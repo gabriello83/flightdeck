@@ -9,3 +9,7 @@ coverage/
 .DS_Store
 .vscode/
 .idea/
+
+# Datos de operación (no se versionan mientras no se decida lo contrario)
+data/raw/
+data/processed/
