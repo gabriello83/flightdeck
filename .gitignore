@@ -10,6 +10,6 @@ coverage/
 .vscode/
 .idea/
 
-# Datos de operación (no se versionan mientras no se decida lo contrario)
-data/raw/
-data/processed/
+# Los datos viajan comprimidos; las versiones descomprimidas se quedan fuera
+data/raw/*.csv
+data/raw/*.html

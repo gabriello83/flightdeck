@@ -28,6 +28,17 @@ OUT = Path(__file__).resolve().parent.parent / "data" / "processed"
 CORTE_AGOSTO = dt.date(2026, 8, 1)
 
 
+def abrir(nombre):
+    """Abre un fuente de data/raw, comprimido o no: en el repo viajan en .gz."""
+    ruta = RAW / nombre
+    if ruta.exists():
+        return open(ruta, encoding="utf-8-sig", newline="")
+    comprimido = RAW / (nombre + ".gz")
+    if comprimido.exists():
+        return gzip.open(comprimido, "rt", encoding="utf-8-sig", newline="")
+    sys.exit(f"No encuentro {ruta} ni {comprimido}")
+
+
 def numero(valor):
     """'1.234,56' o '1234.56' -> float."""
     if valor is None or valor == "":
@@ -107,7 +118,7 @@ def hoja(path, nombre_hoja=None):
 def ventas():
     print("ventas")
     filas = []
-    with open(RAW / "ventas.csv", encoding="utf-8-sig", newline="") as f:
+    with abrir("ventas.csv") as f:
         lector = csv.reader(f, delimiter=";")
         next(lector)
         for fila in lector:
@@ -190,7 +201,8 @@ def preventivos():
 def censo():
     """El censo con ubicacion solo existe dentro del dashboard de David (San Pablo)."""
     print("censo de maquinas")
-    html = (RAW / "dashboard_david_sanpablo.html").read_text(encoding="utf-8")
+    with abrir("dashboard_david_sanpablo.html") as f:
+        html = f.read()
     m = re.search(r"/\*__EMBEDDED_DATA_START__\*/(.*?)/\*__EMBEDDED_DATA_END__\*/", html, re.S)
     if not m:
         print("  aviso: no hay datos incrustados en el HTML")
