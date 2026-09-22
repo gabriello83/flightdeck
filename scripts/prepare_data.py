@@ -40,6 +40,24 @@ def numero(valor):
     return float(txt)
 
 
+def momento(valor):
+    """Devuelve un datetime completo, o None."""
+    if valor is None or valor == "":
+        return None
+    if isinstance(valor, dt.datetime):
+        return valor
+    if isinstance(valor, dt.date):
+        return dt.datetime.combine(valor, dt.time())
+    txt = str(valor).strip()
+    for patron in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M:%S",
+                   "%Y-%m-%dT%H:%M:%S", "%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return dt.datetime.strptime(txt, patron)
+        except ValueError:
+            continue
+    return None
+
+
 def fecha(valor):
     """Devuelve (fecha ISO, hora HH:MM o cadena vacia)."""
     if valor is None or valor == "":
@@ -130,24 +148,29 @@ def averias():
     print("averias")
     filas = []
     for r in hoja(RAW / "averias.xlsx"):
-        alta, hora_alta = fecha(r["fecharecepcion"])
-        cierre, _ = fecha(r.get("fecha_cierre"))
+        m_alta = momento(r["fecharecepcion"])
+        m_cierre = momento(r.get("fecha_cierre"))
+        alta = m_alta.date().isoformat() if m_alta else ""
+        hora_alta = m_alta.strftime("%H:%M") if m_alta else ""
+        cierre = m_cierre.date().isoformat() if m_cierre else ""
+        hora_cierre = m_cierre.strftime("%H:%M") if m_cierre else ""
+        # Resolucion real en horas; los cierres a las 00:00 son cierres administrativos
+        # por lotes, asi que se marcan aparte para no ensuciar la media.
         horas = ""
-        if alta and cierre:
-            try:
-                horas = round((dt.date.fromisoformat(cierre) - dt.date.fromisoformat(alta)).days * 24, 1)
-            except ValueError:
-                horas = ""
+        cierre_por_lotes = ""
+        if m_alta and m_cierre:
+            horas = round((m_cierre - m_alta).total_seconds() / 3600, 1)
+            cierre_por_lotes = "si" if (m_cierre.hour == 0 and m_cierre.minute == 0) else "no"
         filas.append([str(r["denominacentro"] or "").strip(), str(r["codigomaquina"] or "").strip(),
-                      alta, hora_alta, cierre, horas,
+                      alta, hora_alta, cierre, hora_cierre, horas, cierre_por_lotes,
                       str(r["numero"] or "").strip(), str(r.get("modelomaquina") or "").strip(),
                       str(r.get("tipomaquina") or "").strip(), str(r["ubicacionpdv"] or "").strip(),
                       str(r["categoriaoperacion"] or "").strip(), str(r["operacion"] or "").strip(),
                       str(r["estadoactual"] or "").strip(), str(r.get("tecnicoresolutor") or "").strip()])
     escribir("averias.csv.gz",
-             ["centro", "maquina", "fecha_alta", "hora_alta", "fecha_cierre", "horas_resolucion",
-              "numero", "modelo", "tipo_maquina", "ubicacion", "categoria", "operacion",
-              "estado", "tecnico"], filas)
+             ["centro", "maquina", "fecha_alta", "hora_alta", "fecha_cierre", "hora_cierre",
+              "horas_resolucion", "cierre_por_lotes", "numero", "modelo", "tipo_maquina",
+              "ubicacion", "categoria", "operacion", "estado", "tecnico"], filas)
 
 
 def preventivos():
