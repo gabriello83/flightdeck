@@ -3,59 +3,76 @@
 ## Qué es VenCloud
 
 VenCloud es el ERP de vending de **EAC Software / Macrosistemas**. Serunion —el operador
-que presta el servicio en los centros de Airbus, y que aparece como cliente `10002-SERUNION, SA`
-en todas nuestras tablas— trabaja con la versión VenCloud PRO.
+que presta el servicio en los centros de Airbus, y que aparece como cliente
+`10002-SERUNION, SA` en todas nuestras tablas— trabaja con la versión VenCloud PRO.
 
-En los datos de averías hay una pista importante: varias incidencias figuran registradas
-por el usuario **`VenCloudExternalAPI`**. Es decir, la API externa existe y ya se usa en
-producción contra este mismo tenant.
+## La API de WebReports externos
 
-## Lo que no sabemos todavía
+Servicio WCF que publica los informes de VenCloud por número. **Todos los parámetros van
+en la ruta**: ni query string ni cuerpo.
 
-EAC Software no publica documentación abierta de la API. Sin estos datos no se puede
-escribir el conector:
+```
+POST {endpoint}/GetReportV2/{token}/{empresa}/{informe}[|filtro1|filtro2...]
+```
 
-1. **URL base** del entorno (producción y, si existe, preproducción).
-2. **Autenticación**: clave de API, OAuth2, usuario y token… y cómo se renueva.
-3. **Endpoints de los informes rápidos**: qué informe corresponde a ventas, visitas,
-   incidencias, preventivos y censo de máquinas.
-4. **Filtros admitidos**: rango de fechas, centro, delegación, máquina.
-5. **Paginación y límites**: tamaño máximo de respuesta, número de peticiones por minuto,
-   si hay un tope de filas o de rango de fechas por llamada.
-6. **Formato y zona horaria**: JSON o CSV, y en qué huso vienen las fechas.
-7. **Un usuario de solo lectura** dedicado a este proyecto, para no trabajar con las
-   credenciales personales de nadie.
+| | |
+|---|---|
+| Endpoint | `https://vencloudpro.eac.es/2311_api/webservices//VenCloudExternalApi/VenCloudExternalApi.svc` |
+| Empresa | `2311` |
+| Método | POST |
+| Respuesta | JSON, con forma variable según el informe |
 
-Quién puede darlo: EAC Software como fabricante, o el equipo de sistemas de Serunion como
-propietario del tenant. Conviene pedirlo por escrito, indicando que es un acceso de solo
-lectura para explotación de informes.
+Los filtros, si los hay, se concatenan al número de informe separados por `|`.
 
-## Arquitectura propuesta
+El token **no está en el repositorio**. Se lee del entorno (`VENCLOUD_TOKEN`), hay una
+plantilla en `.env.example`, y `.env` está en `.gitignore`. El cliente además enmascara el
+token en todo lo que imprime o guarda, para que no acabe en un log o en un fichero de
+descarga.
+
+## Cliente
+
+`scripts/vencloud.py`, solo biblioteca estándar, ejecutable en cualquier máquina:
+
+```bash
+export VENCLOUD_TOKEN=...
+python3 scripts/vencloud.py informe 1                     # un informe
+python3 scripts/vencloud.py informe 12 2026-05-01 2026-05-31   # con filtros
+python3 scripts/vencloud.py catalogo 1 40                 # recorre números y apunta qué devuelve cada uno
+```
+
+Guarda la respuesta cruda en `data/vencloud/` (fuera del control de versiones) y resume
+filas, columnas y primer registro. Reintenta con espera creciente en fallos de red y 5xx,
+nunca en 4xx.
+
+## Lo que falta por averiguar
+
+Se resuelve con una tanda de llamadas, no hace falta documentación:
+
+1. **Qué número es cada informe**: cuál da ventas, visitas, incidencias, preventivos y
+   censo de máquinas. Para eso está `catalogo`.
+2. **Formato de los filtros**: orden, formato de fecha (`dd/mm/aaaa` o ISO) y cómo se
+   indican centro y máquina.
+3. **Si el filtro va con la barra codificada** (`%7C`) o literal. IIS rechaza una u otra
+   según configuración, así que el cliente admite las dos: `VENCLOUD_FILTRO_CRUDO=1`
+   fuerza el envío literal.
+4. **Límites**: tamaño máximo de respuesta, rango de fechas por llamada, paginación y
+   peticiones por minuto. El cliente espera un segundo entre llamadas mientras no se sepa.
+5. **Zona horaria** de las fechas devueltas.
+
+## Estado
+
+El host `vencloudpro.eac.es` está **bloqueado por la política de red del entorno** de esta
+sesión, así que las llamadas no salen desde aquí. El cliente está escrito y probado en su
+manejo de errores; en cuanto el host esté permitido —o ejecutándolo desde una máquina con
+salida a internet— se puede levantar el catálogo de informes y empezar la ingesta.
+
+## Arquitectura de la ingesta
 
 ```
 VenCloud API ──► ingesta programada ──► almacén ──► API propia ──► cuadro de mando
   (informes)      (cada noche)          (DuckDB)    (agregados)      (navegador)
 ```
 
-- **Ingesta**: un proceso que cada noche pide a VenCloud el delta del día y lo normaliza
-  con las mismas reglas que ya aplica `scripts/prepare_data.py`.
-- **Almacén**: DuckDB sobre fichero. 1,1 millones de líneas por cuatro meses es un volumen
-  pequeño; con un año de histórico seguirá siéndolo, y las consultas agregadas son
-  inmediatas sin necesidad de montar un servidor de base de datos.
-- **API propia**: expone solo agregados (por centro, máquina, día, artículo). Así el
-  navegador nunca descarga el millón de filas.
-- **Cuadro de mando**: aplicación web, en la línea de cabina de avión que busca el proyecto.
-
-La pieza de ingesta se escribe **detrás de una interfaz**, con dos implementaciones: una
-que lee los ficheros exportados a mano (lo que tenemos hoy) y otra que llama a la API
-(cuando haya credenciales). El resto del sistema no se entera de cuál está activa, así que
-la integración no bloquea la construcción del cuadro de mando.
-
-## Mientras tanto
-
-Con los informes exportados a mano ya se puede montar todo y tenerlo funcionando. El día
-que lleguen las credenciales, lo único que cambia es de dónde salen los ficheros.
-
-Una cosa que conviene pedir ya, aunque siga siendo exportación manual: que el informe de
-ventas **incluya la hora**. Solo la trajo el fichero de agosto, y es lo que abre el
-análisis por franja horaria (ver `02-analisis-exploratorio.md`).
+La ingesta queda detrás de una interfaz con dos implementaciones, ficheros exportados y
+API, de modo que el resto del sistema no se entera de cuál está activa y la integración no
+bloquea la construcción del cuadro de mando.
