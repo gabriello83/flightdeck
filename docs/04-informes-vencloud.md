@@ -677,15 +677,15 @@ y Valencia (45). En Airbus son **30**, repartidas entre Getafe (7), CBC (6), San
 Para el cuadro de mando basta añadir `and p.id is not null`, o separar ambas listas: una de
 máquinas desatendidas y otra de parque inmovilizado, que son dos problemas distintos.
 
-### Ojo: dice reposición, no recaudación
+### El informe hermano que falta: sin recaudación
 
-El comentario del SQL dice "para determinar si ha habido recaudación", pero el código mira
-`partesvisitareposiciones`, que son líneas de **reposición**. La regla de negocio que
-interesa vigilar es otra: **toda máquina hay que recaudarla al menos una vez al mes, y más a
-menudo si acumula más de 100 € en la bolsa**.
+Este informe es de **reposición**. El comentario que arrastra el SQL menciona la
+recaudación, pero el código mira `partesvisitareposiciones`; conviene corregir el
+comentario para que no despiste.
 
-Eso pide un informe hermano que mire `partesvisita` con `recaudacion = 1`, como hace el
-informe 6. Y con la venta en efectivo de la telemetría se puede ir más lejos: estimar
+Falta el equivalente para la otra regla de negocio: **toda máquina hay que recaudarla al
+menos una vez al mes, y más a menudo si acumula más de 100 € en la bolsa**. Eso pide un
+informe hermano que mire `partesvisita` con `recaudacion = 1`, como hace el informe 6. Y con la venta en efectivo de la telemetría se puede ir más lejos: estimar
 **cuánto dinero hay ahora mismo en cada máquina** desde la última recaudación, y avisar al
 pasar de 100 € sin esperar al mes. Ese sí es un instrumento de cabina.
 
