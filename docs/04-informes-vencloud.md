@@ -1156,6 +1156,57 @@ lo teclea en VenCloud, no quién fue a la instalación. Para medir trabajo de ca
 
 ---
 
+## Informe 31 — Recaudaciones por cliente y centro en periodo de visita
+
+**Parámetros**: `Codigo Cliente` (0, numérico, **0 = todos**), `Desde Fecha Visita` (1) y
+`Hasta Fecha Visita` (2).
+
+Es la versión útil del informe 6: sin delegación cableada, con comodín de cliente y
+agrupando por cliente y centro.
+
+```sql
+where pvis.recaudacion = 1
+  and pvis.estadocontaje = 1
+  and (pvis.fechaejec >= '{1}' and pvis.fechaejec <= '{2} 23:59:59')
+  and ((0 = {0}) or (cli.codigo = {0}))
+```
+
+**Salida** (septiembre de 2026): **286.344,78 €** en 246 centros de 133 clientes.
+
+| | |
+|---|---:|
+| Mediana por centro | 245,05 € |
+| Máximo | 21.663,89 € (Alhambra) |
+| Centros a cero | 11 |
+
+Los grandes son hospitales: Hermanos Trias 18.308 €, Virgen Macarena 15.982 €, Hospital
+Clínico 15.727 €, La Paz 14.989 €. **Airbus suma 22.642,96 €** repartidos en solo 6 de sus
+9 centros: Getafe 8.184 €, San Pablo Sur 5.756 €, Illescas 3.778 €, Tablada 3.025 €,
+CBC 1.459 € y San Pablo Norte 438 €. Albacete e ITC no aparecen.
+
+### Dos cosas que hay que saber antes de usar la cifra
+
+**Es dinero contado, no dinero recogido.** El filtro `estadocontaje = 1` deja fuera las
+recaudaciones que todavía no se han contado. Lo que este informe da es la caja ya
+verificada; el efectivo recogido y pendiente de contar no aparece por ningún lado. Para el
+cuadro de mando interno eso es en sí un indicador: **cuánto hay recaudado sin contar, y
+desde cuándo**.
+
+**Hay un `left join` que sobra y puede inflar el total.** La consulta se une a
+`vending.partesvisitacontajes` pero no usa ninguna columna suya: ni en el `select`, ni en
+el `where` —`estadocontaje` sale de `partesvisita`—, ni en el `group by`. Si un parte de
+visita tiene varias líneas de contaje (por ejemplo una por denominación de moneda), el join
+**multiplica las filas y `sum(pvis.imprecauda)` cuenta ese importe tantas veces como
+líneas**.
+
+En los números de septiembre no se ve nada raro —los 8.184 € de Getafe encajan con una
+venta mensual del orden de 88.000 € pagada mayormente con tarjeta de empleado—, así que o
+la tabla tiene una línea por parte, o el efecto es pequeño. Pero conviene comprobarlo con
+un centro concreto, porque el join **no aporta nada**: quitarlo es seguro y elimina el
+riesgo.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
