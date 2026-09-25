@@ -155,6 +155,51 @@ el tipo de indicador que respalda a la empresa ante una inspección o una reclam
 
 ---
 
+## Informe 6 — Recaudación HUCA por mes
+
+**Parámetros**: `FECHAINICIO` (orden 0) y `FECHAFIN` (orden 1), tipo Fecha. El primero se
+usa además para sacar el año y el mes que necesita el cálculo del IVA.
+
+```sql
+select tmp.fechaini as fecha, pdvs.codigo, pdvs.ubicacion, tmp.imprecauda as total,
+       (select public.calcula_iva_medio(date_part('year', timestamp '{0}')::int,
+                                        date_part('month', timestamp '{0}')::int,
+                                        tmp.pdvid, tmp.prefacrecaudaresumenid)) as iva_medio
+from (SELECT fechaini::date, p.pdvid, p.id, imprecauda, p.recprosegurid,
+             p.recprosegurdetalleid, rp.prefacrecaudaresumenid
+      FROM vending.partesvisita as p
+      left join utils.recprosegur as rp on rp.id = recprosegurid
+      left join utils.recprosegurdetalle as rpd on rpd.id = p.recprosegurdetalleid
+      where p.delegacionid = 2 and recaudacion = 1
+        and fechaini >= '{0}'
+        and fechaini < ('{1}' || ' 23:59:59')::timestamp without time zone
+      order by p.pdvid asc, fechaini asc) as tmp
+left join vending.pdvs on pdvs.id = tmp.pdvid
+```
+
+**Salida**: columnas `fecha`, `codigo`, `ubicacion`, `total`, `iva_medio`. La ejecución de
+prueba (25/09/2026 a 25/09/2026) devolvió **cero registros**: ese día no hubo recaudación
+en esa delegación.
+
+### Qué aporta
+
+Es el **dinero efectivamente recaudado** de cada máquina, que no es lo mismo que lo
+vendido. La recaudación se marca en el parte de visita (`recaudacion = 1`, importe en
+`imprecauda`) y se concilia con Prosegur a través de `utils.recprosegur` y su detalle.
+
+Cruzado con la venta —que vendrá de Nayax— permite el indicador que ningún panel de
+cliente va a tener: **descuadre entre lo vendido en efectivo y lo recaudado**, máquina a
+máquina. Ahí se ven atascos de monedero, recuentos mal hechos y mermas.
+
+### Cómo generalizarlo
+
+El informe está atado a una delegación (`p.delegacionid = 2`, HUCA). Para el cuadro de
+mando interno hace falta la versión sin ese filtro, o con la delegación como tercer
+parámetro, y añadiendo cliente y centro al resultado —igual que hace el informe 4— para
+poder agrupar por cartera. Conviene incluir también `delegacionid` como columna.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
