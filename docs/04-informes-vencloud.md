@@ -549,6 +549,51 @@ Cruzado con el informe 7 sale la merma real: retiradas / cargas por artículo y 
 
 ---
 
+## Informe 14 — Albaranes de entrada: temperatura
+
+**Parámetros**: `Id Delegacion` (0, numérico), `Codigo Proveedor` (1, numérico),
+`Desde Fecha` (2) y `Hasta Fecha` (3).
+
+```sql
+from compras.albaranescpa alcpa
+inner join compras.proveedores prove on alcpa.proveedorid = prove.id
+inner join general.delegaciones del on alcpa.delegacionid = del.id
+where prove.codigo = {1} and del.id = {0}
+  and (alcpa.fecha >= '{2}' and alcpa.fecha <= '{3} 23:59:59')
+  and estado = 2
+```
+
+Devuelve, por albarán: número, fecha, proveedor, número de artículos distintos, unidades
+totales y `transtemperatura`, la **temperatura del transporte** anotada en la recepción.
+
+**Salida**: la ejecución de prueba devolvió **cero registros**.
+
+### Por qué sale vacío tan fácilmente
+
+Este informe tiene cuatro filtros obligatorios y **ninguno admite comodín**: delegación y
+proveedor son igualdades exactas, y además exige `estado = 2`. Basta fallar en uno de los
+tres para no ver nada. Para el cuadro de mando hace falta la versión con comodines:
+
+```sql
+where ((0 = {0}) or (del.id = {0}))
+  and ((0 = {1}) or (prove.codigo = {1}))
+```
+
+Conviene además **descomentar `alcpa.total`**, que está en el SQL anulado: da el importe
+del albarán y con él el volumen de compra por proveedor, sin pedir otro informe.
+
+### Lo que aporta
+
+Cierra la **cadena de frío de punta a punta**. Hasta ahora teníamos la temperatura en la
+máquina (informe 4); esto da la temperatura en la recepción de mercancía. Juntos cubren
+proveedor → almacén → máquina, que es lo que pide una auditoría de seguridad alimentaria.
+
+Como indicador de proveedor, lo primero no es la temperatura media sino **cuántos albaranes
+llegan sin temperatura anotada**: igual que con el caducado, la ausencia de dato es el
+primer hallazgo, no la buena noticia.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
