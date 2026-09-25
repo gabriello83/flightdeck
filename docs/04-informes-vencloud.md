@@ -454,6 +454,56 @@ demuestra que `clase` está disponible en `recursos.maquinasmodelos`.
 
 ---
 
+## Informe 11 — PDVs y máquinas con canales de planograma
+
+**Parámetro**: `Delegación` (0, numérico, 0 = todas).
+
+Mismo censo que el informe 10, con una bandera distinta: si la máquina tiene canales con
+artículo asignado (`recursos.maquinascanales` con `articuloid` no nulo y la máquina no
+marcada como `sinplanograma`). Sirve para localizar las máquinas sin planograma.
+
+**Salida**: 4.498 máquinas. De las 3.203 instaladas, **2.889 tienen planograma y 314 no
+(9,8%)**.
+
+### Dónde están los huecos
+
+| Delegación | Sin planograma | De |
+|---|---:|---:|
+| Serunion Vending - CENTRAL | 39 | 42 (**93%**) |
+| Levante - Valencia | 62 | 199 (31%) |
+| Levante - Murcia | 56 | 408 (14%) |
+| Cataluña - Cornellà | 81 | 633 (13%) |
+| Andalucía - Sevilla | 41 | 370 (11%) |
+| Madrid - Leganés | 20 | 855 (2%) |
+
+Airbus está bien: 8 de 563 máquinas sin planograma, un 1%, repartidas entre San Pablo Sur
+(4), Tablada, ITC, Albacete e Illescas.
+
+### Cruzado con las tarifas del informe 10
+
+Sobre las 3.203 máquinas instaladas:
+
+| | |
+|---|---:|
+| Bien configuradas (tarifa y planograma) | 2.579 (80,5%) |
+| Con tarifa pero sin planograma | 222 |
+| Con planograma pero sin tarifa | 310 |
+| **Sin tarifa ni planograma** | **92** |
+
+Esas 92 son máquinas instaladas, en un punto de venta, sin tarifa y sin planograma:
+venden a ciegas y sin precio configurado. Es la lista más corta y más accionable que ha
+salido hasta ahora, y encaja en el cuadro de mando interno como panel de calidad de
+configuración, junto con las 402 sin tarifa del informe 10.
+
+### Por qué importa para el análisis
+
+Sin planograma no se puede saber qué debería haber en cada canal, así que no se puede
+distinguir **"no había demanda" de "estaba vacío"**. Las máquinas sin planograma quedan
+fuera de cualquier cálculo de rotura de stock y de venta perdida, y hay que decirlo en el
+panel en vez de dar un dato incompleto como si fuera completo.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
