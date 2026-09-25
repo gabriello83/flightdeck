@@ -1326,6 +1326,52 @@ detector de tarifa mal configurada o de surtido cambiado sin querer.
 
 ---
 
+## Informe 35 — Clientes: precio medio de ventas por periodo y clase de máquina
+
+**Parámetros**: `Desde Fecha` (0) y `Hasta Fecha` (1), y **aquí sí se usan en los dos
+sitios**: tanto en la subconsulta que calcula las ventas como en el filtro de clientes. Es
+el mismo informe que el 34 pero bien hecho; sirve de plantilla para arreglar aquel.
+
+**Salida** (septiembre de 2026): 133 filas · **65 clientes** · 851.404 unidades ·
+**721.484,70 €** · precio medio global **0,8474 €**.
+
+| Clase de máquina | Unidades | Importe | Precio medio |
+|---|---:|---:|---:|
+| Snack / multiproducto | 313.617 | 352.429,68 € | 1,1238 € |
+| Bebidas calientes | 384.087 | 203.982,07 € | 0,5311 € |
+| Bebidas frías | 153.700 | 165.072,95 € | 1,0740 € |
+
+El café vende **más unidades que nada** (384.087, el 45%) pero a la mitad de precio, así
+que en facturación queda por detrás del snack. Es la tensión clásica del vending: el café
+llena la ruta de trabajo y el snack paga las facturas.
+
+Por cliente, **Serunion concentra 324.805,48 €**, el 45% del total; le siguen el Institut
+Català de la Salut (71.684 €), Value Retail Las Rozas (65.919 €) y la Alhambra (56.926 €).
+Airbus no aparece como cliente porque sus centros cuelgan de Serunion, que es el cliente
+10002.
+
+### Cuidado con leer esto como "la venta del mes"
+
+Son las ventas **registradas en los partes de visita** (`cal_totnumvtas` y
+`cal_totimpvtas`), no la venta real del periodo. Dos razones para no confundirlas:
+
+1. Solo aparecen **65 clientes**, cuando el informe 31 contabiliza recaudación en 133. La
+   mitad de la cartera no tiene ventas registradas en septiembre.
+2. Arrastra el mismo desfase que el informe 26: la venta se imputa al parte de visita, o
+   sea al día en que pasó el reponedor, no al día en que se vendió.
+
+Como referencia de precio medio y de mix por clase es excelente. Como cifra de negocio del
+mes, no.
+
+### Detalle de modelado
+
+Este informe clasifica por **`maqmod.clase`** (la clase del modelo de máquina) mientras que
+el 34 usa **`pdv.clase`** (la del punto de venta). Son dos campos distintos que casi siempre
+coinciden pero no tienen por qué: un punto de venta puede tener una máquina de otra clase.
+Al montar la ingesta hay que elegir uno y ser consistente.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
