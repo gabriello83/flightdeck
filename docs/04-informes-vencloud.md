@@ -1936,6 +1936,66 @@ de ruta hay que filtrar todo eso.
 
 ---
 
+## Informe 51 — Modelos y plantillas
+
+Sin parámetros. Lista, para cada modelo de máquina, **las plantillas de planograma
+definidas para él** (`recursos.maquinasmodelosplantillas`): código de modelo, nombre,
+clase, id de plantilla y nombre de la plantilla.
+
+Una plantilla es el esqueleto de planograma de un modelo —qué hueco hay en cada posición y
+qué capacidad tiene— sobre el que luego se montan los planogramas concretos de cada
+máquina.
+
+**Salida**: **307 plantillas** sobre **130 modelos**.
+
+| Clase | Plantillas |
+|---|---:|
+| Snack / multiproducto | 130 |
+| Bebida caliente | 108 |
+| Bebida fría | 67 |
+| Combi mixtas | 2 |
+
+### Las plantillas se están usando como planogramas de cliente
+
+72 modelos tienen una sola plantilla, pero unos pocos acumulan muchas:
+
+| Plantillas | Modelo |
+|---:|---|
+| **24** | 900 ADVANCED |
+| **19** | 1050 ADVANCED |
+| 10 | OPERA 2 C |
+| 10 | ARIA L EVO MASTER |
+| 9 | G-DRINK DV9 |
+
+Y los nombres lo explican: "Planograma Opera 2 C Alhambra", "LA PAZ - Comercio
+justo/normal", "AMAZON MADRID - Normal/Premium", "EDP" (que se repite 10 veces), "CAN RUTI
+1", "TV3", "ALLIANZ". Es decir, **no son variantes técnicas del modelo sino montajes por
+cliente**. Funciona, pero convierte el catálogo de plantillas en una lista que crece con
+cada cliente nuevo y complica saber cuál es la configuración estándar de un modelo.
+
+### Consecuencia directa sobre el informe 40
+
+El informe 40 saca la capacidad de cada máquina con
+`maquinamodeloplantillaid = (select max(id) ...)`, o sea **la plantilla creada más
+recientemente**. Con 24 plantillas para el 900 ADVANCED, esa "última" es, con toda
+probabilidad, el montaje de un cliente concreto y no la configuración estándar del modelo.
+
+Eso explica bastante bien los valores raros que encontré allí —azúcar 3.000, vaso 3.000,
+infusión 7.000—: no son necesariamente errores de captura, pueden ser plantillas hechas
+para un caso particular. En cualquier caso, **la capacidad del informe 40 no es fiable como
+capacidad del modelo**, y para calcular autonomías habría que decidir qué plantilla
+representa a cada modelo, o mejor, leer la configuración real de cada máquina.
+
+### Un detalle de mapeo
+
+El `CASE` de clases de este informe **no coincide con el de los demás**: aquí falta el
+código 99 y el 100 se etiqueta como "Genérica/Otros", cuando en los informes 8, 20 y 44 el
+99 es "Genérica" y el 100 es "Compactadora". En esta salida no afecta, porque solo aparecen
+las cuatro clases habituales, pero es una discrepancia a tener en cuenta: el catálogo de
+clases debe salir de un único sitio en la ingesta, no copiarse informe a informe.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
