@@ -219,6 +219,74 @@ poder agrupar por cartera. Conviene incluir también `delegacionid` como columna
 
 ---
 
+## Informe 7 — Total de cargas por punto de venta, artículo y periodo
+
+**Parámetros**: `Desde` (0), `Hasta` (1), `Codigo_Centro` (2, numérico) y `Codigo_Cliente`
+(3, numérico). Los dos últimos admiten **0 como comodín**: `((0 = {2}) or (clicen.numcentro = {2}))`.
+Es el primer informe que permite pedir toda la cartera o acotar a un cliente o centro.
+
+```sql
+select cli.codigo codigocliente, cli.nombre nombrecliente,
+       clicen.numcentro, clicen.denomina centro,
+       m.codigo cod_maq, a.codigo cod_art, a.denomina articulo, rdo.cargas_totales
+from (select pdvid, articuloid, sum(cantidad) cargas_totales
+      from vending.partesvisita p
+      left join vending.partesvisitareposiciones rep on p.id = rep.partevisitaid
+      where rep.tipo = 'CM'
+        and p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
+      group by pdvid, articuloid) rdo
+left join vending.pdvs pdv on pdv.id = rdo.pdvid
+left join recursos.maquinas m on m.id = pdv.maquinaid
+left join comercial.clientescentros clicen on clicen.id = pdv.clientecentroid
+left join comercial.clientes cli on cli.id = clicen.clienteid
+left join stocks.articulos a on a.id = rdo.articuloid
+where pdv.estado = 1
+  and ((0 = {2}) or (clicen.numcentro = {2}))
+  and ((0 = {3}) or (cli.codigo = {3}))
+order by m.codigo, cod_art
+```
+
+El comentario que arrastra el informe explica una limitación real: una máquina puede haber
+estado en taller y cambiar de punto de venta dentro del periodo, así que lo correcto sería
+agrupar por PDV. Se agrupa por PDV pero se pinta la máquina, el cliente y el centro
+**actuales**. Para series largas hay que tenerlo en cuenta: la máquina que aparece puede no
+ser la que estuvo allí todo el periodo.
+
+**Salida**: 7.497 filas · 1.019 máquinas · 338 artículos · toda la cartera (Serunion, La
+Paz, Institut Català de la Salut, RTVE, Alhambra, Airbus…). Suma 154.312 unidades.
+
+### ¿Son cargas reales o vienen de coeficientes?
+
+**Son reales, anotadas en el parte de visita.** Cuatro evidencias:
+
+1. Cruzando con las ventas de los centros de Airbus, el ratio cargas/ventas va de 0,002 a
+   0,82, con un coeficiente de variación de 1,05. Si salieran de aplicar un coeficiente
+   sobre la venta, el ratio sería estable; no lo es ni de lejos.
+2. Hay **3.801 combinaciones de máquina y artículo vendidas sin ninguna línea de carga** en
+   el periodo. Un cálculo derivado de la venta no dejaría huecos.
+3. Aparecen **medias unidades** (0,5, 1,5, 2,5): seis casos. Eso es alguien tecleando.
+4. Se cargan cosas que **no se venden**: café a granel, preparado lácteo, azúcar, vasos y
+   paletinas. Son ingredientes y consumibles, no artículos de venta, y solo pueden venir de
+   una anotación física.
+
+### Lo que este informe desbloquea
+
+Es la vía para **valorar el consumo sin necesidad del escandallo del café**. El `cod_art`
+de este informe cruza con el del informe 2 (precios de compra) en el **97% de los
+artículos y el 100% de las unidades cargadas**, que es justo el cruce que no funcionaba
+con el nombre del artículo.
+
+Es decir: coste de mercancía cargada = cargas × precio de compra, por máquina y por
+centro. Y los ingredientes del café entran solos, porque se cargan como artículo.
+
+**Pero falta el factor de conversión.** Multiplicando tal cual sale un disparate:
+6.150 paletinas × 15,90 € = 97.785 €, porque el precio es por caja de cien o de mil. En
+cambio Coca Cola lata, 4.186 × 0,549 = 2.298 €, es correcto. Sin saber en qué unidad está
+cada cosa, la valoración no se puede cerrar. Es el mismo problema del informe 2 y se
+resuelve con el mismo campo: unidades por caja en el maestro de artículos.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
