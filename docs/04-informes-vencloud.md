@@ -177,9 +177,28 @@ from (SELECT fechaini::date, p.pdvid, p.id, imprecauda, p.recprosegurid,
 left join vending.pdvs on pdvs.id = tmp.pdvid
 ```
 
-**Salida**: columnas `fecha`, `codigo`, `ubicacion`, `total`, `iva_medio`. La ejecución de
-prueba (25/09/2026 a 25/09/2026) devolvió **cero registros**: ese día no hubo recaudación
-en esa delegación.
+**Salida**: columnas `fecha`, `codigo`, `ubicacion`, `total`, `iva_medio`. La primera
+ejecución de prueba (25/09/2026 a 25/09/2026) devolvió cero registros.
+
+Agosto de 2026 completo, delegación 2 (HUCA):
+
+| | |
+|---|---:|
+| Recaudaciones | 21 |
+| Puntos de venta | 14 |
+| Total recaudado | 3.273,32 € |
+| Por recaudación | mediana 145 €, de 92 € a 303 € |
+| Días con recaudación | 6 (entre el 5 y el 24 de agosto) |
+
+Ni ceros ni negativos. La frecuencia es baja —1,5 recaudaciones por punto en todo el mes—
+y se concentra en seis días: la ruta de recaudación pasa cada dos o tres semanas.
+
+El `iva_medio` sale distinto en cada punto de venta (de 10 a 14,09) porque es el IVA medio
+ponderado según el surtido de esa máquina, mezcla de tipos. Es el que permite pasar de
+recaudación bruta a base imponible sin inventar un tipo único.
+
+Un detalle del export, no del informe: las fechas llegan al Excel como número de serie
+(46239 = 05/08/2026). Por la API, `fechaini::date` viene ya como fecha.
 
 ### Qué aporta
 
