@@ -1623,9 +1623,9 @@ que va dejando el terminal del reponedor, guardadas en `utils.trackinggps`.
 - El corte superior es `fecha <= '{2}'`, **sin `23:59:59`**. Todos los demás informes lo
   llevan. Aquí eso significa que la fecha "hasta" se interpreta a las 00:00:00 y **el
   último día se pierde entero**.
-- Solo devuelve el código de dispositivo. **No hay forma de saber de quién es ese
-  terminal**, ni a qué ruta pertenece, así que el informe no se puede cruzar con nada. Le
-  falta el enlace con el reponedor o la ruta, que es lo que lo convertiría en información.
+- Solo devuelve el código de dispositivo, sin decir de quién es. **Eso lo resuelve el
+  informe 46**, que da la correspondencia entre dispositivo, ruta, empleado y vehículo: el
+  dispositivo 3 es la Ruta Alhambra Mañana, de Alejandro Rivas Ronquillo, vehículo 3742KFL.
 
 **Salida** (dispositivo 3, septiembre de 2026): **43 puntos**.
 
@@ -1875,6 +1875,64 @@ venta.
 - La columna `ventas` está calculada en la CTE pero **comentada en el `select`**.
   Descomentarla daría carga media y venta en la misma fila, que es justo lo que hace falta
   para decidir frecuencias. Es un cambio de un carácter.
+
+---
+
+## Informe 46 — Calidad: control de temperaturas de ruta
+
+**Parámetros**: `Desde Fecha` (0), `Hasta Fecha` (1) e `Id Delegación` (2, con comodín 0).
+
+Sale de `vending.rutascontrol`: el parte de apertura y cierre de cada jornada de ruta, con
+ruta, vehículo, empleado, **código de dispositivo**, horas de inicio, fin y cierre,
+**kilómetros inicial y final** y la temperatura del vehículo al empezar.
+
+**Salida** (septiembre de 2026): **1.288 controles** · 77 rutas · 80 dispositivos · 77
+empleados · 63 vehículos · 15 delegaciones.
+
+### Resuelve el agujero del informe 41
+
+Este es el informe que da **la correspondencia entre dispositivo, ruta, empleado y
+vehículo**, que era justo lo que le faltaba al de coordenadas GPS para poder cruzarse con
+algo. Comprobado: el **dispositivo 3** del informe 41 es la **Ruta Alhambra Mañana**, de
+Alejandro Rivas Ronquillo, vehículo 3742KFL — lo que encaja con que todas las coordenadas
+cayeran en el recinto de la Alhambra.
+
+### Temperatura del vehículo: hay lecturas altas
+
+Mediana de 2 °C, coherente con transporte refrigerado. Pero:
+
+| | |
+|---|---:|
+| Lecturas por encima de 8 °C | 115 |
+| Por encima de 15 °C | **79** (hasta 26 °C) |
+| Exactamente 0 °C | 86 |
+
+Las rutas que más acumulan lecturas altas son **Ruta AIRBUS ALBACETE (19)**, Técnica 01
+(19) y Cantabria 1 (18). En las rutas técnicas puede no haber producto fresco a bordo, pero
+en una ruta de reposición como la de Albacete sí importa. Y los 86 ceros exactos huelen a
+valor por defecto, igual que pasaba con el control de temperatura de máquinas del informe 4.
+
+### Kilómetros: el dato está sin depurar
+
+| | |
+|---|---:|
+| Controles con recorrido plausible (0–1.000 km) | 1.056 de 1.288 |
+| Recorrido mediano por jornada | 53 km |
+| **Total del mes** | **73.883 km** |
+| Controles con recorrido ≤ 0 | **232** |
+| Controles con km inicial < 100 | **402** |
+
+Esos 402 son cuentakilómetros sin rellenar: se teclea 1 y 2 en lugar de la lectura real. Y
+hay un control con −251.833 km, que es un error de tecleo del odómetro. Con eso limpio se
+podría calcular coste de desplazamiento por ruta y por punto de venta, que es una pieza que
+falta para saber cuánto cuesta de verdad atender cada máquina.
+
+### Jornadas: muchas sin cerrar bien
+
+Duración mediana de **8,3 horas**, que es una jornada normal. Pero **83 controles duran más
+de 24 horas**, 26 duran menos de 15 minutos y **38 siguen abiertos** (con `fechafin` a
+01/01/1900, el mismo centinela que usan las averías del informe 8). Antes de medir tiempos
+de ruta hay que filtrar todo eso.
 
 ---
 
