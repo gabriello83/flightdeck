@@ -13,9 +13,13 @@ trae. Al final del documento están los que conviene encargar.
 
 ## De dónde sale cada cosa
 
-Decisión del 25/09/2026: **la venta por producto probablemente venga de Nayax**, no de
-VenCloud. Nayax es la pasarela de pago y telemetría de las máquinas, y registra la
-transacción con su hora, su importe y su medio de pago.
+Decisión del 25/09/2026: la venta por producto probablemente venga de Nayax, no de
+VenCloud.
+
+**Resuelto el 26/09/2026 con el informe 59**: Nayax es el sistema de telemetría
+`tipotelemetria = 40` y **sus ventas ya están dentro de VenCloud**, en
+`telemetry.telemetrysales`. El enlace entre punto de venta y aparato es
+`pdvs.telemetriadispositivo`. No hace falta una integración aparte con Nayax.
 
 | | Fuente |
 |---|---|
@@ -2165,6 +2169,74 @@ Dentro de "Determinados días": 1.004 puntos de venta se visitan **un día por s
 dos días, 418 tres, 110 cinco y 9 seis. Con esto y la carga media del informe 45 ya se
 puede comparar **frecuencia teórica contra consumo real**, que es la pregunta de fondo de
 cualquier replanteo de rutas.
+
+---
+
+## Informe 59 — PDVs: auditoría de conectividad
+
+Sin parámetros. **No funciona**: no llega a devolver resultado.
+
+Es una pena, porque conceptualmente es de los más valiosos: por cada punto de venta da su
+**tipo de conectividad**, su **sistema de telemetría**, el **identificador del dispositivo
+de telemetría** y tres fechas —último audit del reponedor, último audit de telemetría y
+última venta registrada en `telemetry.telemetrysales`—. Es decir, **qué máquinas están
+mudas y por qué vía deberían estar hablando**.
+
+### Los dos catálogos que aporta, que valen por sí solos
+
+**Tipo de conectividad** (`pdvs.tipoconectividad`):
+
+| | | | |
+|---|---|---|---|
+| 0 Sin conectividad | 1 Bluetooth | 2 Telemetría | 3 IrDA |
+| 99 Importación externa | 100 Contadores manuales | 101 Contadores manuales por canal | |
+
+**Sistema de telemetría** (`maquinas.tipotelemetria`):
+
+| | | | |
+|---|---|---|---|
+| 0 Sin telemetría | 10 Money Tor | 30 MEI Advance 5K | **40 NAYAX** |
+| 51 Coges Avantis | 52 Coges Nebular V2 | 60 Caslab M-VOT | 70 Prodelfi |
+| 80 Orain | 90 Vend-X | 110 Atento | 120 Veos |
+| 130 Televend | 140 Muxunav | 150 Reite | |
+
+### Esto cierra la cuestión de Nayax
+
+**Nayax es `tipotelemetria = 40`**, y sus ventas están en `telemetry.telemetrysales` dentro
+de VenCloud. El informe 9, que filtraba justamente `tipotelemetria = 40`, no era un informe
+genérico de tarjetas: era **el de las ventas de Nayax**.
+
+Y hay más: `pdvs.telemetriadispositivo` es **el identificador del dispositivo de
+telemetría**, o sea la clave que enlaza cada punto de venta con su aparato Nayax. Era
+exactamente lo que faltaba, y no es `refexterna` como supuse al ver el informe 10.
+
+Conclusión: **no hace falta integrar Nayax por separado**. La venta ya está en VenCloud,
+identificada por sistema de telemetría y con el dispositivo enlazado al punto de venta.
+
+### Por qué no funciona
+
+Dos causas probables, por orden:
+
+1. **La consulta de la última venta no tiene límite de fechas:**
+
+   ```sql
+   select max(fechaventa) as fecharts, pdvid from telemetry.telemetrysales
+   where pdvid in (select id from pdv where tipoconectividad in (2)) group by pdvid
+   ```
+
+   Eso recorre **el histórico completo de ventas de telemetría**, que en esta base son
+   millones de filas. Es el mismo mal que hace lento al informe 37. Se arregla acotando por
+   fecha (los últimos 90 días bastan para una auditoría de conectividad) o usando un
+   `lateral` con `order by fechaventa desc limit 1` por punto de venta.
+
+2. **Puede haber ambigüedad de columnas.** En la CTE `pdv` se seleccionan `tipoconectividad`
+   y `tipotelemetria` **sin cualificar**, mientras el `CASE` usa `m.tipotelemetria`. Si esas
+   columnas existen tanto en `vending.pdvs` como en `recursos.maquinas`, PostgreSQL aborta
+   con "column reference is ambiguous". Se arregla poniendo el alias delante de cada una.
+
+Vale la pena arreglarlo: con este informe se puede saber **qué máquinas deberían mandar
+datos y no los mandan**, que es la causa raíz del 12% de audits del informe 33 y de la
+cobertura del 4% en Valencia del informe 52.
 
 ---
 
