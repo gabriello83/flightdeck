@@ -1603,6 +1603,53 @@ modelo, no de la máquina concreta.
 
 ---
 
+## Informe 41 — Listado de coordenadas GPS por dispositivo y fecha
+
+**Parámetros**: `Codigo Dispositivo` (0, numérico), `Desde Fecha` (1) y `Hasta Fecha` (2).
+**El SQL no llegó**, solo la salida.
+
+Cuatro columnas: `fecha`, `coddispositivo`, `gpslatitud`, `gpslongitud`. Son las posiciones
+que va dejando el terminal del reponedor.
+
+**Salida** (dispositivo 3, septiembre de 2026): **43 puntos**.
+
+### La captura es muy parcial
+
+| | |
+|---|---|
+| Días con dato | **3** (18, 23 y 25 de septiembre) |
+| Franja horaria | de 06:22 a 11:00, ninguna tarde |
+| Intervalo entre puntos | mediana 5,1 minutos |
+| Extensión geográfica | 0,88 km de diagonal |
+| Recorrido acumulado | 4,0 km |
+
+Las coordenadas caen todas en el entorno de la Alhambra, en Granada, así que este
+dispositivo está asignado a esa ruta. Y con 0,88 km de extensión, **lo que se está
+registrando es el movimiento a pie dentro del recinto**, no el desplazamiento entre
+clientes.
+
+Tres días de dato en un mes de trabajo significa que, hoy por hoy, **esto no sirve para
+analizar rutas**. Es un dispositivo de una ruta concreta y no se puede generalizar al
+resto de la flota sin mirar más, pero conviene averiguar si la captura falla en todos los
+terminales o solo en este antes de contar con ello para nada.
+
+### Para qué serviría con captura completa
+
+- **Tiempo real en cada punto de venta**, que hoy no se puede medir: sabemos cuándo se
+  abre el parte, no cuánto se tarda.
+- **Ruta real contra ruta planificada**, que enlaza directamente con el informe 33 y sus
+  desviaciones del plan.
+- **Prueba de presencia** ante una reclamación de cliente.
+
+### Advertencia
+
+Son **datos de geolocalización de personas trabajadoras**. En un cuadro de mando interno
+eso exige base legal, información previa a la plantilla y finalidad acotada; el uso
+razonable es agregado —tiempos medios, cobertura de ruta— y no el seguimiento individual.
+Conviene decidirlo antes de construir la pantalla, no después.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
