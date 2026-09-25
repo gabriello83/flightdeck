@@ -1,8 +1,9 @@
 # Catálogo de informes rápidos de VenCloud
 
 Cada informe es una consulta SQL publicada con un número. Se piden con
-`scripts/vencloud.py informe <n> [filtros...]`. Este documento crece según se van
-conociendo.
+`scripts/vencloud.py informe <n> [filtros...]`, y los parámetros van en el orden que
+declara el informe (`Orden: 0`, `Orden: 1`…), sustituyendo a `{0}`, `{1}` en el SQL. Este
+documento crece según se van conociendo.
 
 Que el informe sea SQL plano tiene una consecuencia importante: **se pueden encargar
 informes a medida**. Si falta un campo, no hay que rodearlo, se pide la consulta que lo
@@ -52,6 +53,77 @@ paletina, azúcar. Sin esa composición, casi la mitad del negocio se queda sin 
 
 ---
 
+## Informe 4 — Calidad: control de temperatura
+
+**Parámetros**: `Desde Fecha` (orden 0) y `Hasta Fecha` (orden 1), ambos de tipo Fecha.
+En el SQL entran como `fechaini >= '{0}'` y `fechaini < '{1} 23:59:59'`, así que van como
+texto en formato de fecha de PostgreSQL: `2026-05-01`. Ejemplo de llamada:
+
+```bash
+python3 scripts/vencloud.py informe 4 2026-05-01 2026-08-31
+```
+
+```sql
+select cli.codigo cod_cli, cli.nombre cliente, cn.numcentro, cn.denomina centro,
+       pdv.codigo cod_pdv, pdv.ubicacion, m.codigo cod_maq, mod.modelo modelo,
+       p.fechaini::text fecha_visita, tempvalor valortemperatura
+from vending.partesvisita p
+left join vending.pdvs pdv on pdv.id = p.pdvid
+left join recursos.maquinas m on m.id = pdv.maquinaid
+left join recursos.maquinasmodelos mod on mod.id = m.maquinamodeloid
+left join comercial.clientescentros cn on cn.id = pdv.clientecentroid
+left join comercial.clientes cli on cli.id = cn.clienteid
+where temperatura and fechaini >= '{0}' and fechaini < '{1} 23:59:59'
+order by cli.codigo, cn.numcentro, pdv.codigo, p.fechaini
+```
+
+La temperatura la anota el reponedor en el terminal durante la visita. Las máquinas con
+producto fresco (sándwiches, platos de quinta gama) deben estar **entre 0 y 4 °C**.
+
+### Salida analizada (25/09/2026, un solo día)
+
+119 lecturas · 106 máquinas · **toda la cartera de la empresa**, no solo Airbus: Alhambra,
+Hospital Clínico, Europastry, Kellogg, Airbus San Pablo Sur…
+
+**Hay dos poblaciones mezcladas en la misma columna.** Nueve lecturas están entre 90 y
+96 °C: son máquinas de bebida caliente (OPERA, ZENSIA, KIKKO, WINNING) y esa es la
+temperatura de caldera, no un fallo. El umbral 0–4 °C **solo aplica a las refrigeradas**,
+así que cualquier alarma tiene que clasificar antes la máquina o se llena de falsos
+positivos.
+
+Sobre las 110 lecturas refrigeradas:
+
+| | |
+|---|---:|
+| Mediana | 4,2 °C |
+| Por encima de 4 °C | 66 (60,0%) |
+| Por encima de 5 °C | 32 (29,1%) |
+| Por encima de 6 °C | 27 (24,5%) |
+| Por encima de 8 °C | 3 (2,7%) |
+| Máximo | 9,0 °C |
+
+Las peores son tres G-DRINK DC6 de la Alhambra, entre 8,4 y 9,0 °C. En Airbus hay 29
+lecturas refrigeradas y 14 por encima de 4 °C, pero ninguna pasa de 4,9 °C: incumplimiento
+formal, no riesgo sanitario.
+
+### Advertencias sobre el dato
+
+- **La lectura es manual**, la teclea el reponedor. En el Hospital Clínico todas las
+  lecturas del día son exactamente `8.0`, y hay muchos `3.0` redondos repetidos. Antes de
+  montar una alarma sobre esto hay que saber si el terminal propone un valor por defecto,
+  porque un valor tecleado en bloque no mide nada.
+- **No se sabe la cobertura**: 119 lecturas en un día, pero no cuántas máquinas con
+  producto fresco deberían haberse controlado. Sin el censo, el indicador que de verdad
+  importa —qué máquinas con fresco se han quedado **sin** control— no se puede calcular.
+
+### Para qué sirve en el cuadro de mando interno
+
+Es un panel de calidad y APPCC con valor propio: porcentaje de lecturas en rango por
+cliente y centro, máquinas reincidentes fuera de rango, y cobertura del control. Es además
+el tipo de indicador que respalda a la empresa ante una inspección o una reclamación.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
@@ -63,7 +135,23 @@ Aprovechando que son consultas SQL a medida:
    por caja o factor de conversión, PVP de tarifa, IVA.
 3. **Escandallo de las selecciones de bebida caliente**: qué ingredientes y qué cantidad
    consume cada selección.
-4. **Censo de máquinas**: código, modelo, tipo, centro, ubicación, fecha de instalación,
-   capacidad. Hoy solo tenemos ubicación de las 125 máquinas de San Pablo Sur, de 549.
+4. **Censo de máquinas**. Con las tablas que ya conocemos por el informe 4 se puede
+   escribir entero, solo hay que publicarlo. Resuelve la cobertura del control de
+   temperatura y la ubicación de las 549 máquinas, de las que hoy solo tenemos 125:
+
+   ```sql
+   select cli.codigo cod_cli, cli.nombre cliente, cn.numcentro, cn.denomina centro,
+          pdv.codigo cod_pdv, pdv.ubicacion, m.codigo cod_maq, mod.modelo modelo
+   from vending.pdvs pdv
+   left join recursos.maquinas m on m.id = pdv.maquinaid
+   left join recursos.maquinasmodelos mod on mod.id = m.maquinamodeloid
+   left join comercial.clientescentros cn on cn.id = pdv.clientecentroid
+   left join comercial.clientes cli on cli.id = cn.clienteid
+   order by cli.codigo, cn.numcentro, pdv.codigo
+   ```
+
+   Si la máquina tiene marca de refrigerada, tipo o capacidad en `recursos.maquinas` o en
+   `recursos.maquinasmodelos`, conviene añadir esas columnas: son las que permiten separar
+   las máquinas de fresco de las de bebida caliente.
 5. **Planograma por máquina**: canal, artículo asignado y capacidad, que es lo que permite
    distinguir "no había demanda" de "estaba vacío".
