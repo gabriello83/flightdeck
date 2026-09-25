@@ -1281,6 +1281,51 @@ tipo: incluye también las rutas técnicas.
 
 ---
 
+## Informe 34 — Máquina: precio medio de venta por periodo
+
+**Parámetros**: `Desde Fecha` (0) y `Hasta Fecha` (1).
+
+### Este informe está roto, y es el peor de los casos
+
+Los parámetros **solo se usan para elegir qué máquinas salen**:
+
+```sql
+where maq.id in (select distinct(pvis.maquinaid) from vending.partesvisita pvis
+                 where (pvis.fechaejec >= '{0}' and pvis.fechaejec <= '{1} 23:59:59'))
+```
+
+Pero la subconsulta que calcula las ventas tiene el periodo **escrito a fuego**:
+
+```sql
+where (pvis.fechaejec >= '2024-07-01' and pvis.fechaejec <= '2024-07-31 23:59:59')
+```
+
+Es decir: se pide septiembre de 2026 y se obtiene **la lista de máquinas visitadas en
+septiembre de 2026 con sus ventas de julio de 2024**. El informe 9 tenía el mismo vicio,
+pero allí al menos devolvía vacío y saltaba a la vista. Aquí devuelve cifras con toda la
+pinta de ser correctas.
+
+La prueba está en la propia salida: **229 máquinas**, cuando en septiembre hubo 20.816
+visitas sobre más de 3.000 puntos de venta. Esas 229 son la intersección de dos periodos
+sin relación: máquinas visitadas en septiembre de 2026 **que además** vendieron algo en
+julio de 2024. Y los 207.504,14 € y 239.868 unidades que muestra son de julio de 2024.
+
+Se arregla sustituyendo las dos constantes por `'{0}'` y `'{1} 23:59:59'`.
+
+### Lo que mide, cuando funcione
+
+Precio medio por venta de cada máquina, a partir de `cal_totnumvtas` y `cal_totimpvtas`,
+que son los totales calculados del parte de visita. Con las cifras de julio de 2024, las
+medianas por clase salen coherentes: bebida caliente 0,649 €, bebida fría 0,867 €, snack
+0,924 €.
+
+Dicho esto, **es un indicador derivado, no un informe**: teniendo ventas por máquina, el
+precio medio se calcula en el cuadro de mando sin pedir nada a VenCloud. Lo que sí vale la
+pena conservar de aquí es la idea: el precio medio por máquina y por clase es un buen
+detector de tarifa mal configurada o de surtido cambiado sin querer.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
