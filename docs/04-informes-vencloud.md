@@ -1606,10 +1606,26 @@ modelo, no de la máquina concreta.
 ## Informe 41 — Listado de coordenadas GPS por dispositivo y fecha
 
 **Parámetros**: `Codigo Dispositivo` (0, numérico), `Desde Fecha` (1) y `Hasta Fecha` (2).
-**El SQL no llegó**, solo la salida.
+
+```sql
+select fecha::text, coddispositivo, gpslatitud, gpslongitud
+from utils.trackinggps
+where coddispositivo = {0}
+  and (fecha >= '{1}' and fecha <= '{2}')
+order by coddispositivo ASC, fecha DESC
+```
 
 Cuatro columnas: `fecha`, `coddispositivo`, `gpslatitud`, `gpslongitud`. Son las posiciones
-que va dejando el terminal del reponedor.
+que va dejando el terminal del reponedor, guardadas en `utils.trackinggps`.
+
+**Dos defectos del SQL:**
+
+- El corte superior es `fecha <= '{2}'`, **sin `23:59:59`**. Todos los demás informes lo
+  llevan. Aquí eso significa que la fecha "hasta" se interpreta a las 00:00:00 y **el
+  último día se pierde entero**.
+- Solo devuelve el código de dispositivo. **No hay forma de saber de quién es ese
+  terminal**, ni a qué ruta pertenece, así que el informe no se puede cruzar con nada. Le
+  falta el enlace con el reponedor o la ruta, que es lo que lo convertiría en información.
 
 **Salida** (dispositivo 3, septiembre de 2026): **43 puntos**.
 
