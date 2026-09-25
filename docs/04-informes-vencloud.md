@@ -979,6 +979,108 @@ de empresa habría que llamarlo centro a centro. Se arregla con el patrón del i
 
 ---
 
+## Informe 28 — Comprobación de IVAs en la recaudación
+
+Sin parámetros, y con el periodo **escrito a fuego**: `where anho = 2024 and mes in (1..7)`.
+Como el informe 9, hay que parametrizarlo para que sirva de algo en el día a día.
+
+### Qué hace
+
+Una recaudación es un montón de monedas que mezcla productos al 10% y al 21%. Para
+facturarla hay que repartir la base por tipo de IVA, y VenCloud lo hace con un criterio.
+Este informe saca ese reparto línea a línea, desde `facturacion.prefacrecaudadetalle`, y
+lo pone al lado de dos cosas con las que contrastarlo:
+
+- **`IVA_MAQUINA`**: el tipo configurado en la ficha de la máquina (`clasefacvtaid`:
+  1 → 21%, 2 → 10%, 3 → 4%, 4 → 0%).
+- **`critcalculo`**: cómo se ha repartido — `1 AUDIT` (datos de auditoría de la máquina),
+  `2 CARGAS`, `3 CANALES` (planograma) o `4 MAQUINA` (el tipo único de la ficha).
+
+O sea: es un informe de **control fiscal**, para comprobar que el IVA repercutido en cada
+recaudación se ha calculado con un criterio razonable y cuadra.
+
+### La salida (enero a julio de 2024)
+
+149.985 líneas · base **3.527.265,75 €** · cuota **451.646,46 €**.
+
+| Criterio | Líneas |
+|---|---:|
+| 1 AUDIT | 115.138 (76,8%) |
+| 3 CANALES | 22.830 (15,2%) |
+| 4 MAQUINA | 11.532 (7,7%) |
+| 2 CARGAS | 485 (0,3%) |
+
+Tipos aplicados: 10% en 110.798 líneas, 21% en 34.250 y 0% en 4.937 (28.954,86 € de base).
+
+**La aritmética es impecable**: en las 149.985 líneas, la cuota es exactamente la base por
+el tipo. Ahí no hay nada que rascar.
+
+### Dos cosas que sí merecen una mirada
+
+**1. Líneas con criterio MAQUINA cuyo tipo no coincide con el de la máquina: 5.026,
+375.070,77 € de base.** Que el tipo aplicado difiera del de la ficha es normal cuando el
+reparto es por AUDIT o por CANALES —una misma máquina vende al 10% y al 21%—, y por eso el
+15,5% de discrepancia global no dice nada. Pero cuando el criterio es *la máquina*, el tipo
+debería ser *el de la máquina*. Casi todas son 21% aplicado sobre máquinas hoy configuradas
+al 10%. La explicación más probable es que la ficha haya cambiado después de facturar, o que
+se cambiara la máquina de ese punto de venta: el informe lee la configuración **actual**
+contra una factura **histórica**. Conviene confirmarlo antes de darlo por error.
+
+**2. 66.347 líneas (44%) no tienen máquina asociada**, con 1.142.767,81 € de base. Son
+puntos de venta cuyo `maquinaid` no resuelve hoy. En esas líneas la columna de contraste
+viene vacía, así que **casi la mitad del importe no se puede comprobar** con este informe.
+Para que sirva de verdad habría que guardar el tipo de IVA vigente en el momento de
+facturar, no ir a buscarlo a la ficha.
+
+---
+
+## Informe 29 — Rutas y PDVs: lista
+
+Sin parámetros. Filtra `r.tipo = 0`, o sea un tipo concreto de ruta; hay otros, porque el
+informe 20 llegaba a contar 65 rutas distintas y aquí salen 60.
+
+**Salida**: 3.021 filas · **60 rutas** · 3.007 puntos de venta · 185 clientes · 412 centros
+· 17 delegaciones.
+
+### Aviso de modelado: el código de ruta no es único
+
+`cod_ruta` se repite entre delegaciones —hay 32 códigos distintos para 60 rutas—, así que
+la clave de una ruta es **la delegación más el código**, o su `refexterna`, que sí sale
+única (60 valores). Agrupar solo por `cod_ruta` mezcla rutas de provincias distintas; es un
+error fácil de cometer y da resultados absurdos.
+
+### Tamaño de las rutas
+
+| | |
+|---|---:|
+| Mediana | 52 puntos de venta |
+| Media | 50 |
+| Mayor | 123 (La Paz 01 - Café) |
+| Menor | 2 (Ruta 12 - Luis Chávez, Madrid 22 - EDP) |
+
+La mayoría de rutas llevan el nombre del reponedor, lo que permite atribuir trabajo a
+personas sin cruzar con nada más.
+
+### Lo que sale al cruzarlo con el censo
+
+- **196 puntos de venta instalados no están en ninguna ruta de tipo 0**, 22 de ellos en
+  centros de Airbus. O los cubre otro tipo de ruta, o son máquinas que nadie tiene
+  asignadas: hay que mirarlo.
+- **14 puntos de venta están en dos rutas a la vez** (por ejemplo C00663, en "Ruta 01
+  Fernando Duran Roca" y en "Ruta La Línea 1"). Duplicidad de asignación.
+- Hay una **RUTA TEST** con 3 puntos de venta, los tres instalados. Igual que el
+  `CLIENTE TEST` del informe 8, hay que excluirla de cualquier indicador.
+
+### Por qué es la base del análisis de rutas
+
+Hasta ahora la ruta solo aparecía como texto en las visitas. Esto da la **asignación
+oficial**: qué PDV pertenece a qué ruta. Con ella se puede medir lo que de verdad importa
+de una ruta —cobertura, carga de trabajo por reponedor, visitas realizadas frente a puntos
+asignados, rentabilidad por ruta— y contrastar la asignación teórica con las visitas reales
+del informe de visitas.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
