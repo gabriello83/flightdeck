@@ -2053,6 +2053,57 @@ cabina no es cuánto vende cada delegación, sino **cuánta de su venta se está
 
 ---
 
+## Informe 53 — Rutas por fecha: plan, visitas, recaudaciones y audits
+
+**Parámetros**: `Desde Fecha` (0) y `Hasta Fecha` (1).
+
+Es el informe 33 **abierto por día**: genera la rejilla de días por ruta con
+`generate_series` y cuelga de ella las cuatro medidas. Los totales de septiembre coinciden
+exactamente con los del 33 (24.966 planificadas, 20.816 partes, 7.095 recaudaciones,
+286.344,78 €, 2.396 audits), así que es el mismo dato con la dimensión temporal añadida.
+
+**Salida**: 1.282 filas (ruta × día con actividad) sobre 26 días.
+
+### Entre semana el cumplimiento es estable
+
+Del lunes al viernes se mueve entre el **79% y el 91%**, sin sobresaltos. El 83% agregado
+del informe 33 no esconde ningún día catastrófico.
+
+### El plan de fin de semana es ficticio
+
+| Día | Planificadas | Realizadas | % |
+|---|---:|---:|---:|
+| Sábados | 125–126 | 140–169 | 111–135% |
+| **Domingos** | **14** | **82–117** | **586–836%** |
+
+Se planifican 14 visitas en domingo y se hacen más de cien. El fin de semana se trabaja sin
+plan, y eso contamina cualquier indicador de cumplimiento: lo que entre semana es una
+medida útil, en fin de semana es ruido.
+
+### El importe de recaudación llega con días de retraso
+
+Esto es lo más relevante para el diseño del cuadro de mando:
+
+| Fecha | Recaudaciones | Importe |
+|---|---:|---:|
+| 21/09 | 422 | 10.216 € |
+| 22/09 | 412 | 4.216 € |
+| **23/09** | **428** | **0 €** |
+| 24/09 | 358 | 3.918 € |
+| **25/09** | **340** | **0 €** |
+
+El número de visitas con recaudación se mantiene normal, pero **el importe cae a cero en
+los últimos días**. No es que no se recaude: es que el importe se teclea después. Encaja con
+lo que ya sabíamos del informe 31, donde el filtro `estadocontaje = 1` dejaba fuera lo
+recaudado y no contado.
+
+Consecuencia práctica: **un indicador de "efectivo recaudado hoy" siempre marcará cero**, y
+los últimos tres o cuatro días de cualquier periodo están infravalorados. El panel tiene que
+retrasar esa serie o marcar los días aún no consolidados, igual que hacen los cuadros de
+mando financieros con el cierre.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
