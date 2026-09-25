@@ -1716,14 +1716,51 @@ con el inventario del informe 20.
 - Septiembre en curso (289.273,17 €) encaja con los 286.344,78 € de los informes 31, 33 y
   36. No son exactamente lo mismo: aquí es el importe **con IVA de la prefacturación** y
   allí el **efectivo contado**.
-- El título promete "Recaudación y Bancarias" pero la consulta solo devuelve una serie. La
-  parte bancaria no está.
+- El título "Recaudación y Bancarias" se entiende al ver el informe 43: **este suma todas
+  las formas de pago** y el 43 solo el efectivo (`formapago = 0`). No es que falte la parte
+  bancaria, es que va incluida en el total.
 
 ### Rendimiento
 
 Doce subconsultas correlacionadas por fila y 5.203 filas son más de sesenta mil consultas.
 Lo mismo se obtiene con un solo `group by` por PDV, año y mes. Si este informe se va a
 llamar por API con regularidad, hay que reescribirlo.
+
+---
+
+## Informe 43 — Recaudaciones por PDV, año y mes: solo recaudación
+
+Idéntico al informe 42 salvo por una línea repetida en las doce subconsultas:
+`and formapago = 0`. Es decir, **solo efectivo**. Los mismos parámetros, con el mismo hueco
+en la posición 2.
+
+Comparando los dos sale el reparto entre efectivo y medios bancarios, que es un dato de
+negocio que no se ve en ningún otro informe:
+
+| Mes | Efectivo (43) | Total (42) | Bancario | % bancario |
+|---|---:|---:|---:|---:|
+| Agosto | 428.003,41 € | 965.283,49 € | 537.280,08 € | 56% |
+| Julio | 643.927,16 € | 1.363.982,99 € | 720.055,83 € | 53% |
+| Mayo | 517.609,52 € | 1.235.383,11 € | 717.773,59 € | 58% |
+| Abril | 590.713,13 € | 1.242.413,61 € | 651.700,48 € | 52% |
+| Octubre anterior | 676.104,50 € | 1.429.596,02 € | 753.491,52 € | 53% |
+
+**Algo más de la mitad de la recaudación ya no es efectivo.** Se mantiene estable mes a mes
+entre el 52% y el 58%, y eso tiene consecuencias operativas directas: la ruta de
+recaudación mueve menos de la mitad del dinero, y el descuadre de caja pierde peso frente
+al cuadre con la pasarela de pago.
+
+### Dos cosas más que se ven al comparar
+
+**El mes en curso no tiene todavía parte bancaria.** Septiembre da exactamente 289.273,17 €
+en los dos informes. O el bancario se prefactura más tarde, o aún no se ha procesado; en
+cualquier caso, **el mes corriente no es comparable con los cerrados** y el cuadro de mando
+tiene que advertirlo.
+
+**El registro corrupto es de efectivo.** El −7.522.229.465,35 € del PDV C01830 aparece en el
+informe 43, o sea con `formapago = 0`. En el 42 el importe es 110,65 € menos negativo, que
+es lo que ese punto de venta tiene de bancario ese mes. Lo demás de ese PDV es normal: 183 €
+en septiembre, 227 € en agosto, 474 € en julio.
 
 ---
 
