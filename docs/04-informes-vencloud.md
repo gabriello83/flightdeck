@@ -2104,6 +2104,70 @@ mando financieros con el cierre.
 
 ---
 
+## Informe 58 — Listado de rutas con PDVs y criterios asignados
+
+Sin parámetros. 47 columnas. Es **la configuración que genera el plan de visitas**:
+`vending.rutasdetallecriterios`, con el criterio de frecuencia de cada punto de venta
+dentro de cada ruta, los días marcados en dos semanas alternas y los días de recaudación.
+
+**Salida**: 4.017 asignaciones · 44 rutas · 3.009 puntos de venta.
+
+### Catálogos que aporta
+
+- **Tipo de ruta**: 0 Normal · 1 Fines de semana · 2 Festivos · 3 Extra · 4 Técnica. En uso
+  solo hay dos: Normal (3.021) y Extra (996).
+- **Criterio de visita**: 0 Diario · 1 Determinados días · 2 Semanas alternas · 3 Cada n
+  días estático · 4 Cada n días dinámico · 5 Cada n días por turnos · 6 Cada n semanas.
+
+| Criterio | Asignaciones |
+|---|---:|
+| Determinados días | 2.490 (62%) |
+| Cada n días dinámico | 535 |
+| Semanas alternas | 408 |
+| Diario | 351 |
+| Cada n días estático | 214 |
+| Cada n semanas | 19 |
+
+### Explica el plan fantasma de los domingos
+
+Solo **14 puntos de venta** tienen marcado el domingo (`d1 = 1`) y 58 el sábado. Eso cuadra
+**exactamente** con las 14 visitas planificadas en domingo que aparecían en el informe 53,
+frente a las más de cien que se hacen de verdad.
+
+O sea: el fin de semana no es que el motor de planificación falle, es que **los criterios no
+están configurados para el trabajo que se hace en sábado y domingo**. Se arregla en la
+configuración, no en el informe.
+
+### Los días de recaudación casi no están configurados
+
+Lunes 164, martes 141, miércoles 133, jueves 152, viernes 96, y **sábado y domingo cero**.
+En total unas 686 combinaciones de punto de venta y día, cuando el informe 53 muestra unas
+**400 recaudaciones diarias**. La recaudación se hace sobre la marcha, no según criterio, lo
+que encaja con el 34,8% de máquinas sin recaudar del informe 23.
+
+### Dos defectos de configuración concretos
+
+**97 asignaciones tienen criterio "Determinados días" y ningún día marcado**, ni en la
+semana 1 ni en la semana 2. Son puntos de venta que **no se planifican nunca**. 94 están en
+rutas activas y, lo más llamativo, **81 se concentran en una sola ruta: "La Paz 01 - Café"**.
+Esa ruta era además la más grande del parque (123 PDVs, informe 29), así que dos tercios de
+ella están configurados para no generar visita.
+
+**879 asignaciones cuelgan de rutas inactivas** (847 puntos de venta), entre ellas "Madrid
+12 Airbus Álvaro", "Madrid 13 Airbus Úrsula" y "Madrid 14 Airbus Paco", que parecen
+versiones antiguas de las rutas de Airbus vigentes. Eso es histórico normal, pero **48
+puntos de venta solo están en rutas inactivas**: no tienen ninguna ruta activa que los
+cubra, y enlazan con los 196 sin ruta del informe 29.
+
+### Frecuencia teórica
+
+Dentro de "Determinados días": 1.004 puntos de venta se visitan **un día por semana**, 832
+dos días, 418 tres, 110 cinco y 9 seis. Con esto y la carga media del informe 45 ya se
+puede comparar **frecuencia teórica contra consumo real**, que es la pregunta de fondo de
+cualquier replanteo de rutas.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
