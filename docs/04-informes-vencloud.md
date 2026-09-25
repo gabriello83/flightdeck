@@ -1372,6 +1372,64 @@ Al montar la ingesta hay que elegir uno y ser consistente.
 
 ---
 
+## Informe 36 — Seguimiento operativo por ruta, cliente y máquina
+
+**Parámetros**: `Desde Fecha` (0) y `Hasta Fecha` (1), usados correctamente en todas las
+subconsultas.
+
+**Es la tabla que el cuadro de mando necesita**: una fila por punto de venta visitado, con
+delegación, cliente, centro, dirección completa, máquina, ubicación, ruta y cinco medidas
+del periodo —producto cargado, producto retirado, número de ventas, importe de ventas y
+recaudación—. Todo lo que hasta ahora estaba repartido en ocho informes, junto y por PDV.
+
+**Salida** (1 al 26 de septiembre de 2026): **2.956 puntos de venta** · 177 clientes · 399
+centros · 2.921 máquinas.
+
+| Medida | PDVs con dato | Total |
+|---|---:|---:|
+| Producto cargado | 2.828 (95,7%) | 2.470.043 unidades |
+| Producto retirado | **417 (14,1%)** | 8.743 unidades |
+| Número de ventas | 2.956 | 852.339 |
+| Importe de ventas | 2.956 | 722.158,92 € |
+| Recaudación | 2.956 | 286.344,78 € |
+
+### Cuatro cosas que salen de aquí y de ningún otro sitio
+
+**1. El 86% de los puntos de venta no registra ni una retirada.** Solo 417 de 2.956 anotan
+producto retirado. Aplicando el criterio del equipo —una ruta sin caducado es un reponedor
+que no lo está marcando— esto deja de ser una métrica de merma y pasa a ser una métrica de
+disciplina: son 2.539 puntos de venta donde no se está registrando. Donde sí se registra, la
+retirada es el 2,2% de lo cargado (mediana), con un p90 del 15,8%.
+
+**2. El 63% de los puntos de venta visitados no tiene dato de venta.** La mediana de
+`totimpvtas` es **cero**: 1.872 de 2.956. Es la otra cara del 12% de audits del informe 33,
+ahora medida por punto de venta. Cualquier análisis de venta con estos datos cubre, como
+mucho, un tercio del parque.
+
+**3. El efectivo es una parte pequeña del negocio.** En los puntos de venta con venta
+registrada, la recaudación es el **9% del importe vendido** (mediana), con un p90 del 48%.
+El resto es tarjeta y medios cashless. Y hay **16 puntos de venta donde la recaudación
+supera la venta registrada**: o falta venta por registrar, o hay un descuadre. Esa lista,
+corta y concreta, es un instrumento de cabina.
+
+**4. Tres tipos de retirada, no uno.** El SQL filtra `RC`, `RM` y `RR`. Hasta ahora solo
+conocíamos `RC` (caducidad) por el informe 12; falta saber qué son las otras dos.
+
+### Otros apuntes
+
+- **118 puntos de venta visitados no tienen ruta activa asignada**, en línea con los 196
+  sin ruta del informe 29.
+- Los totales cuadran con el resto: la recaudación da **exactamente** los mismos
+  286.344,78 € que los informes 31 y 33, y las ventas (722.158,92 €) coinciden con el
+  informe 35 salvo por los cuatro días de diferencia del rango.
+- **El producto cargado mezcla unidades**: 2,47 millones incluye paletinas, vasos y azúcar
+  junto a latas y sándwiches, y sin el factor de conversión esa suma no significa gran cosa.
+  Para valorar hay que ir por artículo, como en el informe 66.
+- El SQL repite cinco veces la misma subconsulta con un `pdvid in (...)` redundante. Funciona,
+  pero una sola agregación con cinco columnas haría lo mismo mucho más rápido.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
