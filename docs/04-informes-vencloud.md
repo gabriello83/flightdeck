@@ -504,6 +504,51 @@ panel en vez de dar un dato incompleto como si fuera completo.
 
 ---
 
+## Informe 12 — Total de retiradas por caducidad, por PDV, artículo y periodo
+
+**Parámetros**: `Desde` (0), `Hasta` (1) y `NumCentro` (2, numérico).
+
+Mismo motor que el informe 7, cambiando el tipo de línea de reposición: `rep.tipo = 'RC'`
+(retirada por caducidad) en vez de `'CM'` (carga).
+
+```sql
+where rep.tipo = 'RC' and p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
+  and p.clientecentroid = (select id from comercial.clientescentros where numcentro = {2})
+```
+
+**Salida**: la ejecución de prueba devolvió **cero registros**.
+
+### Dos limitaciones de este informe
+
+**El centro es obligatorio.** A diferencia del informe 7, aquí no hay comodín: el filtro es
+una igualdad directa contra `numcentro`, así que no se puede pedir toda la cartera de una
+vez. Para un cuadro de mando de empresa habría que llamarlo centro a centro, cientos de
+veces. Se arregla con el mismo patrón que ya usa el 7:
+
+```sql
+  and ((0 = {2}) or (cn.numcentro = {2}))
+```
+
+**Y no hace falta que sea un informe aparte.** El 7 y el 12 son la misma consulta con
+distinto `tipo`. Lo razonable es **un solo informe de reposiciones con `rep.tipo` como
+columna**: sirve para cargas, para caducados y para los tipos que existan y todavía no
+conocemos, y evita mantener dos consultas gemelas.
+
+### Por qué el caducado importa, y por qué el cero engaña
+
+El caducado es merma directa: producto comprado, cargado y tirado. Valorarlo es inmediato,
+porque el `cod_art` cruza con los precios de compra del informe 2 igual que las cargas.
+
+Pero el indicador hay que leerlo al revés de lo que parece. Según el equipo, **una ruta sin
+caducado no es una ruta perfecta: es un reponedor que no está marcando el producto
+caducado en el terminal**. Así que el primer indicador no es cuánto se retira, sino
+**cuántas rutas y máquinas no registran ninguna retirada**, que es una alerta de disciplina
+de proceso.
+
+Cruzado con el informe 7 sale la merma real: retiradas / cargas por artículo y por máquina.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
