@@ -1471,6 +1471,54 @@ Y como trae el `puc`, da el margen por máquina sin más cuentas.
 
 ---
 
+## Informe 38 — Resumen de inventario de máquinas según el último inventario en visitas
+
+Sin parámetros. Es el gemelo del informe 20, con una diferencia de fondo: la fecha del
+último inventario **no sale de los informes formales de inventario**
+(`stocks.infinventarioelementos`) sino de los **inventarios anotados en el parte de visita**
+(`vending.partesvisitarecinventarios`). A cambio, no trae valoración.
+
+**Salida**: 3.200 máquinas, las mismas del informe 20.
+
+| | Informe 38 (visitas) | Informe 20 (formal) |
+|---|---:|---:|
+| Sin inventario nunca | 1.073 (33,5%) | 954 (29,8%) |
+| Antigüedad mediana | **397 días** | 485 días |
+| Inventariadas en los últimos 30 días | 48 (1,5%) | 18 (0,6%) |
+| En el último año | 902 (28,2%) | 828 (25,9%) |
+
+### Son dos registros distintos, y ninguno está completo
+
+Comparando máquina a máquina:
+
+- Coinciden en fecha en **2.694 (84%)**.
+- En **219** el inventario de visita es más reciente que el formal; en **20** es al revés.
+- **193 máquinas tienen inventario formal pero ninguno en visita**, y **74 al revés**.
+
+Juntando los dos, las máquinas **sin ningún inventario por ninguna vía bajan a 880** (27,5%)
+en lugar de las 1.073 o 954 que dice cada informe por separado.
+
+Conclusión para la ingesta: la fecha de último inventario debe ser **la más reciente de las
+dos fuentes**, no la de un informe u otro. Y el indicador que importa sigue siendo el mismo
+del informe 20: **cuántas máquinas llevan más de X meses sin contar**, que con cualquiera de
+las dos medidas es una cifra muy alta.
+
+### Detalle heredado del informe 20
+
+Los dos comparten esta subconsulta para la ruta:
+
+```sql
+(select rut.denomina from vending.rutas rut
+ left join vending.rutasdetalle rutde on rut.id = rutde.rutaid
+ where rutde.pdvid = pdv.id order by tipo asc limit 1) ruta
+```
+
+El `limit 1` sobre `order by tipo` devuelve **una ruta cualquiera** cuando el punto de venta
+está en varias, y por el informe 29 sabemos que hay 14 en esa situación. Para esos, la ruta
+que muestran estos informes no es fiable.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
