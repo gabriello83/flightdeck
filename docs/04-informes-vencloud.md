@@ -648,6 +648,49 @@ tecleo mueve el panel entero.
 
 ---
 
+## Informe 22 — Recursos: máquinas sin reposición desde una fecha dada
+
+**Parámetro**: `Desde fecha`, y aquí hay un detalle que importa para la API: su **orden es
+1, no 0**, y el SQL lo usa como `{1}`. Es el primer informe donde la numeración no empieza
+en cero, así que al construir la llamada no se puede dar por hecho que el primer filtro sea
+`{0}`. Hay que probarlo.
+
+```sql
+where m.id not in (select pv.maquinaid
+                   from vending.partesvisitareposiciones as pvr
+                   left join vending.partesvisita as pv on pvr.partevisitaid = pv.id
+                   where pvr.fecha >= '{1}')
+```
+
+**Salida** (desde el 01/09/2026): **1.664 máquinas**.
+
+### Tres cuartas partes del resultado son ruido
+
+De esas 1.664, **1.286 no tienen punto de venta**: son las máquinas de taller y almacén que
+ya conocíamos por el informe 10. Lógicamente no se reponen, y aparecen aquí cada vez.
+
+**Las que importan son 378**: máquinas instaladas, en un punto de venta, que llevan 24 días
+sin una sola línea de reposición. Se concentran en Murcia (79), Leganés (75), Cornellà (70)
+y Valencia (45). En Airbus son **30**, repartidas entre Getafe (7), CBC (6), San Pablo Norte
+(6), Tablada (4), Illescas (3), San Pablo Sur (2) y Albacete (2).
+
+Para el cuadro de mando basta añadir `and p.id is not null`, o separar ambas listas: una de
+máquinas desatendidas y otra de parque inmovilizado, que son dos problemas distintos.
+
+### Ojo: dice reposición, no recaudación
+
+El comentario del SQL dice "para determinar si ha habido recaudación", pero el código mira
+`partesvisitareposiciones`, que son líneas de **reposición**. La regla de negocio que
+interesa vigilar es otra: **toda máquina hay que recaudarla al menos una vez al mes, y más a
+menudo si acumula más de 100 € en la bolsa**.
+
+Eso pide un informe hermano que mire `partesvisita` con `recaudacion = 1`, como hace el
+informe 6. Y con la venta en efectivo de la telemetría se puede ir más lejos: estimar
+**cuánto dinero hay ahora mismo en cada máquina** desde la última recaudación, y avisar al
+pasar de 100 € sin esperar al mes. Ese sí es un instrumento de cabina.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
@@ -655,11 +698,14 @@ Aprovechando que son consultas SQL a medida:
 1. **Ventas con código de artículo, hora y medio de pago.** El campo que desbloquea todo
    lo demás: sin `cod_art` no hay margen, sin hora no hay análisis por franja, sin medio
    de pago no se cuadran las 276 devoluciones. Filtros por rango de fechas y centro.
-3. **Maestro de artículos completo**: `cod_art`, denominación, familia, formato, unidades
+3. **Máquinas sin recaudación desde una fecha**, el hermano del informe 22 pero mirando
+   `partesvisita` con `recaudacion = 1`. Con la venta en efectivo permite estimar el dinero
+   acumulado en cada máquina y avisar al pasar de 100 €.
+4. **Maestro de artículos completo**: `cod_art`, denominación, familia, formato, unidades
    por caja o factor de conversión, PVP de tarifa, IVA.
-4. **Escandallo de las selecciones de bebida caliente**: qué ingredientes y qué cantidad
+5. **Escandallo de las selecciones de bebida caliente**: qué ingredientes y qué cantidad
    consume cada selección.
-5. **Censo de máquinas: resuelto por el informe 10.** Solo falta añadirle el modelo con
+6. **Censo de máquinas: resuelto por el informe 10.** Solo falta añadirle el modelo con
    `mod.clase` traducido y la capacidad. El SQL de partida sería este, si se prefiere un
    informe aparte:
 
