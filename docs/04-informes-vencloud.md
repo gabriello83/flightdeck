@@ -378,7 +378,10 @@ Mientras no se corrija, el informe solo sirve para fechas anteriores a marzo de 
 ### Lo importante no es el informe, es la tabla que revela
 
 `telemetry.telemetrysales` es una tabla de **ventas de telemetría dentro de VenCloud**, con
-`fechaventa`, `precio`, `pdvid`, `tipotelemetria` y `lineaprecio`. Es decir: puede que la
+`fechaventa`, `precio`, `pdvid`, `tipotelemetria` y `lineaprecio`. Por el informe 37 sabemos
+que `lineaprecio` distingue el medio de pago: **2 efectivo, 1 tarjeta de crédito, 3
+prepago**. O sea que este informe, al filtrar `lineaprecio = 1`, suma solo la venta con
+tarjeta de crédito, no toda la venta. Es decir: puede que la
 venta que dábamos por perdida —la que íbamos a buscar en Nayax— ya esté aquí, con su fecha
 y hora, y ya enlazada al punto de venta de VenCloud, que es la unión que nos faltaba entre
 los dos mundos.
@@ -1427,6 +1430,44 @@ conocíamos `RC` (caducidad) por el informe 12; falta saber qué son las otras d
   Para valorar hay que ir por artículo, como en el informe 66.
 - El SQL repite cinco veces la misma subconsulta con un `pdvid in (...)` redundante. Funciona,
   pero una sola agregación con cinco columnas haría lo mismo mucho más rápido.
+
+---
+
+## Informe 37 — Comparador de precios: máquina contra audit, por artículo
+
+**Parámetro**: `Código Artículo` (0, **cadena**; es el primero que no es número ni fecha).
+
+Para un artículo dado, recorre todos los canales de máquina donde está asignado
+(`recursos.maquinascanales`), se queda con el canal más reciente de cada máquina y pone una
+al lado de otra dos cosas:
+
+- **El precio configurado**, calculado con la función `vending.getprecioscanal(...)` en sus
+  tres modalidades: `precioef` (efectivo), `preciotp` y `preciotc` (tarjetas).
+- **El último precio leído en un audit**, de `vending.partesvisitamaqdetalle`
+  (`tic_precioef`, `tic_preciotp`, `tic_preciotc`), tomando solo visitas con `estadolec = 2`
+  y lectura no vacía.
+
+Añade `a.puc`, el precio de última compra, así que en la misma fila están el coste y el
+precio de venta de cada máquina.
+
+### Para qué sirve
+
+Detecta **máquinas cuyo precio real no coincide con la tarifa**. Es la herramienta que
+faltaba para investigar el hallazgo del análisis exploratorio: 121 artículos con precio
+distinto según el centro, con casos como PAN AIRBUS de 0,31 € a 2,05 €. Con este informe se
+puede ver si eso es tarifa negociada o máquina mal configurada, artículo por artículo.
+
+Y como trae el `puc`, da el margen por máquina sin más cuentas.
+
+### Dos cosas a tener en cuenta
+
+- **Depende de los audits**, y ya sabemos por el informe 33 que solo se capturan en el 12%
+  de las visitas. Para muchas máquinas la columna de audit vendrá vacía o con una lectura
+  antigua; conviene mirar también la fecha de esa lectura, que el informe no muestra.
+- El bloque comentado del SQL revela algo útil sobre la telemetría: lee precios de
+  `telemetry.telemetrysales` filtrando `lineaprecio` **2 para efectivo, 1 para tarjeta de
+  crédito y 3 para prepago**. Eso explica el `lineaprecio = 1` del informe 9: aquel informe
+  solo suma **ventas con tarjeta de crédito**, no toda la venta.
 
 ---
 
