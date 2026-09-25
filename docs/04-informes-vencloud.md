@@ -797,6 +797,74 @@ el indicador sería directo: artículos activos sin planograma y sin movimiento 
 
 ---
 
+## Informe 25 — PDVs: cargas por punto de venta y clase de artículo
+
+**Parámetros**: `Desde Fecha` (0) y `Hasta Fecha` (1).
+
+Tres columnas de cantidad por punto de venta —`frias`, `snack` y `café`— construidas con
+tres subconsultas sobre las líneas de carga (`tipo = 'CM'`), cada una filtrando una clase
+de artículo distinta.
+
+**Salida** (agosto de 2026): 2.371 puntos de venta.
+
+| Columna | Unidades |
+|---|---:|
+| frías | 616.207 |
+| snack | 319.634 |
+| café | 430.600 |
+
+### Aquí sí hay coeficientes
+
+Es la diferencia clave con el informe 7. Las columnas de frías y snack suman unidades tal
+cual, pero la de café multiplica por un coeficiente:
+
+```sql
+res.cantidad * replace(coe.coeficiente,',','.')::numeric as cant_total
+...
+inner join importacion.art_bc_coeficiente coe on coe.articuloid = res.artid
+```
+
+O sea: el café no se carga en servicios, se carga en kilos de café, de leche en polvo y de
+chocolate, y `importacion.art_bc_coeficiente` convierte cada artículo a **servicios
+equivalentes**. Por eso la mediana de la columna café (360) es el doble que la de las otras.
+
+Esto completa la respuesta sobre si las cargas son reales: **el informe 7 da la carga
+física, el 25 da la carga convertida a servicios para el café**. Son compatibles, no
+contradictorios.
+
+Dos avisos sobre ese cálculo:
+
+- Es un `inner join`, así que **un artículo de café sin coeficiente desaparece sin dejar
+  rastro**. Un punto de venta puede aparecer con la columna vacía simplemente porque falta
+  el coeficiente, no porque no se haya cargado.
+- La subconsulta del café corta en `'{1} 23:59'` en vez de `'{1} 23:59:59'`: pierde el
+  último minuto del día. Es menor, pero hace que la columna de café no cubra exactamente el
+  mismo periodo que las otras dos.
+
+### El hallazgo de fondo: hay dos tablas de clases distintas
+
+Cruzando la clase del punto de venta con la columna que trae dato, el mapeo queda claro:
+
+| Clase de PDV | Columna con dato | Filtro del SQL |
+|---|---|---|
+| BEBIDA CALIENTE (746 PDVs) | solo `café` | `a.clase = 0` |
+| BEBIDA FRÍA (664) | solo `frias` | `a.clase = 2` |
+| SNK/MULTIPRODUCTO (957) | `frias` y `snack` | `a.clase = 2` y `a.clase = 3` |
+
+Es decir, **`stocks.articulos.clase` usa una codificación distinta de `pdv.clase` y
+`mod.clase`**: en artículos, 0 es café, 2 es bebida fría y 3 es snack; en máquinas, 0 es
+bebida fría y 2 bebida caliente. A primera vista el SQL parece tener las etiquetas
+cambiadas, y no es así. Es una trampa fácil de pisar al escribir la ingesta, y por eso
+queda anotada aquí.
+
+### Nota
+
+El `where` final exige que al menos una de las tres columnas tenga dato, así que **los
+puntos de venta visitados sin ninguna carga no aparecen**. Para medir visitas sin carga hay
+que ir al informe 22.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
