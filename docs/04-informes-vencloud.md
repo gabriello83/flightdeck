@@ -691,6 +691,61 @@ pasar de 100 € sin esperar al mes. Ese sí es un instrumento de cabina.
 
 ---
 
+## Informe 23 — Recursos: máquinas sin recaudación desde una fecha dada
+
+**Parámetro**: `Fecha desde`, otra vez con **orden 1**, usado como `{1}`.
+
+Es el informe hermano del 22, y está mejor construido:
+
+```sql
+where p.clase not in (10,11,100,101,102,200) and
+      m.id not in (select maquinaid from vending.partesvisita
+                   where fechacrea >= '{1}' and recaudacion = 1)
+```
+
+Excluye las clases que no manejan dinero —fuentes de agua, OCS, compactadoras, máquinas de
+cambio, partner y quioscos— y, de paso, **deja fuera las máquinas sin punto de venta**,
+porque `p.clase` es nulo para ellas y `NULL not in (...)` no se cumple. El informe 22
+debería hacer lo mismo.
+
+**Salida** (desde el 01/09/2026, 24 días): **1.093 máquinas**, ninguna sin PDV.
+
+### El dato importa, y bastante
+
+El parque que maneja efectivo son 3.145 máquinas (informe 20, descontando las clases sin
+dinero). Así que **el 34,8% lleva 24 días sin recaudar**, con la regla de negocio en una vez
+al mes. No es un incumplimiento todavía, pero a esa fecha un tercio de la flota está al
+borde.
+
+| Delegación | Sin recaudar |
+|---|---:|
+| Madrid - Leganés | 423 |
+| Levante - Murcia | 221 |
+| Cataluña - Cornellà | 87 |
+| Levante - Valencia | 70 |
+| Andalucía - Sevilla | 62 |
+
+En Airbus son 177, y **Getafe solo aporta 93** de sus 231 máquinas: el 40% del centro.
+
+Con el único dato de recaudación real que tenemos —mediana de 145 € por recaudación en la
+delegación 2 durante agosto— el orden de magnitud sería de unos **150.000 € parados en las
+bolsas**. Es una estimación gruesa, de una sola delegación y un solo mes, y no se puede dar
+por buena para toda la cartera; pero sirve para dimensionar por qué esto merece un
+instrumento propio en la cabina.
+
+### Cruzado con el informe 22
+
+| | |
+|---|---:|
+| Sin reposición **ni** recaudación | **295** |
+| Solo sin recaudar | 798 |
+| Solo sin reponer | 83 |
+
+Las 295 que no reciben ninguna de las dos atenciones son la lista corta: máquinas
+instaladas a las que hace 24 días que no va nadie.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
@@ -698,9 +753,10 @@ Aprovechando que son consultas SQL a medida:
 1. **Ventas con código de artículo, hora y medio de pago.** El campo que desbloquea todo
    lo demás: sin `cod_art` no hay margen, sin hora no hay análisis por franja, sin medio
    de pago no se cuadran las 276 devoluciones. Filtros por rango de fechas y centro.
-3. **Máquinas sin recaudación desde una fecha**, el hermano del informe 22 pero mirando
-   `partesvisita` con `recaudacion = 1`. Con la venta en efectivo permite estimar el dinero
-   acumulado en cada máquina y avisar al pasar de 100 €.
+3. **Dinero acumulado por máquina desde la última recaudación.** El informe 23 ya da qué
+   máquinas llevan sin recaudar; lo que falta es cuánto llevan dentro, cruzando la venta en
+   efectivo de la telemetría con la fecha de la última recaudación, para avisar al pasar de
+   100 € sin esperar al mes.
 4. **Maestro de artículos completo**: `cod_art`, denominación, familia, formato, unidades
    por caja o factor de conversión, PVP de tarifa, IVA.
 5. **Escandallo de las selecciones de bebida caliente**: qué ingredientes y qué cantidad
