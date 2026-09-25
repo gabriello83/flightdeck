@@ -594,6 +594,60 @@ primer hallazgo, no la buena noticia.
 
 ---
 
+## Informe 20 — Resumen de inventario valorado por máquina
+
+Sin parámetros. Recorre los puntos de venta activos (`pdv.estado = 1`) y, para cada uno,
+busca su **último** informe de inventario de máquina (`tipoalm = 'M'`, `maquinaverif`) y
+trae su `valortotal`.
+
+**Salida**: 3.200 máquinas · **306.203,51 €** de valor total declarado.
+
+Aporta además dos columnas que llevábamos tiempo necesitando: la **ruta** asignada al punto
+de venta y la **clase de máquina** ya traducida.
+
+### Pero ese número no es el stock de hoy
+
+| | |
+|---|---:|
+| Máquinas **nunca inventariadas** | 954 (29,8%) |
+| Antigüedad mediana del último inventario | **485 días** |
+| Inventariadas en los últimos 30 días | 18 (0,6%) |
+| Inventariadas en el último año | 828 (25,9%) |
+
+El inventario más antiguo es de agosto de 2023. Así que "inventario valorado" es, en
+realidad, la suma de fotos viejas: tres de cada cuatro máquinas llevan más de un año sin
+contar. Para el cuadro de mando esto no invalida el dato, pero obliga a enseñarlo **siempre
+junto a la antigüedad**, y probablemente el indicador principal no sea el valor sino
+**cuántas máquinas llevan sin inventariar más de X meses**.
+
+### Y hay valores imposibles
+
+| Valor | Máquina | Centro | Último inventario |
+|---:|---|---|---|
+| 78.761,19 € | 20SE1717 (Snack) | TVE | 18/09/2024 |
+| 19.275,48 € | 17FP1498 (Bebida Fría) | Centro de Estudios Jurídicos | 14/03/2024 |
+| 2.142,99 € | 19SE1652 (Snack) | Fundación Teatro Real | 20/03/2025 |
+
+El percentil 99 del parque son 336 €. Una máquina con 78.761 € dentro no existe: **una sola
+máquina es el 26% del total declarado**. O son inventarios de almacén imputados a un punto
+de venta, o son errores de captura. Sin las dos primeras, el total baja a unos 208.000 €,
+que ya es una cifra creíble.
+
+Cualquier indicador de valor de stock tiene que llevar control de atípicos, o un error de
+tecleo mueve el panel entero.
+
+### Reparto
+
+- **Por clase**: Bebida Caliente 1.276, Snack 1.069, Bebida Fría 766, Fuente de Agua 47,
+  Genérica 29, OCS 8, Zumos 1. Y **4 máquinas con "Valor no esperado"**: hay códigos de
+  clase que el `CASE` no contempla.
+- **Por delegación**: Madrid-Leganés concentra 151.006 € en 853 máquinas, la mitad del
+  total.
+- **Rutas**: 65 distintas, y **154 puntos de venta sin ruta asignada**.
+- **Airbus**: 563 máquinas, 24.954,79 €, y **276 nunca inventariadas** (el 49%).
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
