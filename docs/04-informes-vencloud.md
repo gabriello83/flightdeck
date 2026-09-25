@@ -929,6 +929,56 @@ cualquier número de este informe.
 
 ---
 
+## Informe 26 — Total de ventas por PDV, artículo y periodo
+
+**Parámetros**: `Desde` (0), `Hasta` (1) y `NumCentro` (2, numérico y **obligatorio**, sin
+comodín, igual que el informe 12).
+
+```sql
+select pdvid, articuloid, sum(totnumvtas) ventas_totales, sum(totimpvtas) importe_total_ventas
+from vending.partesvisita p
+left join vending.partesvisitaventas v on p.id = v.partevisitaid
+where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
+  and p.clientecentroid = (select id from comercial.clientescentros where numcentro = {2})
+group by pdvid, articuloid
+```
+
+**Salida**: la ejecución de prueba devolvió **cero registros**.
+
+### Esto es la venta por artículo dentro de VenCloud
+
+Y es importante: trae **`cod_art`**, la clave que cruza con los precios de compra del
+informe 2 y con las cargas del 7 y el 66. Con este informe el margen por artículo y por
+máquina deja de depender de Nayax.
+
+Hay ahora **dos fuentes de venta distintas** dentro de VenCloud, y conviene no mezclarlas:
+
+| | `vending.partesvisitaventas` (informe 26) | `telemetry.telemetrysales` (informe 9) |
+|---|---|---|
+| Origen | contadores de la máquina leídos en cada visita | transacción de telemetría |
+| Detalle | total por artículo entre visitas | venta individual con fecha y hora |
+| Trae artículo | sí, `cod_art` | por confirmar |
+| Sirve para | margen, consumo, cuadre | series diarias, franjas horarias, medio de pago |
+
+### La trampa del periodo
+
+El filtro es sobre `p.fechaini`, **la fecha de la visita**, no la de la venta. Las ventas
+que se imputan a un periodo son las **leídas en las visitas de ese periodo**, y esas ventas
+se produjeron entre la visita anterior y esta.
+
+Con rutas que pasan cada dos o tres semanas —como se ve en la recaudación del informe 6—
+el desfase puede ser de semanas. Para un total mensual da igual, se compensa; para
+comparar un mes contra otro, o para cualquier serie corta, **no vale**: mueve la venta al
+día en que pasó el reponedor. Las series diarias tienen que salir de la telemetría.
+
+### Lo que le falta
+
+Lo mismo que al 12: el centro es obligatorio y no admite comodín, así que para una visión
+de empresa habría que llamarlo centro a centro. Se arregla con el patrón del informe 7:
+`((0 = {2}) or (cn.numcentro = {2}))`.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
