@@ -345,6 +345,53 @@ porque está todo manchado"— y la dirección completa del centro con provincia
 
 ---
 
+## Informe 9 — Telemetría: cuadre de ventas con tarjeta por delegación
+
+**Parámetros**: `DESDE` (0) y `HASTA` (1), tipo Fecha.
+
+```sql
+select case when delegacionid is null then 'Sin configurar'
+            else (select nombre from general.delegaciones as d where delegacionid = d.id) end as delegacion,
+       ventas_tc
+from (SELECT delegacionid, sum(precio) as ventas_tc
+      FROM telemetry.telemetrysales as t
+      left join vending.pdvs as p on pdvid = p.id
+      where fechaventa >= '{0}'
+        and fechaventa <= ('20240229 23:59:59')::timestamp without time zone
+        and tipotelemetria = 40 and lineaprecio = 1
+      group by delegacionid) as tmp;
+```
+
+### La salida viene vacía porque el informe tiene un error
+
+La fecha de fin está **escrita a fuego**: `fechaventa <= ('20240229 23:59:59')`. El
+parámetro `{1}` no se usa en ninguna parte. Cualquier consulta posterior al 29 de febrero
+de 2024 devuelve cero filas, se pida el rango que se pida. Se arregla sustituyendo esa
+constante:
+
+```sql
+        and fechaventa <= ('{1} 23:59:59')::timestamp without time zone
+```
+
+Mientras no se corrija, el informe solo sirve para fechas anteriores a marzo de 2024.
+
+### Lo importante no es el informe, es la tabla que revela
+
+`telemetry.telemetrysales` es una tabla de **ventas de telemetría dentro de VenCloud**, con
+`fechaventa`, `precio`, `pdvid`, `tipotelemetria` y `lineaprecio`. Es decir: puede que la
+venta que dábamos por perdida —la que íbamos a buscar en Nayax— ya esté aquí, con su fecha
+y hora, y ya enlazada al punto de venta de VenCloud, que es la unión que nos faltaba entre
+los dos mundos.
+
+Vale la pena comprobar qué contiene esa tabla antes de montar nada contra Nayax. Si trae
+artículo, resuelve de golpe el problema de las claves.
+
+Además, este informe es la otra mitad del informe 6: **recaudación (efectivo) + ventas con
+tarjeta (telemetría) = venta total**, y la diferencia contra lo vendido es el descuadre que
+interesa vigilar máquina a máquina.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
@@ -352,11 +399,11 @@ Aprovechando que son consultas SQL a medida:
 1. **Ventas con código de artículo, hora y medio de pago.** El campo que desbloquea todo
    lo demás: sin `cod_art` no hay margen, sin hora no hay análisis por franja, sin medio
    de pago no se cuadran las 276 devoluciones. Filtros por rango de fechas y centro.
-2. **Maestro de artículos completo**: `cod_art`, denominación, familia, formato, unidades
+3. **Maestro de artículos completo**: `cod_art`, denominación, familia, formato, unidades
    por caja o factor de conversión, PVP de tarifa, IVA.
-3. **Escandallo de las selecciones de bebida caliente**: qué ingredientes y qué cantidad
+4. **Escandallo de las selecciones de bebida caliente**: qué ingredientes y qué cantidad
    consume cada selección.
-4. **Censo de máquinas**. Con las tablas que ya conocemos por el informe 4 se puede
+5. **Censo de máquinas**. Con las tablas que ya conocemos por el informe 4 se puede
    escribir entero, solo hay que publicarlo. Resuelve la cobertura del control de
    temperatura y la ubicación de las 549 máquinas, de las que hoy solo tenemos 125:
 
@@ -374,5 +421,5 @@ Aprovechando que son consultas SQL a medida:
    Conviene añadirle `mod.clase` traducido, como hace el informe 8: es lo que separa las
    máquinas refrigeradas de las de bebida caliente. Y la capacidad, si existe en
    `recursos.maquinas` o `recursos.maquinasmodelos`.
-5. **Planograma por máquina**: canal, artículo asignado y capacidad, que es lo que permite
+6. **Planograma por máquina**: canal, artículo asignado y capacidad, que es lo que permite
    distinguir "no había demanda" de "estaba vacío".
