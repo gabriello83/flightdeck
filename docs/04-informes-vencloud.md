@@ -530,9 +530,8 @@ veces. Se arregla con el mismo patrón que ya usa el 7:
 ```
 
 **Y no hace falta que sea un informe aparte.** El 7 y el 12 son la misma consulta con
-distinto `tipo`. Lo razonable es **un solo informe de reposiciones con `rep.tipo` como
-columna**: sirve para cargas, para caducados y para los tipos que existan y todavía no
-conocemos, y evita mantener dos consultas gemelas.
+distinto `tipo`. Lo razonable es un solo informe de reposiciones con `rep.tipo` como
+columna, y **ya existe: es el informe 66**, que además baja al detalle por parte de visita.
 
 ### Por qué el caducado importa, y por qué el cero engaña
 
@@ -832,11 +831,15 @@ Esto completa la respuesta sobre si las cargas son reales: **el informe 7 da la 
 física, el 25 da la carga convertida a servicios para el café**. Son compatibles, no
 contradictorios.
 
-Dos avisos sobre ese cálculo:
+Tres avisos sobre ese cálculo:
 
+- **La tabla de coeficientes no es la buena.** `importacion.art_bc_coeficiente` es una
+  tabla de importación; el coeficiente vigente es el campo `coeficienteservicios` de
+  `stocks.articulos`, que es el que usa el informe 66. La columna de café de este informe
+  hay que darla por sospechosa.
 - Es un `inner join`, así que **un artículo de café sin coeficiente desaparece sin dejar
   rastro**. Un punto de venta puede aparecer con la columna vacía simplemente porque falta
-  el coeficiente, no porque no se haya cargado.
+  el coeficiente, no porque no se haya cargado. El informe 66 corrige esto también.
 - La subconsulta del café corta en `'{1} 23:59'` en vez de `'{1} 23:59:59'`: pierde el
   último minuto del día. Es menor, pero hace que la columna de café no cubra exactamente el
   mismo periodo que las otras dos.
@@ -862,6 +865,67 @@ queda anotada aquí.
 El `where` final exige que al menos una de las tres columnas tenga dato, así que **los
 puntos de venta visitados sin ninguna carga no aparecen**. Para medir visitas sin carga hay
 que ir al informe 22.
+
+---
+
+## Informe 66 — Detalle de reposición con carga teórica de caliente
+
+**Parámetros**: `{0}` y `{1}`, fechas.
+
+Es la versión buena del informe 25, y de hecho es el informe de reposiciones que hacía
+falta: baja al **detalle por parte de visita**, con fecha, cliente, punto de venta,
+**tipo de movimiento**, código de artículo, descripción y cantidad. Al traer `pr.tipo` como
+columna sirve a la vez para cargas (`CM`), retiradas por caducidad (`RC`) y cualquier otro
+tipo que exista, en lugar de necesitar un informe por tipo como el 7 y el 12.
+
+### El coeficiente correcto
+
+```sql
+case
+    when coe.coeficienteservicios is null then res.cantidad
+    else res.cantidad * coe.coeficienteservicios::numeric
+end as cant_total
+...
+left join stocks.articulos coe on coe.id = res.artid
+```
+
+Dos mejoras sobre el informe 25: el coeficiente sale de **`stocks.articulos.coeficienteservicios`**,
+que es el campo vigente, y no de la tabla de importación; y el join es `left` con
+respaldo, así que **un artículo sin coeficiente conserva su cantidad** en vez de
+desaparecer.
+
+### Un problema serio en la construcción
+
+Las dos ramas —artículos de clase distinta de 0, y artículos de café— se unen con **dos
+`left join` independientes sobre `pdv.id`**, y luego se elige columna con un `case`. Dos
+joins sobre la misma clave producen producto cartesiano: si un punto de venta tiene N
+líneas de no-café y M de café, salen **N × M filas**.
+
+Y como el `case` es `when res_bf_sn.tipo is null then res_bc... else res_bf_sn...`, en
+todas esas filas `res_bf_sn.tipo` viene informado, así que:
+
+- cada línea de no-café aparece **repetida M veces**, y
+- **las líneas de café no aparecen nunca**.
+
+El café solo se ve en los puntos de venta que no tienen ninguna línea de otra clase. Como
+las máquinas de bebida caliente suelen llevar solo artículos de clase 0, el informe parece
+correcto al mirarlo; **donde falla es en las máquinas combi o en los PDV con varias
+máquinas**, que es justo donde interesa.
+
+La construcción correcta no es un join, es un `UNION ALL` de las dos ramas: cada una ya
+devuelve las mismas columnas (pdv, fecha, tipo, artículo, cantidad) y no hay nada que
+cruzar.
+
+Conviene comprobarlo con una salida real de un punto de venta combi antes de dar por bueno
+cualquier número de este informe.
+
+### Otros dos detalles
+
+- Los tres cortes de fecha usan `'{1} 23:59'` en vez de `23:59:59`: se pierde el último
+  minuto del día.
+- La rama de no-café filtra `a.clase != 0`, que en PostgreSQL **también excluye los
+  artículos con clase nula**. Si hay artículos sin clase asignada, no salen por ninguna de
+  las dos ramas.
 
 ---
 
