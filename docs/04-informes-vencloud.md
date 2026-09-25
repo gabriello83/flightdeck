@@ -392,6 +392,68 @@ interesa vigilar máquina a máquina.
 
 ---
 
+## Informe 10 — PDVs y máquinas con tarifa vending o tarifa de productos
+
+**Parámetro**: `Delegacion` (0, numérico, 0 = todas).
+
+Sale de `recursos.maquinas` cruzando punto de venta, centro, cliente y delegación, y añade
+tres banderas de configuración de tarifa. **Es el censo de máquinas que faltaba.**
+
+**Salida**: 4.498 máquinas · 3.203 puntos de venta · 212 clientes · 12 delegaciones.
+
+### El censo, por fin completo
+
+| | |
+|---|---:|
+| Máquinas en total | 4.498 |
+| Instaladas en un punto de venta | 3.203 (71%) |
+| **Sin punto de venta** (taller o almacén) | **1.295 (29%)** |
+| Con número de serie | 4.404 (98%) |
+| En centros de Airbus | 563, en 9 centros |
+
+Casi un tercio del parque está parado. Eso es un indicador de activos por derecho propio:
+cuántas máquinas hay inmovilizadas, dónde y desde cuándo.
+
+Los centros de Airbus son **nueve**, no siete: aparecen AIRBUS ITC (10 máquinas) y AIRBUS
+ALBACETE (PARQUE CI) (2), que no tenían ventas en las exportaciones.
+
+Contrastado con las ventas de mayo a agosto: de las 563 máquinas de Airbus, **546 venden,
+17 no vendieron nada** en cuatro meses. Esas 17 son la primera lista a revisar, y enlazan
+con las máquinas mudas del análisis.
+
+### Configuración de tarifas
+
+Las tarifas se pueden colgar del cliente, del centro o de un PDV suelto. La forma correcta,
+según el equipo, es a nivel de cliente y de centro.
+
+| | SI | NO |
+|---|---:|---:|
+| Tarifa vending asignada | 921 | 3.577 |
+| Tarifa de productos en el cliente | 1.274 | 3.224 |
+| Tarifa de productos en el centro | 1.230 | 3.268 |
+
+**402 máquinas instaladas (12,6%) no tienen ninguna de las tres.** Se concentran en Madrid
+- Leganés (163), Cataluña - Cornellà (63) y Levante - Murcia (41), y afectan a 35 clientes.
+Una máquina vendiendo sin tarifa configurada es dinero mal facturado o directamente
+perdido, así que esto es un panel de configuración pendiente, no una curiosidad. En los
+centros de Airbus no hay ninguna: ahí la configuración está bien.
+
+### `refexterna`: posible puente con la telemetría
+
+`pdv.refexterna` coincide con el código de PDV en el 47% de los casos, pero en el **53%
+restante es otra cosa**: referencias numéricas de seis dígitos como `010502`, `010507`,
+`010671`. Eso tiene pinta de identificador de un sistema externo, y es el primer candidato
+serio a ser la clave que enlaza con la telemetría o con Nayax. Conviene comprobarlo antes
+de construir ninguna tabla de equivalencias a mano.
+
+### Lo que le falta a este informe
+
+Solo dos columnas para ser el censo definitivo: **`mod.clase` traducido** (el tipo de
+máquina, que separa refrigeradas de bebida caliente) y la **capacidad**. El informe 8 ya
+demuestra que `clase` está disponible en `recursos.maquinasmodelos`.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
@@ -403,9 +465,9 @@ Aprovechando que son consultas SQL a medida:
    por caja o factor de conversión, PVP de tarifa, IVA.
 4. **Escandallo de las selecciones de bebida caliente**: qué ingredientes y qué cantidad
    consume cada selección.
-5. **Censo de máquinas**. Con las tablas que ya conocemos por el informe 4 se puede
-   escribir entero, solo hay que publicarlo. Resuelve la cobertura del control de
-   temperatura y la ubicación de las 549 máquinas, de las que hoy solo tenemos 125:
+5. **Censo de máquinas: resuelto por el informe 10.** Solo falta añadirle el modelo con
+   `mod.clase` traducido y la capacidad. El SQL de partida sería este, si se prefiere un
+   informe aparte:
 
    ```sql
    select cli.codigo cod_cli, cli.nombre cliente, cn.numcentro, cn.denomina centro,
