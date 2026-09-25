@@ -746,6 +746,57 @@ instaladas a las que hace 24 días que no va nadie.
 
 ---
 
+## Informe 24 — Artículos que no están en máquinas
+
+Sin parámetros.
+
+```sql
+SELECT a.codigo, a.denomina as nombre
+FROM stocks.articulos as a
+left join recursos.maquinascanales as mc on mc.articuloid = a.id
+left join recursos.maquinascarriles as mr on mr.articuloid = a.id
+where a.obsoleto = false and mc.id is null and mr.id is null and a.tipo <> 'R'
+```
+
+### Qué hace
+
+Es **higiene de catálogo**. Lista los artículos que siguen dados de alta y activos
+(`obsoleto = false`) pero que **no están asignados a ningún hueco de ninguna máquina**: ni
+a un canal (`maquinascanales`, las espirales y selecciones) ni a un carril
+(`maquinascarriles`). Los dos `left join` con `is null` son la forma de decir "no aparece
+en ninguna de las dos tablas". Excluye además los de tipo `R`, que por los ejemplos parecen
+recetas o preparados de café, aunque el significado exacto de ese tipo habría que
+confirmarlo.
+
+Dicho de otro modo: **la parte del catálogo que no está en ningún planograma**.
+
+### Salida: 362 artículos, y el informe es coherente
+
+Contrastado con el resto de informes:
+
+- **329 de los 362 tienen tarifa de compra** mantenida (informe 2). Son artículos que se
+  pueden comprar pero no están colocados en ninguna máquina.
+- **Ninguno tiene cargas registradas** (informe 7): cero unidades de 154.312. Es la
+  comprobación de que el informe dice la verdad.
+- Solo **4 aparecen en las ventas de mayo a agosto**, por 592 € en total (LM Clásico Atún,
+  LM Wrap York, LM Clásico Mixto y una barrita). Son productos que se vendieron y después
+  salieron de los planogramas.
+
+### Para qué sirve en el cuadro de mando
+
+Catálogo muerto que sigue vivo: cada uno de esos 362 artículos aparece en los desplegables,
+en el mantenimiento de tarifas y en los pedidos, y ensucia el trabajo de todo el mundo. La
+lista se parte en dos:
+
+- Los que **llevan tiempo sin usarse**: candidatos a marcar como obsoletos.
+- Los **recién creados**: artículos nuevos pendientes de asignar a un planograma, que es
+  justo lo contrario, trabajo a medio hacer.
+
+Para separarlos hace falta la fecha de alta del artículo, que este informe no trae. Con ella
+el indicador sería directo: artículos activos sin planograma y sin movimiento en X meses.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
