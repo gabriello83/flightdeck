@@ -1666,6 +1666,67 @@ Conviene decidirlo antes de construir la pantalla, no después.
 
 ---
 
+## Informe 42 — Recaudaciones por PDV, año y mes (12 meses)
+
+**Parámetros**: `Año` (0), `Mes` (1), `Codigo Cliente` (**3**) y `Num Centro Cliente`
+(**4**), los dos últimos con comodín 0.
+
+**Ojo con la numeración: no hay parámetro con orden 2.** Es el primer informe con un hueco
+en las posiciones. Al construir la llamada a la API hay que averiguar si los filtros se
+envían por posición declarada —y entonces hace falta un relleno en el hueco— o en el orden
+en que aparecen. Es justo el tipo de detalle que hace fallar una integración en silencio.
+
+Devuelve, por punto de venta, el importe con IVA de la prefacturación de recaudación
+(`facturacion.prefacrecauda.imptotalconiva`) del mes pedido **y de los once anteriores**, en
+doce columnas.
+
+**Salida** (septiembre de 2026): **5.203 puntos de venta** · 318 clientes.
+
+| Mes | PDVs con dato | Suma |
+|---|---:|---:|
+| Septiembre (en curso) | 1.717 | 289.273,17 € |
+| Agosto | 2.612 | 965.283,49 € |
+| Julio | 2.768 | 1.363.982,99 € |
+| **Junio** | 2.717 | **−7.521.015.479,51 €** |
+| Mayo a octubre anterior | ~2.900 | entre 1,03 y 1,43 M€ |
+
+### Hay un registro corrupto que destroza cualquier suma
+
+El mes de junio sale con **menos siete mil quinientos millones de euros**. La causa es **una
+sola fila**:
+
+| PDV | Máquina | Cliente | Importe |
+|---|---|---|---:|
+| C01830 | 19CE1728 | PREZERO Gestión de Residuos | **−7.522.229.354,70 €** |
+
+Sin ella, ese mes suma 1.213.875,19 €, perfectamente en línea con los demás. Hay además un
+−4.338,85 € en el Hospital José María Morales y cuatro negativos pequeños.
+
+Esto no es un problema del informe: el valor está en `facturacion.prefacrecauda`, o sea en
+**la prefacturación**. Conviene mirar si ese registro llegó a facturarse. Y para el cuadro
+de mando, confirma que toda cifra agregada necesita control de atípicos, igual que pasaba
+con el inventario del informe 20.
+
+### Lo demás que se ve
+
+- **1.765 puntos de venta no han tenido ninguna recaudación en doce meses.** El informe no
+  filtra `pdv.estado = 1`, así que incluye puntos de venta inactivos; aun así la cifra es
+  alta y merece revisión.
+- La recaudación mensual de la empresa se mueve entre **1,0 y 1,4 millones de euros**.
+- Septiembre en curso (289.273,17 €) encaja con los 286.344,78 € de los informes 31, 33 y
+  36. No son exactamente lo mismo: aquí es el importe **con IVA de la prefacturación** y
+  allí el **efectivo contado**.
+- El título promete "Recaudación y Bancarias" pero la consulta solo devuelve una serie. La
+  parte bancaria no está.
+
+### Rendimiento
+
+Doce subconsultas correlacionadas por fila y 5.203 filas son más de sesenta mil consultas.
+Lo mismo se obtiene con un solo `group by` por PDV, año y mes. Si este informe se va a
+llamar por API con regularidad, hay que reescribirlo.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
