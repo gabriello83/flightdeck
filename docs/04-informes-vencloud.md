@@ -1523,42 +1523,63 @@ que muestran estos informes no es fiable.
 
 Sin parámetros.
 
-**El SQL que tenemos está incompleto**: es solo la CTE `with carriles as (...)`, sin la
-consulta principal que va detrás. Tal cual no se puede ejecutar. Además esa CTE filtra
-`clase = 2` (bebida caliente) y en la salida aparecen también máquinas de bebida fría y de
-snack, así que el cuerpo que falta hace bastante más que la parte que se ve.
+Selecciona las máquinas cuyo **modelo es de clase 0, 2 o 9** (fría, caliente, snack), no
+obsoleto, y que **no tienen ni una fila en `recursos.maquinascanales`**. A cada una le
+adosa la capacidad teórica de su modelo por materia prima, sacada de la plantilla más
+reciente (`recursos.maquinasmodelosplantillas`).
 
-Lo que sí se entiende de la CTE: para cada modelo de máquina toma **la plantilla más
-reciente** (`recursos.maquinasmodelosplantillas`) y suma la capacidad máxima de sus carriles
-por tipo de materia prima.
+**Salida**: **652 máquinas** · 98 modelos.
 
-**Salida**: **652 máquinas sin canales configurados**, con la capacidad teórica de su modelo
-en doce materias primas: café soluble, café grano, azúcar, vaso, paletina, leche,
-chocolate, infusión, café, toppings, soluble, garrafa de agua y cápsula.
+| Clase | Máquinas | Instaladas en un PDV |
+|---|---:|---:|
+| Bebida caliente / preparadas | 323 | 113 |
+| Bebida fría | 220 | 37 |
+| Snack / multiprecio | 109 | 21 |
 
-| Clase | Máquinas |
-|---|---:|
-| Bebida caliente / preparadas | 323 |
-| Bebida fría | 220 |
-| Snack / multiprecio | 109 |
+Las **171 instaladas** son las accionables: están en un punto de venta y no tienen canales
+configurados. Las otras 481 están en taller o almacén, donde no tenerlos es normal.
 
-98 modelos distintos, encabezados por NECTA-KIKKO MAX, NECTA-KIKKO y NECTA-OPERA 2C.
+Cuadra con el informe 11: las 652 salen todas como "sin planograma" allí. El 11 cuenta 907
+porque no filtra por clase ni por modelo obsoleto.
 
-### Esto trae la capacidad que faltaba
+### El catálogo de materias primas
 
-Era una de las peticiones pendientes: sin capacidad no se puede calcular la **autonomía** de
-una máquina —cuántos días aguanta con lo que le cabe, dado su consumo— y por tanto no se
-puede juzgar si una ruta pasa demasiado o demasiado poco. Cruzando estas capacidades con
-las cargas del informe 66 y las ventas, la autonomía sale sola.
+Los códigos de `tipomateriaprima`, que el informe traduce a columnas:
 
-Ojo a que **son capacidades del modelo, no de la máquina concreta**: vienen de la plantilla
-del modelo, así que dos máquinas del mismo modelo con configuraciones distintas comparten
-cifra.
+| | | | |
+|---|---|---|---|
+| 1 café | 2 azúcar | 3 vaso | 4 paletina |
+| 5 leche | 6 soluble | 7 garrafa de agua | 8 cápsula |
+| 9 chocolate | 10 infusión | 11 café soluble | 12 café grano |
+| 13 toppings | | | |
+
+### Las columnas de capacidad solo valen para las calientes
+
+La CTE que calcula las capacidades filtra `clase = 2`, pero la consulta principal trae
+también clases 0 y 9. Resultado: **las 329 máquinas de fría y snack salen con todas las
+capacidades vacías**, sin excepción. No es que no tengan capacidad, es que el informe no la
+busca para ellas.
+
+De las 323 calientes, 248 traen alguna capacidad; las 75 restantes son modelos sin plantilla
+cargada.
+
+### Y para las calientes, "sin canales" probablemente no significa "sin configurar"
+
+Las máquinas de bebida caliente no se configuran por canales sino por **carriles de materia
+prima** (`recursos.maquinascarriles`). El propio autor del informe lo tenía en mente: hay un
+bloque comentado que iba a comprobar exactamente eso —`select count(id) from
+recursos.maquinascarriles where maquinaid = m.id` para marcar "tiene contenedores"— y se
+quedó sin terminar.
+
+Así que de las 113 calientes instaladas que el informe señala, buena parte puede estar
+perfectamente configurada por carriles. **Conviene terminar ese bloque comentado antes de
+usar esta lista como tarea de trabajo**; si no, se manda a alguien a revisar máquinas que
+están bien. Para fría y snack, donde el canal sí es la vía, las 58 instaladas sí son
+trabajo real.
 
 ### Las plantillas tienen errores
 
-Entre los valores aparecen cifras imposibles que, al venir de la plantilla del modelo,
-afectan a todas las máquinas de ese modelo:
+Valores imposibles que, al venir de la plantilla del modelo, afectan a todas sus máquinas:
 
 | Materia prima | Valor anómalo | Valores normales |
 |---|---:|---|
@@ -1570,8 +1591,15 @@ afectan a todas las máquinas de ese modelo:
 | chocolate | 1.000 | 2 a 3,6 |
 | leche | 20 | 2 a 4 |
 
-Y hay 33 máquinas con todas las capacidades a cero. Antes de calcular autonomías hay que
-limpiar esto, o una plantilla mal rellenada dirá que una máquina aguanta años.
+Y hay 33 máquinas con todas las capacidades a cero.
+
+### Lo que aporta
+
+La **capacidad**, que era una petición pendiente del censo. Con ella, las cargas del informe
+66 y la venta, sale la **autonomía**: cuántos días aguanta cada máquina con lo que le cabe.
+Es la medida que permite juzgar si una ruta pasa de más o de menos, en vez de discutirlo de
+oído. Eso sí, hay que limpiar antes las plantillas y recordar que la capacidad es del
+modelo, no de la máquina concreta.
 
 ---
 
