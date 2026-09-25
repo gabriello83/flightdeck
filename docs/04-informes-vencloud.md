@@ -1996,6 +1996,63 @@ clases debe salir de un único sitio en la ingesta, no copiarse informe a inform
 
 ---
 
+## Informe 52 — Importe de ventas acumuladas por delegación, cliente y periodo
+
+**Parámetros**: `Codigo Cliente` (0, comodín 0), `Desde Fecha` (1) y `Hasta Fecha` (2).
+
+Suma `cal_totimpvtas` de los partes de visita agrupando por delegación y cliente.
+
+**Salida** (septiembre de 2026): 208 filas · 16 delegaciones · 177 clientes ·
+**728.181,74 €**. En línea con los 721.484,70 € del informe 35, que sale de la misma
+columna con otro agrupamiento.
+
+**127 de las 208 filas están a cero**: el `having sum(...) > 0` está comentado, así que
+aparecen todos los clientes con visitas aunque no registren venta.
+
+### El ranking por delegación no significa lo que parece
+
+| Delegación | Importe | Clientes |
+|---|---:|---:|
+| Madrid - Leganés | 227.802,61 € | 34 |
+| Levante - Murcia | 132.549,35 € | 33 |
+| Cataluña - Cornellà | 107.365,32 € | 49 |
+| Andalucía - Sevilla | 60.720,87 € | 14 |
+| Andalucía - Granada | 60.555,85 € | 2 |
+| **Levante - Valencia** | **3.043,70 €** | **30** |
+
+Valencia, con 30 clientes, factura mil veces menos que Granada con dos. Eso no es un
+desplome comercial: **es que no se está capturando la venta**.
+
+Cruzando con el informe 36, la cobertura de dato de venta por delegación:
+
+| Delegación | PDVs | Con venta | Cobertura |
+|---|---:|---:|---:|
+| Andalucía - Granada | 28 | 24 | **86%** |
+| Andalucía - Cádiz | 54 | 35 | 65% |
+| Madrid - Leganés | 816 | 396 | 49% |
+| Cataluña - Cornellà | 597 | 191 | 32% |
+| Andalucía - Málaga | 95 | 22 | 23% |
+| Norte - Cantabria | 38 | 3 | 8% |
+| **Levante - Valencia** | **157** | **6** | **4%** |
+| **Norte - Oviedo** | **45** | **2** | **4%** |
+| **Andalucía - La Línea** | **16** | **0** | **0%** |
+
+La cobertura va del **0% al 86%** según la delegación. Con esa dispersión, **cualquier
+comparación de ventas entre delegaciones basada en `cal_totimpvtas` carece de sentido**, y
+un ranking así en un cuadro de mando llevaría a conclusiones falsas sobre el rendimiento de
+los equipos.
+
+Es la misma historia del 12% de audits del informe 33, pero ahora se ve **dónde** falla: no
+es un problema repartido, está concentrado en Valencia, Oviedo, Cantabria y La Línea.
+
+### Consecuencia para el cuadro de mando
+
+Mientras la captura no se arregle, el panel debe mostrar **la cobertura junto a cada cifra
+de venta** y evitar rankings entre delegaciones. Y lo primero que debería salir en la
+cabina no es cuánto vende cada delegación, sino **cuánta de su venta se está midiendo**.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
