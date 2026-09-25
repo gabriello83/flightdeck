@@ -1817,6 +1817,67 @@ se hace en fecha distinta a la prevista.
 
 ---
 
+## Informe 45 — Visitas: cargas medias por visita
+
+**Parámetros**: `DESDE` (0) y `HASTA` (1).
+
+Por punto de venta: número de visitas, unidades repuestas y **carga media por visita**, con
+ruta, cliente, centro, estado y tipo de máquina. Filtra `tipo = 0` en el parte de visita,
+o sea solo las visitas ordinarias.
+
+**Salida** (septiembre de 2026): 2.893 puntos de venta · 20.673 visitas · 2.478.786
+unidades repuestas. Cuadra con los 2.470.043 del informe 36 para los 26 primeros días.
+
+### La carga media, que es la medida que faltaba
+
+| | Mediana | p10 | p90 |
+|---|---:|---:|---:|
+| Global | 84,4 unidades | 28,0 | 375,3 |
+
+Pero el global no dice nada, porque **cada tipo de máquina juega en otra escala**:
+
+| Tipo | PDVs | Carga media (mediana) | p90 |
+|---|---:|---:|---:|
+| Caliente | 1.118 | **248,8** | 498,0 |
+| Snack | 1.007 | 61,2 | 116,3 |
+| Frío | 696 | 51,5 | 117,5 |
+
+Las de bebida caliente cargan cuatro veces más unidades por visita, lo cual es lógico: ahí
+entran vasos, paletinas y azúcar por centenares junto al café. **Comparar la carga media
+entre tipos no tiene sentido; dentro de cada tipo, sí.**
+
+### Los candidatos a espaciar la ruta
+
+Puntos de venta con 8 o más visitas en el mes y carga media mínima:
+
+| Visitas | Carga media | PDV | Centro |
+|---:|---:|---|---|
+| 9 | **3,6** | AF082 | Airbus San Pablo Sur |
+| 11 | 7,5 | C00786 | Odalys Campus Sevilla |
+| 9 | 7,6 | F01298 | Hospital Zendal |
+| 11 | 8,7 | AF067 | Airbus San Pablo Norte |
+| 12 | 10,1 | F01025 | Hospital La Paz |
+| 17 | **10,7** | AS175 | Airbus San Pablo Sur |
+
+Nueve visitas para reponer 3,6 unidades de media es un desplazamiento que no se paga solo.
+Esta lista, cruzada con la venta del informe 36, es la base para replantear frecuencias — y
+enlaza con lo que ya salió en el análisis exploratorio: máquinas con 55 visitas y ninguna
+venta.
+
+### Detalles
+
+- **60 puntos de venta recibieron visita sin reponer nada.**
+- **15 puntos de venta con estado "No instalado" fueron visitados**, y otros 15 salen con
+  tipo "Revisar" porque su clase no está en el `CASE`.
+- 47 puntos de venta sin ruta asignada.
+- La CTE de rutas usa `min(rutaid)`, así que cuando un punto de venta está en varias rutas
+  muestra una arbitraria. Mismo problema que los informes 20 y 38.
+- La columna `ventas` está calculada en la CTE pero **comentada en el `select`**.
+  Descomentarla daría carga media y venta en la misma fila, que es justo lo que hace falta
+  para decidir frecuencias. Es un cambio de un carácter.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
