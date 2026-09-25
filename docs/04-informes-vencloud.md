@@ -11,6 +11,37 @@ trae. Al final del documento están los que conviene encargar.
 
 ---
 
+## De dónde sale cada cosa
+
+Decisión del 25/09/2026: **la venta por producto probablemente venga de Nayax**, no de
+VenCloud. Nayax es la pasarela de pago y telemetría de las máquinas, y registra la
+transacción con su hora, su importe y su medio de pago.
+
+| | Fuente |
+|---|---|
+| Venta por producto, hora y medio de pago | **Nayax** (pendiente de ver un informe) |
+| Visitas, incidencias, preventivos, temperatura | VenCloud |
+| Artículos, proveedores, precios de compra | VenCloud |
+| Censo de máquinas, modelos, centros y clientes | VenCloud |
+
+Esto tiene una consecuencia de diseño: el cuadro de mando cruza **dos sistemas**, y lo que
+manda ya no es el nombre del artículo sino **las claves que unen ambos mundos**:
+
+- **Máquina**: el identificador de dispositivo de Nayax contra el `cod_maq` de VenCloud.
+  Sin esa correspondencia no se puede decir qué vendió la máquina que se visitó o se
+  averió.
+- **Producto**: el artículo de Nayax (que suele venir del planograma cargado en la
+  máquina) contra el `cod_art` de VenCloud, que es el que lleva el precio de compra.
+
+Hasta ver un informe de Nayax no se sabe cuál de las dos correspondencias existe ya y cuál
+hay que construir. **Es lo primero que hay que resolver**, antes que cualquier pantalla:
+si esas claves no casan, el cuadro de mando se queda en dos mitades incomunicadas.
+
+Mientras tanto, las tablas de ventas que manejamos (las exportaciones de mayo a agosto) se
+usan solo para dimensionar y prototipar, no como origen definitivo.
+
+---
+
 ## Informe 2 — Artículos: proveedor y precio de compra
 
 Sin parámetros.
