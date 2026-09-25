@@ -1764,6 +1764,59 @@ en septiembre, 227 € en agosto, 474 € en julio.
 
 ---
 
+## Informe 44 — Visitas según plan: realizadas, no realizadas y no realizables
+
+**Parámetros**: `Desde` (0) y `Hasta` (1).
+
+Parte del plan de visitas (`vending.planvisitas`) y busca el parte correspondiente
+enlazando por **fecha, ruta y punto de venta a la vez**:
+
+```sql
+left join vending.partesvisita pvis
+on (planvis.fecha = pvis.fechaini::date) and (planvis.rutaid = pvis.rutaid)
+   and (planvis.pdvid = pvis.pdvid)
+```
+
+**Salida** (septiembre de 2026): **25.569 visitas planificadas** · 14.936 con parte (58%)
+· 10.633 sin parte (42%) · 127 marcadas como no realizables.
+
+### El informe tiene un fallo que lo deja casi inservible
+
+**Todos los `left join` cuelgan de `pvis`, no de `planvis`.** Consecuencia: en las 10.633
+visitas no realizadas —justo las que interesan— **todas las columnas salen vacías**. Lo he
+comprobado fila a fila: ni punto de venta, ni fecha, ni ruta, ni empleado, ni cliente. Solo
+se rellenan las dos banderas y `clasemaquina`, que pone "OTROS" porque el `else` del `CASE`
+captura el nulo.
+
+Es decir: el informe dice que hay 10.633 visitas sin hacer y **no dice cuáles**.
+
+El arreglo es directo: colgar los joins de `planvis`, que ya tiene `pdvid`, `rutaid` y
+`fecha`, y usar `pvis` solo para saber si existe parte. Con eso el informe pasa de ser un
+recuento a ser una lista de trabajo.
+
+### Y el 42% de "no realizadas" no significa lo que parece
+
+El informe 33 daba un cumplimiento del **83%** para el mismo mes; este da 58%. No se
+contradicen: miden cosas distintas. El 33 cuenta partes por ruta dentro del periodo,
+mientras que este exige que el parte case **el mismo día, la misma ruta y el mismo punto de
+venta**. Una visita hecha el martes en lugar del lunes cuenta aquí como no realizada.
+
+Así que este informe mide **adherencia al día planificado**, no cobertura. Es una medida
+legítima y útil —dice si el plan describe la realidad—, pero llamarla "no realizadas"
+induce a error, y la diferencia entre ambas cifras (25 puntos) es justamente el trabajo que
+se hace en fecha distinta a la prevista.
+
+### Lo que sí aporta
+
+- **127 visitas marcadas como no realizables**, todas con el mismo motivo: **"No se puede
+  acceder"**. Si el catálogo `configuracion.motvisitanorealizable` tiene más motivos, no se
+  están usando; un solo motivo para todo no permite actuar.
+- En las visitas realizadas: **62 empleados, 52 vehículos y 60 rutas**. Es el primer
+  informe que trae **vehículo**, lo que abre el análisis de flota, y el empleado por visita,
+  que permite medir carga de trabajo real por persona en vez de por ruta.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
