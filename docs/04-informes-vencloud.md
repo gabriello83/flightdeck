@@ -1081,6 +1081,81 @@ del informe de visitas.
 
 ---
 
+## Informe 30 — PDVs: historial de instalaciones
+
+Sin parámetros; **conviene añadirle rango de fechas**, porque hoy devuelve el histórico
+entero y va a crecer sin parar.
+
+Sale de `vending.pdvshisinstalaciones` y da el **ciclo de vida de cada máquina en cada
+punto de venta**: instalación, retirada, y los dos lados de una sustitución. Trae además
+fabricante y modelo, número de serie, quién lo ejecutó y notas libres.
+
+Códigos de `tipo`: 0 instalación · 1 retirada · 2 sustitución-instalación · 3
+sustitución-retirada.
+
+**Salida**: 4.119 movimientos · 3.219 puntos de venta · 2.505 máquinas · 257 clientes.
+
+| Movimiento | Nº |
+|---|---:|
+| Retirada de máquina | 2.094 |
+| Instalación de máquina | 1.429 |
+| Sustitución - instalación | 298 |
+| Sustitución - retirada | 298 |
+
+El histórico arranca en julio de 2023 (103 movimientos), y desde ahí: 1.598 en 2024, 1.399
+en 2025 y 1.012 en lo que va de 2026. Hay además **4 registros con fecha 01/01/1900** y tres
+sueltos de 2017, 2019 y 2022 que habrá que descartar.
+
+### El parque está encogiendo
+
+| Año | Instalaciones | Retiradas | Neto |
+|---|---:|---:|---:|
+| 2023 (desde julio) | 58 | 27 | **+31** |
+| 2024 | 615 | 739 | **−124** |
+| 2025 | 465 | 742 | **−277** |
+| 2026 (hasta septiembre) | 287 | 583 | **−296** |
+
+Tres años seguidos en negativo y acelerando: unas 700 máquinas netas menos desde 2024. Y
+encaja con lo que ya sabíamos por el censo: **1.295 máquinas sin punto de venta**, paradas
+en taller o almacén. No son dos hallazgos, son el mismo visto por dos sitios.
+
+La única reserva: si alguna retirada corresponde a una máquina instalada antes de que
+existiera el histórico, no tiene instalación que la compense. Eso afectaría sobre todo a
+2023 y 2024; en 2025 y 2026 la tendencia debería ser limpia.
+
+### Una cuarta parte de las instalaciones dura menos de un mes
+
+Emparejando instalación y retirada del mismo par máquina-punto de venta salen 463 ciclos
+completos:
+
+| | |
+|---|---:|
+| Mediana de permanencia | 196 días |
+| Retiradas antes de 30 días | **114 (24,6%)** |
+| Antes de 90 días | 166 (35,9%) |
+| Antes de un año | 315 (68,0%) |
+
+Que una de cada cuatro instalaciones se deshaga en menos de un mes es llamativo. Puede ser
+material de prueba, instalaciones temporales para eventos, o instalaciones que salen mal —
+el dato por sí solo no lo distingue, y las notas libres (1.682 movimientos las tienen)
+seguramente lo expliquen.
+
+### Lo que aporta al cuadro de mando
+
+- **Antigüedad de cada máquina en su emplazamiento**, que hasta ahora no teníamos y es la
+  variable que falta para leer bien las averías: no es lo mismo una avería en una máquina
+  recién instalada que en una que lleva tres años.
+- **Fabricante**, por primera vez: NECTA 1.678 movimientos, FAS 706, Sandenvendo 613,
+  Azkoyen 475, Bianchi 230, Rhea 90, Dixie Narco 79, Jofemar 72. Cruzado con el informe 8
+  permite pasar de "averías por modelo" a "averías por marca y por antigüedad".
+- **Rotación del parque** por cliente y por centro: altas, bajas y sustituciones.
+
+Un apunte sobre el dato: **`realizado_por` es casi siempre la misma persona** —Noelia
+Moreno Martín firma 3.693 de los 4.119 movimientos, el 90%—, así que ese campo dice quién
+lo teclea en VenCloud, no quién fue a la instalación. Para medir trabajo de campo no sirve.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
