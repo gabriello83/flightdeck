@@ -1192,7 +1192,8 @@ verificada; el efectivo recogido y pendiente de contar no aparece por ningún la
 cuadro de mando interno eso es en sí un indicador: **cuánto hay recaudado sin contar, y
 desde cuándo**.
 
-**Hay un `left join` que sobra y puede inflar el total.** La consulta se une a
+**Hay un `left join` que sobra** (comprobado con el informe 33: no infla, pero tampoco
+aporta, así que lo suyo es quitarlo). La consulta se une a
 `vending.partesvisitacontajes` pero no usa ninguna columna suya: ni en el `select`, ni en
 el `where` —`estadocontaje` sale de `partesvisita`—, ni en el `group by`. Si un parte de
 visita tiene varias líneas de contaje (por ejemplo una por denominación de moneda), el join
@@ -1204,6 +1205,79 @@ venta mensual del orden de 88.000 € pagada mayormente con tarjeta de empleado�
 la tabla tiene una línea por parte, o el efecto es pequeño. Pero conviene comprobarlo con
 un centro concreto, porque el join **no aporta nada**: quitarlo es seguro y elimina el
 riesgo.
+
+---
+
+## Informe 33 — Rutas: plan de visitas, visitas, recaudaciones y audits
+
+**Parámetros**: `Desde Fecha` (0) y `Hasta Fecha` (1).
+
+Pone una al lado de otra, por ruta, cuatro cosas: las visitas **planificadas**
+(`vending.planvisitas`), las **realizadas** (partes de visita), las que llevaron
+**recaudación** con su importe, y las que capturaron **audit** (`estadolec = 2` y `lectura`
+no vacía, la lectura de contadores de la máquina).
+
+Es, de largo, el informe más útil que ha aparecido para el cuadro de mando interno: mide
+ejecución contra plan, que es lo que no se podía medir con nada de lo anterior.
+
+**Salida** (septiembre de 2026, 73 rutas):
+
+| | | |
+|---|---:|---|
+| Visitas planificadas | 24.966 | |
+| Partes de visita | 20.816 | **83% del plan** |
+| Con recaudación | 7.095 | 34% de las visitas |
+| Importe recaudado | 286.344,78 € | 40,36 € por visita recaudada |
+| **Con audit** | **2.396** | **12% de las visitas** |
+
+### El 12% de audit es el hallazgo
+
+El audit es la lectura de los contadores de la máquina, y es de donde sale la venta por
+artículo del informe 26 y el criterio con el que se reparte el IVA en el informe 28. Que
+solo se capture en **una de cada ocho visitas** explica de golpe por qué tantos informes de
+venta salen vacíos o cojos.
+
+Y hay **7 rutas con visitas y ni un solo audit**, entre ellas una de Airbus:
+
+| Ruta | Visitas sin audit |
+|---|---:|
+| Madrid 08 Princesa | 536 |
+| **Sevilla 6 Airbus S.Pablo Parte H1** | **492** |
+| Madrid RTVE Prado | 289 |
+| Ruta La Línea 1 | 91 |
+
+### Cumplimiento del plan
+
+Mediana del 88%, pero con mucha dispersión: p10 en 27% y p90 en 132%.
+
+**Cinco rutas planificadas sin una sola visita**: Teruel 4 (152 planificadas), Sevilla Fin
+de Semana (92), Princesa Fin de Semana (80), RUTA TEST (57) y Refuerzo José Manuel (30).
+
+**Nueve rutas por debajo del 50%**, y las dos peores son de volumen grande: Ruta 13 Can
+Ruti, 317 visitas de 1.197 planificadas (26%), y Ruta 14 Yordy, 385 de 1.406 (27%). Con
+planes de más de mil visitas mensuales incumplidos en tres cuartas partes, o el plan está
+mal dimensionado o la ruta no se está haciendo; en ambos casos es una pregunta que el panel
+debe poner encima de la mesa.
+
+**Cuatro rutas por encima del 150%**, encabezadas por Alhambra Tarde con 323 visitas sobre
+76 planificadas (425%). Ahí el plan no describe la realidad.
+
+Y **11 rutas con visitas pero sin ninguna recaudación**, la mayor Figueres 1 con 447
+visitas.
+
+### De paso, resuelve la duda del informe 31
+
+Este informe suma **286.344,78 €**, exactamente el mismo importe que el 31, y lo calcula
+**sin el `left join` a `partesvisitacontajes`** que allí quedaba pendiente de comprobar. Que
+coincidan al céntimo indica que ese join no está inflando nada. Y como el 31 filtra además
+`estadocontaje = 1` y da lo mismo, en septiembre prácticamente toda la recaudación estaba
+ya contada.
+
+### Nota
+
+El `where` exige `rut.refexterna != ''`, así que las rutas sin referencia externa no
+aparecen. Aquí salen 73 rutas, más que las 60 del informe 29, porque este no filtra por
+tipo: incluye también las rutas técnicas.
 
 ---
 
