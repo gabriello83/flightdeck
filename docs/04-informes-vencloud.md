@@ -1519,6 +1519,62 @@ que muestran estos informes no es fiable.
 
 ---
 
+## Informe 40 — Máquinas sin canales
+
+Sin parámetros.
+
+**El SQL que tenemos está incompleto**: es solo la CTE `with carriles as (...)`, sin la
+consulta principal que va detrás. Tal cual no se puede ejecutar. Además esa CTE filtra
+`clase = 2` (bebida caliente) y en la salida aparecen también máquinas de bebida fría y de
+snack, así que el cuerpo que falta hace bastante más que la parte que se ve.
+
+Lo que sí se entiende de la CTE: para cada modelo de máquina toma **la plantilla más
+reciente** (`recursos.maquinasmodelosplantillas`) y suma la capacidad máxima de sus carriles
+por tipo de materia prima.
+
+**Salida**: **652 máquinas sin canales configurados**, con la capacidad teórica de su modelo
+en doce materias primas: café soluble, café grano, azúcar, vaso, paletina, leche,
+chocolate, infusión, café, toppings, soluble, garrafa de agua y cápsula.
+
+| Clase | Máquinas |
+|---|---:|
+| Bebida caliente / preparadas | 323 |
+| Bebida fría | 220 |
+| Snack / multiprecio | 109 |
+
+98 modelos distintos, encabezados por NECTA-KIKKO MAX, NECTA-KIKKO y NECTA-OPERA 2C.
+
+### Esto trae la capacidad que faltaba
+
+Era una de las peticiones pendientes: sin capacidad no se puede calcular la **autonomía** de
+una máquina —cuántos días aguanta con lo que le cabe, dado su consumo— y por tanto no se
+puede juzgar si una ruta pasa demasiado o demasiado poco. Cruzando estas capacidades con
+las cargas del informe 66 y las ventas, la autonomía sale sola.
+
+Ojo a que **son capacidades del modelo, no de la máquina concreta**: vienen de la plantilla
+del modelo, así que dos máquinas del mismo modelo con configuraciones distintas comparten
+cifra.
+
+### Las plantillas tienen errores
+
+Entre los valores aparecen cifras imposibles que, al venir de la plantilla del modelo,
+afectan a todas las máquinas de ese modelo:
+
+| Materia prima | Valor anómalo | Valores normales |
+|---|---:|---|
+| infusión | 7.000 | 1 a 3 |
+| azúcar | 3.000 | 2 a 4 |
+| vaso | 3.000 | 300 a 700 |
+| paletina | 2.500 y 3.000 | 300 a 900 |
+| cápsula | 1.200 | 6 |
+| chocolate | 1.000 | 2 a 3,6 |
+| leche | 20 | 2 a 4 |
+
+Y hay 33 máquinas con todas las capacidades a cero. Antes de calcular autonomías hay que
+limpiar esto, o una plantilla mal rellenada dirá que una máquina aguanta años.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
