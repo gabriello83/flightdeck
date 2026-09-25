@@ -76,17 +76,36 @@ y merece su propio panel. Entre las técnicas dominan "distribuidor fuera de ser
 
 Por modelo de máquina: ARIA L EVO MASTER (183), OPERA ONE 2C (170), LEI 600 TOUCH (98).
 
-## 7. El tiempo de resolución apenas se puede medir
+## 7. El tiempo de resolución, corregido
 
-De 785 incidencias, **446 están cerradas a las 00:00**: cierres administrativos por lotes,
-no la hora real de resolución. Solo quedan 339 medibles:
+Al conocer el SQL del informe 8 (ver `04-informes-vencloud.md`) se aclara qué significan
+las horas de cierre, y la conclusión cambia respecto a la primera lectura.
 
-- Mediana **22 h**, media 63,6 h, p90 **187 h**, máximo 815 h.
-- Resueltas en menos de 4 h: 40%. En menos de 24 h: 53%. En menos de 48 h: 64%.
+`fecha_cierre` no es un campo, es un cálculo con tres salidas: el evento de cierre del log
+cuando existe —y entonces trae hora real—, `t.fechafin` cuando la tarea está finalizada sin
+ese evento —y entonces es una fecha sin hora, que se pinta como 00:00—, y `01/01/1900`
+cuando la tarea **sigue abierta**.
 
-El propio dato es el problema: si se quiere un SLA de verdad, hay que arreglar cómo se
-cierran las incidencias en VenCloud. Mientras tanto, cualquier MTTR que enseñemos debe
-decir sobre qué muestra está calculado.
+De las 785 incidencias:
+
+| | |
+|---|---:|
+| Cerradas con hora exacta | 339 |
+| Cerradas con fecha pero sin hora | 404 |
+| Todavía abiertas (01/01/1900) | 42 |
+
+Así que no es que el dato esté mal: de las 743 cerradas conocemos el día en todas y la
+hora en 339.
+
+- Con hora exacta: **mediana 22 h**, 53% en menos de 24 h.
+- Con solo fecha: **62,9% se cierran el mismo día**, 80,7% al día siguiente.
+- Conjunto completo, en días: **mediana 0,07 días**, 58% el mismo día, **p90 de 7 días**.
+
+El servicio es bastante mejor de lo que parecía. Lo que sí conviene vigilar es esa cola:
+un 9% tarda más de una semana, y son las que hay que mirar una a una.
+
+Desde ahora esto no hay que calcularlo: el informe 8 trae una columna `diferencia` con el
+intervalo exacto.
 
 ## 8. Lo que cuestan las averías, medido de verdad
 

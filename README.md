@@ -40,7 +40,8 @@ así que el repositorio es autosuficiente: clonar y ejecutar reproduce las tabla
 - **Rutas desequilibradas**: de 0,2 € a 617 € por visita; seis máquinas recibieron 55
   visitas sin vender nada.
 - **La mitad de las incidencias no son averías**: 276 de 785 son devoluciones de dinero.
-- **El MTTR apenas se puede medir**: 446 incidencias se cierran a las 00:00 por lotes.
+- **El servicio técnico responde mejor de lo que parecía**: el 58% de las incidencias se
+  cierra el mismo día, pero un 9% tarda más de una semana.
 
 Todo está desarrollado, con cifras y advertencias, en `docs/02-analisis-exploratorio.md`.
 

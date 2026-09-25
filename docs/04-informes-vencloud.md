@@ -287,6 +287,64 @@ resuelve con el mismo campo: unidades por caja en el maestro de artículos.
 
 ---
 
+## Informe 8 — Tareas técnicas por cliente y fecha
+
+**Parámetros**: `Codigo Cliente` (0, numérico, 0 = todos), `Desde Fecha recepción` (1),
+`Hasta Fecha recepción` (2) y `Num Centro` (3, numérico, 0 = todos).
+
+Es el informe del que salió el fichero de averías que ya teníamos. Ahora, con el SQL a la
+vista, se entienden cosas que antes había que adivinar. 24 columnas, de `sat.tareatecnica`
+más los catálogos de operaciones, estados, máquinas, centros y direcciones.
+
+### Lo que aclara el SQL
+
+**`fecha_cierre` no es un campo, es un cálculo con tres salidas:**
+
+1. El evento de cierre del log (`sat.tareatecnicaeventoslog`) cuando existe: trae hora real.
+2. `t.fechafin` cuando la tarea está finalizada pero no hay ese evento: es una fecha sin
+   hora, y por eso se pinta como **00:00**.
+3. `01/01/1900 00:00` cuando la tarea **sigue abierta**.
+
+Esto corrige la lectura inicial del análisis: las incidencias cerradas a las 00:00 no son
+cierres administrativos por lotes, es que el cierre viene de un campo de fecha. El día es
+bueno; solo falta la hora. Y las de 1900 no son cierres raros, son tareas abiertas.
+
+**La columna `diferencia`** da el intervalo exacto entre recepción y cierre, o `0` si no
+está cerrada. Ahorra calcularlo.
+
+**Los códigos traducidos** que conviene guardar como catálogo propio:
+
+- `origen`: 0 Email · 1 Teléfono · 2 WhatsApp · 3 Interna · 4 Portal B2B · 9 Autogenerada.
+- `mod.clase` (tipo de máquina): 0 Bebidas Frías/Envasadas · 2 Bebidas Calientes/Preparadas ·
+  3 Zumos · 4 Combi · 7 Epis · 8 Tabaco · 9 Snack/Multiproducto · 10 Fuente de Agua ·
+  11 OCS/Café Cápsula-Grano · 99 Genérica · 100 Compactadoras · 101 Máquinas de cambio ·
+  102 Partner · 200 Kiosko.
+- `arearesponsable`: 0 SAT-Técnico · 1 Operaciones (Reponedor) · 2 Taller · 3 Call Center ·
+  4 Comercial · 5 TI · 6 Instalaciones.
+
+`mod.clase` es importante por sí solo: **es lo que separa las máquinas refrigeradas de las
+de bebida caliente**, que era justo lo que hacía falta para que la alarma de temperatura
+del informe 4 no dé falsos positivos.
+
+### Salida analizada (25/09/2026, un día)
+
+114 tareas de toda la cartera. Dos cosas a tener en cuenta:
+
+- **34 de las 114 son del cliente `CLIENTE TEST`**: hay datos de prueba en producción. Hay
+  que excluirlos en la ingesta o contaminan cualquier indicador.
+- **59 de 114 tienen `origenllamada` vacío**: el `CASE` no cubre todos los valores de
+  `t.origen` (faltan 5, 6, 7, 8). O se completa el mapeo o ese campo no sirve para segmentar.
+
+Reparto del día: 62 de atención al cliente y 38 de averías técnicas; 83 las resuelve el
+SAT, 20 operaciones y 11 el call center; 57 sobre máquinas de snack, 33 de bebida caliente
+y 24 de bebida fría.
+
+Trae además dos campos que no estaban en la exportación anterior y valen para el cuadro de
+mando: `comentarios`, con las notas del técnico —"limpio tubo de residuos, máquina y mueble
+porque está todo manchado"— y la dirección completa del centro con provincia y ciudad.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
@@ -313,8 +371,8 @@ Aprovechando que son consultas SQL a medida:
    order by cli.codigo, cn.numcentro, pdv.codigo
    ```
 
-   Si la máquina tiene marca de refrigerada, tipo o capacidad en `recursos.maquinas` o en
-   `recursos.maquinasmodelos`, conviene añadir esas columnas: son las que permiten separar
-   las máquinas de fresco de las de bebida caliente.
+   Conviene añadirle `mod.clase` traducido, como hace el informe 8: es lo que separa las
+   máquinas refrigeradas de las de bebida caliente. Y la capacidad, si existe en
+   `recursos.maquinas` o `recursos.maquinasmodelos`.
 5. **Planograma por máquina**: canal, artículo asignado y capacidad, que es lo que permite
    distinguir "no había demanda" de "estaba vacío".
