@@ -131,6 +131,8 @@ select
   m.codigo                  as matricula,
   cen.numcentro             as num_centro,
   cen.denomina              as centro,
+  cli.codigo                as cod_cliente,
+  cli.nombre                as cliente,
   del.nombre                as delegacion,
   ru.denomina               as ruta,
   cast(t.fechaventa as text) as fecha_venta,
@@ -138,14 +140,21 @@ select
   t.diasemana               as dia_semana,
   a.codigo                  as cod_articulo,
   a.denomina                as articulo,
+  a.clase                   as clase_articulo,
   t.seleccion               as seleccion,
   t.codcanal                as canal,
   t.precio                  as precio,
   t.coste                   as coste,
-  (t.precio - coalesce(t.coste,0)) as margen,
-  case t.lineaprecio when 1 then 'Tarjeta crédito' when 2 then 'Efectivo'
-                     when 3 then 'Prepago' else cast(t.lineaprecio as text) end as medio_pago,
+  a.puc                     as puc_articulo,
+  (t.precio - coalesce(t.coste, a.puc, 0)) as margen,
+  case t.lineaprecio
+       when 1 then 'Tarjeta credito'
+       when 2 then 'Efectivo'
+       when 3 then 'Prepago'
+       else cast(t.lineaprecio as text) end as medio_pago,
   t.tipoventaorigen         as tipo_origen,
+  t.tipotelemetria          as tipo_telemetria,
+  t.telemetriadispositivo   as dispositivo,
   t.transactionid           as id_transaccion
 from telemetry.telemetrysales t
 left join recursos.maquinas m           on m.id   = t.maquinaid
@@ -156,7 +165,7 @@ left join general.delegaciones del      on del.id = p.delegacionid
 left join vending.rutas ru              on ru.id  = t.rutaid
 left join stocks.articulos a            on a.id   = t.articuloid
 where t.fechaventa >= '{0}' and t.fechaventa <= '{1} 23:59:59'
-order by t.fechaventa;
+order by m.codigo, t.fechaventa
 ```
 
 Y el resumen del mismo día, para comparar el total contra lo que dice el informe 68:

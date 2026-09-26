@@ -129,3 +129,35 @@ El planograma **no es una sola tabla**. `recursos.maquinascanales` son los canal
 frío; `recursos.maquinascarriles` son los carriles de materia prima de las máquinas calientes,
 con su propio `tipomateriaprima`, `capacmax`, `stockrecom` y `cargaminima`. El volcado de
 planograma del bloque 5.4 de `08-sql-relleno.md` sólo cubre la mitad: hace falta también 3.4.
+
+---
+
+## 5. Máquinas (4.498 registros, 3.200 operativas)
+
+| campo | relleno | qué significa |
+|---|---|---|
+| `telemetriadispositivo` | **63,8 %** | 2.870 máquinas mandan venta en tiempo real. Las otras **1.628 no** |
+| `costecompra` | 10,9 % | el coste del parque no está |
+| `cuotaamortizacion` | 9 % | |
+| `mesesamortizacion` | 9 % | la amortización no está en el maestro de máquinas |
+| `auditgenalarmas` | **0 máquinas** | ninguna máquina genera alarmas de audit |
+| `fechaultcambioplanograma` | **0 %** | nunca se registra el cambio de planograma |
+| cedidas | 16 | |
+
+**Consecuencias directas**
+
+- **3.200 operativas y 3.200 PDVs activos**: la relación máquina ↔ PDV activo es 1 a 1. Hablar de
+  matrícula y hablar de PDV activo es lo mismo, que es justo como trabaja Serunion.
+- **El 36 % del parque no tiene telemetría.** Ese es el límite duro de cualquier cuadro de mando
+  en tiempo real: 1.628 máquinas sólo se conocen cuando el reponedor las visita. La cabina tiene
+  que decir de qué máquina habla en tiempo real y de cuál no, en vez de mezclarlas en un total.
+  Conviene repetir el porcentaje sólo sobre `estado = 1`, porque el 63,8 % está calculado sobre
+  las 4.498 e incluye máquinas de baja y en taller.
+- **La amortización al 9 % no invalida los 8,3 años.** Lo que dice es que el plazo no se guarda
+  máquina a máquina, sino probablemente en `configuracion.confrentabilidad.plazoamortizacion`
+  (8,3 años ≈ 100 meses). Otra razón para lanzar la consulta 3.1.
+- `fechaultcambioplanograma` al 0 % mata el indicador de «planograma sin revisar desde hace X».
+  La antigüedad del planograma habrá que deducirla de otra cosa: la última reposición que cambió
+  de artículo, por ejemplo.
+- `auditgenalarmas` a cero, igual que `actalarmasrentrec` en los PDVs: **todo el sistema de
+  alarmas nativo de VenCloud está apagado.** No es una carencia, es una palanca sin usar.
