@@ -2700,6 +2700,35 @@ máquina en el 100% de los casos**. Este informe es, de los catalogados, el cens
 
 ---
 
+## Informe 81 — Máquinas cedidas
+
+Sin parámetros.
+
+**No filtra nada: es una copia del informe 77.** Lo he comprobado por los dos lados:
+
+- El SQL recibido es **idéntico** al del informe 77, sin ninguna condición añadida.
+- La salida tiene **las mismas 4.498 máquinas**, las mismas columnas y exactamente el mismo
+  reparto por estado (3.200 operativas, 970 en taller, 92 vendidas…). Ni una máquina de
+  diferencia en ningún sentido.
+
+O el informe se creó duplicando el 77 y nunca se le añadió el filtro, o el filtro existe en
+la versión real y no llegó en lo que me pasaste.
+
+### Qué debería hacer
+
+"Cedida" es una categoría con peso comercial: distingue las máquinas que la empresa **presta
+al cliente** de las que el cliente compra o de las que están en depósito. Afecta a quién
+amortiza el activo, quién paga las reparaciones y qué pasa al terminar el contrato.
+
+Para filtrarlo hace falta el campo que marca ese régimen en la ficha de la máquina —algo
+como `propiedad`, `cedida` o `tipopropiedad`—, y **no aparece en ninguno de los informes
+catalogados hasta ahora**. Conviene mirar la ficha de máquina en VenCloud y localizarlo;
+con ese nombre, el informe se arregla añadiendo una línea.
+
+Mientras tanto, el informe 77 cubre exactamente lo mismo, así que este no aporta nada.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
