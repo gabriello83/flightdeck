@@ -12,7 +12,7 @@ qué indicadores puede sostener la cabina hoy, sin rellenar nada.
 | `preciocoste` | 2,2 % | vacío |
 | `pmc` (precio medio de compra) | 2,2 % | vacío |
 | `numunidart` | 0,5 % | vacío |
-| `coeficienteservicios` | 0,2 % | vacío — los coeficientes no están aquui |
+| `coeficienteservicios` | 0,2 % | vacío — los coeficientes no están aquí |
 | `caducidaddias` | 0,1 % | vacío |
 | activos | 26.754 de 27.179 | sólo 425 marcados obsoletos: el maestro no se depura |
 | frescos | 65 | |
