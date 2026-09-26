@@ -2300,6 +2300,58 @@ real, y a diferencia del informe 37 no depende de los audits ni tarda una eterni
 
 ---
 
+## Informe 64 — Listado detallado de tarifas de los clientes
+
+Sin parámetros. Une dos orígenes: las **tarifas asignadas a un punto de venta**
+(`pdvs.tarifavendingid`) y las **tarifas de cliente** (`clientes.tarifavendingid`), estas
+últimas solo para los puntos de venta que no tienen tarifa propia. Devuelve, por cliente y
+artículo, **tres precios**: efectivo, tarjeta privada y tarjeta de crédito.
+
+**Salida**: **38.300 líneas** · 179 clientes · 201 tarifas · 602 artículos.
+22.874 líneas de tarifa de cliente y 15.426 de tarifa de PDV.
+
+### Es la pieza que faltaba para cerrar el tema de los precios
+
+El informe 60 daba el precio **realmente cobrado** por delegación; este da el precio
+**configurado** por cliente. Juntos responden la pregunta que arrastrábamos desde el
+análisis exploratorio: si un artículo se vende a distinto precio, ¿es tarifa negociada o
+error de configuración?
+
+Para el artículo de prueba (36411, Ruffles jamón) la respuesta es clara: **hay 207
+configuraciones de tarifa distintas**, con precios en efectivo de **0,40 € a 1,30 €**. Las
+más repetidas son 0,80 € (40 veces), 0,70 € (31), 0,90 € (31) y 0,85 € (22). O sea: la
+dispersión está **configurada**, no es un desajuste de máquina. Pero 207 tarifas para una
+bolsa de patatas es, en sí mismo, el hallazgo: **la estructura de precios está
+extraordinariamente fragmentada**.
+
+### El precio de empleado
+
+En **7.624 líneas (20%)** el precio de tarjeta privada difiere del de efectivo. Es el
+descuento a empleado, y en algunos casos es grande: en la Alhambra, 1,20 € en efectivo
+frente a **0,60 € con tarjeta privada**. Esto explica de paso por qué la recaudación en
+efectivo es menos de la mitad del negocio (informe 43): donde hay tarjeta de empleado, sale
+a mitad de precio.
+
+### Tres cosas a vigilar
+
+**986 combinaciones de cliente y artículo tienen más de un precio en efectivo configurado**
+—408 solo de Serunion—, y una llega a tener 50 líneas. Casos como la Alhambra, con 1,15 € y
+2,30 € para el mismo artículo, son probablemente tarifa de empleado y tarifa de público
+conviviendo. Legítimo, pero implica que **de este informe no se puede deducir "el precio" de
+un artículo para un cliente**.
+
+**Y no se puede resolver esa ambigüedad con lo que da el informe**, porque las filas de
+"Tarifa PDV" **no dicen a qué punto de venta se aplican**: no hay columna de PDV. Falta ese
+campo para poder aplicar la precedencia (PDV manda sobre cliente) y saber qué precio rige
+en cada máquina. Es la mejora más útil que se le puede hacer.
+
+**659 líneas tienen precio en efectivo 0**, en 79 clientes. La mayoría son consumibles que
+no se venden —vasos, preparado lácteo— y ahí el cero es correcto. Pero hay 81 líneas de
+TRIANGULO DE CREMA a cero, que sí es producto vendible: o es gratuidad pactada o es tarifa
+sin rellenar, y conviene mirarlo.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
