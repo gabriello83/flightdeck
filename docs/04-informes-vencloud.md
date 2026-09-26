@@ -2775,6 +2775,62 @@ que buscar ese dato en el contrato o en la ficha del punto de venta.
 
 ---
 
+## Informe 83 — Máquinas: última y próxima visita
+
+Sin parámetros. Por cada máquina **operativa** (`estado = 1`), la fecha de su última visita
+y la de la próxima planificada.
+
+**Salida**: **3.200 máquinas**, las mismas operativas del informe 77.
+
+### La mayoría del parque está bien atendido
+
+| Días desde la última visita | |
+|---|---:|
+| Mediana | **1 día** |
+| p90 | 10 días |
+
+El grueso del parque se visita con mucha frecuencia. El problema está en la cola:
+
+| | Máquinas | % |
+|---|---:|---:|
+| Más de 15 días sin visita | 251 | 8,1% |
+| Más de 30 días | 169 | 5,5% |
+| **Más de 90 días** | **94** | **3,0%** |
+| Sin ninguna visita registrada | 101 | 3,2% |
+
+Y el máximo son **941 días** —dos años y medio— en una máquina marcada como **Operativa**.
+Esa lista de 94 es corta, concreta y no requiere ningún análisis adicional: o están
+abandonadas o su estado está mal puesto.
+
+### 260 máquinas operativas sin próxima visita planificada
+
+Un 8% del parque operativo no tiene ninguna visita futura en el plan. Mirando los modelos se
+entiende buena parte:
+
+| Modelo | Máquinas |
+|---|---:|
+| Aquaservice | 38 |
+| **FICTICIO** | **29** |
+| TANGO | 16 |
+| KIKKO MAX | 12 |
+
+Las Aquaservice y las fuentes de agua las atiende un tercero, así que no tener plan es
+normal. Pero aparece un modelo llamado **FICTICIO** con 29 máquinas: otro artefacto de
+pruebas en producción, como el `CLIENTE TEST` del informe 8 y la `RUTA TEST` del 29. Hay que
+excluirlo de los indicadores.
+
+**96 máquinas no tienen ni última ni próxima visita.** Son las candidatas más claras a
+revisión de estado.
+
+### Un detalle del SQL
+
+`max(pv.fechaini::text)` calcula el máximo sobre **texto**, no sobre fecha. Con el formato
+ISO que usa PostgreSQL el orden alfabético coincide con el cronológico, así que da el
+resultado correcto — pero por casualidad. Si alguna vez cambia el formato de salida, deja de
+funcionar sin avisar. Lo suyo es `max(pv.fechaini)::text`.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
