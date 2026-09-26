@@ -2415,6 +2415,66 @@ así que es el que conviene usar como referencia.
 
 ---
 
+## Informe 68 — PDVs: análisis de ingresos por punto de venta
+
+**Parámetros**: `fecha_inicial` (0) y `fecha_fin` (1).
+
+**Es el informe más importante de todos los vistos hasta ahora**, porque es el primero que
+junta las dos mitades del ingreso:
+
+- **Efectivo**: `sum(imprecauda)` de los partes de visita.
+- **Tarjeta**: `sum(precio)` de `telemetry.telemetrysales` con `tipoventaorigen = 2`.
+
+Es decir, **lee la venta directamente de la telemetría**, sin pasar por los audits.
+
+**Salida** (septiembre de 2026): 2.956 puntos de venta.
+
+| | | |
+|---|---:|---:|
+| Efectivo | 286.344,78 € | 32,5% |
+| **Tarjeta** | **595.448,99 €** | **67,5%** |
+| **Ingreso total** | **881.793,77 €** | |
+
+El efectivo cuadra al céntimo con los informes 31, 33 y 36. Y la parte de tarjeta aparece
+en **2.004 de los 2.956 puntos de venta (68%)**, que encaja con el 71% de máquinas con
+Nayax instalado del informe 67.
+
+### Esta es la cifra de negocio buena
+
+Compárese con lo que daban los informes basados en partes de visita:
+
+| Fuente | Septiembre | Cobertura |
+|---|---:|---|
+| `cal_totimpvtas` (informes 35 y 52) | 721.484 € | 37% de los PDVs, del 0% al 86% según delegación |
+| **Efectivo + telemetría (informe 68)** | **881.794 €** | **68% de los PDVs** |
+
+Y el contraste en Airbus lo confirma: este informe da **171.080,84 €** (22.642,96 € de
+efectivo y 148.437,88 € de tarjeta), del orden de los ~195.000 € mensuales que muestran las
+exportaciones de ventas de mayo a agosto. Los informes de audits daban cifras mucho más
+bajas.
+
+**Conclusión para la arquitectura**: la venta del cuadro de mando debe salir de
+`telemetry.telemetrysales` más la recaudación en efectivo, no de `cal_totimpvtas`.
+
+### El reparto entre efectivo y tarjeta
+
+- En los puntos de venta que tienen las dos vías, el efectivo es solo el **13%** (mediana),
+  con un p90 del 55%.
+- **749 puntos de venta solo ingresan por tarjeta** (177.705 €): son máquinas cashless.
+- **398 solo ingresan en efectivo** (75.934 €): son las que no tienen telemetría.
+
+Esto matiza el 52-58% de efectivo que salía del informe 43: aquello era sobre la
+prefacturación de recaudación, y esto es sobre el ingreso real. **El efectivo ya es solo un
+tercio del negocio.**
+
+### Un código nuevo
+
+`telemetrysales.tipoventaorigen = 2` identifica la venta con tarjeta. Es un campo distinto
+de `lineaprecio` (que distingue el precio aplicado: efectivo, crédito o prepago) y de
+`tipotelemetria` (el fabricante del sistema). Conviene no confundirlos.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
