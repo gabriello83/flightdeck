@@ -862,8 +862,9 @@ Cruzando la clase del punto de venta con la columna que trae dato, el mapeo qued
 | SNK/MULTIPRODUCTO (957) | `frias` y `snack` | `a.clase = 2` y `a.clase = 3` |
 
 Es decir, **`stocks.articulos.clase` usa una codificación distinta de `pdv.clase` y
-`mod.clase`**: en artículos, 0 es café, 2 es bebida fría y 3 es snack; en máquinas, 0 es
-bebida fría y 2 bebida caliente. A primera vista el SQL parece tener las etiquetas
+`mod.clase`**. El informe 60 da el catálogo completo: en artículos **0 es materia prima**
+(café en grano, leche, vasos, paletinas), 1 bebida caliente preparada, 2 bebida fría
+envasada, 3 snacks y 6 garrafas; en máquinas, 0 es bebida fría y 2 bebida caliente. A primera vista el SQL parece tener las etiquetas
 cambiadas, y no es así. Es una trampa fácil de pisar al escribir la ingesta, y por eso
 queda anotada aquí.
 
@@ -2237,6 +2238,65 @@ Dos causas probables, por orden:
 Vale la pena arreglarlo: con este informe se puede saber **qué máquinas deberían mandar
 datos y no los mandan**, que es la causa raíz del 12% de audits del informe 33 y de la
 cobertura del 4% en Valencia del informe 52.
+
+---
+
+## Informe 60 — Artículos: precio medio por delegación, artículo y periodo
+
+**Parámetros**: `Id Delegacion` (0, comodín 0), `Codigo Artículo` (1, cadena, comodín
+cadena vacía), `Desde Fecha` (2) y `Hasta Fecha` (3).
+
+Suma unidades e importe de `vending.partesvisitaventas` agrupando por artículo y
+delegación, y calcula el precio medio. Bien construido: los cuatro parámetros se usan y
+ambos comodines funcionan.
+
+### El catálogo de clases de artículo, por fin completo
+
+`stocks.articulos.clase`: **0 materia prima · 1 bebida caliente/preparada · 2 bebida fría
+envasada · 3 snacks/sólidos · 6 garrafas de agua · resto recambios**.
+
+Esto afina lo que dedujimos del informe 25: la clase 0 no es "café" sino **materia prima**
+—café en grano, leche en polvo, vasos, paletinas, azúcar—, que es justamente lo que se
+carga en las máquinas de bebida caliente y lo que el coeficiente convierte a servicios. Las
+clases 2 y 3 coinciden con lo deducido.
+
+### Salida para el artículo 36411 (Ruffles jamón 45 g), septiembre
+
+14 delegaciones · 4.017 unidades · 4.051 € · precio medio **1,0086 €**.
+
+Con el precio de compra del informe 2 (0,327 €, Pepsico) sale el margen por delegación:
+
+| Delegación | Unidades | PVP | Margen |
+|---|---:|---:|---:|
+| Cádiz | 65 | 0,756 € | 56,7% |
+| Hospital La Paz | 487 | 0,800 € | 59,1% |
+| Tarragona | 118 | 0,811 € | 59,7% |
+| Bilbao | 118 | 0,914 € | 64,2% |
+| Sevilla | 246 | 1,018 € | 67,9% |
+| **Cornellà** | **1.230** | 1,053 € | 68,9% |
+| **Leganés** | **1.149** | 1,053 € | 68,9% |
+| Murcia | 202 | 1,124 € | 70,9% |
+| Amazon Girona | 106 | 1,200 € | 72,8% |
+| Oviedo | 26 | 1,400 € | 76,6% |
+
+**El mismo producto se vende de 0,756 € a 1,400 €: un 85% de diferencia.** Margen global
+del 67,6%.
+
+Parte será tarifa negociada —La Paz vende 487 unidades a 0,80 € mientras Leganés, en la
+misma ciudad, cobra 1,053 €, y un hospital bien puede tener condiciones propias— y parte
+será tarifa sin revisar. El informe no lo distingue; lo que hace es **poner la pregunta
+encima de la mesa con números**.
+
+Para dimensionar: si las delegaciones por debajo de 1,053 € subieran a ese precio, serían
+**218 € más al mes con un solo artículo**, un 5,4%. Multiplicado por los 370 artículos del
+catálogo, la revisión de tarifas deja de ser un detalle.
+
+### Por qué este informe importa para el cuadro de mando
+
+Es la herramienta que faltaba para atacar el hallazgo del análisis exploratorio —121
+artículos con precio distinto entre centros— de forma sistemática: artículo a artículo,
+con unidades y margen, y filtrable por delegación. Combinado con el informe 2 da margen
+real, y a diferencia del informe 37 no depende de los audits ni tarda una eternidad.
 
 ---
 
