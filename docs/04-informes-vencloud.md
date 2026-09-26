@@ -2852,6 +2852,62 @@ activo.
   circuito con los informes 60 (precio cobrado) y 64 (tarifa configurada) y ver dónde no
   coinciden.
 
+### Salida analizada: máquina 24SE1983 (SOPRANO, snack, Airbus ITC)
+
+**70 canales**: 49 activos con artículo y 21 inactivos sin artículo. 46 artículos distintos;
+solo tres ocupan dos canales (Ruffles jamón, Kit Kat y otro).
+
+**La numeración delata la mecánica**: del canal 1 al 20, los impares están inactivos y los
+pares activos; del 21 al 41 van consecutivos. Es una máquina con **espirales dobles en la
+zona alta** —dos espirales unidas gobernadas por un canal, para producto voluminoso— y
+espirales simples en el resto.
+
+### Tres huecos de configuración
+
+- **`stockrec` es 0 en los 70 canales.** El campo de stock recomendado existe pero no se
+  usa, así que **no hay punto de pedido** por canal. Es una pena, porque era la mitad del
+  valor del informe.
+- **8 canales activos tienen capacidad 0.** Sin capacidad no entran en ningún cálculo de
+  rotura ni de autonomía.
+- **13 canales activos tienen precio 0.** Probablemente el precio efectivo lo pone la tarifa
+  (el informe 37 calcula el precio con la función `getprecioscanal`, no leyendo este campo),
+  pero conviene confirmar cuál manda: si el canal manda, son productos que salen gratis.
+
+### El planograma no tiene histórico, y eso obliga a fotografiarlo
+
+De los **41 artículos que esta máquina vendió entre mayo y agosto, solo 16 están en su
+planograma actual**. Sus cuatro superventas de entonces —Kit Kat (1.616 unidades), Huesito
+(1.232), Kinder Bueno White (1.198) y Natumix (1.064)— no aparecen hoy.
+
+No es un error: **la máquina se ha movido**. En las exportaciones de mayo–agosto estaba en
+San Pablo Sur y ahora figura en Airbus ITC, con planograma nuevo.
+
+La consecuencia para la ingesta es importante: `recursos.maquinascanales` guarda **el estado
+de hoy, sin historia**. Cualquier análisis que cruce planograma con ventas pasadas es
+inválido salvo que hayamos guardado la foto. **Hay que volcar el informe 84 periódicamente y
+conservar las versiones**, igual que se hace con cualquier dimensión que cambia en el tiempo.
+
+### Lo que ya se puede calcular: autonomía real
+
+Con la capacidad del planograma y el consumo:
+
+| | |
+|---|---:|
+| Capacidad total del planograma | 520 unidades |
+| Venta media por día laborable | 182 unidades |
+| **Autonomía teórica** | **2,9 días** |
+| Intervalo real entre visitas (agosto) | **1 día** (mediana) |
+| Unidades repuestas entre visitas | 74 (mediana), 152 (p90) |
+
+O sea: la máquina que más vende de Airbus **se visita a diario y se repone con el 14% de su
+capacidad**, cuando aguantaría casi tres días. Nunca llegó a agotarse en las 30 ventanas
+entre visitas analizadas.
+
+Puede haber razones operativas —está en un comedor, lleva producto fresco, es la más
+visible—, pero el dato sostiene una conversación concreta sobre frecuencia. Y este es
+exactamente el cálculo que el cuadro de mando debe hacer para las 2.889 máquinas con
+planograma, no para una.
+
 ### Aviso sobre el comodín
 
 Pasar `'0'` devuelve el planograma de **todas** las máquinas: 2.889 con planograma por
