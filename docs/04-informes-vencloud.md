@@ -2720,12 +2720,58 @@ la versión real y no llegó en lo que me pasaste.
 al cliente** de las que el cliente compra o de las que están en depósito. Afecta a quién
 amortiza el activo, quién paga las reparaciones y qué pasa al terminar el contrato.
 
-Para filtrarlo hace falta el campo que marca ese régimen en la ficha de la máquina —algo
-como `propiedad`, `cedida` o `tipopropiedad`—, y **no aparece en ninguno de los informes
-catalogados hasta ahora**. Conviene mirar la ficha de máquina en VenCloud y localizarlo;
-con ese nombre, el informe se arregla añadiendo una línea.
+El campo existe y lo trae el **informe 82**: `recursos.maquinas.tipopropiedad` (0 propia,
+1 proveedor externo). Añadiendo `where tipopropiedad = 1` este informe haría lo que promete,
+al menos para la cesión desde el proveedor.
 
 Mientras tanto, el informe 77 cubre exactamente lo mismo, así que este no aporta nada.
+
+---
+
+## Informe 82 — Máquinas: tipo de propiedad y proveedor externo
+
+Sin parámetros. Tres columnas: código de máquina, **tipo de propiedad**
+(`recursos.maquinas.tipopropiedad`: 0 propia, 1 proveedor externo) y el proveedor.
+
+Es el campo que faltaba para el informe 81.
+
+**Salida**: 4.498 máquinas · **4.100 propias** · **396 de proveedor externo** · 2 sin tipo
+de propiedad informado.
+
+### Quién pone esas 396 máquinas
+
+| Proveedor | Máquinas |
+|---|---:|
+| **FONT VELLA** | **387** |
+| COCA COLA | 5 |
+| Illy | 3 |
+| Sin proveedor informado | 1 |
+
+Y cuadra con el tipo: **389 de las 396 son de bebida fría envasada**. Son las neveras y
+fuentes que pone la marca, no máquinas de vending completas.
+
+### Lo que sale al cruzarlo con el informe 77
+
+| Estado de las externas | Máquinas |
+|---|---:|
+| Operativa | 229 |
+| **En taller** | **129** |
+| Devuelta a proveedor | 20 |
+| Baja definitiva | 12 |
+| Resto | 6 |
+
+**Un tercio de las máquinas de proveedor externo está en el taller.** Son activos ajenos, y
+conviene saber si esas reparaciones las asume la empresa o el proveedor: 129 máquinas
+ocupando cola de taller sin ser patrimonio propio es una pregunta con dinero detrás.
+
+En los centros de Airbus solo hay 6 máquinas externas, una por centro aproximadamente.
+
+### Un matiz sobre el informe 81
+
+Este campo distingue **de quién es la máquina** —propia o del proveedor que la cede a la
+empresa—, que es la cesión vista desde arriba. Si lo que busca el informe 81 es la otra
+dirección —máquinas que **la empresa cede al cliente**—, `tipopropiedad` no lo cubre y habrá
+que buscar ese dato en el contrato o en la ficha del punto de venta.
 
 ---
 
