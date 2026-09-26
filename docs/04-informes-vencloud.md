@@ -2831,6 +2831,35 @@ funcionar sin avisar. Lo suyo es `max(pv.fechaini)::text`.
 
 ---
 
+## Informe 84 — Planogramas de máquinas
+
+**Parámetro**: código de máquina (cadena), con **comodín `'0'`** para traerlas todas.
+
+Es el **detalle de planograma** que llevábamos pidiendo desde el informe 11: por cada canal
+de la máquina, el artículo asignado, los **tres precios** (efectivo, tarjeta privada,
+tarjeta de crédito), la **capacidad máxima**, el **stock recomendado** y si el canal está
+activo.
+
+### Lo que desbloquea
+
+- **Rotura de stock real.** Con capacidad y stock recomendado por canal, más las cargas del
+  informe 66 y la venta de la telemetría, se puede por fin distinguir **"no había demanda"
+  de "estaba vacío"**, que era el límite que arrastrábamos desde el análisis exploratorio.
+- **Autonomía por canal**: cuántos días aguanta cada hueco al ritmo de venta que tiene. Es
+  mejor medida que la autonomía por máquina del informe 40, porque una máquina se queda
+  vacía por su canal más rápido, no por su media.
+- **Precio real por canal**, que es donde acaba mandando la tarifa. Permite cerrar el
+  circuito con los informes 60 (precio cobrado) y 64 (tarifa configurada) y ver dónde no
+  coinciden.
+
+### Aviso sobre el comodín
+
+Pasar `'0'` devuelve el planograma de **todas** las máquinas: 2.889 con planograma por
+decenas de canales cada una son más de cien mil filas. Para la ingesta es justo lo que
+queremos, pero conviene pedirlo por delegación o en tandas, no de una vez.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
