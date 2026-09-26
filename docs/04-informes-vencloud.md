@@ -2584,6 +2584,63 @@ selectores ni ids.
 
 ---
 
+## Informe 71 — Informe de limpieza
+
+**Parámetros**: `Desde Fecha` (0), `Hasta Fecha` (1) y `Centro Cliente` (2, tipo Buscador).
+Como el informe 70, filtra por `clicen.id`, el **identificador interno**, no por
+`numcentro`: no se puede llamar desde la API sin resolver antes ese id.
+
+Lista todas las visitas ordinarias (`pvis.tipo = 0`) del centro con la marca de si se
+registró limpieza.
+
+**Salida** (Airbus Getafe, septiembre): 1.227 visitas · 227 puntos de venta · 5 reponedores
+· 19 días.
+
+### El resultado
+
+| | |
+|---|---:|
+| Visitas con limpieza registrada | **18 (1,5%)** |
+| Visitas sin limpieza | 1.209 |
+| **Puntos de venta sin ninguna limpieza en el mes** | **209 de 227** |
+
+Y por reponedor:
+
+| Reponedor | Con limpieza | Visitas |
+|---|---:|---:|
+| Javier Tejedor | 1 | 423 |
+| Álvaro Zayas | 15 | 267 |
+| Úrsula Gargas | 0 | 223 |
+| Francisco Ordiales | 2 | 170 |
+| Soulaimane Barhoun | 0 | 144 |
+
+Que un reponedor marque el 6% y los demás el 0% apunta más a **práctica de registro
+desigual** que a que la limpieza no se haga. Pero el dato, tal como está, no permite
+distinguirlo.
+
+### El patrón se repite en todo el sistema
+
+Este es el tercer indicador que depende de que el reponedor marque algo en el terminal, y
+los tres están igual de vacíos:
+
+| Marca | Cobertura |
+|---|---:|
+| Retirada por caducidad (informe 36) | 14% de los puntos de venta |
+| Temperatura (informes 4 y 70) | 2 lecturas en 231 máquinas en Getafe |
+| **Limpieza (este informe)** | **1,5% de las visitas** |
+
+Para el cuadro de mando esto significa dos cosas. Primera: **ninguno de los tres puede
+sostener un KPI de servicio hoy**, porque mediría el registro y no el trabajo. Segunda: los
+tres juntos **sí sostienen un KPI de disciplina de registro** por ruta y por reponedor, que
+es accionable de inmediato y que además es la condición previa para que algún día los otros
+sirvan.
+
+Y hay un matiz que conviene tener presente: en un centro como Airbus, la limpieza y el
+control de temperatura son exactamente lo que un cliente pide ver cuando hay una
+reclamación. Que estén sin registrar es un riesgo documental, no solo un hueco de dato.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
