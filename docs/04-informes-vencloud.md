@@ -2352,6 +2352,69 @@ sin rellenar, y conviene mirarlo.
 
 ---
 
+## Informe 67 — PDVs: amortización
+
+Sin parámetros. Por cada punto de venta activo con máquina: **fecha y coste de compra**,
+documento de compra, número de serie, modelo, sistema de telemetría, **primera visita** y
+**última instalación**.
+
+**Salida**: 3.203 puntos de venta.
+
+### Solo el 15% del parque tiene datos de compra
+
+| | |
+|---|---:|
+| Con coste de compra > 0 | **480 (15%)** |
+| Con coste a cero | 2.723 |
+| Con fecha de compra válida | 958 (30%) |
+| **Con fecha 01/01/1900** | **2.245 (70%)** |
+| Con documento de compra | **0** |
+
+Las 480 con coste suman **1.522.409 €**, con una mediana de 3.100 € por máquina y un rango
+estrecho de 2.600 a 3.860 €. Todas se compraron hace unos 22 meses: las compras con dato se
+concentran en 2024 (757 máquinas).
+
+### La amortización, con la regla de 8,3 años
+
+A 100 meses lineales, sobre las 480 máquinas con dato:
+
+| | |
+|---|---:|
+| Totalmente amortizadas | **0** |
+| En amortización | 480 |
+| **Valor neto pendiente** | **1.187.479 €** |
+| **Cuota mensual** | **15.224 €/mes** |
+
+Pero esto **solo cubre el 15% del parque**. El resto no tiene coste registrado, así que hoy
+**no se puede calcular la amortización de la flota**, ni repartir ese coste por máquina para
+saber cuánto cuesta de verdad atender un punto de venta. Es un agujero de datos, no del
+informe: el informe está bien hecho.
+
+Dicho esto, las seis máquinas con más de 8,3 años que aparecen (por fecha de compra) son un
+1% del parque con fecha; la mediana de antigüedad es de **1,9 años**. Si eso es
+representativo, el parque es joven y casi todo está pendiente de amortizar.
+
+### El dato que más valor tiene aquí: la telemetría instalada
+
+| | |
+|---|---:|
+| **NAYAX** | **2.286 (71%)** |
+| Sin telemetría | 917 (29%) |
+
+Siete de cada diez puntos de venta activos **tienen Nayax instalado**. Y sin embargo solo el
+12% de las visitas capturan audit (informe 33) y solo un tercio de los puntos de venta
+registra ventas (informe 36).
+
+La conclusión es importante para la arquitectura: **el problema no es falta de hardware**,
+es que el dato de telemetría no está llegando a `partesvisitaventas`. Refuerza la decisión
+de tomar la venta directamente de `telemetry.telemetrysales`.
+
+Este informe trae además el catálogo de telemetría más completo de todos —añade al del
+informe 59 los códigos 20 NRI Currenza, 50 Coges Nebular, 100 Matipay ASQS y 170 Vendon—,
+así que es el que conviene usar como referencia.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
