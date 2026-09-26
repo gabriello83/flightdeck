@@ -418,8 +418,9 @@ tres banderas de configuración de tarifa. **Es el censo de máquinas que faltab
 | Con número de serie | 4.404 (98%) |
 | En centros de Airbus | 563, en 9 centros |
 
-Casi un tercio del parque está parado. Eso es un indicador de activos por derecho propio:
-cuántas máquinas hay inmovilizadas, dónde y desde cuándo.
+Casi un tercio del parque está parado. El informe 77 desglosa qué son: **970 en taller**,
+208 ya fuera de parque (vendidas, de baja o devueltas), 77 en regeneración y solo **27
+disponibles para instalar**.
 
 Los centros de Airbus son **nueve**, no siete: aparecen AIRBUS ITC (10 máquinas) y AIRBUS
 ALBACETE (PARQUE CI) (2), que no tenían ventas en las exportaciones.
@@ -2638,6 +2639,64 @@ sirvan.
 Y hay un matiz que conviene tener presente: en un centro como Airbus, la limpieza y el
 control de temperatura son exactamente lo que un cliente pide ver cuando hay una
 reclamación. Que estén sin registrar es un riesgo documental, no solo un hueco de dato.
+
+---
+
+## Informe 77 — Listado de máquinas
+
+Sin parámetros. El parque completo —**4.498 máquinas**, las mismas del informe 10— con su
+**estado**, tipo, modelo, punto de venta, centro, cliente y las delegaciones tanto del punto
+de venta como de la máquina.
+
+### El catálogo de estados, que faltaba
+
+`recursos.maquinas.estado`: 0 Disponible · 1 Operativa · 2 En taller · 3 Reservada para
+cliente · 4 En almacén pendiente de revisar · 5 Instalada desactivada temporal · 6 En
+proceso de retirada · 9 Baja definitiva · 10 Vendida · 11 Devuelta a proveedor · 100
+Entregado a producción · 101 Devuelto de producción · 110 En proceso de instalación · 120 En
+revisión · 1000 Regenerada · 1001 Para regenerar · 1002 Achatarrada.
+
+### Y desglosa por fin las 1.295 máquinas "paradas"
+
+En el informe 10 vimos que 1.295 máquinas no tienen punto de venta y lo llamamos parque
+inmovilizado. Ahora se ve qué son exactamente:
+
+| Estado | Máquinas |
+|---|---:|
+| Operativa | 3.200 |
+| **En taller** | **970** |
+| Vendida | 92 |
+| Baja definitiva | 71 |
+| Devuelta a proveedor | 45 |
+| Para regenerar | 44 |
+| Regenerada | 33 |
+| Disponible | 27 |
+| En almacén, pendiente de revisar | 9 |
+| Reservada para cliente | 4 |
+| Instalada, desactivada temporal | 3 |
+
+Tres lecturas:
+
+**El taller es el cuello de botella.** 970 máquinas, tres cuartas partes de todo lo que está
+fuera de servicio. No es "parque inmovilizado" genérico: es una cola de reparación.
+
+**Solo hay 27 máquinas disponibles para instalar**, más 9 pendientes de revisar y 4
+reservadas. Es decir, **40 máquinas listas frente a 970 en reparación**. Si mañana entra un
+cliente nuevo, el material sale del taller o no sale.
+
+**208 máquinas ya no son parque**: 92 vendidas, 71 de baja definitiva y 45 devueltas al
+proveedor. Siguen en la tabla, y conviene excluirlas de cualquier recuento de flota o los
+porcentajes salen mal.
+
+Esto encaja con el informe 30, que mostraba el parque encogiendo tres años seguidos
+(−296 máquinas netas en 2026). Las máquinas salen de servicio más rápido de lo que el taller
+las devuelve.
+
+### Coherencia
+
+Todo cuadra: las 3.200 operativas son exactamente las que tienen punto de venta, ninguna
+operativa está sin asignar, y **la delegación del punto de venta coincide con la de la
+máquina en el 100% de los casos**. Este informe es, de los catalogados, el censo más limpio.
 
 ---
 
