@@ -48,7 +48,7 @@ select
   round(100.0*count(*) filter (where mesesamortizacion is not null and mesesamortizacion <> 0)/count(*),1)  as pct_mesesamort,
   round(100.0*count(*) filter (where fechafinamortizacion > '1900-01-02')/count(*),1)               as pct_finamort,
   round(100.0*count(*) filter (where telemetriadispositivo is not null and telemetriadispositivo <> '')/count(*),1) as pct_dispositivo,
-  count(*) filter (where auditgenalarmas is true)                             as con_alarmas_audit,
+  count(*) filter (where auditgenalarmas <> 0)                                as con_alarmas_audit,
   round(100.0*count(*) filter (where fechaultcambioplanograma > '1900-01-02')/count(*),1)           as pct_ultcambioplano,
   round(100.0*count(*) filter (where consumomaximo is not null and consumomaximo <> 0)/count(*),1)  as pct_consumomaximo,
   round(100.0*count(*) filter (where fechafingarantia > '1900-01-02')/count(*),1)                   as pct_fingarantia
@@ -133,7 +133,7 @@ select
   cen.denomina              as centro,
   del.nombre                as delegacion,
   ru.denomina               as ruta,
-  t.fechaventa::text        as fecha_venta,
+  cast(t.fechaventa as text) as fecha_venta,
   t.hora                    as hora,
   t.diasemana               as dia_semana,
   a.codigo                  as cod_articulo,
@@ -144,7 +144,7 @@ select
   t.coste                   as coste,
   (t.precio - coalesce(t.coste,0)) as margen,
   case t.lineaprecio when 1 then 'Tarjeta crédito' when 2 then 'Efectivo'
-                     when 3 then 'Prepago' else t.lineaprecio::text end as medio_pago,
+                     when 3 then 'Prepago' else cast(t.lineaprecio as text) end as medio_pago,
   t.tipoventaorigen         as tipo_origen,
   t.transactionid           as id_transaccion
 from telemetry.telemetrysales t
@@ -156,7 +156,6 @@ left join general.delegaciones del      on del.id = p.delegacionid
 left join vending.rutas ru              on ru.id  = t.rutaid
 left join stocks.articulos a            on a.id   = t.articuloid
 where t.fechaventa >= '{0}' and t.fechaventa <= '{1} 23:59:59'
-  and ((0 = {2}) or (cli.codigo = {2}))
 order by t.fechaventa;
 ```
 
@@ -164,7 +163,7 @@ Y el resumen del mismo día, para comparar el total contra lo que dice el inform
 
 ```sql
 select
-  t.fechaventa::date        as fecha,
+  cast(t.fechaventa as date) as fecha,
   count(*)                  as transacciones,
   count(distinct t.maquinaid) as maquinas,
   sum(t.precio)             as importe,
@@ -175,7 +174,7 @@ select
   count(*) filter (where t.lineaprecio = 3) as n_prepago
 from telemetry.telemetrysales t
 where t.fechaventa >= '{0}' and t.fechaventa <= '{1} 23:59:59'
-group by t.fechaventa::date
+group by cast(t.fechaventa as date)
 order by fecha;
 ```
 
@@ -197,7 +196,7 @@ order by c.activa desc, cen.denomina;
 
 -- 3.2 Alarmas de máquina disparadas por la telemetría
 select m.codigo as matricula, cen.denomina as centro, pdv.codigo as cod_pdv,
-       al.firedon::text as disparada, al.code as codigo_alarma,
+       cast(al.firedon as text) as disparada, al.code as codigo_alarma,
        al.eventdescription as descripcion, al.status as estado, al.telemetrysource as fuente
 from telemetry.telemetryalarms al
 left join recursos.maquinas m on m.id = al.maquinaid
@@ -207,7 +206,7 @@ where al.firedon >= '{0}' and al.firedon <= '{1} 23:59:59'
 order by al.firedon desc;
 
 -- 3.3 Alarmas detectadas en el audit de la visita
-select m.codigo as matricula, a.codigoalarma, a.fechaalarma::text as fecha
+select m.codigo as matricula, a.codigoalarma, cast(a.fechaalarma as text) as fecha
 from vending.partesvisitaauditalarmas a
 left join recursos.maquinas m on m.id = a.maquinaid
 where a.fechaalarma >= '{0}' and a.fechaalarma <= '{1} 23:59:59';
@@ -239,7 +238,7 @@ Y para ver si el canal de notificación móvil se está usando:
 ```sql
 select tiponotificacion, count(*) as n,
        count(*) filter (where leida is true) as leidas,
-       min(fecha)::text as desde, max(fecha)::text as hasta
+       cast(min(fecha) as text) as desde, cast(max(fecha) as text) as hasta
 from recursos.empleadosnotificacionesmobile
 group by tiponotificacion order by n desc;
 ```
@@ -264,10 +263,10 @@ order by a.codigo;
 -- 5.2 Máquinas (las matrículas), con todo lo de activo y telemetría
 select m.codigo as matricula, m.nserie, m.estado, m.cedida, m.tipopropiedad, m.proveedorexterno,
        mo.modelo, mo.clase as clase_modelo, fab.nombre as fabricante,
-       m.fechacompra::text, m.costecompra, m.cuotaamortizacion, m.mesesamortizacion,
-       m.fechafinamortizacion::text, m.fechafingarantia::text,
+       cast(m.fechacompra as text) as fechacompra, m.costecompra, m.cuotaamortizacion, m.mesesamortizacion,
+       cast(m.fechafinamortizacion as text) as fechafinamort, cast(m.fechafingarantia as text) as fechafingarantia,
        m.tipoconectividad, m.tipotelemetria, m.telemetriadispositivo, m.auditgenalarmas,
-       m.sinplanograma, m.fechaultcambioplanograma::text, m.consumomaximo, m.tipoexplotacion,
+       m.sinplanograma, cast(m.fechaultcambioplanograma as text) as ultcambioplano, m.consumomaximo, m.tipoexplotacion,
        pdv.codigo as cod_pdv, pdv.ubicacion, cen.numcentro, cen.denomina as centro,
        cli.codigo as cod_cliente, cli.nombre as cliente, del.nombre as delegacion
 from recursos.maquinas m
@@ -288,7 +287,7 @@ select pdv.codigo as cod_pdv, m.codigo as matricula, pdv.ubicacion, pdv.clase, p
        pdv.vtaefectivo, pdv.vtatprivada, pdv.vtatcredito, pdv.vtapmovil, pdv.vtagratuita,
        pdv.sinrecaudacion, pdv.gpslatitud, pdv.gpslongitud,
        pdv.acuerdopartner, pdv.acuerdoalquiler, pdv.impalquiler, pdv.acuerdosubvencion,
-       pdv.fechaalta::text, pdv.fechabaja::text
+       cast(pdv.fechaalta as text) as fechaalta, cast(pdv.fechabaja as text) as fechabaja
 from vending.pdvs pdv
 left join recursos.maquinas m on m.id = pdv.maquinaid
 left join comercial.clientescentros cen on cen.id = pdv.clientecentroid
@@ -319,3 +318,21 @@ que hay que rellenar antes.
 Sospecho, por lo visto hasta ahora, que `costemediovisita` y `cal_beneficio` estarán poco
 rellenos, y que `unidcaja` sí. Pero es una sospecha: el sentido de la consulta es
 comprobarlo, no confirmarla.
+
+---
+
+## Correcciones tras el primer intento en VenCloud
+
+Dos consultas fallaron con «La sentencia no está bien configurada». Las dos causas, corregidas
+ya arriba:
+
+1. **`recursos.maquinas.auditgenalarmas` es `integer`, no `boolean`.** `is true` sobre un entero
+   es un error de tipos en PostgreSQL. Va como `auditgenalarmas <> 0`.
+2. **Los casts con `::` desaparecen.** El motor de informes puede interpretar los dos puntos
+   como marca de parámetro. Todo va ahora como `cast(x as text)`, que es ANSI y no tiene ese
+   riesgo. También se ha quitado el filtro de cliente `{2}` del detalle de telemetría: cuantos
+   menos parámetros, menos superficie de fallo al probar.
+
+Regla general para esta tanda: **el bloque 1 no lleva parámetros** (se pega y se prueba tal
+cual). Los que sí llevan `{0}`/`{1}` necesitan las dos fechas declaradas en la pestaña
+Parámetros, tipo Fecha, Orden 1 y 2.
