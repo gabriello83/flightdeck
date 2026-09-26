@@ -1577,11 +1577,10 @@ bloque comentado que iba a comprobar exactamente eso —`select count(id) from
 recursos.maquinascarriles where maquinaid = m.id` para marcar "tiene contenedores"— y se
 quedó sin terminar.
 
-Así que de las 113 calientes instaladas que el informe señala, buena parte puede estar
-perfectamente configurada por carriles. **Conviene terminar ese bloque comentado antes de
-usar esta lista como tarea de trabajo**; si no, se manda a alguien a revisar máquinas que
-están bien. Para fría y snack, donde el canal sí es la vía, las 58 instaladas sí son
-trabajo real.
+**Comprobado después con el informe 84 y descartado**: una máquina de bebida caliente
+(24CE4829) tiene 36 canales con sus selecciones. Las máquinas de café **sí usan
+`maquinascanales`**, de modo que una caliente sin canales no tiene selecciones configuradas
+y no puede vender. Las 171 instaladas del informe, calientes incluidas, son trabajo real.
 
 ### Las plantillas tienen errores
 
@@ -2907,6 +2906,45 @@ Puede haber razones operativas —está en un comedor, lleva producto fresco, es
 visible—, pero el dato sostiene una conversación concreta sobre frecuencia. Y este es
 exactamente el cálculo que el cuadro de mando debe hacer para las 2.889 máquinas con
 planograma, no para una.
+
+### Segunda salida: máquina 24CE4829 (OPERA TOUCH 2C, bebida caliente)
+
+**36 canales, 32 activos.** Y aquí los "canales" no son huecos físicos sino **selecciones**:
+R01 Café solo normal, R04 Café con leche normal, R10 Café solo premium, R28 Cappuccino
+vainilla, R53 Solo Vaso… Son los artículos de **tipo `R`** que el informe 24 excluía; ahora
+se sabe qué son: **recetas**.
+
+La capacidad es 0 en los 36 canales, lógicamente: una selección no tiene capacidad, la
+tienen los carriles de materia prima.
+
+**Esto corrige una cautela que puse en el informe 40.** Allí supuse que las máquinas de
+bebida caliente podían no usar `maquinascanales` y que por eso las 113 calientes señaladas
+como "sin canales" podrían estar bien configuradas. No es así: **las máquinas de café sí
+usan canales, para sus selecciones**. Una máquina caliente sin canales no tiene selecciones
+configuradas, o sea que no puede vender. Las 113 son trabajo real.
+
+### Y resuelve qué significa un precio 0 en el canal
+
+El planograma actual tiene seis selecciones a **0 €**: Café americano premium, Cappuccino
+premium, Mocachino premium, Mocachino descafeinado, Leche, Agua caliente y Solo Vaso.
+
+Contrastando con las ventas reales de esa máquina entre mayo y agosto: **Café Americano
+Premium vendió 273 unidades a 0,45 €** y **Mocachino Premium 130 a 0,45 €**. No salieron
+gratis.
+
+Conclusión, ya con evidencia: **`mc.precioef = 0` no significa gratis, significa que el
+canal no fija precio y manda la tarifa**. Es coherente con que el informe 37 calcule el
+precio con la función `getprecioscanal` en lugar de leer este campo. La misma lectura vale
+para los 13 canales a cero de la máquina de snack.
+
+Un detalle más: el planograma actual pone las selecciones premium a **0,60 €** y en mayo–
+agosto todas se vendieron a **0,45 €**. O la tarifa pisa también ese precio, o hubo una
+subida posterior. Cualquiera de las dos cosas confirma que **el precio bueno no está en el
+planograma**.
+
+Y otro aviso sobre nombres: la misma selección se llama "Café largo premium" en el maestro
+de artículos y "Café Express Largo Premium" en el export de ventas. Cruzar por nombre es
+imposible; solo sirve `cod_art`.
 
 ### Aviso sobre el comodín
 
