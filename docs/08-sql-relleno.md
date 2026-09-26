@@ -146,7 +146,8 @@ select
   t.precio                  as precio,
   t.coste                   as coste,
   a.puc                     as puc_articulo,
-  (t.precio - coalesce(t.coste, a.puc, 0)) as margen,
+  case when coalesce(t.coste,0) > 0 then t.coste else coalesce(a.puc,0) end as coste_est,
+  (t.precio - case when coalesce(t.coste,0) > 0 then t.coste else coalesce(a.puc,0) end) as margen,
   case t.lineaprecio
        when 1 then 'Tarjeta credito'
        when 2 then 'Efectivo'
@@ -344,4 +345,5 @@ ya arriba:
 
 Regla general para esta tanda: **el bloque 1 no lleva parámetros** (se pega y se prueba tal
 cual). Los que sí llevan `{0}`/`{1}` necesitan las dos fechas declaradas en la pestaña
-Parámetros, tipo Fecha, Orden 1 y 2.
+Parámetros, tipo Fecha, **Orden 0 y 1** — la numeración del Orden empieza en 0 y se
+corresponde con `{0}` y `{1}`, no en 1.
