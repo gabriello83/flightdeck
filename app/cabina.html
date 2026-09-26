@@ -1,0 +1,439 @@
+<title>Cabina de Vending Airbus</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --ground:#eef1f6; --panel:#ffffff; --panel-2:#f7f8fa; --rail:#0e1a2b;
+  --line:#dde3ec; --line-2:#c9d2e0;
+  --ink:#0e1520; --ink-2:#44546b; --muted:#7b8699; --on-rail:#e8eef7; --on-rail-2:#95a6bd;
+  --s1:#2a78d6; --s2:#eb6834;
+  --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --crit:#d03b3b;
+  --seq-1:#cde2fb; --seq-2:#9ec5f4; --seq-3:#5598e7; --seq-4:#2a78d6; --seq-5:#1c5cab; --seq-6:#104281;
+  --shadow:0 1px 2px rgba(14,26,43,.06),0 8px 24px rgba(14,26,43,.05);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --ground:#0b0f15; --panel:#12161c; --panel-2:#171c24; --rail:#080c12;
+  --line:#242c38; --line-2:#323c4b;
+  --ink:#eef2f7; --ink-2:#aab6c6; --muted:#7f8b9c; --on-rail:#e8eef7; --on-rail-2:#8a9bb2;
+  --s1:#3987e5; --s2:#d95926;
+  --seq-1:#104281; --seq-2:#184f95; --seq-3:#256abf; --seq-4:#3987e5; --seq-5:#6da7ec; --seq-6:#9ec5f4;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.28);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0b0f15; --panel:#12161c; --panel-2:#171c24; --rail:#080c12;
+  --line:#242c38; --line-2:#323c4b;
+  --ink:#eef2f7; --ink-2:#aab6c6; --muted:#7f8b9c; --on-rail:#e8eef7; --on-rail-2:#8a9bb2;
+  --s1:#3987e5; --s2:#d95926;
+  --seq-1:#104281; --seq-2:#184f95; --seq-3:#256abf; --seq-4:#3987e5; --seq-5:#6da7ec; --seq-6:#9ec5f4;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.28);
+}
+body{background:var(--ground);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.5}
+*{box-sizing:border-box}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:16px;padding-block:0 56px}
+.lbl{font-family:"Barlow Condensed","IBM Plex Sans",sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.09em;font-size:12px;color:var(--muted)}
+.num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+/* ---- riel superior ---- */
+.rail{background:var(--rail);color:var(--on-rail);border-bottom:1px solid #1d2a3d}
+.rail-in{max-width:1240px;margin:0 auto;padding:14px 16px 0}
+.brandrow{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px}
+.mark{width:30px;height:30px;flex:none}
+.brand h1{margin:0;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:23px;letter-spacing:.04em;text-transform:uppercase;line-height:1.1}
+.brand p{margin:1px 0 0;font-size:11.5px;color:var(--on-rail-2);letter-spacing:.02em}
+.acct{text-align:right}
+.acct .k{font-family:"Barlow Condensed",sans-serif;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--on-rail-2)}
+.acct .v{font-family:"Barlow Condensed",sans-serif;font-size:19px;font-weight:600;letter-spacing:.06em}
+/* anunciador */
+.annun{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0 0;padding-bottom:14px}
+.ann{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.1);border-left:3px solid var(--good);border-radius:5px;padding:8px 11px}
+.ann.w{border-left-color:var(--warn)} .ann.c{border-left-color:var(--crit)} .ann.s{border-left-color:var(--serious)}
+.ann .t{font-family:"Barlow Condensed",sans-serif;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--on-rail-2);display:flex;align-items:center;gap:6px}
+.ann .t b{width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block;flex:none}
+.ann.w .t b{background:var(--warn)} .ann.c .t b{background:var(--crit)} .ann.s .t b{background:var(--serious)}
+.ann .v{font-family:"IBM Plex Mono",monospace;font-size:19px;font-weight:500;margin-top:2px;font-variant-numeric:tabular-nums}
+.ann .d{font-size:11px;color:var(--on-rail-2);margin-top:1px}
+
+/* ---- paneles ---- */
+.grid{display:grid;gap:14px;margin-top:14px}
+.c2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.c3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px 18px 18px;box-shadow:var(--shadow);min-width:0}
+.panel > h2{margin:0 0 2px;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+.panel > .sub{margin:0 0 14px;font-size:12.5px;color:var(--muted);text-wrap:balance}
+.big{font-family:"IBM Plex Mono",monospace;font-size:31px;font-weight:500;letter-spacing:-.01em;font-variant-numeric:tabular-nums;line-height:1.1}
+.mid{font-family:"IBM Plex Mono",monospace;font-size:21px;font-weight:500;font-variant-numeric:tabular-nums}
+.hint{font-size:12px;color:var(--muted);margin-top:4px}
+.readout{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.readout .cell{border-left:2px solid var(--line-2);padding-left:12px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:0 0 6px;border-bottom:1px solid var(--line)}
+td{padding:6px 0;border-bottom:1px solid var(--line);vertical-align:middle}
+td.n{text-align:right;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.mono{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.tag{display:inline-block;font-family:"Barlow Condensed",sans-serif;font-size:11px;letter-spacing:.07em;text-transform:uppercase;padding:1px 7px;border-radius:3px;border:1px solid var(--line-2);color:var(--ink-2)}
+.scroll{overflow-x:auto}
+svg{display:block;max-width:100%}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+
+/* avisos */
+.avisos{display:flex;flex-direction:column;gap:9px}
+.av{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:11px 13px;border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:6px;background:var(--panel-2)}
+.av.c{border-left-color:var(--crit)} .av.s{border-left-color:var(--serious)} .av.g{border-left-color:var(--good)}
+.av .q{font-family:"IBM Plex Mono",monospace;font-size:21px;font-weight:500;min-width:52px;font-variant-numeric:tabular-nums}
+.av .txt strong{display:block;font-size:13.5px;font-weight:600}
+.av .txt span{font-size:12.5px;color:var(--muted)}
+button{font:inherit;cursor:pointer;background:var(--panel);color:var(--ink);border:1px solid var(--line-2);border-radius:5px;padding:6px 12px;font-size:12.5px;white-space:nowrap}
+button:hover{border-color:var(--s1);color:var(--s1)}
+button:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+.draft{margin-top:10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);padding:12px 13px}
+.draft pre{margin:8px 0 0;font-family:"IBM Plex Mono",monospace;font-size:12.5px;white-space:pre-wrap;color:var(--ink);line-height:1.55}
+.draft .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .08s;background:var(--rail);color:var(--on-rail);border-radius:5px;padding:6px 9px;font-size:12px;font-family:"IBM Plex Mono",monospace;z-index:9;box-shadow:0 6px 18px rgba(0,0,0,.28)}
+.foot{margin-top:22px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.foot b{color:var(--ink-2);font-weight:600}
+@media (max-width:900px){.c3,.c2{grid-template-columns:1fr}.annun{grid-template-columns:repeat(2,1fr)}.readout{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:460px){.annun{grid-template-columns:1fr}.readout{grid-template-columns:1fr}.av{grid-template-columns:auto 1fr;gap:8px}.av button{grid-column:2}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="rail">
+  <div class="rail-in">
+    <div class="brandrow">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="14" fill="none" stroke="#3987e5" stroke-width="1.6"/>
+          <circle cx="16" cy="16" r="9" fill="none" stroke="#3987e5" stroke-width="1" opacity=".5"/>
+          <path d="M2 16h7M23 16h7M16 2v7M16 23v7" stroke="#3987e5" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M16 9.5l4.6 9.4-4.6-2.3-4.6 2.3z" fill="#eb6834"/>
+        </svg>
+        <div>
+          <h1>Flightdeck</h1>
+          <p>Control de operación · servicio de vending</p>
+        </div>
+      </div>
+      <div class="acct">
+        <div class="k">Cuenta</div>
+        <div class="v">AIRBUS</div>
+        <div class="k" style="margin-top:4px">9 centros · 563 máquinas</div>
+      </div>
+    </div>
+    <div class="annun" id="annun"></div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="grid c2" style="margin-top:14px">
+    <div class="panel">
+      <h2>Ingreso del mes</h2>
+      <p class="sub">Septiembre 2026. Efectivo recaudado más venta con tarjeta leída de la telemetría.</p>
+      <div class="big" id="ingTotal"></div>
+      <div class="hint" id="ingSplit"></div>
+      <svg id="svgSplit" viewBox="0 0 560 74" role="img" aria-label="Reparto del ingreso entre efectivo y tarjeta"></svg>
+      <div class="legend">
+        <span><i style="background:var(--s1)"></i> Tarjeta (telemetría)</span>
+        <span><i style="background:var(--s2)"></i> Efectivo (recaudación)</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Periodo de referencia</h2>
+      <p class="sub">Mayo a agosto de 2026, el histórico completo disponible por artículo y máquina.</p>
+      <div class="readout">
+        <div class="cell"><div class="lbl">Venta</div><div class="mid" id="rVenta"></div></div>
+        <div class="cell"><div class="lbl">Unidades</div><div class="mid" id="rUds"></div></div>
+        <div class="cell"><div class="lbl">Precio medio</div><div class="mid" id="rTicket"></div></div>
+        <div class="cell"><div class="lbl">Referencias</div><div class="mid" id="rArt"></div></div>
+      </div>
+      <div class="hint" style="margin-top:14px">Máquinas con venta registrada: <span class="mono" id="rMaq"></span> de 563. Las 17 restantes no vendieron nada en cuatro meses.</div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:14px">
+    <h2>Avisos de operación</h2>
+    <p class="sub">Ordenados por severidad. Cada aviso prepara un mensaje listo para enviar al responsable de la ruta o al supervisor.</p>
+    <div class="avisos" id="avisos"></div>
+    <div class="draft" id="draft" hidden>
+      <div class="row">
+        <span class="lbl" style="color:var(--ink-2)">Mensaje preparado</span>
+        <span class="tag" id="draftTo"></span>
+        <button id="copyBtn" type="button">Copiar texto</button>
+        <button id="closeBtn" type="button">Cerrar</button>
+      </div>
+      <pre id="draftText"></pre>
+      <div class="hint">El envío por WhatsApp aún no está conectado. De momento el panel redacta el aviso y tú lo pegas.</div>
+    </div>
+  </div>
+
+  <div class="grid c2">
+    <div class="panel">
+      <h2>Venta por centro</h2>
+      <p class="sub">Mayo–agosto. Getafe concentra el 45% de la facturación de la cuenta.</p>
+      <svg id="svgCentros" role="img" aria-label="Venta por centro, mayo a agosto"></svg>
+    </div>
+    <div class="panel">
+      <h2>El día de la semana manda</h2>
+      <p class="sub">Media por día. El viernes vende un 28% menos que el martes y el fin de semana es marginal: nada se compara contra «ayer», sino contra el mismo día de la semana anterior.</p>
+      <svg id="svgSemana" role="img" aria-label="Venta media por día de la semana"></svg>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Venta diaria</h2>
+    <p class="sub">123 días. El dentado corresponde a los fines de semana; el escalón de agosto es el parón de verano.</p>
+    <svg id="svgSerie" role="img" aria-label="Serie diaria de venta de mayo a agosto"></svg>
+  </div>
+
+  <div class="grid c2">
+    <div class="panel">
+      <h2>Máquinas mudas</h2>
+      <p class="sub">Mayo–julio, sin contar agosto. Días laborables consecutivos sin vender una sola unidad. Casi ninguna tenía incidencia abierta.</p>
+      <div class="big" id="mudasN"></div>
+      <div class="hint" id="mudasD"></div>
+      <div class="scroll" style="margin-top:12px"><table id="tMudas"></table></div>
+    </div>
+    <div class="panel">
+      <h2>Rendimiento por máquina</h2>
+      <p class="sub">Euros por día laborable con venta. La mejor hace quince veces la mediana del parque.</p>
+      <div class="scroll"><table id="tMaq"></table></div>
+    </div>
+  </div>
+
+  <div class="grid c2">
+    <div class="panel">
+      <h2>Servicio técnico</h2>
+      <p class="sub">785 incidencias en cuatro meses. La mitad no son averías: son devoluciones de dinero.</p>
+      <svg id="svgAver" role="img" aria-label="Incidencias por categoría"></svg>
+      <div class="readout" style="margin-top:16px;grid-template-columns:repeat(3,1fr)">
+        <div class="cell"><div class="lbl">Mismo día</div><div class="mid" id="aDia"></div></div>
+        <div class="cell"><div class="lbl">p90</div><div class="mid" id="aP90"></div></div>
+        <div class="cell"><div class="lbl">Abiertas</div><div class="mid" id="aAbi"></div></div>
+      </div>
+      <div class="hint">El 9% tarda más de una semana. Esa cola es la que hay que mirar una a una.</div>
+    </div>
+    <div class="panel">
+      <h2>Rutas y visitas</h2>
+      <p class="sub">16.017 visitas, 15 rutas, 17 reponedores. El rendimiento por visita va de 0,2 € a 617 €.</p>
+      <div class="scroll"><table id="tVis"></table></div>
+      <div class="hint" style="margin-top:10px">Candidatas a espaciar frecuencia: el desplazamiento no se paga con esa reposición.</div>
+    </div>
+  </div>
+
+  <div class="grid c2">
+    <div class="panel">
+      <h2>Surtido</h2>
+      <p class="sub">Diez referencias hacen el 43,5% de la venta, mientras 141 de 370 no llegan a 100 € en cuatro meses.</p>
+      <svg id="svgArt" role="img" aria-label="Artículos más vendidos"></svg>
+    </div>
+    <div class="panel">
+      <h2>Máquinas reincidentes</h2>
+      <p class="sub">Incidencias acumuladas por máquina en el periodo. Con la antigüedad de instalación se puede separar el modelo del emplazamiento.</p>
+      <div class="scroll"><table id="tRein"></table></div>
+      <div class="hint" style="margin-top:10px">Modelos con más incidencias: <span id="modelos" class="mono"></span></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <p><b>Origen.</b> Venta, visitas, incidencias y preventivos de mayo a agosto de 2026, extraídos de VenCloud. Cifras de septiembre de los informes 23, 33, 36, 68 y 77. La venta con tarjeta sale de <span class="mono">telemetry.telemetrysales</span>, no de los audits de visita.</p>
+    <p style="margin-bottom:0"><b>Lo que todavía no se puede medir.</b> Margen por artículo, porque el precio de compra viene por caja y falta el factor de conversión. Rotura de stock, porque el stock recomendado está a cero en el planograma. Limpieza y control de temperatura, porque se registran en el 1,5% y el 1% de las visitas: hoy medirían el registro, no el trabajo.</p>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+const D={"periodo":{"desde":"2026-05-01","hasta":"2026-08-31","dias":123},"global":{"importe":778370.65,"unidades":1124774,"maquinas":547,"articulos":370,"ticket":0.692},"centros":[{"centro":"Getafe","importe":350910.09,"unidades":510354,"maquinas":230},{"centro":"San Pablo Sur","importe":187074.12,"unidades":244789,"maquinas":125},{"centro":"Illescas","importe":62271.71,"unidades":94220,"maquinas":50},{"centro":"Tablada","importe":60593.64,"unidades":92197,"maquinas":49},{"centro":"CBC","importe":55893.98,"unidades":88255,"maquinas":46},{"centro":"Albacete","importe":42368.64,"unidades":67795,"maquinas":27},{"centro":"San Pablo Norte","importe":19258.47,"unidades":27164,"maquinas":22}],"semana":[{"dia":"Lun","media":8976.0},{"dia":"Mar","media":9568.0},{"dia":"Mié","media":9365.0},{"dia":"Jue","media":8836.0},{"dia":"Vie","media":6922.0},{"dia":"Sáb","media":633.0},{"dia":"Dom","media":485.0}],"serie":[{"f":"2026-05-01","v":342.0},{"f":"2026-05-02","v":477.0},{"f":"2026-05-03","v":483.0},{"f":"2026-05-04","v":10362.0},{"f":"2026-05-05","v":11532.0},{"f":"2026-05-06","v":11301.0},{"f":"2026-05-07","v":11347.0},{"f":"2026-05-08","v":9322.0},{"f":"2026-05-09","v":705.0},{"f":"2026-05-10","v":531.0},{"f":"2026-05-11","v":11075.0},{"f":"2026-05-12","v":11563.0},{"f":"2026-05-13","v":11529.0},{"f":"2026-05-14","v":10461.0},{"f":"2026-05-15","v":5658.0},{"f":"2026-05-16","v":717.0},{"f":"2026-05-17","v":542.0},{"f":"2026-05-18","v":10969.0},{"f":"2026-05-19","v":11579.0},{"f":"2026-05-20","v":11579.0},{"f":"2026-05-21","v":11272.0},{"f":"2026-05-22","v":9640.0},{"f":"2026-05-23","v":695.0},{"f":"2026-05-24","v":518.0},{"f":"2026-05-25","v":6544.0},{"f":"2026-05-26","v":11651.0},{"f":"2026-05-27","v":11756.0},{"f":"2026-05-28","v":11762.0},{"f":"2026-05-29","v":9817.0},{"f":"2026-05-30","v":735.0},{"f":"2026-05-31","v":541.0},{"f":"2026-06-01","v":10775.0},{"f":"2026-06-02","v":11909.0},{"f":"2026-06-03","v":11348.0},{"f":"2026-06-04","v":6819.0},{"f":"2026-06-05","v":6252.0},{"f":"2026-06-06","v":753.0},{"f":"2026-06-07","v":545.0},{"f":"2026-06-08","v":11219.0},{"f":"2026-06-09","v":11851.0},{"f":"2026-06-10","v":12029.0},{"f":"2026-06-11","v":11276.0},{"f":"2026-06-12","v":9534.0},{"f":"2026-06-13","v":984.0},{"f":"2026-06-14","v":665.0},{"f":"2026-06-15","v":11224.0},{"f":"2026-06-16","v":11659.0},{"f":"2026-06-17","v":11710.0},{"f":"2026-06-18","v":11522.0},{"f":"2026-06-19","v":9469.0},{"f":"2026-06-20","v":924.0},{"f":"2026-06-21","v":675.0},{"f":"2026-06-22","v":11034.0},{"f":"2026-06-23","v":11600.0},{"f":"2026-06-24","v":11066.0},{"f":"2026-06-25","v":10977.0},{"f":"2026-06-26","v":8813.0},{"f":"2026-06-27","v":880.0},{"f":"2026-06-28","v":537.0},{"f":"2026-06-29","v":10922.0},{"f":"2026-06-30","v":11617.0},{"f":"2026-07-01","v":9992.0},{"f":"2026-07-02","v":10471.0},{"f":"2026-07-03","v":9397.0},{"f":"2026-07-04","v":872.0},{"f":"2026-07-05","v":645.0},{"f":"2026-07-06","v":11314.0},{"f":"2026-07-07","v":11622.0},{"f":"2026-07-08","v":10766.0},{"f":"2026-07-09","v":10272.0},{"f":"2026-07-10","v":7699.0},{"f":"2026-07-11","v":731.0},{"f":"2026-07-12","v":532.0},{"f":"2026-07-13","v":9274.0},{"f":"2026-07-14","v":7567.0},{"f":"2026-07-15","v":7873.0},{"f":"2026-07-16","v":7539.0},{"f":"2026-07-17","v":6648.0},{"f":"2026-07-18","v":536.0},{"f":"2026-07-19","v":437.0},{"f":"2026-07-20","v":7979.0},{"f":"2026-07-21","v":8529.0},{"f":"2026-07-22","v":8575.0},{"f":"2026-07-23","v":8388.0},{"f":"2026-07-24","v":10293.0},{"f":"2026-07-25","v":619.0},{"f":"2026-07-26","v":535.0},{"f":"2026-07-27","v":10562.0},{"f":"2026-07-28","v":10658.0},{"f":"2026-07-29","v":10602.0},{"f":"2026-07-30","v":9808.0},{"f":"2026-07-31","v":6604.0},{"f":"2026-08-01","v":337.0},{"f":"2026-08-02","v":297.0},{"f":"2026-08-03","v":5252.0},{"f":"2026-08-04","v":5252.0},{"f":"2026-08-05","v":5033.0},{"f":"2026-08-06","v":4551.0},{"f":"2026-08-07","v":3693.0},{"f":"2026-08-08","v":303.0},{"f":"2026-08-09","v":240.0},{"f":"2026-08-10","v":3579.0},{"f":"2026-08-11","v":3499.0},{"f":"2026-08-12","v":3353.0},{"f":"2026-08-13","v":3253.0},{"f":"2026-08-14","v":2358.0},{"f":"2026-08-15","v":260.0},{"f":"2026-08-16","v":247.0},{"f":"2026-08-17","v":3733.0},{"f":"2026-08-18","v":3973.0},{"f":"2026-08-19","v":3811.0},{"f":"2026-08-20","v":3752.0},{"f":"2026-08-21","v":3156.0},{"f":"2026-08-22","v":369.0},{"f":"2026-08-23","v":371.0},{"f":"2026-08-24","v":8174.0},{"f":"2026-08-25","v":6600.0},{"f":"2026-08-26","v":6882.0},{"f":"2026-08-27","v":6741.0},{"f":"2026-08-28","v":5902.0},{"f":"2026-08-29","v":502.0},{"f":"2026-08-30","v":384.0},{"f":"2026-08-31","v":7582.0}],"articulos":[{"a":"Café con Leche Normal","u":206166,"i":94756.0},{"a":"COCA COLA ZERO LATA33","u":71126,"i":55428.0},{"a":"Café Cortado Normal","u":68375,"i":31484.0},{"a":"AGUA FONT VELLA 500ml","u":58879,"i":31130.0},{"a":"Café Largo Normal","u":62812,"i":28900.0},{"a":"COCA COLA LATA 33","u":37376,"i":28700.0},{"a":"Café con Leche Premium","u":42138,"i":25166.0},{"a":"Cappuccino Avellana","u":32774,"i":15092.0},{"a":"Café Largo Premium","u":23732,"i":14250.0},{"a":"DONETTE CLASICO P-4","u":10925,"i":13700.0},{"a":"AGUA FONT VELLA PET 1,5L","u":18505,"i":13306.0},{"a":"FANTA NAR LATA33 C24","u":16080,"i":12421.0}],"top_maq":[{"m":"24SE1983","c":"San Pablo Sur","dia":219.7,"i":19117.0},{"m":"24SE1984","c":"San Pablo Sur","dia":107.8,"i":9377.0},{"m":"24FE1685","c":"San Pablo Sur","dia":86.8,"i":7555.0},{"m":"24SE1985","c":"San Pablo Sur","dia":81.8,"i":7033.0},{"m":"24FE1686","c":"San Pablo Sur","dia":75.4,"i":6484.0},{"m":"24SE2038","c":"Getafe","dia":73.7,"i":6342.0},{"m":"24SE2217","c":"Getafe","dia":67.8,"i":5901.0},{"m":"24SE2151","c":"Getafe","dia":58.5,"i":4974.0}],"bot_maq":[{"m":"13FP0049","c":"San Pablo Sur","dia":1.38,"i":92.0},{"m":"24SE2096","c":"CBC","dia":1.2,"i":1.0},{"m":"24FE1756","c":"CBC","dia":1.11,"i":12.0},{"m":"24CE5105","c":"Illescas","dia":1.06,"i":17.0},{"m":"18CE1686","c":"Getafe","dia":1.0,"i":22.0},{"m":"06CE3159","c":"Getafe","dia":0.83,"i":42.0},{"m":"24CE5111","c":"Tablada","dia":0.76,"i":4.0},{"m":"13CE0054","c":"Tablada","dia":0.73,"i":26.0}],"pareto":[{"n":5,"pct":31.1},{"n":10,"pct":43.5},{"n":20,"pct":57.6},{"n":50,"pct":79.1},{"n":100,"pct":93.4}],"cola":141,"mudas":{"n":61,"dias":594,"top":[{"m":"24CE5040","c":"CBC","max":22,"n":1,"tot":22},{"m":"18CE1686","c":"Getafe","max":20,"n":5,"tot":35},{"m":"25FE1782","c":"San Pablo Sur","max":19,"n":1,"tot":19},{"m":"24CE5110","c":"San Pablo Norte","max":17,"n":1,"tot":17},{"m":"24CE4937","c":"Tablada","max":14,"n":2,"tot":17},{"m":"24CE5093","c":"Illescas","max":14,"n":3,"tot":21},{"m":"24FE1729","c":"San Pablo Sur","max":13,"n":1,"tot":13},{"m":"24CE5104","c":"Illescas","max":13,"n":2,"tot":21}]},"averias":{"n":785,"abiertas":42,"cat":[{"k":"Atención al cliente","v":390},{"k":"Averías técnicas","v":310},{"k":"Solicitudes de cliente","v":48},{"k":"Devolución de dinero","v":21},{"k":"Obsoletas","v":16}],"ope":[{"k":"DEVOLUCION - Transferencia Bancaria","v":100},{"k":"DEVOLUCION - Tarjeta Empleado","v":99},{"k":"SNACK/BEBIDA - Distribuidor fuera de servici","v":66},{"k":"CAFÉ - Distribuidor fuera de servicio","v":59},{"k":"Reponer distribuidor automatico","v":48},{"k":"DEVOLUCION - TARJETA DE CREDITO","v":39}],"mismo_dia":58,"p90":7.0,"mediana_h":22.0,"rein":[{"m":"24FE1757","c":"CBC","n":16},{"m":"24SE2004","c":"CBC","n":13},{"m":"18CE1627","c":"Albacete","n":11},{"m":"16FE1234","c":"Getafe","n":10},{"m":"24FE1765","c":"Tablada","n":9},{"m":"24CE5069","c":"Tablada","n":9}],"modelos":[{"k":"ARIA L EVO MASTER","v":183},{"k":"OPERA ONE 2C","v":170},{"k":"LEI 600 TOUCH 2 C","v":98},{"k":"ORCHESTRA","v":70},{"k":"S-C47","v":49},{"k":"SVE CFX-HC2","v":47}]},"visitas":{"n":16017,"maquinas":545,"rutas":15,"empleados":17,"sin_venta":0,"peor":[{"m":"24CE5111","n":20,"i":4.0,"r":0.2},{"m":"24CE5093","n":54,"i":11.0,"r":0.2},{"m":"24CE5104","n":58,"i":22.0,"r":0.4},{"m":"24CE5105","n":42,"i":17.0,"r":0.4},{"m":"17FE95063","n":13,"i":10.0,"r":0.8},{"m":"24CE5127","n":42,"i":36.0,"r":0.9}],"mejor":[{"m":"24SE1983","n":31,"i":19117.0,"r":617.0},{"m":"24CE4829","n":8,"i":3239.0,"r":405.0},{"m":"24SE1984","n":26,"i":9377.0,"r":361.0},{"m":"24FE1686","n":18,"i":6484.0,"r":360.0},{"m":"24FE1685","n":21,"i":7555.0,"r":360.0}],"rutas_top":[{"k":"Madrid 19 Airbus Illescas","v":2142},{"k":"Sevilla 5 Airbus S.Pablo Parte","v":2122},{"k":"Madrid 17 Airbus Ursula","v":1852},{"k":"Sevilla 6 Airbus S.Pablo Parte","v":1830},{"k":"Madrid 16 Airbus Alvaro","v":1455},{"k":"Sevilla 7 Airbus Tablada","v":1441}]},"preventivos":{"n":463,"maquinas":463},"sept":{"efectivo":22642.96,"tarjeta":148437.88,"total":171080.84,"sin_recaudar":177,"sin_reposicion":30,"maquinas":563,"centros":9,"sin_planograma":8,"sin_ruta":22,"sin_venta_4m":17,"limpieza_getafe":{"si":18,"tot":1227},"temp":{"lecturas":29,"fuera":14},"nayax":{"si":2286,"no":917}}};
+const $=id=>document.getElementById(id);
+const eur=n=>n.toLocaleString("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0});
+const eur2=n=>n.toLocaleString("es-ES",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2});
+const num=n=>n.toLocaleString("es-ES");
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const el=(t,a={})=>{const e=document.createElementNS("http://www.w3.org/2000/svg",t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const tip=$("tip");
+function hover(node,text){
+  node.addEventListener("pointerenter",e=>{tip.textContent=text;tip.style.opacity=1;});
+  node.addEventListener("pointermove",e=>{tip.style.left=Math.min(e.clientX+14,innerWidth-190)+"px";tip.style.top=(e.clientY-34)+"px";});
+  node.addEventListener("pointerleave",()=>{tip.style.opacity=0;});
+}
+
+/* ---------- anunciador ---------- */
+const S=D.sept;
+const cob=Math.round(S.nayax.si/(S.nayax.si+S.nayax.no)*100);
+const ann=[
+  {t:"Sin recaudar",v:S.sin_recaudar,d:"máquinas desde el 1 de septiembre",k:"c"},
+  {t:"Máquinas mudas",v:D.mudas.n,d:"con parones de 3+ días laborables",k:"c"},
+  {t:"Sin reposición",v:S.sin_reposicion,d:"máquinas desde el 1 de septiembre",k:"w"},
+  {t:"Telemetría",v:cob+"%",d:"de los puntos de venta con Nayax",k:"s"}
+];
+$("annun").innerHTML=ann.map(a=>`<div class="ann ${a.k}"><div class="t"><b></b>${a.t}</div><div class="v">${a.v}</div><div class="d">${a.d}</div></div>`).join("");
+
+/* ---------- lecturas ---------- */
+$("ingTotal").textContent=eur2(S.total);
+$("ingSplit").textContent=`${eur(S.tarjeta)} con tarjeta y ${eur(S.efectivo)} en efectivo. El efectivo es el ${Math.round(S.efectivo/S.total*100)}% del ingreso.`;
+$("rVenta").textContent=eur(D.global.importe);
+$("rUds").textContent=num(D.global.unidades);
+$("rTicket").textContent=D.global.ticket.toFixed(3).replace(".",",")+" €";
+$("rArt").textContent=D.global.articulos;
+$("rMaq").textContent=D.global.maquinas;
+$("mudasN").textContent=D.mudas.n+" máquinas";
+$("mudasD").textContent=num(D.mudas.dias)+" días laborables sin una sola venta, acumulados.";
+$("aDia").textContent=D.averias.mismo_dia+"%";
+$("aP90").textContent=D.averias.p90+" d";
+$("aAbi").textContent=D.averias.abiertas;
+$("modelos").textContent=D.averias.modelos.slice(0,3).map(m=>m.k+" ("+m.v+")").join(" · ");
+
+/* ---------- gráficos: se redibujan al ancho real del contenedor ---------- */
+const CH=[];
+function anchoDe(svg){const w=svg.parentElement.clientWidth;return Math.max(280,w);}
+function limpia(svg){while(svg.firstChild)svg.removeChild(svg.firstChild);}
+function corta(t,px){const max=Math.floor(px/6.6);return t.length>max?t.slice(0,max-1)+"…":t;}
+
+function split(){
+  const s=$("svgSplit"),W=anchoDe(s),H=76,bh=26,y=22;limpia(s);
+  s.setAttribute("viewBox",`0 0 ${W} ${H}`);s.setAttribute("height",H);
+  const t=S.total,a=S.tarjeta/t*W,b=S.efectivo/t*W;
+  const r1=el("rect",{x:0,y,width:Math.max(2,a-2),height:bh,rx:4,fill:css("--s1")});
+  const r2=el("rect",{x:a,y,width:Math.max(2,b),height:bh,rx:4,fill:css("--s2")});
+  s.appendChild(r1);s.appendChild(r2);
+  hover(r1,"Tarjeta: "+eur2(S.tarjeta));hover(r2,"Efectivo: "+eur2(S.efectivo));
+  const txt=(x,v,k,an)=>{
+    const a1=el("text",{x,y:y+bh+18,"text-anchor":an,fill:css("--ink"),"font-family":"IBM Plex Mono, monospace","font-size":13.5});
+    a1.textContent=v;s.appendChild(a1);
+    const a2=el("text",{x,y:y-8,"text-anchor":an,fill:css("--muted"),"font-family":"Barlow Condensed, sans-serif","font-size":12,"letter-spacing":"0.09em"});
+    a2.textContent=k;s.appendChild(a2);
+  };
+  txt(0,eur(S.tarjeta)+" · "+Math.round(S.tarjeta/t*100)+"%","TARJETA","start");
+  txt(W,eur(S.efectivo)+" · "+Math.round(S.efectivo/t*100)+"%","EFECTIVO","end");
+}
+CH.push(split);
+
+function barrasH(svgId,rows,fmt){
+  return function(){
+    const s=$(svgId),W=anchoDe(s),n=rows.length,rh=30,H=n*rh+6;limpia(s);
+    s.setAttribute("viewBox",`0 0 ${W} ${H}`);s.setAttribute("height",H);
+    const lw=Math.min(Math.max(W*0.32,96),168), vw=Math.min(W*0.2,86), bw=W-lw-vw-10;
+    const max=Math.max(...rows.map(r=>r.v));
+    const ramp=["--seq-6","--seq-5","--seq-4","--seq-3","--seq-2","--seq-1"];
+    rows.forEach((r,i)=>{
+      const y=i*rh+4, w=Math.max(2,r.v/max*bw), col=css(ramp[Math.min(i,ramp.length-1)]);
+      const k=el("text",{x:0,y:y+15,fill:css("--ink"),"font-size":12.5,"font-family":"IBM Plex Sans, sans-serif"});
+      k.textContent=corta(r.k,lw-8);s.appendChild(k);
+      const b=el("rect",{x:lw,y:y+3,width:w,height:15,rx:4,fill:col});
+      s.appendChild(b);hover(b,`${r.k}: ${fmt(r.v)}`);
+      const t=el("text",{x:W,y:y+15,"text-anchor":"end",fill:css("--ink-2"),"font-size":12.5,"font-family":"IBM Plex Mono, monospace"});
+      t.textContent=fmt(r.v);s.appendChild(t);
+    });
+  };
+}
+CH.push(barrasH("svgCentros",D.centros.map(c=>({k:c.centro,v:c.importe})),eur));
+CH.push(barrasH("svgAver",D.averias.cat.map(c=>({k:c.k,v:c.v})),v=>num(v)));
+CH.push(barrasH("svgArt",D.articulos.slice(0,8).map(a=>({k:a.a,v:a.i})),eur));
+
+function semana(){
+  const s=$("svgSemana"),W=anchoDe(s),H=206,pad={l:4,r:4,t:26,b:32},n=D.semana.length;limpia(s);
+  s.setAttribute("viewBox",`0 0 ${W} ${H}`);s.setAttribute("height",H);
+  const max=Math.max(...D.semana.map(d=>d.media)),bw=(W-pad.l-pad.r)/n;
+  [0,.5,1].forEach(f=>{const y=pad.t+(1-f)*(H-pad.t-pad.b);
+    s.appendChild(el("line",{x1:pad.l,x2:W-pad.r,y1:y,y2:y,stroke:css("--line"),"stroke-width":1}));});
+  D.semana.forEach((d,i)=>{
+    const h=d.media/max*(H-pad.t-pad.b),x=pad.l+i*bw+bw*.2,w=bw*.6,y=H-pad.b-h;
+    const r=el("rect",{x,y,width:w,height:Math.max(2,h),rx:4,fill:css(i<5?"--seq-4":"--seq-2")});
+    s.appendChild(r);hover(r,`${d.dia}: ${eur(d.media)} de media`);
+    const lv=el("text",{x:x+w/2,y:y-7,"text-anchor":"middle",fill:css("--ink"),"font-size":12,"font-family":"IBM Plex Mono, monospace"});
+    lv.textContent=(d.media/1000).toFixed(d.media<1000?1:0).replace(".",",")+"k";s.appendChild(lv);
+    const lk=el("text",{x:x+w/2,y:H-pad.b+17,"text-anchor":"middle",fill:css("--muted"),"font-size":11.5,"font-family":"Barlow Condensed, sans-serif","letter-spacing":"0.07em"});
+    lk.textContent=d.dia.toUpperCase();s.appendChild(lk);
+  });
+}
+CH.push(semana);
+
+function serie(){
+  const s=$("svgSerie"),W=anchoDe(s),H=Math.max(190,Math.min(250,W*0.22)),pad={l:44,r:8,t:16,b:28},d=D.serie,n=d.length;limpia(s);
+  s.setAttribute("viewBox",`0 0 ${W} ${H}`);s.setAttribute("height",H);
+  const max=Math.max(...d.map(p=>p.v)),iw=W-pad.l-pad.r,ih=H-pad.t-pad.b;
+  const X=i=>pad.l+i/(n-1)*iw, Y=v=>pad.t+ih-v/max*ih;
+  [0,.5,1].forEach(f=>{const y=pad.t+ih-f*ih;
+    s.appendChild(el("line",{x1:pad.l,x2:W-pad.r,y1:y,y2:y,stroke:css("--line"),"stroke-width":1}));
+    const t=el("text",{x:pad.l-7,y:y+4,"text-anchor":"end",fill:css("--muted"),"font-size":11,"font-family":"IBM Plex Mono, monospace"});
+    t.textContent=Math.round(max*f/1000)+"k";s.appendChild(t);});
+  let mes="";
+  d.forEach((p,i)=>{const m=p.f.slice(0,7);if(m!==mes){mes=m;
+    const t=el("text",{x:X(i),y:H-8,fill:css("--muted"),"font-size":11.5,"font-family":"Barlow Condensed, sans-serif","letter-spacing":"0.08em"});
+    t.textContent=["","ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"][+m.slice(5)];
+    s.appendChild(t);}});
+  const line=d.map((p,i)=>(i?"L":"M")+X(i).toFixed(1)+" "+Y(p.v).toFixed(1)).join(" ");
+  s.appendChild(el("path",{d:line+` L${X(n-1)} ${pad.t+ih} L${pad.l} ${pad.t+ih} Z`,fill:css("--s1"),opacity:".1"}));
+  s.appendChild(el("path",{d:line,fill:"none",stroke:css("--s1"),"stroke-width":2,"stroke-linejoin":"round"}));
+  const cross=el("line",{y1:pad.t,y2:pad.t+ih,stroke:css("--ink-2"),"stroke-width":1,opacity:0});
+  const dot=el("circle",{r:4.5,fill:css("--s1"),stroke:css("--panel"),"stroke-width":2,opacity:0});
+  s.appendChild(cross);s.appendChild(dot);
+  const hit=el("rect",{x:pad.l,y:pad.t,width:iw,height:ih,fill:"transparent"});
+  s.appendChild(hit);
+  hit.addEventListener("pointermove",e=>{
+    const r=s.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*W;
+    const i=Math.max(0,Math.min(n-1,Math.round((px-pad.l)/iw*(n-1))));
+    const p=d[i];cross.setAttribute("x1",X(i));cross.setAttribute("x2",X(i));cross.setAttribute("opacity",".35");
+    dot.setAttribute("cx",X(i));dot.setAttribute("cy",Y(p.v));dot.setAttribute("opacity",1);
+    const f=new Date(p.f+"T00:00:00");
+    tip.textContent=f.toLocaleDateString("es-ES",{weekday:"short",day:"numeric",month:"short"})+" · "+eur(p.v);
+    tip.style.opacity=1;tip.style.left=Math.min(e.clientX+14,innerWidth-200)+"px";tip.style.top=(e.clientY-34)+"px";
+  });
+  hit.addEventListener("pointerleave",()=>{tip.style.opacity=0;cross.setAttribute("opacity",0);dot.setAttribute("opacity",0);});
+}
+CH.push(serie);
+
+function pinta(){CH.forEach(f=>{try{f();}catch(e){}});}
+pinta();
+let rt;addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(pinta,160);});
+
+/* ---------- tablas ---------- */
+const tabla=(id,cols,rows)=>{$(id).innerHTML="<thead><tr>"+cols.map((c,i)=>`<th${i?' style="text-align:right"':''}>${c}</th>`).join("")+"</tr></thead><tbody>"+rows+"</tbody>";};
+tabla("tMudas",["Máquina","Centro","Parón","Días"],
+  D.mudas.top.map(m=>`<tr><td class="mono">${m.m}</td><td>${m.c}</td><td class="n">${m.max} d</td><td class="n">${m.tot}</td></tr>`).join(""));
+tabla("tMaq",["Máquina","Centro","€/día","Total"],
+  D.top_maq.slice(0,4).map(m=>`<tr><td class="mono">${m.m}</td><td>${m.c}</td><td class="n">${m.dia.toLocaleString("es-ES")} €</td><td class="n">${eur(m.i)}</td></tr>`).join("")
+  +`<tr><td colspan="4" style="padding:8px 0;border-bottom:1px solid var(--line)"><span class="tag">cola del parque</span></td></tr>`
+  +D.bot_maq.slice(0,4).map(m=>`<tr><td class="mono">${m.m}</td><td>${m.c}</td><td class="n">${m.dia.toLocaleString("es-ES")} €</td><td class="n">${eur(m.i)}</td></tr>`).join(""));
+tabla("tVis",["Máquina","Visitas","Venta","€/visita"],
+  D.visitas.peor.map(v=>`<tr><td class="mono">${v.m}</td><td class="n">${v.n}</td><td class="n">${eur(v.i)}</td><td class="n">${v.r.toLocaleString("es-ES",{minimumFractionDigits:1})} €</td></tr>`).join(""));
+tabla("tRein",["Máquina","Centro","Incidencias"],
+  D.averias.rein.map(r=>`<tr><td class="mono">${r.m}</td><td>${r.c}</td><td class="n">${r.n}</td></tr>`).join(""));
+
+/* ---------- avisos ---------- */
+const AV=[
+  {k:"c",q:S.sin_recaudar,t:"Máquinas sin recaudar",s:"Desde el 1 de septiembre. La regla es recaudar al menos una vez al mes.",to:"Supervisor de operaciones",
+   m:`Aviso de recaudación — cuenta AIRBUS\n${S.sin_recaudar} máquinas llevan sin recaudar desde el 1 de septiembre.\nGetafe aporta 93 de ellas, el 40% del centro.\nLa norma es recaudar cada máquina al menos una vez al mes; por encima de 100 € en bolsa, más a menudo.\nPor favor, confirma el plan de recaudación de esta semana.`},
+  {k:"c",q:D.mudas.n,t:"Máquinas mudas",s:`${num(D.mudas.dias)} días laborables sin vender una sola unidad, y casi ninguna con incidencia abierta.`,to:"Responsable de ruta",
+   m:`Aviso de máquinas mudas — cuenta AIRBUS\n${D.mudas.n} máquinas han estado 3 o más días laborables seguidos sin vender nada.\nLa peor, ${D.mudas.top[0].m} en ${D.mudas.top[0].c}, estuvo ${D.mudas.top[0].max} días parada.\nNinguna tenía incidencia abierta, así que no llegó a detectarse.\nRevisad si están averiadas, vacías o desconectadas.`},
+  {k:"w",q:S.sin_reposicion,t:"Máquinas sin reposición",s:"Instaladas, en punto de venta y sin una sola línea de reposición en el mes.",to:"Responsable de ruta",
+   m:`Aviso de reposición — cuenta AIRBUS\n${S.sin_reposicion} máquinas instaladas no han recibido ninguna reposición desde el 1 de septiembre.\nGetafe 7, CBC 6, San Pablo Norte 6, Tablada 4, Illescas 3, San Pablo Sur 2, Albacete 2.\n¿Están fuera de ruta o es un problema de registro en el terminal?`},
+  {k:"s",q:S.sin_ruta,t:"Puntos de venta sin ruta",s:"Instalados y sin ruta activa asignada: nadie los tiene en su plan.",to:"Planificación",
+   m:`Aviso de planificación — cuenta AIRBUS\n${S.sin_ruta} puntos de venta instalados no están en ninguna ruta activa.\nNo aparecen en el plan de visitas de nadie, así que solo se atienden por casualidad.\nHace falta asignarlos o darlos de baja.`},
+  {k:"w",q:S.sin_venta_4m,t:"Máquinas sin venta en cuatro meses",s:"En el censo, operativas, y sin una sola venta entre mayo y agosto.",to:"Supervisor de operaciones",
+   m:`Aviso de parque — cuenta AIRBUS\n${S.sin_venta_4m} máquinas del censo no registraron ninguna venta entre mayo y agosto.\nO están desconectadas de la telemetría, o no se están usando.\nPropongo revisarlas una a una antes de seguir pagando su mantenimiento.`},
+  {k:"w",q:S.limpieza_getafe.si+"/"+S.limpieza_getafe.tot,t:"Registro de limpieza",s:"Visitas con limpieza registrada en Getafe durante septiembre.",to:"Supervisor de operaciones",
+   m:`Aviso de registro — cuenta AIRBUS, centro Getafe\nSolo ${S.limpieza_getafe.si} de ${S.limpieza_getafe.tot} visitas de septiembre tienen la limpieza registrada en el terminal.\n209 de 227 puntos de venta no tienen ninguna.\nUn reponedor marca el 6% y el resto el 0%, así que parece un problema de registro más que de servicio.\nEn un cliente como este, la limpieza es lo primero que se pide ante una reclamación.`},
+  {k:"w",q:S.temp.fuera+"/"+S.temp.lecturas,t:"Temperatura fuera de rango",s:"Lecturas refrigeradas por encima de 4 °C. Ninguna pasa de 4,9 °C.",to:"Calidad",
+   m:`Aviso de calidad — cuenta AIRBUS\n${S.temp.fuera} de ${S.temp.lecturas} lecturas de temperatura en máquinas refrigeradas superan los 4 °C.\nNinguna pasa de 4,9 °C, así que es incumplimiento formal y no riesgo sanitario.\nLo que sí preocupa es la cobertura: en Getafe, con 231 máquinas, solo se registran 2 lecturas al día.`},
+  {k:"g",q:S.sin_planograma,t:"Máquinas sin planograma",s:"Solo el 1% del parque de la cuenta. Es el mejor dato de configuración de toda la cartera.",to:"Planificación",
+   m:`Configuración — cuenta AIRBUS\nSolo ${S.sin_planograma} máquinas de 563 no tienen planograma, un 1%.\nNinguna máquina de la cuenta está sin tarifa configurada.\nEs, con diferencia, la cuenta mejor configurada de la cartera.`}
+];
+$("avisos").innerHTML=AV.map((a,i)=>`<div class="av ${a.k}"><div class="q">${a.q}</div><div class="txt"><strong>${a.t}</strong><span>${a.s}</span></div><button type="button" data-i="${i}">Preparar aviso</button></div>`).join("");
+const draft=$("draft"),dText=$("draftText"),dTo=$("draftTo");
+$("avisos").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-i]");if(!b)return;
+  const a=AV[+b.dataset.i];dText.textContent=a.m;dTo.textContent="Para: "+a.to;draft.hidden=false;
+  draft.scrollIntoView({behavior:"smooth",block:"nearest"});
+});
+$("closeBtn").addEventListener("click",()=>{draft.hidden=true;});
+$("copyBtn").addEventListener("click",async()=>{
+  const b=$("copyBtn");
+  try{await navigator.clipboard.writeText(dText.textContent);b.textContent="Copiado";}
+  catch(_){const r=document.createRange();r.selectNodeContents(dText);const s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent="Selecciona y copia";}
+  setTimeout(()=>{b.textContent="Copiar texto";},2200);
+});
+</script>
