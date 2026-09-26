@@ -2541,6 +2541,49 @@ hicieron algo y cuánto.
 
 ---
 
+## Informe 70 — Registro de temperaturas
+
+**Parámetros**: `Desde Fecha` (0), `Hasta Fecha` (1), `Centro Cliente` (2) y `Máquina` (3),
+los dos últimos de tipo **Buscador** — un selector, el primer tipo de parámetro que no es
+fecha, número ni cadena.
+
+Es el detalle del informe 4 para **una máquina concreta**: cada lectura de temperatura con
+su fecha, su valor y el empleado que la tomó.
+
+**Salida** (Airbus Getafe, septiembre): **cero registros**.
+
+### Por qué sale vacío
+
+No es un fallo del informe. La explicación está en el propio dato: en Airbus Getafe, con
+**231 máquinas**, el informe 4 recoge **2 lecturas de temperatura** en el día analizado,
+mientras que San Pablo Sur, con 115 máquinas, registra 26. Lo más probable es que la máquina
+seleccionada no sea una de esas dos.
+
+El hallazgo de fondo es ese contraste: **la cobertura del control de temperatura varía
+muchísimo entre centros del mismo cliente**. En un centro con producto fresco eso importa,
+y es justo el indicador de cobertura que propuse al analizar el informe 4: no cuántas
+lecturas están fuera de rango, sino **qué máquinas con fresco no se están controlando**.
+
+### Un problema práctico para la ingesta
+
+Los filtros son igualdades contra **identificadores internos**:
+
+```sql
+and pvis.clientecentroid = {2}
+and pvis.maquinaid = {3}
+```
+
+No son el `numcentro` ni el `codigo` de máquina que usan todos los demás informes, sino los
+`id` de la base de datos, que es lo que devuelve el selector de la interfaz. Desde la API no
+se pueden conocer sin consultarlos antes, y ningún informe de los catalogados los expone.
+
+Para automatizar esto hace falta o bien la versión con `numcentro` y `codigo` de máquina, o
+bien un informe que resuelva la correspondencia entre código e id. Y siendo prácticos: **con
+el informe 4 filtrando por fechas ya se tiene lo mismo para toda la cartera**, sin
+selectores ni ids.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
