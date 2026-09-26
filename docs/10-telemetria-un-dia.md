@@ -1,6 +1,6 @@
 # Un día de telemetría: 24 de septiembre de 2026
 
-56.607 transacciones, **52.389,11 €**, 1.841 máquinas, 253 centros, 115 clientes, 47 rutas,
+59.547 transacciones, **54.792,25 €**, 1.841 máquinas, 253 centros, 115 clientes, 47 rutas,
 375 artículos, 14 delegaciones. Un jueves. Es el primer dato de venta real con hora que
 tenemos, y responde de golpe varias preguntas que los informes dejaban abiertas.
 
@@ -19,7 +19,7 @@ tenemos, y responde de golpe varias preguntas que los informes dejaban abiertas.
 | AIRBUS ALBACETE (Parque Científico) | 51 | 0,00 € | 2 | 0 % |
 | **total** | **18.219** | **17.228,22 €** | **529** | |
 
-**32,9 % de toda la venta telemétrica de la compañía en un solo día**, con 529 máquinas.
+**31,4 % de toda la venta telemétrica de la compañía en un solo día**, con 529 máquinas.
 AIRBUS GETAFE por sí solo es el primer centro del país, por delante de Can Ruti y La Paz.
 
 Y AIRBUS opera distinto al resto:
@@ -44,7 +44,7 @@ El Parque Científico de Albacete vende 51 líneas a 0,00 €: es vending gratui
 | 1 · bebida caliente preparada | 20.948 | 10.934,98 € | **0 %** | **0 %** |
 | 2 · bebida fría envasada | 15.199 | 14.850,32 € | 100 % | 100 % |
 | 3 · snack | 11.510 | 13.280,49 € | 94,3 % | 99,3 % |
-| sin artículo | 8.950 | 13.323,32 € | 0 % | 0 % |
+| sin artículo | 11.890 | 15.726,46 € | 0 % | 0 % |
 
 Esto explica de una vez por qué `stocks.articulos.puc` salía al 94 % y aun así media venta se
 queda sin coste. **El café no se compra, se fabrica en la máquina.** Los artículos R01–R29 (café
@@ -71,7 +71,7 @@ son la misma.
 
 ## 3. Un cuarto del dinero no sabe qué producto es
 
-8.950 líneas, **13.323,32 € — el 25,4 % de la venta del día — no tienen artículo asociado.** Son
+11.890 líneas, **15.726,46 € — el 28,7 % de la venta del día — no tienen artículo asociado.** Son
 canales sin mapear: 2.628 de ellas con `canal = -1`. Afectan a 1.155 máquinas, y **176 máquinas
 venden el 100 % de su importe sin artículo identificado**; 363 máquinas pasan del 50 %.
 
@@ -133,3 +133,26 @@ entero lo resuelve en una ejecución.
 
    Aun así quedan 29.974 líneas sin coste ni puc, que son el café y los canales sin mapear. El
    margen real del día no se puede cerrar hasta tener la receta.
+
+
+---
+
+## 8. Corrección: 2.940 líneas que se me quedaron fuera
+
+Al cargar el fichero descarté por error las filas sin matrícula. El día no son 56.607
+transacciones y 52.389,11 €, sino **59.547 y 54.792,25 €**. Todas las cifras de arriba están ya
+recalculadas sobre el día completo.
+
+Y lo descartado resulta ser un hallazgo: **2.940 transacciones, 2.403,14 €, el 4,4 % del día,
+llegan de 118 dispositivos de telemetría que no corresponden a ninguna máquina de
+`recursos.maquinas`.** No tienen matrícula, ni centro, ni ruta, ni artículo: sólo dispositivo,
+importe y medio de pago. Es dinero real entrando —1.288 cobros en efectivo, 1.172 con tarjeta—
+desde equipos que el maestro no reconoce.
+
+A escala de mes son del orden de 60.000 €. Puede ser máquina dada de baja con el dispositivo aún
+activo, dispositivo reasignado sin actualizar, o alta pendiente. Sea lo que sea, es una lista
+corta y cerrada: 118 `devicecode` que cruzar con `telemetry.telemetrydevices` y con
+`recursos.maquinas.telemetriadispositivo` para ver a quién pertenecen.
+
+La cabina tiene que enseñar ese importe en algún sitio en vez de perderlo en un join, porque un
+cuadro de mando que se come el 4,4 % de los ingresos sin avisar es peor que no tenerlo.
