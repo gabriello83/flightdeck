@@ -2475,6 +2475,72 @@ de `lineaprecio` (que distingue el precio aplicado: efectivo, crédito o prepago
 
 ---
 
+## Informe 69 — Control diario de ruta (plan vs real + fuera de ruta)
+
+**Parámetro**: la fecha. Informe propio, no de serie.
+
+Clasifica cada punto de venta del día en tres estados construidos como ramas independientes
+unidas con `UNION ALL`: **HECHA** (planificado y visitado), **PENDIENTE** (planificado sin
+parte) y **FUERA DE RUTA** (visitado sin estar planificado). Añade el reponedor y una
+marca de **PASAJE VACÍO**: visita sin ninguna línea de reposición.
+
+**Hace bien lo que el informe 44 hace mal.** Aquel colgaba todos los `left join` del parte
+de visita y por eso las 10.633 visitas no realizadas salían en blanco. Aquí, al construir
+las tres ramas por separado, las filas PENDIENTE conservan su punto de venta, su ruta, su
+centro y su máquina. Es exactamente la corrección que hacía falta.
+
+La marca de pasaje vacío es además un indicador que no da ningún informe de serie: separa
+"no fue" de "fue y no hizo nada", que operativamente son dos problemas distintos.
+
+**Salida** (26/09/2026, ejecutada a las 02:23): 108 filas, todas PENDIENTE, sobre 9 rutas y
+7 delegaciones. La jornada aún no había empezado, así que la muestra no permite ver los
+otros dos estados. Las 108 planificadas de un sábado encajan con las ~125 que daba el
+informe 53.
+
+### Un fallo real: los puntos de venta visitados por SYSTEM desaparecen
+
+El filtro final es:
+
+```sql
+WHERE (emp.nombre IS NULL OR emp.nombre <> 'SYSTEM')
+```
+
+La intención —no contar las visitas automáticas— es correcta, pero el efecto no. Si un
+punto de venta planificado tiene un parte creado por SYSTEM:
+
+1. Entra en `en_plan_visitada` como HECHA, y el `WHERE` final lo elimina.
+2. **No entra en `en_plan_no_visitada`**, porque esa rama exige `parte_id IS NULL` y el
+   parte existe.
+
+Resultado: **ese punto de venta no aparece en ninguna parte**. Ni como hecho ni como
+pendiente. El informe subestima las dos columnas a la vez.
+
+La forma limpia de arreglarlo es excluir a SYSTEM **al construir `visitas_dia`**, no al
+final. Así sus partes no cuentan como visita y el punto de venta cae en PENDIENTE, que es
+lo que se quiere.
+
+### Tres detalles menores
+
+- **El emparejamiento ignora la ruta** (`ON v.pdvid = p.pdvid AND v.fecha_visita = p.fecha_plan`).
+  Es una buena decisión, porque mide **cobertura** y no adherencia al día, a diferencia del
+  informe 44. Pero conviene saber que la fila muestra la **ruta planificada** junto al
+  **reponedor que realmente fue**, que puede ser de otra ruta. No es un error; es algo que
+  hay que explicar a quien lo lea.
+- **Puede duplicar filas**: si un punto de venta tiene dos partes el mismo día salen dos
+  HECHA, y si está planificado por dos rutas salen dos PENDIENTE. En la muestra hay 4
+  máquinas con más de una fila del mismo estado. Contando filas en lugar de puntos de venta,
+  los totales se inflan.
+- **El pasaje vacío solo detecta la ausencia total de líneas**. Una visita con líneas a
+  cantidad cero no se marca. Si eso pasa, conviene comprobar también la suma.
+
+### Lo que le añadiría
+
+Las unidades repuestas y la recaudación de cada visita, que ya están en `partesvisita`.
+Con eso, una sola consulta respondería las tres preguntas del control diario: si fueron, si
+hicieron algo y cuánto.
+
+---
+
 ## Informes que conviene encargar
 
 Aprovechando que son consultas SQL a medida:
