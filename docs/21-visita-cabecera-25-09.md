@@ -79,7 +79,7 @@ sitio hay que buscarlo en otro lado (la app del reponedor, o el vehículo), no e
 | campo | relleno |
 |---|---:|
 | `imp_carga` (29.265,13 € cargados en el día) | 95,9 % |
-| `lineas_carga` | 96,0 % |
+| `und_carga` | 96,0 % |
 | `cod_bolsa` | 30,7 % |
 | `vtas_imp` | 10,9 % |
 | `temp_marcada` | 10,7 % |
@@ -112,7 +112,14 @@ La media triplica la mediana por unas pocas rutas con partes que se quedan abier
 que usar la mediana, o recortar por encima de un umbral, y de paso sale sola una alarma de
 «partes mal cerrados».
 
-## 7. Dimensión de un día
+## 7. `cal_cm` son unidades, no líneas
+
+Lo había puesto como `lineas_carga`. No lo es: mediana de 80 por visita y máximo 2.101, con un
+coste de 0,359 € por unidad (29.265,13 € / 154.671). Eso es cantidad cargada, no número de
+referencias — una máquina no tiene 80 canales distintos. Renombrado a `und_carga`, `und_rc`,
+`und_rm`, `und_rr`. El A2 lo confirma o lo desmiente al primer intento.
+
+## 8. Dimensión de un día
 
 1.061 máquinas visitadas, 157 centros, 58 rutas, 58 empleados. Sobre un parque de ~2.000 máquinas
 con venta diaria, **la mitad del parque se toca cada día**.

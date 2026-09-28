@@ -87,10 +87,10 @@ select
   p.cal_impcostecaducidad    as coste_caducidad,
   p.cal_impcosterotura       as coste_rotura,
   p.cal_impcosteinv          as coste_inventario,
-  p.cal_cm                   as lineas_carga,
-  p.cal_rc                   as lineas_ret_caducidad,
-  p.cal_rm                   as lineas_rm,
-  p.cal_rr                   as lineas_rr,
+  p.cal_cm                   as und_carga,
+  p.cal_rc                   as und_ret_caducidad,
+  p.cal_rm                   as und_rm,
+  p.cal_rr                   as und_rr,
   p.cal_haydifprecios        as dif_precios,
   p.cal_numcambioscanal      as cambios_canal,
   p.numcanalesvacios         as canales_vacios,
@@ -137,6 +137,17 @@ where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 
 `tipo_linea` es `CM` carga, `RC` retirada por caducidad, y `RM`/`RR`, cuyo significado todavía
 tienes que confirmarme.
+
+**Volumen esperado.** Un día son ~1.100 visitas reales. Los contadores de la cabecera suman
+154.671 unidades movidas el 25/09, pero eso son **unidades, no líneas** (mediana de 80 por visita,
+a 0,359 € de coste por unidad: es cantidad, no referencias). Las líneas serán las del planograma
+que se tocan, del orden de 25.000–45.000 filas al día. Si con un día responde rápido, el mes cabe;
+si tarda, se lanza por semanas.
+
+**Cuadre contra A1.** Cada `parte_id` de aquí tiene que existir en la cabecera, y por parte:
+suma de `cantidad` con `tipo_linea = 'CM'` = `und_carga`, y suma de `cantidad * precio_coste` =
+`imp_carga` (29.265,13 € el 25/09). Si eso cuadra, las hijas son fiables y las nueve restantes van
+seguidas.
 
 ## A3 · EXT_VISITA_INVENTARIO
 
