@@ -138,16 +138,21 @@ where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 `tipo_linea` es `CM` carga, `RC` retirada por caducidad, y `RM`/`RR`, cuyo significado todavía
 tienes que confirmarme.
 
-**Volumen esperado.** Un día son ~1.100 visitas reales. Los contadores de la cabecera suman
-154.671 unidades movidas el 25/09, pero eso son **unidades, no líneas** (mediana de 80 por visita,
-a 0,359 € de coste por unidad: es cantidad, no referencias). Las líneas serán las del planograma
-que se tocan, del orden de 25.000–45.000 filas al día. Si con un día responde rápido, el mes cabe;
-si tarda, se lanza por semanas.
+**Probado el 25/09: 8.187 filas en 2 segundos.** Mediana de 5 líneas por visita. El mes entero
+cabe de sobra en una llamada.
 
-**Cuadre contra A1.** Cada `parte_id` de aquí tiene que existir en la cabecera, y por parte:
-suma de `cantidad` con `tipo_linea = 'CM'` = `und_carga`, y suma de `cantidad * precio_coste` =
-`imp_carga` (29.265,13 € el 25/09). Si eso cuadra, las hijas son fiables y las nueve restantes van
-seguidas.
+**Cuadra con el A1 sin una sola diferencia por parte**
+([22-reposiciones-25-09.md](22-reposiciones-25-09.md)): `CM` = `cal_cm` (154.312 unidades),
+`RC` = `cal_rc` y su coste = `cal_impcostecaducidad`, `RR` = `cal_rr` y su coste =
+`cal_impcosterotura`.
+
+**Cuidado con `cal_impcarga`: es carga NETA**, `CM − RC − RM − RR`. Para valorar lo cargado hay
+que sumar las líneas `CM` de esta tabla, no leer el campo de la cabecera.
+
+**`etiq_canal` es texto, no entero** (`11`, pero también `V58`, `A12`, `VI001`, `DC`), y
+`cod_canal` viene a 0 en una de cada cinco filas: no sirve. Las líneas **sin `etiq_canal` son
+carriles de máquina caliente** — azúcar, vasos, paletinas, café —, el 62 % de las unidades y sólo
+el 19 % del coste. Hay que separarlas de las de canal en cualquier indicador.
 
 ## A3 · EXT_VISITA_INVENTARIO
 
