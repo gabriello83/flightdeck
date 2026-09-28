@@ -177,6 +177,10 @@ left join stocks.articulos a  on a.id = i.articuloid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
+**Puede venir vacío, y no sería un fallo.** El 25/09 los 1.107 partes reales traen
+`cal_impcosteinv = 0`, o sea que nadie valoró inventario ese día. El inventario no se hace en cada
+visita. Si un día sale a cero hay que buscar el día en que sí se hizo, no dar el informe por roto.
+
 ## A4 · EXT_VISITA_INVCANALES
 
 ```sql
