@@ -266,6 +266,41 @@ left join stocks.articulos a  on a.id = c.articuloid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
+**El 25/09 devuelve 0 filas**, y ese mismo día dos máquinas sí hicieron inventario por artículo
+(A3). Las dos tablas no son complementarias: el inventario se guarda en una o en la otra. Antes de
+darle más vueltas hay que saber si `partesvisitainvcanales` tiene datos, y de cuándo: eso es la
+sonda A4Z ([23-inventario.md](23-inventario.md)).
+
+## A4Z · EXT_SONDA_INVCANALES
+
+Sin parámetros. Una fila por mes. Dice si la tabla está viva y desde cuándo.
+
+```sql
+select
+  substring(cast(c.fecha as text) from 1 for 7) as mes,
+  count(c.id)                                   as lineas,
+  count(distinct c.partevisitaid)               as inventarios,
+  count(distinct c.articuloid)                  as articulos
+from vending.partesvisitainvcanales c
+group by substring(cast(c.fecha as text) from 1 for 7)
+order by 1
+```
+
+## A3Z · EXT_SONDA_INVENTARIO
+
+La misma sonda sobre la tabla por artículo, para comparar las dos.
+
+```sql
+select
+  substring(cast(i.fecha as text) from 1 for 7) as mes,
+  count(i.id)                                   as lineas,
+  count(distinct i.partevisitaid)               as inventarios,
+  count(distinct i.articuloid)                  as articulos
+from vending.partesvisitarecinventarios i
+group by substring(cast(i.fecha as text) from 1 for 7)
+order by 1
+```
+
 ## A5 · EXT_VISITA_CONTAJES
 
 La tabla más interesante de todo el paquete: guarda el importe anterior y quién lo cambió.

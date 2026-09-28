@@ -42,6 +42,23 @@ Con dos máquinas no se puede cerrar la interpretación. Se cierra con el A3C, q
 inventario de todo el parque: si ahí `cantidad` también viene mayoritariamente a 0, el campo no se
 usa y el stock hay que deducirlo de `dif_capacidad`.
 
+## Y el inventario por canal (A4) está vacío
+
+`EXT_VISITA_INVCANALES` sobre el 25/09 devuelve **0 filas**. No es un error: el informe se ejecuta
+y no hay nada. Y el mismo día sí hubo dos inventarios por artículo.
+
+O sea que `partesvisitarecinventarios` y `partesvisitainvcanales` **no son complementarias**: el
+inventario se guarda en una o en la otra, según el flujo o el dispositivo. Con un día no se sabe
+si la segunda está muerta del todo o sólo poco usada, y de eso depende una cosa importante: si no
+hay inventario por canal, **la rotura de stock por canal no se puede medir con datos de visita**.
+
+Las dos sondas A3Z y A4Z resuelven la duda de un tiro: una fila por mes sobre cada tabla.
+
+**Si A4 resulta estar muerta**, el camino alternativo ya lo tenemos y no depende del inventario:
+`maquinascanales` da el planograma y el stock recomendado por canal, el A2 da lo que se repone en
+cada canal y con qué frecuencia, y la telemetría da lo que se vende. Canal que se repone al tope
+en cada visita es canal que se está quedando vacío entre visitas.
+
 ## Escala
 
 Los `id` del 25/09 van del 207.179 al 207.218. La tabla lleva ~207.000 líneas **de toda la
