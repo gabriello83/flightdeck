@@ -177,9 +177,70 @@ left join stocks.articulos a  on a.id = i.articuloid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
-**Puede venir vacío, y no sería un fallo.** El 25/09 los 1.107 partes reales traen
-`cal_impcosteinv = 0`, o sea que nadie valoró inventario ese día. El inventario no se hace en cada
-visita. Si un día sale a cero hay que buscar el día en que sí se hizo, no dar el informe por roto.
+**Probado el 25/09: 40 filas, 2 máquinas.** El inventario no se hace en cada visita —
+ese día lo hicieron dos de 1.061. Este informe sigue haciendo falta en la carga nocturna, porque
+es el que va trayendo los inventarios nuevos, pero **no sirve para consultar stock**: para eso
+está el A3B, que trae el último inventario de cada máquina sea de la fecha que sea
+([23-inventario.md](23-inventario.md)).
+
+## A3B · EXT_INVENTARIO_ANTIGUEDAD
+
+Sin parámetros. Una fila por máquina: cuándo se le hizo el último inventario y cuántos se le han
+hecho en total. Es el que dice si el dato sirve o está muerto — en Consum los había de hace 6 a 8
+meses.
+
+```sql
+select
+  ult.matricula            as matricula,
+  cast(ult.ultima as text) as fecha_ultimo_inventario,
+  ult.inventarios          as inventarios_historicos
+from (
+  select
+    m.codigo                        as matricula,
+    max(i.fecha)                    as ultima,
+    count(distinct i.partevisitaid) as inventarios
+  from vending.partesvisitarecinventarios i
+  join vending.partesvisita p on p.id = i.partevisitaid
+  join recursos.maquinas m    on m.id = p.maquinaid
+  group by m.codigo
+) ult
+order by ult.ultima
+```
+
+Si diera error, lo primero que hay que quitar es el `count(distinct ...)`, que es lo más raro de
+la consulta; con `max` sola tiene que funcionar.
+
+## A3C · EXT_INVENTARIO_ULTIMO
+
+Sin parámetros. Las líneas del último inventario de cada máquina. Es la foto de stock que usa la
+cabina; se regenera entera cada noche, no es incremental.
+
+```sql
+select
+  i.id                  as id,
+  i.partevisitaid       as parte_id,
+  ult.matricula         as matricula,
+  cast(i.fecha as text) as fecha,
+  i.cantidad            as cantidad,
+  i.capacmax            as capacidad_max,
+  i.stockrecom          as stock_recomendado,
+  i.difcapacidad        as dif_capacidad,
+  i.huecosrecom         as huecos_recomendados,
+  i.preciocoste         as precio_coste,
+  a.codigo              as cod_articulo,
+  a.denomina            as articulo
+from vending.partesvisitarecinventarios i
+join vending.partesvisita p on p.id = i.partevisitaid
+join (
+  select m.id as maquinaid, max(i2.fecha) as ultima, m.codigo as matricula
+  from vending.partesvisitarecinventarios i2
+  join vending.partesvisita p2 on p2.id = i2.partevisitaid
+  join recursos.maquinas m     on m.id = p2.maquinaid
+  group by m.id, m.codigo
+) ult on ult.maquinaid = p.maquinaid and ult.ultima = i.fecha
+left join stocks.articulos a on a.id = i.articuloid
+order by ult.matricula
+```
 
 ## A4 · EXT_VISITA_INVCANALES
 
