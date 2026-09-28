@@ -17,6 +17,13 @@ de los informes de trabajo.
 2. Nunca `sum(alias.columna)` en un informe con parámetros. Estas extracciones no agregan, así
    que no aplica, pero si alguna vez añades un total, mételo en una subconsulta.
 3. En este modelo «sin referencia» es **0**, no nulo: `coalesce(campo,0) = 0`.
+4. **Los partes del sistema se extraen, pero no se cuentan como visitas.** Dos tercios de las
+   filas de `partesvisita` son partes automáticos (`tipo` 2 y 3, `empleadoid` 0, ruta -99, 0
+   minutos, todos a las 00:00:09). No son visitas, pero traen lectura de máquina, así que **se
+   bajan igual**: la extracción no filtra. Quien filtra es la cabina, y siempre que cuente
+   visitas, tiempos o coste de servicio: `coalesce(empleadoid,0) <> 0 and tipo in (0, 100)`.
+   Sin ese filtro los indicadores salen más del triple. Comprobado el 25/09: 3.504 filas, 1.107
+   visitas reales ([21-visita-cabecera-25-09.md](21-visita-cabecera-25-09.md)).
 
 **Toda fila lleva su `id`.** Es lo que permite que la carga sea idempotente: si una noche falla y
 se repite, se actualiza la fila en vez de duplicarla.
