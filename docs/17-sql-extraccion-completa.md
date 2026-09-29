@@ -459,9 +459,11 @@ left join recursos.maquinas m on m.id = p.maquinaid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
-## A9 · EXT_VISITA_INCIDENCIAS
+## A9 · EXT_VISITA_INCIDENCIAS  ·  **descartado**
 
-Caducado, rotura y robo, canal a canal. El dato de caducado que decías que es fundamental.
+La tabla está vacía: 0 filas del 01 al 25 de septiembre. El caducado y la rotura se registran en
+las líneas `RC` y `RR` del A2, con artículo, canal, unidades y coste, y cuadran con la cabecera.
+**No entra en la carga nocturna.** Ver [26-mermas-y-devoluciones.md](26-mermas-y-devoluciones.md).
 
 ```sql
 select
@@ -490,7 +492,10 @@ left join stocks.articulos a            on a.id   = i.articuloid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
-## A10 · EXT_VISITA_DEVOLUCIONES
+## A10 · EXT_VISITA_DEVOLUCIONES  ·  **probado**
+
+167 filas y 409,10 € del 01 al 25 de septiembre. Viva pero infrautilizada; se usa como alarma de
+monedero, no como control de dinero ([26-mermas-y-devoluciones.md](26-mermas-y-devoluciones.md)).
 
 ```sql
 select
