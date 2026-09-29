@@ -104,6 +104,37 @@ from (select count(*) as n from stocks.traspasosstock) d,
 Los tres diarios no necesitan sonda: **el C1, C2 y C3 de un día ya dicen si están vivos y con qué
 volumen**, y además traen el dato. Se lanzan directamente.
 
+## Y la sonda combinada tampoco funcionó
+
+Dos intentos, dos fallos. Se acabó el experimento: **el motor no traga consultas con varias
+tablas derivadas cruzadas**, con o sin los diarios. Lo que sí está probado cuatro veces —las
+sondas S1 a S4— es **una tabla, un `group by`, un `count`**. Ese es el patrón, y no se toca.
+
+Así que la sonda se hace con **una sola consulta reutilizada**, cambiando tabla y columna de
+fecha, y lanzándola seis veces. Plantilla:
+
+```sql
+select
+  substring(cast(x.FECHA as text) from 1 for 7) as mes,
+  count(x.id)                                   as filas
+from stocks.TABLA x
+group by substring(cast(x.FECHA as text) from 1 for 7)
+order by 1
+```
+
+| # | `TABLA` | `FECHA` | qué mide |
+|---:|---|---|---|
+| 1 | `traspasosstock` | `fechacrea` | traspasos entre almacenes |
+| 2 | `regularizacionesstock` | `fecha` | descuadres reconocidos |
+| 3 | `planrecogida` | `fecha` | planes de recogida de caducado |
+| 4 | `plancargarutavehiculo` | `fechaplan` | plan de carga de vehículo |
+| 5 | `planesretornoprod` | `fechacrea` | retornos de producto |
+| 6 | `infinventarioresumenes` | `fecha` | inventarios de almacén |
+
+**Las tablas de detalle no se sondean.** Si el padre tiene filas, la hija también; y si el padre
+está vacío, la hija sobra. Son seis lanzamientos en vez de diez, y con el patrón que ya sabemos
+que funciona.
+
 ## Paso 2 · Los tres diarios, primero un día
 
 `diarmovalm`, `diarmovveh` y `diarmovmaq` son el núcleo de la trazabilidad y **son las grandes**.
