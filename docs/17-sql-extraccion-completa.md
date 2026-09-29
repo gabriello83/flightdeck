@@ -440,7 +440,10 @@ left join recursos.maquinas m on m.id = p.maquinaid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
-## A8 · EXT_VISITA_TUBOS
+## A8 · EXT_VISITA_TUBOS  ·  **probado**
+
+254.306 filas del 01 al 25 de septiembre. `cantidad_actual` es stock, no contador: mediana de
+52,00 € de cambio por máquina ([27-ventas-del-parte-y-tubos.md](27-ventas-del-parte-y-tubos.md)).
 
 ```sql
 select
@@ -519,7 +522,11 @@ where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 **Este informe lleva DNI y nombre de personas.** No debe entrar nunca en la consola de cliente, y
 en el almacén de datos conviene guardarlo en su propio prefijo, con acceso restringido.
 
-## A11 · EXT_VISITA_VENTAS
+## A11 · EXT_VISITA_VENTAS  ·  **probado, y clave**
+
+156.443 filas. Trae las bebidas calientes por **código de receta** `R01…R72` con su coste
+unitario: es la única fuente que costea el café. No uses su campo `beneficio`, no cuadra
+([27-ventas-del-parte-y-tubos.md](27-ventas-del-parte-y-tubos.md)).
 
 ```sql
 select
