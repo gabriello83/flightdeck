@@ -193,3 +193,42 @@ Cuatro de las nueve áreas que pediste: **control de almacenes, inventario de al
 devoluciones y la parte de stock de rutas**. Y con C1+C2+C3 se cierra la cadena entera —compra →
 almacén → vehículo → máquina → venta—, que es lo que permite medir la merma de verdad en vez de
 deducirla.
+
+
+---
+
+## La sonda con fecha tampoco valida: versión a prueba de nombres
+
+«La sentencia no está bien configurada» quiere decir que el SQL se rechaza antes de ejecutarse, y
+el sospechoso es el nombre de la columna de fecha. En vez de seguir adivinando, la sonda se hace
+**agrupando por una columna que el propio catálogo ya confirma que existe**, porque los informes
+C4 a C9 la seleccionan. Sin fechas, sin `substring` y sin `count` de columna nombrada:
+
+```sql
+select x.COLUMNA as valor, count(*) as filas
+from stocks.TABLA x
+group by x.COLUMNA
+order by 1
+```
+
+| # | `TABLA` | `COLUMNA` | por qué es segura |
+|---:|---|---|---|
+| 1 | `traspasosstock` | `estado` | el C4 selecciona `t.estado` |
+| 2 | `regularizacionesstock` | `tipo` | el C5 selecciona `r.tipo` |
+| 3 | `planrecogida` | `realizadopor` | el C6 selecciona `p.realizadopor` |
+| 4 | `plancargarutavehiculo` | `estado` | el C7 selecciona `c.estado` |
+| 5 | `planesretornoprod` | `estado` | el C8 selecciona `r.estado` |
+| 6 | `infinventarioresumenes` | `anho` | el C9 selecciona `r.anho` |
+
+La primera, entera:
+
+```sql
+select x.estado as valor, count(*) as filas
+from stocks.traspasosstock x
+group by x.estado
+order by 1
+```
+
+Devuelve pocas filas y contesta lo único que importa ahora: **si la tabla tiene datos o no**. De
+paso, agrupar por `estado` dice si los traspasos se quedan a medias, y agrupar por `anho` dice
+desde cuándo hay inventarios de almacén.
