@@ -112,3 +112,113 @@ está medido y no depende de esto son los 122.327 € del punto 2.
   terminado.
 - Cerrar la conciliación de septiembre contra `imptotalconiva`, que ahora tiene una referencia
   oficial que cuadra sola.
+
+---
+
+# Qué es `auditmonbil`, y por qué no se puede sumar en bruto
+
+**AUDIT MONederos y BILleteros.** Es la lectura electrónica del monedero y del billetero de la
+máquina: el «dato electrónico» del circuito. Cuando el reponedor conecta, o cuando la telemetría
+lo manda sola, la máquina vuelca sus contadores y esto es lo que queda guardado. Sí, R2 es el
+informe correcto.
+
+Una fila por denominación y lectura, y para cada una tres pares de contadores:
+
+| columna | qué cuenta |
+|---|---|
+| `aceptadas` / `aceptadasa` | monedas que ha tragado la máquina |
+| `encajon` / `encajona` | las que han caído al cajón — **esto es lo que va a la bolsa** |
+| `entubos` / `entubosa` | las que se han quedado en los tubos para dar cambio |
+
+Sin sufijo es **lo movido desde la última lectura**; con `a`, **el acumulado de la vida de la
+máquina**. Y el modelo se verifica solo, porque los acumulados cuadran fila a fila:
+
+```
+aceptadasa = encajona + entubosa
+0,50 €:  14.416  =   4.431  +  9.985     ✓
+0,20 €:  17.394  =   4.992  + 12.402     ✓
+```
+
+Lo que tragó = lo que fue al cajón + lo que se quedó en los tubos. **El importe teórico de la
+bolsa es `suma(valor × encajon)`**.
+
+## El extracto del 01 al 25 de septiembre
+
+167.374 filas, 26.428 partes. Todo monedas, ni un billete en 25 días.
+
+Y aquí está el problema: **sumado en bruto da 6.848.038 €**, contra los **253.573,19 €** de
+efectivo que dice la telemetría en esas mismas fechas. Veintisiete veces más.
+
+No es un error del modelo, son lecturas corruptas. El desglose por denominación lo enseña:
+
+| denominación | filas | € en cajón | máximo de monedas en **una** lectura |
+|---:|---:|---:|---:|
+| 2,00 | 26.202 | 4.377.724 | **723.546** |
+| 0,50 | 26.353 | 829.306 | 45.635 |
+| 1,00 | 26.277 | 92.962 | 30.637 |
+| 0,20 | 26.427 | −49.473 | 2.600 |
+| 0,10 | 26.351 | −33.252 | 3.499 |
+
+723.546 monedas de 2 € en una sola lectura son 1,4 millones de euros en un cajón. Es un contador
+que ha dado la vuelta o un dispositivo que devuelve basura. Y no se arregla con un tope: probando
+de 100 a 2.000 monedas por lectura el total salta de 120.770 € a 758.145 € sin acercarse nunca a
+la cifra real.
+
+También hay `valor` que no son monedas — `12,75` en 4.329 filas, y `0,04`, `0,39`, `0,40`, `0,45`,
+`2,55` —, pero esas son inofensivas para el dinero: todas traen cajón a cero.
+
+## La conclusión, que cambia cómo se usa la tabla
+
+**Los contadores delta no se pueden agregar a nivel de parque.** Sirven para lo que están: el
+importe teórico **de una bolsa concreta**, comparado con lo que Loomis contó para esa misma bolsa.
+Ahí un contador corrupto se ve como una diferencia enorme en una máquina —que es justo una alarma
+que queremos— en vez de contaminar un total nacional.
+
+De los 26.194 partes, sólo **7.209 traen cajón mayor que cero**, con mediana de 5,00 €: son las
+lecturas automáticas diarias, incrementos pequeños. Las que interesan son las de recaudación.
+
+## R3 · El informe que hace falta
+
+Una fila por visita con recaudación, con su teórico. Pequeño, directo, y es la mitad izquierda del
+control. La agregación va fuera de la subconsulta sobre nombres sin prefijo, que es la única forma
+que traga el motor cuando el informe lleva parámetros.
+
+`recaudacion` es **entero**, no booleano — el mismo tropiezo que `auditgenalarmas`.
+
+```sql
+select
+  parte_id, matricula, centro, ruta, empleado, fecha, cod_bolsa,
+  sum(eur)     as teorico_cajon,
+  sum(monedas) as num_monedas
+from (
+  select
+    p.id                     as parte_id,
+    m.codigo                 as matricula,
+    cen.denomina             as centro,
+    ru.denomina              as ruta,
+    emp.nombre               as empleado,
+    cast(p.fechaini as text) as fecha,
+    p.codbolsa               as cod_bolsa,
+    a.valor * a.encajon      as eur,
+    a.encajon                as monedas
+  from vending.partesvisita p
+  join vending.partesvisitaauditmonbil a  on a.partevisitaid = p.id
+  left join recursos.maquinas m           on m.id  = p.maquinaid
+  left join comercial.clientescentros cen on cen.id = p.clientecentroid
+  left join vending.rutas ru              on ru.id  = p.rutaid
+  left join recursos.empleados emp        on emp.id = p.empleadoid
+  where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
+    and coalesce(p.recaudacion,0) <> 0
+    and coalesce(p.empleadoid,0) <> 0
+) x
+group by parte_id, matricula, centro, ruta, empleado, fecha, cod_bolsa
+order by fecha
+```
+
+Dos parámetros de fecha, 01/09 y 25/09. Deberían salir unas 5.500 filas, una por bolsa.
+
+## Nota: `cal_haydifprecios` no es una alarma
+
+Lo señalé como posible pista de precios mal puestos. No lo es: viene a `true` en 3.282 de los
+3.504 partes del 25/09, **incluidos los automáticos**. Es una marca de configuración —que la
+máquina tiene precios distintos por medio de pago— y no una discrepancia. Descartado.
