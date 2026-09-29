@@ -328,9 +328,12 @@ group by substring(cast(i.fecha as text) from 1 for 7)
 order by 1
 ```
 
-## A5 · EXT_VISITA_CONTAJES
+## A5 · EXT_VISITA_CONTAJES  ·  **descartado**
 
-La tabla más interesante de todo el paquete: guarda el importe anterior y quién lo cambió.
+Era, sobre el papel, la tabla más interesante del paquete: guarda el importe anterior y quién lo
+cambió. Pero está muerta —107 filas de agosto de 2023— porque aquí no se cuenta dentro de
+VenCloud: cuenta Loomis y el resultado se importa. **No entra en la carga nocturna.** El contaje
+real vive en `facturacion.prefacrecauda`.
 
 **Esta es la excepción a la regla de filtrar por la fecha de la madre.** El contaje no ocurre
 durante la visita: la bolsa se recoge un día y se cuenta otro. Filtrando por `p.fechaini` sobre el
@@ -386,7 +389,11 @@ group by substring(cast(c.fechacontaje as text) from 1 for 7)
 order by 1
 ```
 
-## A6 · EXT_VISITA_CONTAJES_DETALLE
+## A6 · EXT_VISITA_CONTAJES_DETALLE  ·  **descartado**
+
+La tabla madre está muerta (107 filas de agosto de 2023 y nada más), así que el detalle tampoco
+tiene nada. Se queda escrito por si algún día se empieza a contar dentro de VenCloud, pero **no
+entra en la carga nocturna**. Ver [24-cadena-del-efectivo.md](24-cadena-del-efectivo.md).
 
 ```sql
 select
@@ -406,9 +413,12 @@ left join recursos.maquinas m on m.id = p.maquinaid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
-## A7 · EXT_VISITA_MONBIL
+## A7 · EXT_VISITA_MONBIL  ·  **probado**
 
-Lo que la máquina dice que tiene, frente a lo que el reponedor cuenta.
+Lo que la máquina dice que tiene, frente a lo que el reponedor cuenta. Es el «dato electrónico»
+del circuito. Probado del 01 al 25 de septiembre: 167.374 filas, 26.428 partes. Cómo se leen sus
+contadores y por qué no se pueden sumar en bruto, en
+[25-recaudacion-oficial-y-audit.md](25-recaudacion-oficial-y-audit.md).
 
 ```sql
 select
