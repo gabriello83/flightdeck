@@ -306,3 +306,38 @@ from (
 group by fecha
 order by fecha
 ```
+
+## El denominador, ya sin estimar: 7.086
+
+Del 01 al 25 de septiembre hay **7.086 recaudaciones**. La cobertura del dato electrónico queda
+fijada:
+
+| | bolsas | % de 7.086 |
+|---|---:|---:|
+| Recaudaciones | 7.086 | 100 % |
+| Con lectura electrónica | 503 | **7,1 %** |
+| Con lectura **utilizable** | 204 | **2,9 %** |
+
+Tres de cada cien bolsas se pueden contrastar contra lo que dice la máquina. El resto se cierra a
+ciegas.
+
+Dos cosas más que dice el reparto por día, y las dos hablan bien del dato:
+
+**Los sábados no se recauda, literalmente.** El 05, el 12 y el 19 no aparecen. Los domingos hay 6,
+2 y 1. La recaudación es de lunes a viernes, entre 317 y 449 al día, con media de **372 por día
+laborable** sobre 19 días.
+
+**El 11 de septiembre baja a 180**, la mitad de un viernes normal. Es la Diada: las delegaciones de
+Cataluña no trabajaron. Que el calendario laboral autonómico se vea en los números es buena señal
+sobre la calidad del dato.
+
+### Y de paso aparece otra conciliación pendiente
+
+7.086 recaudaciones en 19 días laborables de septiembre son 372 al día. `prefacrecauda` de agosto
+con `critcalculo = 3` da 5.665 en el mes, unos 270 al día. **Hay un 27 % de diferencia** entre lo
+que dicen las visitas y lo que llega a la recaudación oficial.
+
+Pueden ser los dos meses —agosto es vacaciones— o puede ser que haya recaudaciones registradas en
+la visita que nunca llegan a generar línea oficial. Lo segundo sería un control de primer orden:
+**una bolsa que se recoge y no aparece nunca en la cuenta**. Se resuelve lanzando este mismo conteo
+sobre agosto y comparándolo contra los 5.665, que es la comparación limpia mes contra mes.
