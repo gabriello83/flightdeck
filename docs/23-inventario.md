@@ -102,3 +102,95 @@ en toda su vida**.
 
 Por eso el A3C debería devolver del orden de 50.000–60.000 filas, y por eso conviene lanzar antes
 el A3B, que es pequeño y ya dice cuántas máquinas tienen inventario y de qué antigüedad.
+
+
+---
+
+# Medido: el cumplimiento del inventario, a 29/09/2026
+
+## `partesvisitainvcanales` está vacía del todo
+
+La sonda sobre la tabla de inventario **por canal** no devuelve ni una fila. No es que el 25/09 no
+hubiera: **no hay nada en toda la historia**. La tabla existe en el modelo y nadie la escribe.
+
+Queda cerrado: **el inventario por canal no se puede sacar de los datos de visita.** Se saca por el
+camino alternativo — `maquinascanales` para el planograma y el stock recomendado, el A2 para lo que
+se repone en cada canal y con qué frecuencia, y la telemetría para lo que se vende.
+
+## El inventario por artículo sí está vivo, pero muy por debajo de la norma
+
+3.319 máquinas se han inventariado alguna vez, **11.744 inventarios desde el 23/01/2024**. Todas
+ellas existen en el parque del informe 77, así que el dato es limpio.
+
+Sobre las **3.200 máquinas operativas**:
+
+| situación | máquinas | % |
+|---|---:|---:|
+| **En norma** (inventario de hace 90 días o menos) | **275** | **8,6 %** |
+| Caducado, entre 3 y 12 meses | 583 | 18,2 % |
+| Muy caducado, más de 12 meses | 1.579 | 49,3 % |
+| **Nunca inventariada** | **763** | **23,8 %** |
+
+**2.925 de 3.200 máquinas operativas están fuera de norma.** Y una de cada cuatro no se ha
+inventariado jamás, lo que incumple también la segunda parte de la regla, la del inventario antes
+de instalar.
+
+## No es cuestión de campañas trimestrales
+
+Era la duda razonable: que los inventarios se concentren a fin de trimestre y un jueves de
+septiembre saliera bajo por casualidad. No es eso. Repartiendo por el mes del último inventario:
+
+| mes | máquinas | mes | máquinas |
+|---|---:|---|---:|
+| 2025-09 | 293 | 2026-04 | 58 |
+| 2025-11 | 109 | 2026-05 | 92 |
+| 2025-12 | 160 | 2026-06 | 30 |
+| 2026-01 | 219 | 2026-07 | 167 |
+| 2026-02 | 266 | 2026-08 | 116 |
+| 2026-03 | 116 | 2026-09 | 66 |
+
+No hay picos de cierre de trimestre. Y el ritmo largo lo confirma: 11.744 inventarios en los 32
+meses que lleva la tabla son **367 al mes**, contra los **1.067 al mes** que pide inventariar 3.200
+máquinas cada trimestre. Se va al **34 % del ritmo necesario**.
+
+**Pero el problema no es sólo de volumen, es de reparto.** 843 máquinas tienen exactamente un
+inventario en toda su vida mientras otras acumulan ocho o más. Si esos 367 al mes se dirigieran a
+las máquinas que más tiempo llevan sin inventario en vez de repetir sobre las mismas, el
+cumplimiento subiría mucho sin hacer un inventario más.
+
+## Dónde está el problema
+
+| delegación | parque | en norma | % |
+|---|---:|---:|---:|
+| Madrid - Leganés | 853 | 9 | **1,1 %** |
+| Cataluña - Cornellà | 633 | 134 | 21,2 % |
+| Levante - Murcia | 408 | 55 | 13,5 % |
+| Andalucía - Sevilla | 369 | 30 | 8,1 % |
+| Levante - Valencia | 199 | 0 | **0,0 %** |
+| Madrid - Hospital La Paz | 132 | 0 | **0,0 %** |
+| Norte - Bilbao | 126 | 25 | 19,8 % |
+| Cataluña - Tarragona | 100 | 2 | 2,0 % |
+| Andalucía - Málaga | 98 | 12 | 12,2 % |
+| Serunion Vending - CENTRAL | 42 | 0 | **0,0 %**, y ninguna inventariada nunca |
+
+Madrid-Leganés es la delegación más grande del grupo y tiene nueve máquinas en norma de 853.
+Cornellà, con 633, tiene 134: se puede, y alguien lo está haciendo.
+
+Y por tipología, el peor sitio posible:
+
+| tipo | parque | en norma | % |
+|---|---:|---:|---:|
+| Bebidas Calientes/Preparadas | 1.276 | 41 | **3,2 %** |
+| Snack/Multiproducto | 1.069 | 149 | 13,9 % |
+| Bebidas Frías/Envasadas | 766 | 85 | 11,1 % |
+
+**El café es donde peor se cumple y donde más falta hace.** Un snack se cuenta de un vistazo; el
+café se carga a granel — kilos de grano, de azúcar, de leche —, no tiene telemetría de unidades
+que permita deducir el consumo, y es justo la tipología en la que el inventario es la única forma
+de saber qué hay dentro.
+
+## Entregable
+
+[`carga/inventario_cumplimiento.xlsx`](../carga/inventario_cumplimiento.xlsx), con tres hojas:
+resumen por delegación, resumen por tipología, y el detalle de las 3.200 máquinas operativas
+ordenado por días sin inventario, con cliente, centro, PDV y modelo, listo para repartir trabajo.
