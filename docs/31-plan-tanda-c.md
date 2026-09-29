@@ -30,9 +30,53 @@ select
   (select count(*) from stocks.infinventarioelementos)        as inventario_elementos
 ```
 
-Si el motor se queja de las subconsultas en el `select`, o si tarda demasiado sobre los diarios
-—que pueden tener millones de filas—, se parte en dos: primero las diez tablas pequeñas, y los
-tres diarios aparte.
+**Esa versión no funciona**: el validador de VenCloud rechaza un `select` de subconsultas
+escalares **sin cláusula `from`**. Los agregados tienen que ir como tablas derivadas dentro del
+`from`, cruzadas entre sí:
+
+```sql
+select
+  a.n as mov_almacen,   b.n as mov_vehiculo,  c.n as mov_maquina,
+  d.n as traspasos,     e.n as regularizaciones,
+  f.n as planes_recogida, g.n as recogida_detalle,
+  h.n as planes_carga,    i.n as carga_detalle,
+  j.n as planes_retorno,  k.n as retorno_detalle,
+  l.n as inventarios_alm, m.n as inventario_elementos
+from (select count(*) as n from stocks.diarmovalm) a,
+     (select count(*) as n from stocks.diarmovveh) b,
+     (select count(*) as n from stocks.diarmovmaq) c,
+     (select count(*) as n from stocks.traspasosstock) d,
+     (select count(*) as n from stocks.regularizacionesstock) e,
+     (select count(*) as n from stocks.planrecogida) f,
+     (select count(*) as n from stocks.planrecogidadetalle) g,
+     (select count(*) as n from stocks.plancargarutavehiculo) h,
+     (select count(*) as n from stocks.plancargarutavehiculodetalle) i,
+     (select count(*) as n from stocks.planesretornoprod) j,
+     (select count(*) as n from stocks.planesretornoproddetalles) k,
+     (select count(*) as n from stocks.infinventarioresumenes) l,
+     (select count(*) as n from stocks.infinventarioelementos) m
+```
+
+Y si aun así falla, la alternativa es una fila por tabla con `union all`:
+
+```sql
+select 'diarmovalm' as tabla, count(*) as filas from stocks.diarmovalm
+union all select 'diarmovveh', count(*) from stocks.diarmovveh
+union all select 'diarmovmaq', count(*) from stocks.diarmovmaq
+union all select 'traspasosstock', count(*) from stocks.traspasosstock
+union all select 'regularizacionesstock', count(*) from stocks.regularizacionesstock
+union all select 'planrecogida', count(*) from stocks.planrecogida
+union all select 'planrecogidadetalle', count(*) from stocks.planrecogidadetalle
+union all select 'plancargarutavehiculo', count(*) from stocks.plancargarutavehiculo
+union all select 'plancargarutavehiculodetalle', count(*) from stocks.plancargarutavehiculodetalle
+union all select 'planesretornoprod', count(*) from stocks.planesretornoprod
+union all select 'planesretornoproddetalles', count(*) from stocks.planesretornoproddetalles
+union all select 'infinventarioresumenes', count(*) from stocks.infinventarioresumenes
+union all select 'infinventarioelementos', count(*) from stocks.infinventarioelementos
+```
+
+Si tarda demasiado sobre los diarios —que pueden tener millones de filas—, se parte en dos:
+primero las diez tablas pequeñas y los tres diarios aparte.
 
 ## Paso 2 · Los tres diarios, primero un día
 

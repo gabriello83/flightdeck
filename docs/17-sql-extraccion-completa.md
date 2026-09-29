@@ -17,7 +17,10 @@ de los informes de trabajo.
 2. Nunca `sum(alias.columna)` en un informe con parámetros. Estas extracciones no agregan, así
    que no aplica, pero si alguna vez añades un total, mételo en una subconsulta.
 3. En este modelo «sin referencia» es **0**, no nulo: `coalesce(campo,0) = 0`.
-4. **Los partes del sistema se extraen, pero no se cuentan como visitas.** Dos tercios de las
+4. **Toda consulta necesita `from`.** Un `select` de subconsultas escalares sin cláusula `from`
+   —`select (select count(*) from a), (select count(*) from b)`— lo rechaza el validador. Para
+   poner varios agregados en una fila, van como tablas derivadas en el `from`, cruzadas entre sí.
+5. **Los partes del sistema se extraen, pero no se cuentan como visitas.** Dos tercios de las
    filas de `partesvisita` son partes automáticos (`tipo` 2 y 3, `empleadoid` 0, ruta -99, 0
    minutos, todos a las 00:00:09). No son visitas, pero traen lectura de máquina, así que **se
    bajan igual**: la extracción no filtra. Quien filtra es la cabina, y siempre que cuente
