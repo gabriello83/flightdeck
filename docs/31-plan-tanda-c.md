@@ -1,0 +1,94 @@
+# Tanda C · Qué crear, qué no, y con qué fechas
+
+Diez informes escritos en el catálogo. Antes de crearlos todos conviene recordar el balance: de
+los diecisiete lanzados hasta ahora, **ocho tablas estaban vacías**. Crear diez informes a ciegas
+significa, estadísticamente, tirar cuatro.
+
+Así que la tanda C va en tres pasos.
+
+---
+
+## Paso 1 · Una sola sonda, y contesta por las trece tablas
+
+Sin parámetros. Devuelve **una fila con trece números**. Con eso sabemos de un vistazo qué existe
+antes de crear un solo informe más.
+
+```sql
+select
+  (select count(*) from stocks.diarmovalm)                    as mov_almacen,
+  (select count(*) from stocks.diarmovveh)                    as mov_vehiculo,
+  (select count(*) from stocks.diarmovmaq)                    as mov_maquina,
+  (select count(*) from stocks.traspasosstock)                as traspasos,
+  (select count(*) from stocks.regularizacionesstock)         as regularizaciones,
+  (select count(*) from stocks.planrecogida)                  as planes_recogida,
+  (select count(*) from stocks.planrecogidadetalle)           as recogida_detalle,
+  (select count(*) from stocks.plancargarutavehiculo)         as planes_carga,
+  (select count(*) from stocks.plancargarutavehiculodetalle)  as carga_detalle,
+  (select count(*) from stocks.planesretornoprod)             as planes_retorno,
+  (select count(*) from stocks.planesretornoproddetalles)     as retorno_detalle,
+  (select count(*) from stocks.infinventarioresumenes)        as inventarios_alm,
+  (select count(*) from stocks.infinventarioelementos)        as inventario_elementos
+```
+
+Si el motor se queja de las subconsultas en el `select`, o si tarda demasiado sobre los diarios
+—que pueden tener millones de filas—, se parte en dos: primero las diez tablas pequeñas, y los
+tres diarios aparte.
+
+## Paso 2 · Los tres diarios, primero un día
+
+`diarmovalm`, `diarmovveh` y `diarmovmaq` son el núcleo de la trazabilidad y **son las grandes**.
+Las reposiciones de un solo día ya fueron 8.187 líneas, y estas cubren todo el movimiento de
+stock, no sólo el de máquina.
+
+| informe | fechas | por qué |
+|---|---|---|
+| **C1** · MOV_ALMACEN | **25/09/2026 – 25/09/2026** | un día, para medir volumen |
+| **C2** · MOV_VEHICULO | **25/09/2026 – 25/09/2026** | un día |
+| **C3** · MOV_MAQUINA | **25/09/2026 – 25/09/2026** | un día |
+
+Con el resultado se decide si el mes entra de una vez o hay que partirlo por semanas. Si un día
+responde rápido, se relanzan los tres con **01/09/2026 – 25/09/2026** y quedan alineados con toda
+la tanda A.
+
+Elijo el 25/09 y no otro día porque es del que tenemos **todo lo demás medido**: 1.107 visitas,
+8.187 reposiciones, 29.265,13 € de carga. Eso permite cuadrar el movimiento de stock contra la
+reposición, que es la comprobación que de verdad valida estas tres tablas.
+
+## Paso 3 · Las siete restantes, sólo las que la sonda diga que viven
+
+Todas con **01/09/2026 – 25/09/2026**, la misma ventana que el resto del proyecto.
+
+| informe | tabla | área del cuadro de mando | nota |
+|---|---|---|---|
+| **C4** · TRASPASOS | `traspasosstock` | Control almacenes | |
+| **C5** · REGULARIZACIONES | `regularizacionesstock` | Control almacenes | el descuadre reconocido |
+| **C6** · RECOGIDAS | `planrecogida` + detalle | Devoluciones | caducado y rotura separados |
+| **C7** · PLANCARGA | `plancargarutavehiculo` + detalle | Rutas | lo planificado contra lo confirmado |
+| **C8** · RETORNOS | `planesretornoprod` + detalle | Devoluciones | |
+| **C9** · INVENTARIOS_ALM | `infinventarioresumenes` | Inventario almacenes | |
+| **C10** · INVENTARIOS_ALM_PROD | `infinventarioelementosprods` | Inventario almacenes | **no crearlo todavía** |
+
+**C10 no se crea hasta que C9 devuelva filas.** Es su hija: si el padre está vacío, la hija
+también, y es un informe menos que montar.
+
+## Dónde apostaría
+
+Sin datos no es más que una corazonada, y por eso está la sonda. Pero por el patrón que llevamos
+—viven las tablas del proceso que la casa ejecuta de verdad, mueren las del proceso que hace de
+otra manera—:
+
+- **C1, C2 y C3 vivos y grandes.** El stock se mueve todos los días y VenCloud es el ERP que lo
+  lleva; sin esto no habría ni albaranes.
+- **C5 (regularizaciones) vivo**, porque el descuadre hay que reconocerlo en algún sitio.
+- **C6 (planes de recogida) en duda**, por lo mismo que `partesvisitaincidencias` estaba vacía: la
+  caducidad ya se registra en las líneas `RC` de la reposición. Si están las dos, habrá que
+  decidir cuál es la buena antes de sumar, o el caducado saldrá doble.
+- **C7 (plan de carga) en duda.** Si las rutas se cargan sin plan formal en el sistema, estará
+  vacío. Es justo el tipo de proceso que puede hacerse en papel.
+
+## Lo que cierra la tanda C
+
+Cuatro de las nueve áreas que pediste: **control de almacenes, inventario de almacenes,
+devoluciones y la parte de stock de rutas**. Y con C1+C2+C3 se cierra la cadena entera —compra →
+almacén → vehículo → máquina → venta—, que es lo que permite medir la merma de verdad en vez de
+deducirla.
