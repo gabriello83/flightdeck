@@ -3,12 +3,46 @@
 `EXT_VISITA_INVENTARIO` lanzado sobre el 25/09/2026 devuelve **40 filas y 2 máquinas**, de 1.061
 visitadas. No es un fallo del informe: el inventario no se hace en cada visita.
 
-Eso obliga a cambiar el diseño. El inventario **no es un dato incremental por fecha, es un estado**:
-lo que importa de cada máquina es su último inventario, sea de cuando sea.
+## La norma, y lo que sale de contrastarla
+
+La regla de casa es doble:
+
+1. **Inventario de todas las máquinas cada tres meses.**
+2. **Inventario de la máquina antes de instalarla.**
+
+Eso convierte al inventario en un **indicador de cumplimiento**, no en un dato de stock más. Y el
+contraste es inmediato: el parque operativo son **3.200 máquinas** (informe 77), así que la norma
+pide 3.200 inventarios por trimestre. Un trimestre tiene unos 63 días laborables:
+
+| | inventarios/día laborable |
+|---|---:|
+| Lo que pide la norma | **~51** |
+| Lo que hubo el 25/09 | **2** |
+
+Un día no es una muestra, y hay que decirlo: puede que los inventarios se concentren en campañas
+de fin de trimestre en vez de repartirse. Pero hay un segundo indicio que apunta a lo mismo. Los
+`id` del 25/09 van del 207.179 al 207.218, o sea que la tabla lleva unas **207.000 líneas de toda
+la historia**. A las 20 líneas por inventario que se ven ese día, son del orden de **10.000
+inventarios en total** — y la norma pide 12.800 al año. Toda la historia de la tabla cabe en menos
+de un año de cumplimiento.
+
+La sonda A3Z lo cierra sin discusión: líneas e inventarios por mes. Si hay picos trimestrales, se
+verán; si la línea es plana y baja, el incumplimiento es estructural.
+
+**Esto deja de ser un problema de extracción y pasa a ser un indicador de la cabina.** El A3B
+reescrito lo calcula: máquinas sin inventario, máquinas con el inventario caducado a más de 90
+días, y máquinas instaladas sin inventario inicial.
+
+## El diseño que sale de ahí
+
+El inventario **no es un dato incremental por fecha, es un estado**: lo que importa de cada máquina
+es su último inventario, sea de cuando sea.
 
 - **A3** sigue en la carga nocturna, para ir trayendo los inventarios nuevos según se hacen.
-- **A3B** (`EXT_INVENTARIO_ANTIGUEDAD`) da una fila por máquina con la fecha del último inventario.
-  Es el que dice si el dato sirve o está muerto.
+- **A3B** (`EXT_INVENTARIO_CUMPLIMIENTO`) da una fila **por máquina del parque**, tenga inventario
+  o no, con la fecha del primero, la del último y cuántos lleva. Arranca de `recursos.maquinas` y
+  no de los inventarios, porque las máquinas que nunca se han inventariado son justo las que hay
+  que ver y de otro modo no aparecerían.
 - **A3C** (`EXT_INVENTARIO_ULTIMO`) da las líneas de ese último inventario. Es la foto de stock de
   la cabina, y se regenera entera cada noche.
 

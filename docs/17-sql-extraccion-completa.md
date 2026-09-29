@@ -183,32 +183,53 @@ es el que va trayendo los inventarios nuevos, pero **no sirve para consultar sto
 está el A3B, que trae el último inventario de cada máquina sea de la fecha que sea
 ([23-inventario.md](23-inventario.md)).
 
-## A3B · EXT_INVENTARIO_ANTIGUEDAD
+## A3B · EXT_INVENTARIO_CUMPLIMIENTO
 
-Sin parámetros. Una fila por máquina: cuándo se le hizo el último inventario y cuántos se le han
-hecho en total. Es el que dice si el dato sirve o está muerto — en Consum los había de hace 6 a 8
-meses.
+Sin parámetros. Una fila **por máquina del parque**, tenga inventario o no. Es el informe de
+cumplimiento de la norma: inventario cada tres meses, y un inventario inicial antes de instalar
+([23-inventario.md](23-inventario.md)).
+
+Arranca de `recursos.maquinas`, no de los inventarios, porque **las máquinas que nunca se han
+inventariado son justo las que hay que ver** y en una consulta que salga de la tabla de
+inventarios no aparecerían.
 
 ```sql
 select
-  ult.matricula            as matricula,
-  cast(ult.ultima as text) as fecha_ultimo_inventario,
-  ult.inventarios          as inventarios_historicos
-from (
+  m.codigo                     as matricula,
+  pdv.codigo                   as cod_pdv,
+  pdv.estado                   as estado_pdv,
+  cen.numcentro                as num_centro,
+  cen.denomina                 as centro,
+  del.nombre                   as delegacion,
+  cast(pdv.fechaalta as text)  as alta_pdv,
+  cast(inv.primera as text)    as primer_inventario,
+  cast(inv.ultima as text)     as ultimo_inventario,
+  coalesce(inv.inventarios, 0) as inventarios
+from recursos.maquinas m
+left join vending.pdvs pdv              on pdv.maquinaid = m.id
+left join comercial.clientescentros cen on cen.id = pdv.clientecentroid
+left join general.delegaciones del      on del.id = pdv.delegacionid
+left join (
   select
-    m.codigo                        as matricula,
-    max(i.fecha)                    as ultima,
-    count(distinct i.partevisitaid) as inventarios
-  from vending.partesvisitarecinventarios i
-  join vending.partesvisita p on p.id = i.partevisitaid
-  join recursos.maquinas m    on m.id = p.maquinaid
-  group by m.codigo
-) ult
-order by ult.ultima
+    p2.maquinaid                     as maquinaid,
+    min(i2.fecha)                    as primera,
+    max(i2.fecha)                    as ultima,
+    count(distinct i2.partevisitaid) as inventarios
+  from vending.partesvisitarecinventarios i2
+  join vending.partesvisita p2 on p2.id = i2.partevisitaid
+  group by p2.maquinaid
+) inv on inv.maquinaid = m.id
+order by m.codigo
 ```
 
+El sentido de las columnas nuevas:
+
+- `inventarios = 0` → nunca se ha inventariado.
+- `ultimo_inventario` a más de 90 días → fuera de norma.
+- `primer_inventario` posterior a `alta_pdv` → se instaló sin inventario inicial.
+
 Si diera error, lo primero que hay que quitar es el `count(distinct ...)`, que es lo más raro de
-la consulta; con `max` sola tiene que funcionar.
+la consulta; con `min` y `max` solos tiene que funcionar.
 
 ## A3C · EXT_INVENTARIO_ULTIMO
 
