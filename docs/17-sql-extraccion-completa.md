@@ -31,6 +31,12 @@ se repite, se actualiza la fila en vez de duplicarla.
 **Las hijas de la visita se filtran por la fecha de la madre**, no por la suya. Así todas las
 tablas de una misma noche contienen exactamente el mismo conjunto de visitas y cuadran entre sí.
 
+**Con una excepción: lo que ocurre después de la visita se filtra por su propia fecha.** El
+contaje de la bolsa (A5, A6) se hace días más tarde, así que filtrarlo por la fecha de la visita
+haría que no entrara nunca en la carga nocturna. Va por `fechacontaje`. La idempotencia la sigue
+garantizando el `id` de cada fila, aunque la carga toque visitas de días anteriores. Lo mismo hay
+que comprobar en devoluciones antes de darla por buena.
+
 ---
 
 # Tanda A · La visita y sus hijas
@@ -326,6 +332,18 @@ order by 1
 
 La tabla más interesante de todo el paquete: guarda el importe anterior y quién lo cambió.
 
+**Esta es la excepción a la regla de filtrar por la fecha de la madre.** El contaje no ocurre
+durante la visita: la bolsa se recoge un día y se cuenta otro. Filtrando por `p.fechaini` sobre el
+25/09 el informe devuelve **0 filas**, porque esos contajes todavía no se habían hecho — cuadra
+con lo que ya vimos en la cabecera, 340 partes con bolsa y sólo 12 con importe.
+
+Si la carga nocturna filtrara por la fecha de la visita, **esos contajes no entrarían nunca**: la
+noche en que se ejecuta aún no existen, y esa fecha no se vuelve a pedir. Por eso el filtro va
+sobre `c.fechacontaje`, la fecha propia de la fila. Como cada fila lleva su `id`, la carga sigue
+siendo idempotente aunque toque visitas de días anteriores.
+
+Se añade `fecha_visita` para poder medir el retraso entre recoger y contar, que es dinero parado.
+
 ```sql
 select
   c.id            as id,
@@ -333,6 +351,7 @@ select
   m.codigo        as matricula,
   cen.denomina    as centro,
   ru.denomina     as ruta,
+  cast(p.fechaini as text)     as fecha_visita,
   cast(c.fechacontaje as text) as fecha_contaje,
   c.modocontaje   as modo,
   c.registradopor as registrado_por,
@@ -348,7 +367,23 @@ join vending.partesvisita p on p.id = c.partevisitaid
 left join recursos.maquinas m           on m.id   = p.maquinaid
 left join comercial.clientescentros cen on cen.id = p.clientecentroid
 left join vending.rutas ru              on ru.id  = p.rutaid
-where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
+where c.fechacontaje >= '{0}' and c.fechacontaje <= '{1} 23:59:59'
+```
+
+## A5Z · EXT_SONDA_CONTAJES
+
+Sin parámetros. Antes de nada, saber si la tabla está viva: `partesvisitainvcanales` ya nos enseñó
+que una tabla puede existir en el modelo y no tener una sola fila.
+
+```sql
+select
+  substring(cast(c.fechacontaje as text) from 1 for 7) as mes,
+  count(c.id)                     as contajes,
+  count(distinct c.partevisitaid) as partes,
+  count(distinct c.registradopor) as usuarios
+from vending.partesvisitacontajes c
+group by substring(cast(c.fechacontaje as text) from 1 for 7)
+order by 1
 ```
 
 ## A6 · EXT_VISITA_CONTAJES_DETALLE
