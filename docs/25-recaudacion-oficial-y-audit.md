@@ -222,3 +222,87 @@ Dos parámetros de fecha, 01/09 y 25/09. Deberían salir unas 5.500 filas, una p
 Lo señalé como posible pista de precios mal puestos. No lo es: viene a `true` en 3.282 de los
 3.504 partes del 25/09, **incluidos los automáticos**. Es una marca de configuración —que la
 máquina tiene precios distintos por medio de pago— y no una discrepancia. Descartado.
+
+---
+
+# R3, del 01 al 25 de septiembre: el dato electrónico no está donde tiene que estar
+
+El informe devuelve **503 filas**. Debería haber devuelto alrededor de **5.600**.
+
+El cálculo del denominador, por dos caminos que coinciden en el orden de magnitud:
+
+- El 25/09, día suelto y medido: **340 visitas con recaudación**. Por 21 días laborables ≈ 7.100.
+- `prefacrecauda` de agosto, `critcalculo = 3`: **5.665 actos de recaudar** en el mes ≈ 270 al día
+  laborable ≈ 5.600 en 21 días.
+
+O sea que **sólo entre el 7 % y el 9 % de las recaudaciones tiene lectura electrónica de la
+máquina**. Y no está repartido: las 503 salen de **183 máquinas, 33 rutas y 34 empleados**, de un
+parque de más de mil máquinas y 58 rutas al día.
+
+Esto es mucho peor que el 28,6 % de efectivo sin telemetría del apartado 2. Aquello eran puntos de
+venta sin dispositivo. Esto son máquinas **que sí tienen con qué leer** y aun así la bolsa se cierra
+sin lectura.
+
+## Y de las 503, la mayoría tampoco vale
+
+| diagnóstico | bolsas | % |
+|---|---:|---:|
+| Cajón a cero | 167 | 33,2 % |
+| **Plausible** | **204** | **40,6 %** |
+| Importe inverosímil, menos de 5 € | 96 | 19,1 % |
+| Lectura imposible, más de 1.000 € | 29 | 5,8 % |
+| Contador negativo | 7 | 1,4 % |
+
+Mediana de 4,00 €. Quitando los 36 extremos, las 467 bolsas restantes suman **6.993,62 €** — una
+media de 14,98 € por bolsa. Cuando la recaudación real de un mes son 428.003 €.
+
+Los casos extremos se explican solos y son de dispositivo, no de modelo:
+
+| máquina | centro | fecha | teórico | monedas |
+|---|---|---|---:|---:|
+| 22SE1837 | UNIVERSIDAD LA SALLE | 23/09 | **1.428.012,65 €** | 686.343 |
+| 16SE1280 | TELEVISIÓ DE CATALUNYA | siete fechas | 6.507 → 6.648 € | ~9.000 |
+| 22CE4672 | TELEVISIÓ DE CATALUNYA | varias | **−5.370,50 €** | −5.922 |
+
+La 16SE1280 es el caso más didáctico: repite ~6.500 € en cada recaudación y va subiendo poco a
+poco. Eso no es una bolsa, **es el contador acumulado que nunca se pone a cero**. Su `encajon` se
+comporta como un `encajona`.
+
+## Lo que esto significa para el proyecto
+
+El control que describe operaciones —contrastar la bolsa contra el dato electrónico— **hoy no se
+puede ejercer**, y no por falta de informes. Se puede ejercer sobre 204 bolsas de unas 5.600.
+
+Son tres problemas distintos y cada uno tiene dueño distinto:
+
+1. **No se lee al recaudar.** 91 de cada 100 bolsas se cierran sin volcar la máquina. Es
+   procedimiento de reponedor.
+2. **Hay dispositivos que devuelven basura.** Contadores que no se resetean, que dan la vuelta o
+   que van en negativo. Es mantenimiento técnico, máquina a máquina.
+3. **504 puntos de venta no tienen telemetría**, 122.327 € de efectivo al mes. Es inversión.
+
+El cuadro de mando puede medir los tres y ponerles nombre, ruta y delegación. Lo que no puede es
+inventarse el dato que no se tomó.
+
+## Entregable
+
+[`carga/audit_recaudacion_septiembre.xlsx`](../carga/audit_recaudacion_septiembre.xlsx): las 503
+bolsas con su diagnóstico, el resumen, y la lista de máquinas a revisar ordenada por gravedad de
+la lectura.
+
+## Para fijar el denominador sin estimarlo
+
+```sql
+select fecha, count(parte_id) as recaudaciones
+from (
+  select
+    substring(cast(p.fechaini as text) from 1 for 10) as fecha,
+    p.id as parte_id
+  from vending.partesvisita p
+  where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
+    and coalesce(p.recaudacion,0) <> 0
+    and coalesce(p.empleadoid,0) <> 0
+) x
+group by fecha
+order by fecha
+```
