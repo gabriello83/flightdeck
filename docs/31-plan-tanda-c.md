@@ -75,8 +75,34 @@ union all select 'infinventarioresumenes', count(*) from stocks.infinventariores
 union all select 'infinventarioelementos', count(*) from stocks.infinventarioelementos
 ```
 
-Si tarda demasiado sobre los diarios —que pueden tener millones de filas—, se parte en dos:
-primero las diez tablas pequeñas y los tres diarios aparte.
+**Y esto es lo que pasó.** La versión con tablas derivadas valida bien —el error fue «ha ocurrido
+un error durante la operación», o sea que el SQL se aceptó y lo que falló fue construir el
+documento—, pero contar `diarmovmaq` entero se pasa de tiempo. Son millones de filas y un
+`count(*)` sin filtro las recorre todas.
+
+La sonda se queda en **las diez tablas pequeñas**:
+
+```sql
+select
+  d.n as traspasos,       e.n as regularizaciones,
+  f.n as planes_recogida, g.n as recogida_detalle,
+  h.n as planes_carga,    i.n as carga_detalle,
+  j.n as planes_retorno,  k.n as retorno_detalle,
+  l.n as inventarios_alm, m.n as inventario_elementos
+from (select count(*) as n from stocks.traspasosstock) d,
+     (select count(*) as n from stocks.regularizacionesstock) e,
+     (select count(*) as n from stocks.planrecogida) f,
+     (select count(*) as n from stocks.planrecogidadetalle) g,
+     (select count(*) as n from stocks.plancargarutavehiculo) h,
+     (select count(*) as n from stocks.plancargarutavehiculodetalle) i,
+     (select count(*) as n from stocks.planesretornoprod) j,
+     (select count(*) as n from stocks.planesretornoproddetalles) k,
+     (select count(*) as n from stocks.infinventarioresumenes) l,
+     (select count(*) as n from stocks.infinventarioelementos) m
+```
+
+Los tres diarios no necesitan sonda: **el C1, C2 y C3 de un día ya dicen si están vivos y con qué
+volumen**, y además traen el dato. Se lanzan directamente.
 
 ## Paso 2 · Los tres diarios, primero un día
 
