@@ -105,3 +105,65 @@ descubre lanzando, y por eso la Lambda no se puede programar contra el catálogo
 
 B3 relanzado con **01/09/2026 – 25/09/2026** para tener el dinero en la misma ventana que la tanda
 A, y con eso queda cerrado el bloque del dinero.
+
+---
+
+# B3 sobre septiembre: la conciliación cierra exacta, y aparece el ciclo de escritura
+
+Relanzado con `fecha` del 01 al 25 de septiembre: **47.936 filas**, la última escrita el 22/09.
+
+| período contable | filas | efectivo | total |
+|---|---:|---:|---:|
+| agosto de 2026 | 43.152 | 109.062,84 € | 646.342,92 € |
+| septiembre de 2026 | 4.784 | 289.273,17 € | 289.273,17 € |
+
+## La conciliación a tres bandas, al céntimo
+
+Juntando las dos ventanas de escritura, el período contable de agosto queda completo:
+
+| | filas | efectivo | total |
+|---|---:|---:|---:|
+| Escrito en agosto | 5.291 | 318.940,57 € | 318.940,57 € |
+| Escrito en septiembre | 43.152 | 109.062,84 € | 646.342,92 € |
+| **Suma** | **48.443** | **428.003,41 €** | **965.283,49 €** |
+| **R1, filtrado por `anho`/`mes`** | **48.443** | **428.003,41 €** | **965.283,49 €** |
+
+**Coincide exactamente en las tres cifras.** Dos consultas distintas, filtros distintos, mismo
+resultado. El modelo del período contable está entendido y `prefacrecauda` es una fuente fiable.
+
+## Y sale el ciclo de escritura, que es lo importante
+
+Mira la columna del total frente a la del efectivo:
+
+- Lo escrito **dentro del mes** es **todo efectivo**: 318.940,57 € de efectivo y 318.940,57 € de
+  total. Cero banco.
+- Lo escrito **al mes siguiente** aporta 109.062,84 € de efectivo y 646.342,92 € de total, o sea
+  **537.280,08 € de banco** — que es, al céntimo, el `imppagobancario` de agosto que dio R1.
+
+**El cobro por tarjeta de un mes entero se escribe de golpe al mes siguiente.** Septiembre lo
+confirma: sus 4.784 filas escritas hasta el día 22 son 289.273,17 €, todo efectivo, y el banco
+llegará en octubre.
+
+### La consecuencia para el cuadro de mando
+
+El mes en curso **siempre se ve un 55 % más pequeño de lo que es**, porque le falta toda la
+tarjeta, que es el 55,7 % de la facturación. No es un fallo del dato: es el ciclo.
+
+Así que el cuadro de mando tiene que:
+
+1. **Marcar el mes en curso como provisional**, y decir explícitamente que falta el cobro
+   bancario.
+2. Para el mes en curso, **usar la telemetría** —que sí ve tarjeta el mismo día— y dejar
+   `prefacrecauda` para los meses cerrados.
+3. **No comparar nunca un mes en curso contra uno cerrado** sin avisar, o la caída aparente será
+   del 55 %.
+
+Esto cierra además, por fin, la discrepancia que llevábamos arrastrando entre los 1.088.439,33 €
+de telemetría de septiembre y las cifras oficiales: no eran fuentes contradictorias, es que
+miden momentos distintos del mismo ciclo.
+
+## El efectivo ciego, tercera medición
+
+27,4 % en esta ventana, contra el 28,6 % de agosto por `anho`/`mes` y el 29,8 % de la ventana
+anterior. Tres mediciones independientes en el mismo entorno: **entre el 27 % y el 30 % del
+efectivo se recauda sin dato electrónico**. La cifra es sólida.
