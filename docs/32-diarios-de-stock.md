@@ -49,12 +49,19 @@ diarios enseñan que **se tira producto en los tres eslabones**:
 | eslabón | caducidad | rotura | retirada |
 |---|---|---|---|
 | Almacén | 6 líneas · 9,46 € | 2 · 1,80 € | 23 · 86,21 € |
-| **Vehículo** | **52 líneas · 95,49 €** | 6 · 6,62 € | 5 · 14,10 € |
-| Máquina | 58 líneas · 104,96 € | 8 · 8,43 € | 28 · 100,31 € |
-| **TOTAL DÍA** | **116 líneas · 209,91 €** | **16 · 16,85 €** | **56 · 200,62 €** |
+| Vehículo | 52 líneas · 95,49 € | 6 · 6,62 € | 5 · 14,10 € |
+| **Máquina** | **58 líneas · 104,96 €** | 8 · 8,43 € | 28 · 100,31 € |
 
-**La caducidad real del día es el doble de lo que decíamos**: 209,91 € contra los 104,96 € que se
-ven desde la máquina. Casi todo lo que falta se tira en el vehículo, y eso sólo se ve aquí.
+> **CORRECCIÓN.** Dije aquí que la caducidad real era el doble, 209,91 €, sumando los tres
+> eslabones. **Es falso, y lo desmonta la aritmética de la propia tabla**: 6 + 52 = 58, y
+> 9,46 € + 95,49 € = 104,95 €. Las filas de almacén y vehículo **son la misma merma que la de
+> máquina**, registrada en su viaje de vuelta, no pérdidas adicionales.
+>
+> **La caducidad se produce en la máquina y se cuenta una sola vez: 104,96 € ese día.** Lo que
+> dicen almacén y vehículo es *por dónde vuelve* el producto: 52 líneas regresan en la furgoneta y
+> 6 van directas al almacén.
+>
+> Regla para el cuadro de mando: **la merma se mide en C3, nunca sumando los tres diarios.**
 
 Proyectado a 19 días laborables, unos **4.000 € al mes de caducidad**, la mitad de ellos en
 furgoneta. Es poco dinero, pero es un indicador de planificación de carga: producto que sube al
@@ -108,15 +115,19 @@ semanas.
 
 ## La merma del mes, medida
 
-| eslabón | caducidad | rotura | retirada |
+| vía de retorno | caducidad | rotura | retirada |
 |---|---|---|---|
-| Almacén | 220 líneas · **506,89 €** | 55 · 43,44 € | 126 · 427,08 € |
-| **Vehículo** | 934 líneas · **1.867,64 €** | 176 · 290,50 € | 263 · 892,87 € |
-| **Suma (sin máquina)** | **1.154 · 2.374,53 €** | **231 · 333,94 €** | **389 · 1.319,95 €** |
+| Vuelve en furgoneta | 934 líneas · 1.867,64 € | 176 · 290,50 € | 263 · 892,87 € |
+| Va directo al almacén | 220 líneas · 506,89 € | 55 · 43,44 € | 126 · 427,08 € |
+| **TOTAL DEL MES** | **1.154 · 2.374,53 €** | **231 · 333,94 €** | **389 · 1.319,95 €** |
 
-**El 79 % de la caducidad fuera de máquina se tira en la furgoneta.** Y sumando la de máquina
-—104,96 € el 25/09, del orden de 2.000 € en el mes—, la caducidad total del mes ronda los
-**4.400 €**. Confirma la proyección que hice desde un solo día.
+Y el C3 del mes confirma estos mismos números al céntimo desde el lado de la máquina: 1.154 líneas
+`RC` por 2.374,53 €, 231 `RR` por 333,94 € y 389 `RM` por 1.319,95 €. **La merma está contada una
+vez**, y las dos tablas la ven desde los dos extremos del mismo viaje.
+
+**El 79 % del producto caducado vuelve en la furgoneta** y el 21 % va directo al almacén. Pero
+—ver la corrección de arriba— **no se suman**: son las dos rutas de retorno de la misma merma. La
+caducidad del mes es **2.374,53 €**, no 4.400 €.
 
 Está concentrada: **29 de los 52 vehículos** tienen caducidad, y el peor, el `1613LKD`, acumula
 141 líneas y 249,35 €.
@@ -164,3 +175,31 @@ aritmética del día se mantiene, **C3 del mes tiene que traer exactamente 140.4
 
 [`carga/merma_septiembre.xlsx`](../carga/merma_septiembre.xlsx): caducidad y rotura por vehículo,
 por artículo con el eslabón donde se produce, y por almacén con su valor movido y sus descuadres.
+
+
+---
+
+# C3 del mes: la predicción sale exacta
+
+Dos quincenas, 236.657 + 247.366 filas, **484.023 en total** del 01 al 25 de septiembre. 2.879
+máquinas y 449 artículos.
+
+| `motivo` | filas |
+|---|---:|
+| VE · venta | 340.555 |
+| **CM · carga** | **140.479** |
+| IN · inventario | 1.215 |
+| RC · caducidad | 1.154 |
+| RM · retirada | 389 |
+| RR · rotura | 231 |
+
+**140.479 líneas de carga, contra las 140.479 que predije desde C1 + C2. Diferencia: cero.** La
+cadena almacén → vehículo → máquina cuadra al dígito sobre 25 días y casi medio millón de
+movimientos.
+
+## Y las ventas, con su coste, para 759 máquinas
+
+340.555 líneas `VEN`: **316.612 unidades y 180.700,36 € de coste**. El A11 daba 173.737,77 € de
+coste para 766 máquinas en las mismas fechas — dos caminos distintos, mismo orden de magnitud.
+
+Es la segunda fuente de coste de venta del proyecto, y la que llega a más máquinas.
