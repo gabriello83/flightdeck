@@ -869,7 +869,10 @@ left join recursos.empleados emp   on emp.id = r.empleadoid
 where r.fecha >= '{0}' and r.fecha <= '{1} 23:59:59'
 ```
 
-## C6 · EXT_STOCK_RECOGIDAS
+## C6 · EXT_STOCK_RECOGIDAS  ·  **descartado**
+
+`stocks.planrecogida` está vacía. La caducidad se mide en las líneas `RC` de la reposición y en
+los diarios de stock. **No entra en la carga nocturna.**
 
 Caducado y rotura separados, que es justo lo que pedías.
 
@@ -958,7 +961,11 @@ left join stocks.articulos a   on a.id  = d.articuloid
 where r.fechacrea >= '{0}' and r.fechacrea <= '{1} 23:59:59'
 ```
 
-## C9 · EXT_STOCK_INVENTARIOS_ALM
+## C9 · EXT_STOCK_INVENTARIOS_ALM  ·  **probado, y mal nombrado**
+
+No son inventarios de almacén: es el **balance mensual de existencias de los tres eslabones**
+(`tipo_elemento` A, M y V), 8,29 M € en total
+([33-tanda-c-resultados.md](33-tanda-c-resultados.md)).
 
 ```sql
 select
