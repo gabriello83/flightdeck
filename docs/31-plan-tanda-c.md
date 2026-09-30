@@ -232,3 +232,13 @@ order by 1
 Devuelve pocas filas y contesta lo único que importa ahora: **si la tabla tiene datos o no**. De
 paso, agrupar por `estado` dice si los traspasos se quedan a medias, y agrupar por `anho` dice
 desde cuándo hay inventarios de almacén.
+
+
+### Resultado de la sonda 1
+
+`stocks.traspasosstock`: **35.510 filas, todas con `estado = 2`.** La tabla está viva y con
+volumen, y no hay ni un traspaso en otro estado. O el 2 es «recepcionado» y no queda ninguno a
+medias, o el campo no se usa como flujo de trabajo — se sabrá con el C4, que trae `fechasalida` y
+`fechaentrada` por separado.
+
+**C4 se crea.**
