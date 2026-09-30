@@ -92,3 +92,75 @@ lleva por unidad.
 
 - **C1 y C2**: 01/09/2026 – 25/09/2026 de una vez.
 - **C3**: por semanas — 01–07, 08–14, 15–21, 22–25. Cuatro lanzamientos de unas 150.000 filas.
+
+---
+
+# C1 y C2 del mes: 01 al 25 de septiembre
+
+| | filas | valor movido | artículos | usuarios |
+|---|---:|---:|---:|---:|
+| C1 · almacén | 60.477 | **1.135.810,63 €** | 996 | 79 |
+| C2 · vehículo | 122.583 | **783.560,85 €** | 637 | 64 |
+
+30 almacenes y 52 vehículos. Menos volumen del que proyecté —esperaba 73.000 y 183.000—, así que
+**el mes entra de una vez sin problema**, y probablemente C3 también por quincenas en vez de
+semanas.
+
+## La merma del mes, medida
+
+| eslabón | caducidad | rotura | retirada |
+|---|---|---|---|
+| Almacén | 220 líneas · **506,89 €** | 55 · 43,44 € | 126 · 427,08 € |
+| **Vehículo** | 934 líneas · **1.867,64 €** | 176 · 290,50 € | 263 · 892,87 € |
+| **Suma (sin máquina)** | **1.154 · 2.374,53 €** | **231 · 333,94 €** | **389 · 1.319,95 €** |
+
+**El 79 % de la caducidad fuera de máquina se tira en la furgoneta.** Y sumando la de máquina
+—104,96 € el 25/09, del orden de 2.000 € en el mes—, la caducidad total del mes ronda los
+**4.400 €**. Confirma la proyección que hice desde un solo día.
+
+Está concentrada: **29 de los 52 vehículos** tienen caducidad, y el peor, el `1613LKD`, acumula
+141 líneas y 249,35 €.
+
+### Y lo que se caduca es justo lo que no tiene coste cargado
+
+| € caducados | líneas | artículo |
+|---:|---:|---|
+| 161,79 | 103 | ÑAMING GO! MIXTO 135G |
+| 151,30 | 54 | DONETTES CLASICO |
+| 151,05 | 100 | ÑAMING GO! ATUN 140G |
+| 150,24 | 77 | ÑAMING TCUIDA PRIMAVERA 130G |
+| 106,81 | 71 | ÑAMING GO! POLLO CHEDAR 130G |
+| 91,05 | 25 | ZANAHORIA BASTÓN CON HUMMUS 100G |
+
+Son los frescos de marca propia — **los mismos 59 artículos que en el A2 se cargan a coste cero**.
+O sea que la merma real es **mayor** que estos 2.374,53 €: los que más caducan son precisamente los
+que no siempre traen `puc`, y ahí el cálculo los valora a cero. Pedir los costes de los frescos
+deja de ser una cuestión de margen y pasa a ser una de medición de pérdidas.
+
+## Un dato que hay que verificar antes de usarlo
+
+`dif_inventario` marca 1.257 movimientos en almacén y 581 en vehículo. Pero al desglosarlos:
+
+| | líneas marcadas | con cantidad positiva | con cantidad negativa |
+|---|---:|---:|---:|
+| Almacén | 1.257 | 877 · **56.984,75 €** | **0** |
+| Vehículo | 581 | 527 · **5.468,35 €** | **0** |
+
+**Ni un solo descuadre negativo.** Un recuento real produce sobrantes y faltantes; aquí sólo hay
+sobrantes, por 62.453 € en 25 días, un 5,5 % de todo lo movido en almacén.
+
+No me creo que el stock teórico esté sistemáticamente corto. Lo más probable es que **el signo esté
+en otro campo** o que los faltantes se registren con otro `tipo_mov`. Hay que aclararlo antes de
+publicar cualquier indicador de descuadre, o diremos que sobran 62.000 € de género cuando puede ser
+justo lo contrario.
+
+## La comprobación pendiente sobre C3
+
+La carga del mes: **37.688 líneas `CM` en almacén + 102.791 en vehículo = 140.479**. Si la
+aritmética del día se mantiene, **C3 del mes tiene que traer exactamente 140.479 líneas con motivo
+`CM`**. Es la validación de la cadena a escala de mes, y sale sola al lanzar C3.
+
+## Entregable
+
+[`carga/merma_septiembre.xlsx`](../carga/merma_septiembre.xlsx): caducidad y rotura por vehículo,
+por artículo con el eslabón donde se produce, y por almacén con su valor movido y sus descuadres.
