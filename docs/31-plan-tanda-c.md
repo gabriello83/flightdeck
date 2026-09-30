@@ -242,3 +242,87 @@ medias, o el campo no se usa como flujo de trabajo — se sabrá con el C4, que 
 `fechaentrada` por separado.
 
 **C4 se crea.**
+
+
+---
+
+# Resultado de las seis sondas, y veredicto
+
+| # | tabla | filas | reparto | veredicto |
+|---:|---|---:|---|---|
+| 1 | `traspasosstock` | 35.510 | todo `estado = 2` | **C4 se crea** |
+| 2 | `regularizacionesstock` | 35.510 | todo `tipo = 2` | **a repetir** |
+| 3 | `planrecogida` | **0** | — | **C6 NO se crea** |
+| 4 | `plancargarutavehiculo` | 5.932 | 5 estados | **C7 se crea** |
+| 5 | `planesretornoprod` | 472 | todo `estado = 0` | **C8 se crea** |
+| 6 | `infinventarioresumenes` | 1.928 | 4 años | **C9 y C10 se crean** |
+
+## La sonda 2 hay que repetirla
+
+Devuelve **exactamente lo mismo que la sonda 1**: un solo valor, el 2, y 35.510 filas. Que dos
+tablas distintas tengan el mismo número de filas al dígito y el mismo valor único no es
+verosímil. Casi seguro que el informe siguió apuntando a `traspasosstock`. Hasta repetirla no
+damos nada por sabido de `regularizacionesstock`.
+
+## Sonda 3 · La recogida de caducado no se planifica
+
+`planrecogida` está vacía. Es la novena tabla muerta, y esta la habíamos anticipado: la caducidad
+se registra en las líneas `RC` de la reposición y en los diarios de stock, no en un plan formal de
+recogida. **C6 fuera**, y no perdemos nada porque ya tenemos la merma en los tres eslabones.
+
+## Sonda 4 · El plan de carga sí tiene flujo de trabajo
+
+5.932 planes repartidos en cinco estados:
+
+| `estado` | planes | % |
+|---:|---:|---:|
+| 0 | 33 | 0,6 % |
+| **1** | **4.882** | **82,3 %** |
+| 2 | 42 | 0,7 % |
+| 3 | 20 | 0,3 % |
+| **4** | **955** | **16,1 %** |
+
+Es la primera tabla con variedad real de estados, así que aquí el campo sí se usa. Y el reparto
+dice algo: **el 82 % se queda en el estado 1 y sólo el 16 % llega al 4.** Si el 4 es «confirmado»,
+cinco de cada seis planes de carga se crean y no se cierran. El C7 lo confirmará, porque trae
+`cantcalculada`, `cantpedida` y `cantconfirmada` en la misma fila — lo planificado contra lo que
+de verdad subió a la furgoneta.
+
+## Sonda 5 · Los retornos se abren y nunca se cierran
+
+472 planes de retorno en toda la historia, **los 472 en `estado = 0`**. Ninguno avanza. El C8 trae
+`cantverifrepo` y `cantverifalmacen`: si esos campos están vacíos, el retorno de producto se anota
+y nadie lo verifica, que es el mismo agujero que la entrega de bolsas a Loomis.
+
+## Sonda 6 · Los almacenes sí se inventarían, y con regularidad
+
+| año | inventarios |
+|---:|---:|
+| 2023 | 343 |
+| 2024 | 588 |
+| 2025 | 588 |
+| 2026 (a septiembre) | 409 |
+
+588 al año son **49 al mes sobre 30 almacenes**: inventario mensual de almacén, hecho de forma
+constante desde 2024. Y 2026 va al mismo ritmo.
+
+**El contraste con las máquinas es brutal.** Los almacenes se inventarían todos los meses; de las
+3.200 máquinas operativas, sólo el 8,6 % tiene inventario de menos de 90 días y el 23,8 % no se ha
+inventariado nunca. La disciplina existe en la casa — está en el almacén y no llega a la máquina.
+
+---
+
+# Qué crear y con qué fechas
+
+| informe | crear | fechas | por qué |
+|---|---|---|---|
+| **C4** · TRASPASOS | **sí** | 01/09/2026 – 25/09/2026 | alineado con todo lo demás |
+| **C5** · REGULARIZACIONES | **sí** | 01/09/2026 – 25/09/2026 | y de paso resuelve la duda de la sonda 2 |
+| C6 · RECOGIDAS | **no** | — | tabla vacía |
+| **C7** · PLANCARGA | **sí** | 01/09/2026 – 25/09/2026 | plan contra confirmado |
+| **C8** · RETORNOS | **sí** | **01/01/2026 – 30/09/2026** | sólo 472 en total; con un mes no se ve nada |
+| **C9** · INVENTARIOS_ALM | **sí** | **01/01/2026 – 30/09/2026** | los 409 del año, para medir cumplimiento |
+| **C10** · INVENTARIOS_ALM_PROD | **sí** | 01/09/2026 – 25/09/2026 | es el detalle; primero un mes por volumen |
+
+Cinco informes nuevos en vez de siete, y dos de ellos con ventana ancha porque son tablas
+pequeñas donde un mes no dice nada.
