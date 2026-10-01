@@ -51,9 +51,9 @@
     {"id": "m_rutas_criterios",   "nombre": "EXT_RUTAS_CRITERIOS",       "informe": 159, "clave_fecha": "ninguna",   "destino": "maestros/rutas_criterios",  "filas_mes": 4019},
     {"id": "m_rutas_operarios",   "nombre": "EXT_RUTAS_OPERARIOS",       "informe": 160, "clave_fecha": "ninguna",   "destino": "maestros/rutas_operarios",  "filas_mes": 129},
     {"id": "m_rutas_fondos",      "nombre": "EXT_RUTAS_FONDOS",          "informe": 162, "clave_fecha": "ninguna",   "destino": "maestros/rutas_fondos",     "filas_mes": 7794},
-    {"id": "m_sat_catalogo",      "nombre": "EXT_SAT_CATALOGO",          "informe": null, "clave_fecha": "ninguna",   "destino": "maestros/sat_catalogo",     "filas_mes": 101},
-    {"id": "m_carriles",          "nombre": "EXT_MAESTRO_CARRILES",      "informe": null, "clave_fecha": "ninguna",   "destino": "maestros/carriles",         "filas_mes": 15088},
-    {"id": "m_recetas",           "nombre": "EXT_MAESTRO_RECETAS",       "informe": null, "clave_fecha": "ninguna",   "destino": "maestros/recetas",          "filas_mes": 612}
+    {"id": "m_sat_catalogo",      "nombre": "EXT_SAT_CATALOGO",          "informe": 172, "clave_fecha": "ninguna",   "destino": "maestros/sat_catalogo",     "filas_mes": 101},
+    {"id": "m_carriles",          "nombre": "EXT_MAESTRO_CARRILES",      "informe": 136, "clave_fecha": "ninguna",   "destino": "maestros/carriles",         "filas_mes": 15088},
+    {"id": "m_recetas",           "nombre": "EXT_MAESTRO_RECETAS",       "informe": 129, "clave_fecha": "ninguna",   "destino": "maestros/recetas",          "filas_mes": 612}
   ],
   "descartados": {
     "_nota": "Tablas vacias comprobadas una a una. No se bajan. El SQL esta escrito en docs/17 por si algun dia se usan.",

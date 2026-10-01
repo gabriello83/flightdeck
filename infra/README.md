@@ -37,11 +37,17 @@ Por eso la extracción está escrita para que eso no pueda costar una noche de d
 La primera carga se lanza **a mano**, se mira ese registro, y si el lector no reconoció la
 envoltura se ajusta una función de diez líneas. No hay nada más que adivinar.
 
-## Los números de informe están a null, a propósito
+## Los números de informe · **los 30 rellenos**
 
-En `manifiesto.json`, el campo `informe` de cada entrada está vacío. Hay que rellenarlo con el
-número que VenCloud asigne a cada `EXT_*` al crearlos. **La extracción se niega a arrancar si falta
-alguno** y dice cuáles: preferimos parar a bajar el informe equivocado en silencio.
+Los 30 informes `EXT_*` están creados en VenCloud y el manifiesto lleva su número: del **105 al
+172**, sin ninguno repetido. La extracción ya puede arrancar.
+
+La comprobación de que se niega a arrancar con un número ausente sigue ahí, y hace falta: este
+fichero se edita a mano y a veces directamente en GitHub. Un número mal copiado no se nota al
+guardarlo, se nota a las 3:15 de la mañana — bajando el informe equivocado, que es el fallo más
+caro de descubrir después. Por eso `test_manifiesto.py` lo valida antes: números presentes, sin
+repetir, claves de fecha del vocabulario, maestro y fecha coherentes, un único informe en
+`restringido/` y ninguna tabla muerta colada entre las vivas.
 
 ---
 
