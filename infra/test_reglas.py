@@ -116,6 +116,45 @@ comprueba("6.400 averias tecnicas de tipo A",
 comprueba("389 preventivos", sum(1 for t in tareas if R.es_preventivo(t)), 389)
 
 # ----------------------------------------------------------------------
+print("\nEl catalogo de SAT: se clasifica por operacion, no por categoria")
+comprueba("101 operaciones menos 65 tecnicas = 36 no tecnicas",
+          len(R.OPERACIONES_NO_TECNICAS), 36)
+comprueba("22 retiradas", len(R.OPERACIONES_RETIRADAS), 22)
+
+# C06 y T08 son la MISMA averia en dos categorias distintas: es el caso que
+# demuestra que la categoria no clasifica.
+c06 = {"cod_operacion": "C06", "categoria": "ATENCION AL CLIENTE"}
+t08 = {"cod_operacion": "T08", "categoria": "AVERIAS TECNICAS"}
+comprueba("T08 es fallo tecnico", R.es_fallo_tecnico(t08), True)
+comprueba("y C06 tambien, aunque su categoria diga otra cosa", R.es_fallo_tecnico(c06), True)
+comprueba("pero por categoria C06 no cuenta", R.es_averia_tecnica(c06), False)
+
+comprueba("la limpieza no es fallo tecnico",
+          R.es_fallo_tecnico({"cod_operacion": "C20"}), False)
+comprueba("ni una devolucion de dinero",
+          R.es_fallo_tecnico({"cod_operacion": "DEV01"}), False)
+comprueba("ni cambiar un precio",
+          R.es_fallo_tecnico({"cod_operacion": "S011"}), False)
+comprueba("ni el cajon de sastre TECNICO - VARIOS",
+          R.es_fallo_tecnico({"cod_operacion": "A036"}), False)
+comprueba("una obsoleta tecnica si cuenta en el historico",
+          R.es_fallo_tecnico({"cod_operacion": "C01"}), True)
+comprueba("sin codigo, cae a la categoria",
+          R.es_fallo_tecnico({"categoria": "AVERIAS TECNICAS"}), True)
+comprueba("T55 esta retirada", R.operacion_retirada({"cod_operacion": "T55"}), True)
+comprueba("T08 no", R.operacion_retirada({"cod_operacion": "T08"}), False)
+
+print("\nLa cuenta de 2026, reproducida con el reparto medido")
+# 27.543 tareas: 6.400 en la categoria AVERIAS TECNICAS, 3.410 fallos tecnicos
+# archivados en ATENCION AL CLIENTE y 413 en operaciones retiradas.
+tareas_2026 = ([dict(t08, n=1)] * 6400 + [dict(c06, n=1)] * 3410
+               + [{"cod_operacion": "C01", "categoria": "Obsoletas"}] * 413
+               + [{"cod_operacion": "D01", "categoria": "ATENCION AL CLIENTE"}] * 17320)
+comprueba("27.543 tareas", len(tareas_2026), 27543)
+comprueba("por categoria salen 6.400", sum(1 for x in tareas_2026 if R.es_averia_tecnica(x)), 6400)
+comprueba("por operacion salen 10.223", sum(1 for x in tareas_2026 if R.es_fallo_tecnico(x)), 10223)
+
+# ----------------------------------------------------------------------
 print("\nTiempos: mediana, porque la media miente")
 t = R.resumen_tiempos([1, 2, 3, 4, 5, 6, 7, 8, 9, 387])
 comprueba("mediana 5,5", t["mediana"], 5.5)

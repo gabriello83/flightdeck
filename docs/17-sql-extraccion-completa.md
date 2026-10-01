@@ -1304,86 +1304,55 @@ left join stocks.articulos a  on a.id = mt.recambioid
 where t.fecha >= '{0}' and t.fecha <= '{1} 23:59:59'
 ```
 
-## D11 · EXT_SAT_CATALOGO  *(sin parámetros)*  ·  **sin lanzar**
+## D11 · EXT_SAT_CATALOGO  *(sin parámetros)*  ·  **probado**
 
-Es el único de la tanda D que no se ha ejecutado nunca. De sus columnas, **sólo cuatro
-están confirmadas**, y lo están porque D7 las usa y D7 funcionó:
+**101 operaciones y 6 categorías.** Las dos sondas confirmaron las doce columnas que había
+inferido —todas existen— y revelaron cuatro más: `notificaemail`, `descripcion`, `qrcs` y
+`causaccep` en las operaciones, y `refexterna` en las categorías.
 
-| confirmado por D7 | sin confirmar (nombre inferido del modelo) |
+Pero tres de esas columnas no sirven y una join tampoco, así que la versión final las deja
+fuera:
+
+| fuera | por qué |
 |---|---|
-| `satoperaciones.id`, `.codigo`, `.nombre`, `.satoperacioncategoriaid` | `.tipo`, `.severidad`, `.tiempoestimado`, `.averiarapida`, `.tipoasignacion`, `.desactivada`, `.fabricanteid` |
-| `satoperacionescategorias.id`, `.nombre` | `satoperacionescategorias.tipo` |
-
-Así que **primero las dos sondas**, que es lo que ha funcionado toda la campaña: un
-`select tabla.*` dice los nombres de verdad y evita gastar intentos adivinando.
-
-### Sonda D11-A · columnas reales de las operaciones
-
-```sql
-select op.* from configuracion.satoperaciones op order by op.id
-```
-
-### Sonda D11-B · columnas reales de las categorías
-
-```sql
-select cat.* from configuracion.satoperacionescategorias cat order by cat.id
-```
-
-Las dos tablas son catálogos cerrados —cientos de filas, no miles—, así que bajarlas
-enteras no cuesta nada y de paso **ya son la extracción**: si las sondas salen, el maestro
-está volcado.
-
-### D11 · versión que no puede fallar
-
-Sólo columnas confirmadas. Si hay prisa, créala así y se amplía después.
-
-```sql
-select
-  op.id      as id,
-  op.codigo  as codigo,
-  op.nombre  as operacion,
-  cat.id     as categoria_id,
-  cat.nombre as categoria
-from configuracion.satoperaciones op
-left join configuracion.satoperacionescategorias cat on cat.id = op.satoperacioncategoriaid
-order by cat.nombre, op.codigo
-```
-
-### D11 · versión completa
-
-Para cuando las sondas confirmen los nombres. Si alguno no coincide, se cambia esa línea
-y nada más; el resto de la consulta no depende de ella.
+| `left join general.fabricantes` | **`fabricanteid` es nulo en las 101**. La join no aporta una sola fila |
+| `notificaemail` | `false` en las 101 |
+| `qrcs` | `false` en las 101 |
+| `causaccep` | nulo en las 101 |
+| `op.tipo` | redundante: coincide con `categoria.tipo` en las 101 filas. Se extrae el de la categoría |
 
 ```sql
 select
   op.id        as id,
   op.codigo    as codigo,
   op.nombre    as operacion,
-  op.tipo      as tipo,
   op.severidad as severidad,
-  op.tiempoestimado as tiempo_estimado,
   op.averiarapida   as averia_rapida,
   op.tipoasignacion as tipo_asignacion,
+  op.tiempoestimado as tiempo_estimado,
   op.desactivada    as desactivada,
+  op.descripcion    as descripcion,
   cat.id       as categoria_id,
   cat.nombre   as categoria,
-  cat.tipo     as tipo_categoria,
-  f.nombre     as fabricante
+  cat.tipo     as tipo_categoria
 from configuracion.satoperaciones op
 left join configuracion.satoperacionescategorias cat on cat.id = op.satoperacioncategoriaid
-left join general.fabricantes f on f.id = op.fabricanteid
 order by cat.nombre, op.codigo
 ```
 
-**Sin parámetros**: es un maestro, así que no lleva FECHA DESDE ni FECHA HASTA, y por tanto
-tampoco le aplica la regla del `Orden`. En el manifiesto va con `clave_fecha: "ninguna"` y
-destino `maestros/sat_catalogo`: se baja entero cada noche, sin partición por fecha.
+**Sin parámetros**: es maestro, no lleva fechas y por tanto tampoco le aplica la regla del
+`Orden`. Se baja entero cada noche a `maestros/sat_catalogo`, sin partición.
 
-**Para qué sirve**: es el diccionario que cierra el SAT. D7 trae el `cod_operacion` y la
-`categoria` de cada tarea, pero no sabe qué operaciones existen ni cuáles están
-desactivadas. Con este catálogo se puede decir **qué operaciones no se usan nunca** y
-cuáles se usan con una categoría que no les corresponde — y es lo que hace falta para que
-el `tipo_tarea` ('A' avería, 'E' preventivo) deje de ser la única clasificación disponible.
+### Lo que el catálogo cambia
+
+No es un volcado más: **desmonta la clasificación del SAT**. La categoría dice en qué lista
+se archivó la operación, no si es un fallo técnico. `C06 · SNACK/BEBIDA - Distribuidor fuera
+de servicio` está en ATENCIÓN AL CLIENTE mientras su gemela de café, `T08 · CAFÉ -
+Distribuidor fuera de servicio`, está en AVERÍAS TÉCNICAS. Contando por operación y no por
+categoría, los fallos técnicos de 2026 pasan de **6.400 a 10.223**.
+
+Está medido y detallado en [41-catalogo-sat.md](41-catalogo-sat.md), con la corrección a
+[34-sat-averias.md](34-sat-averias.md).
 
 ---
 

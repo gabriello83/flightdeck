@@ -185,10 +185,13 @@ def tareas_de_maquina(tareas):
 
 
 def es_averia_tecnica(tarea):
-    """Solo una de cada cuatro tareas de SAT es una averia.
+    """Tareas de la CATEGORIA "AVERIAS TECNICAS". 6.400 de 27.543 en 2026.
 
-    27.543 tareas en nueve meses, de las que 16.754 son atencion al cliente y
-    6.400 averias tecnicas. Llamar "averias" a la tabla entera infla por cuatro.
+    OJO: esto mide el buzon, no el fallo. Para contar fallos tecnicos de verdad
+    usa `es_fallo_tecnico`, que clasifica por operacion: la categoria se deja
+    fuera 3.823 fallos que estan archivados en ATENCION AL CLIENTE y en
+    operaciones retiradas (10.223 contra 6.400). Se conserva esta funcion porque
+    el reparto por categoria sigue siendo correcto COMO reparto de buzones.
     """
     return v(tarea, "categoria") == "AVERIAS TECNICAS"
 
@@ -196,6 +199,83 @@ def es_averia_tecnica(tarea):
 def es_preventivo(tarea):
     """tipo_tarea separa averia (A) de preventivo (E)."""
     return v(tarea, "tipo_tarea") == "E"
+
+
+# ----------------------------------------------------------------------
+# el catalogo de SAT (D11): clasificar por operacion, no por categoria
+# ----------------------------------------------------------------------
+# 101 operaciones, 6 categorias. La categoria dice en que LISTA se archivo la
+# operacion, no si es un fallo tecnico: `C06 SNACK/BEBIDA - Distribuidor fuera de
+# servicio` esta en ATENCION AL CLIENTE y su gemela de cafe `T08` en AVERIAS
+# TECNICAS. Contando por categoria salen 6.400 fallos tecnicos en 2026; contando
+# por operacion, 10.223. Medido en docs/41-catalogo-sat.md.
+
+CATEGORIAS_SAT = ("ATENCION AL CLIENTE", "AVERIAS TECNICAS", "Devolucion dinero",
+                  "Solicitudes cliente", "Solicitudes internas", "Obsoletas")
+
+# Las 36 operaciones del catalogo que NO son un fallo tecnico, con su motivo.
+# Las otras 65 si lo son. Es una PROPUESTA pendiente de que Gabriele la confirme:
+# tres casos son discutibles y estan marcados como tal en carga/catalogo_sat.xlsx.
+OPERACIONES_NO_TECNICAS = {
+    "8888888": "preventivo de electrodomesticos",
+    "888889": "solicitud interna",
+    "999999999": "auditoria",
+    "A036": "cajon de sastre: TECNICO - VARIOS",
+    "C016": "reposicion: selecciones vacias",
+    "C15": "configuracion: insertar contador",
+    "C16": "calidad del producto, no de la maquina",
+    "C20": "limpieza",
+    "C22": "limpieza",
+    "C24": "devolucion",
+    "D01": "devolucion",
+    "D03": "devolucion",
+    "D04": "devolucion",
+    "DEV01": "devolucion",
+    "DEV02": "devolucion",
+    "DEV03": "calidad del producto",
+    "DEV04": "calidad del producto",
+    "DEV05": "devolucion",
+    "DEV06": "devolucion",
+    "S001": "configuracion: planograma",
+    "S002": "mover maquina",
+    "S003": "instalar cashless",
+    "S004": "instalar pago bancario",
+    "S005": "cambiar maquina",
+    "S006": "reforma",
+    "S007": "administracion: saldo",
+    "S008": "limpieza",
+    "S009": "configuracion: etiqueta",
+    "S010": "reponer",
+    "S011": "configuracion: precio",
+    "S012": "solicitud generica",
+    "S013": "instalacion nueva",
+    "S12": "ajuste de molino",
+    "T47": "limpieza",
+    "T49": "instalacion de cable DEX",
+    "T55": "configuracion: precio",
+}
+
+# Las 22 desactivadas. Siguen apareciendo en tareas antiguas, asi que no se
+# pueden ignorar al contar historico; solo al ofrecer opciones nuevas.
+OPERACIONES_RETIRADAS = frozenset(["A004", "A005", "A012", "A014", "A021", "A028", "A029", "A035", "C01", "C02", "C03", "C04", "C05", "C17", "C21", "T23", "T28", "T34", "T42", "T47", "T50", "T55"])
+
+
+def es_fallo_tecnico(tarea):
+    """Si la tarea es un fallo de la maquina, clasificando por OPERACION.
+
+    Prefiere el codigo de operacion, que es el dato bueno. Si la tarea no lo
+    trae, cae a la categoria y acepta su error: la categoria subestima los
+    fallos tecnicos en un 60 %, asi que esa rama es un apano, no una medida.
+    """
+    codigo = str(v(tarea, "cod_operacion", "") or "").strip()
+    if codigo:
+        return codigo not in OPERACIONES_NO_TECNICAS
+    return v(tarea, "categoria") == "AVERIAS TECNICAS"
+
+
+def operacion_retirada(tarea):
+    """La tarea usa una operacion que ya esta desactivada en el catalogo."""
+    return str(v(tarea, "cod_operacion", "") or "").strip() in OPERACIONES_RETIRADAS
 
 
 # ----------------------------------------------------------------------

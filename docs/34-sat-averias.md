@@ -44,9 +44,28 @@ el subconjunto de las que se pagan en mano.
 | Solicitudes cliente | 995 | 3,6 % |
 | Obsoletas | 423 | 1,5 % |
 
-Llamar «averías» a esta tabla es engañoso: es **el buzón de atención al cliente**. Las averías de
-verdad son 6.400 en nueve meses, unas 710 al mes sobre 3.200 máquinas operativas — **una avería
-por máquina cada cuatro meses y medio**.
+Llamar «averías» a esta tabla es engañoso: es **el buzón de atención al cliente**.
+
+> ### CORRECCIÓN · 01/10/2026
+>
+> **Los 6.400 están mal, y el título de esta sección también.** Esta tabla cuenta por
+> *categoría*, y el catálogo de operaciones (D11, [41-catalogo-sat.md](41-catalogo-sat.md))
+> demuestra que la categoría dice en qué lista se archivó la operación, no si es un fallo
+> técnico. `C06 · SNACK/BEBIDA - Distribuidor fuera de servicio` está en ATENCIÓN AL CLIENTE
+> mientras su gemela de café, `T08`, está en AVERÍAS TÉCNICAS: la misma avería en dos sitios.
+>
+> Contando por operación, los fallos técnicos de 2026 son **10.223**, no 6.400 — un 60 % más,
+> y **más de una de cada tres tareas**, no una de cada cuatro. Los 3.823 que faltaban estaban
+> 3.410 en ATENCIÓN AL CLIENTE y 413 en operaciones ya retiradas.
+>
+> El error se delata dos párrafos más abajo, donde yo mismo contaba los 2.694 de `C06` entre
+> las operaciones «que sí son técnicas» mientras la tabla de arriba los dejaba fuera. La tabla
+> por categoría sigue siendo correcta como reparto de buzones; lo que no vale es leerla como
+> un recuento de averías.
+
+Con el recuento corregido: 10.223 fallos técnicos en nueve meses, unas 1.136 al mes sobre
+3.200 máquinas operativas — **una avería por máquina cada dos meses y tres semanas**, no cada
+cuatro y medio.
 
 Las operaciones más frecuentes que sí son técnicas: distribuidor fuera de servicio en snack/bebida
 (2.694) y en café (1.617), reponer distribuidor (949), carril fuera de servicio (461) y calidad no
