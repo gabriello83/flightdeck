@@ -167,6 +167,19 @@ comprueba("2 nunca inventariadas", airbus["inventario"]["cumplimiento"]["nunca"]
 comprueba("50 % en norma", airbus["inventario"]["cumplimiento"]["pct_en_norma"], 50.0)
 comprueba("existencias en almacen", airbus["inventario"]["existencias"]["A"], 9000.0)
 
+print("\nEl estado de la carga queda donde la web puede leerlo")
+import datetime as _dt
+_ayer = HOY - _dt.timedelta(days=1)
+ALMACEN[f"registro/extraccion/anio={_ayer.year}/mes={_ayer.month:02d}/{_ayer.isoformat()}.json"] = \
+    json.dumps({"ejecucion": f"{_ayer}T03:15:00Z", "dias": [str(_ayer)],
+                "resumen": {"descargas_ok": 90, "descargas_fallidas": 0, "bytes": 1234},
+                "ok": [{"id": "visita_cabecera", "filas": 3504}], "errores": []}).encode()
+_est = L.estado_de_la_carga(HOY)
+comprueba("encuentra la de ayer", _est["descargas_ok"], 90)
+comprueba("y avisa de que lleva un dia de retraso", _est["retraso_dias"], 1)
+comprueba("con las filas por informe", _est["filas_por_informe"]["visita_cabecera"], 3504)
+comprueba("sin registro, lo dice", "retraso_dias" in L.estado_de_la_carga(HOY - _dt.timedelta(days=30)), True)
+
 print("\nUn informe que falta no rompe la carga")
 comprueba("sin stock_vehiculo, sigue habiendo panel", "servicio" in airbus, True)
 

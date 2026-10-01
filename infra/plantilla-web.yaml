@@ -1,0 +1,638 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  digivend · plataforma web en dashboard.digivend.es. Sirve la pagina, el acceso,
+  la API, el asistente y las alarmas. Pila SEPARADA de la ingesta: comparte solo
+  el bucket de datos, y de ese bucket solo lee la carpeta de paneles.
+
+  El navegador habla con UN SOLO ORIGEN. La pagina y /api/* salen del mismo
+  dominio, asi que no hay ni una llamada a otro dominio y no hay CORS. Lo que
+  llama fuera (VenCloud, la API de Claude, WhatsApp) lo hace Lambda, desde AWS,
+  donde la red del cliente no interviene.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: "Identidad" }
+        Parameters: [Prefijo, Proyecto]
+      - Label: { default: "Dominio (se puede dejar vacio y anadir despues)" }
+        Parameters: [Dominio, CertificadoArn]
+      - Label: { default: "Enlace con la ingesta" }
+        Parameters: [BucketDatos]
+      - Label: { default: "Correo y asistente" }
+        Parameters: [RemitenteAvisos, ModeloAsistente]
+
+Parameters:
+  Prefijo:
+    Type: String
+    Default: digivend
+    AllowedPattern: "[a-z][a-z0-9-]{2,20}"
+  Proyecto:
+    Type: String
+    Default: digivend
+    Description: Etiqueta de coste, la misma que la ingesta.
+  Dominio:
+    Type: String
+    Default: ""
+    Description: >
+      dashboard.digivend.es. Dejalo VACIO en el primer despliegue: la plataforma
+      funciona igual en la URL que da CloudFront, y el dominio se anade despues
+      sin tocar nada del codigo.
+  CertificadoArn:
+    Type: String
+    Default: ""
+    Description: >
+      ARN del certificado de ACM. OJO: para CloudFront el certificado tiene que
+      estar en us-east-1, no en Europa. Vacio si Dominio esta vacio.
+  BucketDatos:
+    Type: String
+    Description: >
+      Nombre del bucket que creo la pila de ingesta. Esta plataforma solo lee
+      de el la carpeta cabina/, y tiene negado el acceso a restringido/.
+  RemitenteAvisos:
+    Type: String
+    Default: ""
+    Description: Direccion verificada en SES desde la que salen las alarmas por correo.
+  ModeloAsistente:
+    Type: String
+    Default: claude-opus-5-5
+    Description: Modelo del asistente.
+
+Conditions:
+  HayDominio: !And [!Not [!Equals [!Ref Dominio, ""]], !Not [!Equals [!Ref CertificadoArn, ""]]]
+
+Resources:
+
+  # ============================================================ la pagina
+  # Bucket privado: nadie entra por S3. Solo CloudFront, y solo a leer.
+  BucketWeb:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${Prefijo}-web-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration: { Status: Enabled }
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
+
+  AccesoDesdeCloudFront:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${Prefijo}-oac"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  PoliticaBucketWeb:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BucketWeb
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: SoloEstaDistribucion
+            Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: s3:GetObject
+            Resource: !Sub "${BucketWeb.Arn}/*"
+            Condition:
+              StringEquals:
+                "AWS:SourceArn": !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribucion}"
+
+  # Las cabeceras de seguridad. Aqui va frame-ancestors, que en una etiqueta
+  # <meta> el navegador ignora: solo vale como cabecera HTTP.
+  Cabeceras:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub "${Prefijo}-cabeceras"
+        Comment: Un solo origen, sin terceros, sin incrustar en otra pagina.
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            Override: true
+            ContentSecurityPolicy: >-
+              default-src 'self';
+              script-src 'self' 'unsafe-inline';
+              style-src 'self' 'unsafe-inline';
+              img-src 'self' data:;
+              font-src 'self';
+              connect-src 'self';
+              form-action 'self';
+              base-uri 'self';
+              frame-ancestors 'none';
+              object-src 'none'
+          StrictTransportSecurity:
+            Override: true
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+          ContentTypeOptions: { Override: true }
+          FrameOptions: { Override: true, FrameOption: DENY }
+          ReferrerPolicy: { Override: true, ReferrerPolicy: same-origin }
+        CustomHeadersConfig:
+          Items:
+            - { Header: Permissions-Policy, Value: "geolocation=(), camera=(), microphone=()", Override: true }
+
+  Distribucion:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub "${Prefijo} · plataforma"
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        PriceClass: PriceClass_100
+        Aliases: !If [HayDominio, [!Ref Dominio], !Ref "AWS::NoValue"]
+        ViewerCertificate: !If
+          - HayDominio
+          - AcmCertificateArn: !Ref CertificadoArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
+        Origins:
+          - Id: paginas
+            DomainName: !GetAtt BucketWeb.RegionalDomainName
+            OriginAccessControlId: !GetAtt AccesoDesdeCloudFront.Id
+            S3OriginConfig: { OriginAccessIdentity: "" }
+          - Id: api
+            DomainName: !Sub "${Api}.execute-api.${AWS::Region}.amazonaws.com"
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+        DefaultCacheBehavior:
+          TargetOriginId: paginas
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          # CachingOptimized, politica gestionada por AWS.
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref Cabeceras
+        CacheBehaviors:
+          # Esto es lo que hace que no haya ninguna llamada a otro dominio:
+          # /api/* sale del MISMO origen que la pagina.
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            Compress: true
+            # CachingDisabled y AllViewerExceptHostHeader, gestionadas por AWS.
+            # La segunda reenvia la cookie de sesion, que es lo que importa.
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            ResponseHeadersPolicyId: !Ref Cabeceras
+        CustomErrorResponses:
+          - { ErrorCode: 403, ResponseCode: 200, ResponsePagePath: /index.html, ErrorCachingMinTTL: 0 }
+          - { ErrorCode: 404, ResponseCode: 200, ResponsePagePath: /index.html, ErrorCachingMinTTL: 0 }
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
+
+  # ============================================================ quien es quien
+  # Cognito guarda SOLO las contrasenas: su cifrado, su politica y el cambio
+  # obligatorio en el primer acceso. Nadie se inventa aqui un hash de password.
+  # El alta la hace el administrador; no hay registro abierto.
+  Usuarios:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${Prefijo}-usuarios"
+      AdminCreateUserConfig: { AllowAdminCreateUserOnly: true }
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      MfaConfiguration: "OFF"
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          TemporaryPasswordValidityDays: 7
+      UserPoolTags: { Proyecto: !Ref Proyecto }
+
+  ClienteUsuarios:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${Prefijo}-servidor"
+      UserPoolId: !Ref Usuarios
+      GenerateSecret: false
+      # Solo flujo de servidor: el navegador NUNCA habla con Cognito. Si lo
+      # hiciera, estaria llamando a cognito-idp.amazonaws.com, que es
+      # exactamente el dominio externo que no podemos usar.
+      ExplicitAuthFlows: [ALLOW_ADMIN_USER_PASSWORD_AUTH, ALLOW_REFRESH_TOKEN_AUTH]
+      PreventUserExistenceErrors: ENABLED
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      TokenValidityUnits: { AccessToken: hours, IdToken: hours }
+
+  # ============================================================ el estado
+  # Una sola tabla. El esquema de claves esta en infra/README-web.md:
+  #   USUARIO#<correo> · PERFIL#<id> · SESION#<token> · ALARMA#<id>
+  #   PREF#<correo> · CONFIG · USO#<correo> · TELEFONO#<empleadoid>
+  Tabla:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub "${Prefijo}-plataforma"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: pk, AttributeType: S }
+        - { AttributeName: sk, AttributeType: S }
+      KeySchema:
+        - { AttributeName: pk, KeyType: HASH }
+        - { AttributeName: sk, KeyType: RANGE }
+      # Las sesiones y los contadores de uso caducan solos, sin barrerlos.
+      TimeToLiveSpecification: { AttributeName: expira, Enabled: true }
+      PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true }
+      SSESpecification: { SSEEnabled: true }
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
+
+  # ============================================================ secretos
+  ClaveAsistente:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${Prefijo}/asistente/clave-anthropic"
+      Description: Clave de la API de Claude. Se rellena a mano tras crear la pila.
+      Tags: [{ Key: Proyecto, Value: !Ref Proyecto }]
+
+  TokenWhatsApp:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${Prefijo}/avisos/whatsapp"
+      Description: >
+        Token del proveedor de WhatsApp. Mientras este vacio, las alarmas de
+        WhatsApp se registran pero no se envian; las de correo funcionan igual.
+      Tags: [{ Key: Proyecto, Value: !Ref Proyecto }]
+
+  # ============================================================ frontera
+  # El mismo criterio que la ingesta: un techo que las Lambdas no pueden
+  # rebasar, pase lo que pase con sus politicas.
+  Frontera:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${Prefijo}-frontera-web"
+      Description: Techo de permisos de la plataforma. Nada fuera de esta pila.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: NuestraTabla
+            Effect: Allow
+            Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem,
+                     dynamodb:DeleteItem, dynamodb:Query, dynamodb:BatchGetItem]
+            Resource: !GetAtt Tabla.Arn
+          - Sid: SoloLosPanelesDelBucketDeDatos
+            Effect: Allow
+            Action: [s3:GetObject]
+            Resource: !Sub "arn:${AWS::Partition}:s3:::${BucketDatos}/cabina/*"
+          - Sid: NuestroPoolDeUsuarios
+            Effect: Allow
+            Action: [cognito-idp:AdminInitiateAuth, cognito-idp:AdminCreateUser,
+                     cognito-idp:AdminSetUserPassword, cognito-idp:AdminDeleteUser,
+                     cognito-idp:AdminDisableUser, cognito-idp:AdminEnableUser,
+                     cognito-idp:AdminRespondToAuthChallenge, cognito-idp:AdminGetUser]
+            Resource: !GetAtt Usuarios.Arn
+          - Sid: NuestrosSecretos
+            Effect: Allow
+            Action: secretsmanager:GetSecretValue
+            Resource: [!Ref ClaveAsistente, !Ref TokenWhatsApp]
+          - Sid: CorreoDeAvisos
+            Effect: Allow
+            Action: [ses:SendEmail]
+            Resource: "*"
+          - Sid: NuestrosRegistros
+            Effect: Allow
+            Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+            Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Prefijo}-*"
+
+  RolApi:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Prefijo}-rol-api"
+      PermissionsBoundary: !Ref Frontera
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: plataforma
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem,
+                         dynamodb:DeleteItem, dynamodb:Query]
+                Resource: !GetAtt Tabla.Arn
+              - Effect: Allow
+                Action: [s3:GetObject]
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${BucketDatos}/cabina/*"
+              # Los datos con nombre y DNI no se tocan desde la web. Nunca.
+              - Effect: Deny
+                Action: [s3:GetObject]
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${BucketDatos}/restringido/*"
+              - Effect: Allow
+                Action: [cognito-idp:AdminInitiateAuth, cognito-idp:AdminCreateUser,
+                         cognito-idp:AdminSetUserPassword, cognito-idp:AdminDeleteUser,
+                         cognito-idp:AdminDisableUser, cognito-idp:AdminEnableUser,
+                         cognito-idp:AdminRespondToAuthChallenge, cognito-idp:AdminGetUser]
+                Resource: !GetAtt Usuarios.Arn
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref TokenWhatsApp
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Prefijo}-*"
+      Tags: [{ Key: Proyecto, Value: !Ref Proyecto }]
+
+  RolAsistente:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Prefijo}-rol-asistente"
+      PermissionsBoundary: !Ref Frontera
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: asistente
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem]
+                Resource: !GetAtt Tabla.Arn
+              - Effect: Allow
+                Action: [s3:GetObject]
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${BucketDatos}/cabina/*"
+              - Effect: Deny
+                Action: [s3:GetObject]
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${BucketDatos}/restringido/*"
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref ClaveAsistente
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Prefijo}-*"
+      Tags: [{ Key: Proyecto, Value: !Ref Proyecto }]
+
+  RolAlarmas:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Prefijo}-rol-alarmas"
+      PermissionsBoundary: !Ref Frontera
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: alarmas
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:Query]
+                Resource: !GetAtt Tabla.Arn
+              - Effect: Allow
+                Action: [s3:GetObject]
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${BucketDatos}/cabina/*"
+              - Effect: Allow
+                Action: [ses:SendEmail]
+                Resource: "*"
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref TokenWhatsApp
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Prefijo}-*"
+      Tags: [{ Key: Proyecto, Value: !Ref Proyecto }]
+
+  # ============================================================ registros
+  LogApi:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Prefijo}-api"
+      RetentionInDays: 30
+      Tags: [{ Key: Proyecto, Value: !Ref Proyecto }]
+
+  LogAsistente:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Prefijo}-asistente"
+      RetentionInDays: 30
+      Tags: [{ Key: Proyecto, Value: !Ref Proyecto }]
+
+  LogAlarmas:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Prefijo}-alarmas"
+      RetentionInDays: 30
+      Tags: [{ Key: Proyecto, Value: !Ref Proyecto }]
+
+  # ============================================================ lambdas
+  FuncionApi:
+    Type: AWS::Lambda::Function
+    DependsOn: LogApi
+    Properties:
+      FunctionName: !Sub "${Prefijo}-api"
+      Description: Acceso, paneles, administracion y acciones. Solo biblioteca estandar.
+      Runtime: python3.12
+      Handler: lambda_api.lambda_handler
+      Role: !GetAtt RolApi.Arn
+      Timeout: 29
+      MemorySize: 512
+      Environment:
+        Variables:
+          TABLA: !Ref Tabla
+          BUCKET_DATOS: !Ref BucketDatos
+          POOL: !Ref Usuarios
+          CLIENTE_POOL: !Ref ClienteUsuarios
+          SECRETO_WHATSAPP: !Ref TokenWhatsApp
+      Tags: [{ Key: Proyecto, Value: !Ref Proyecto }]
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              raise RuntimeError("Sube infra/api/ del repositorio.")
+
+  FuncionAsistente:
+    Type: AWS::Lambda::Function
+    DependsOn: LogAsistente
+    Properties:
+      FunctionName: !Sub "${Prefijo}-asistente"
+      Description: El asistente. Lleva el SDK de Anthropic, por eso va en zip aparte.
+      Runtime: python3.12
+      Handler: lambda_asistente.lambda_handler
+      Role: !GetAtt RolAsistente.Arn
+      Timeout: 120
+      MemorySize: 1024
+      Environment:
+        Variables:
+          TABLA: !Ref Tabla
+          BUCKET_DATOS: !Ref BucketDatos
+          SECRETO_CLAVE: !Ref ClaveAsistente
+          MODELO: !Ref ModeloAsistente
+      Tags: [{ Key: Proyecto, Value: !Ref Proyecto }]
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              raise RuntimeError("Sube el zip de infra/api/ con el SDK de Anthropic.")
+
+  FuncionAlarmas:
+    Type: AWS::Lambda::Function
+    DependsOn: LogAlarmas
+    Properties:
+      FunctionName: !Sub "${Prefijo}-alarmas"
+      Description: Evalua las alarmas cada hora y avisa por correo o WhatsApp.
+      Runtime: python3.12
+      Handler: lambda_alarmas.lambda_handler
+      Role: !GetAtt RolAlarmas.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          TABLA: !Ref Tabla
+          BUCKET_DATOS: !Ref BucketDatos
+          REMITENTE: !Ref RemitenteAvisos
+          SECRETO_WHATSAPP: !Ref TokenWhatsApp
+      Tags: [{ Key: Proyecto, Value: !Ref Proyecto }]
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              raise RuntimeError("Sube infra/api/ del repositorio.")
+
+  # ============================================================ la puerta
+  Api:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${Prefijo}-api"
+      ProtocolType: HTTP
+      # Sin CORS a proposito: todo es del mismo origen. Si algun dia hiciera
+      # falta CORS, seria la senal de que algo esta llamando desde fuera.
+      Tags: { Proyecto: !Ref Proyecto }
+
+  EtapaApi:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref Api
+      StageName: $default
+      AutoDeploy: true
+      Tags: { Proyecto: !Ref Proyecto }
+
+  IntegracionApi:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref Api
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt FuncionApi.Arn
+      PayloadFormatVersion: "2.0"
+
+  IntegracionAsistente:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref Api
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt FuncionAsistente.Arn
+      PayloadFormatVersion: "2.0"
+      TimeoutInMillis: 29000
+
+  RutaAsistente:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: "POST /api/pregunta"
+      Target: !Sub "integrations/${IntegracionAsistente}"
+
+  RutaResto:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: $default
+      Target: !Sub "integrations/${IntegracionApi}"
+
+  PermisoApi:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref FuncionApi
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*"
+
+  PermisoAsistente:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref FuncionAsistente
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*"
+
+  # ============================================================ horario
+  GrupoHorario:
+    Type: AWS::Scheduler::ScheduleGroup
+    Properties:
+      Name: !Sub "${Prefijo}-horarios-web"
+      Tags: [{ Key: Proyecto, Value: !Ref Proyecto }]
+
+  RolPlanificador:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Prefijo}-rol-planificador-web"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: scheduler.amazonaws.com }
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: { "aws:SourceAccount": !Ref AWS::AccountId }
+      Policies:
+        - PolicyName: invocar
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt FuncionAlarmas.Arn
+      Tags: [{ Key: Proyecto, Value: !Ref Proyecto }]
+
+  RevisionAlarmas:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "${Prefijo}-revision-alarmas"
+      GroupName: !Ref GrupoHorario
+      Description: Revisa las alarmas cada hora, en horario de Madrid.
+      ScheduleExpression: "cron(7 * * * ? *)"
+      ScheduleExpressionTimezone: Europe/Madrid
+      FlexibleTimeWindow: { Mode: "OFF" }
+      Target:
+        Arn: !GetAtt FuncionAlarmas.Arn
+        RoleArn: !GetAtt RolPlanificador.Arn
+
+Outputs:
+  UrlProvisional:
+    Value: !Sub "https://${Distribucion.DomainName}"
+    Description: Aqui funciona todo desde el primer dia, sin dominio.
+  UrlFinal:
+    Condition: HayDominio
+    Value: !Sub "https://${Dominio}"
+  DondeApuntaElDns:
+    Value: !GetAtt Distribucion.DomainName
+    Description: Crea un CNAME de dashboard.digivend.es hacia este nombre.
+  BucketWeb:
+    Value: !Ref BucketWeb
+    Description: Sube aqui la pagina.
+  Tabla:
+    Value: !Ref Tabla
+  PoolUsuarios:
+    Value: !Ref Usuarios
+  ClaveAsistente:
+    Value: !Ref ClaveAsistente
+    Description: Pon aqui la clave de la API de Claude para habilitar el asistente.

@@ -13,6 +13,10 @@ Lo que convierte el prototipo en un sistema vivo. Cinco ficheros:
 
 Y dos baterías de pruebas que se ejecutan sin AWS: `test_reglas.py` y `test_agregados.py`.
 
+**La plataforma web es la otra pila**, documentada en [`README-web.md`](README-web.md):
+`dashboard.digivend.es`, el acceso, la API, el asistente y las alarmas. Las seis baterías
+del proyecto se lanzan de una vez con `sh infra/pruebas.sh`.
+
 ---
 
 ## Lo único que no está probado contra la API real

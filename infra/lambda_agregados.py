@@ -208,6 +208,38 @@ def bloque_inventario(balance, hoy):
 
 
 # ----------------------------------------------------------------------
+# estado de la carga, para el panel de administracion
+# ----------------------------------------------------------------------
+def estado_de_la_carga(hoy):
+    """Resume la ultima extraccion en cabina/, donde la web si puede leer.
+
+    La API solo tiene permiso sobre cabina/, a proposito: no se le abre el
+    registro entero para ensenar cuatro cifras. Se le deja aqui lo justo.
+    """
+    for atras in range(0, 4):
+        d = hoy - datetime.timedelta(days=atras)
+        clave = (f"registro/extraccion/anio={d.year}/mes={d.month:02d}/"
+                 f"{d.isoformat()}.json")
+        reg = _json_de(clave)
+        if not reg:
+            continue
+        return {
+            "ultima_carga": reg.get("ejecucion"),
+            "dias_pedidos": reg.get("dias", []),
+            "descargas_ok": reg.get("resumen", {}).get("descargas_ok"),
+            "descargas_fallidas": reg.get("resumen", {}).get("descargas_fallidas"),
+            "bytes": reg.get("resumen", {}).get("bytes"),
+            "filas_por_informe": {x["id"]: x.get("filas") for x in reg.get("ok", [])},
+            "errores": reg.get("errores", [])[:20],
+            "retraso_dias": atras,
+            "_nota": ("Si retraso_dias es mayor que 0, la carga de esta noche no "
+                      "ha corrido y lo que se ve es de una noche anterior."),
+        }
+    return {"_nota": "No hay ningun registro de extraccion de los ultimos cuatro dias.",
+            "retraso_dias": None}
+
+
+# ----------------------------------------------------------------------
 # ejecucion
 # ----------------------------------------------------------------------
 def lambda_handler(event, context):
@@ -249,6 +281,7 @@ def lambda_handler(event, context):
         "filas_leidas": {k: len(v) for k, v in crudo.items()},
         "ficheros": escritos,
     }
+    escribe("cabina/_estado/carga.json", estado_de_la_carga(hoy))
     escribe(f"registro/agregados/anio={hoy.year}/mes={hoy.month:02d}/{hoy.isoformat()}.json", resumen)
     print(json.dumps(resumen, ensure_ascii=False))
     return resumen
