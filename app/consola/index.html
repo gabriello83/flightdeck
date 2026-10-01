@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M4 11V5h2v6zm3 0V7h2v4zm3 0V3h2v8z' fill='white'/%3E%3C/svg%3E">
+<title>digivend · Consola</title>
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --bien:#0ca30c; --aviso:#fab219; --grave:#ec835a; --critico:#d03b3b;
+  --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark){ :root:where(:not([data-theme="light"])){
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#fff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --sombra:none;
+}}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#fff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --sombra:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--fondo);color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+/* ---------- acceso ---------- */
+#acceso{min-height:100dvh;display:grid;place-items:center;padding:24px}
+.caja{width:100%;max-width:410px;background:var(--tarjeta);border:1px solid var(--borde);
+  border-radius:14px;padding:28px 26px;box-shadow:var(--sombra)}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.logo svg{width:28px;height:28px;flex-shrink:0}
+.logo b{font-size:21px;letter-spacing:-.02em}
+.caja h1{font-size:15px;font-weight:500;color:var(--tinta-2);margin:0 0 22px}
+label.campo{display:block;margin-bottom:14px}
+label.campo span{display:block;font-size:13px;color:var(--tinta-2);margin-bottom:4px}
+input[type=text],input[type=password],input[type=email],input[type=number],select,textarea{
+  width:100%;font:inherit;font-size:14px;color:var(--tinta);background:var(--fondo);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:8px 10px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--s1);outline-offset:1px;border-color:var(--s1)}
+textarea{min-height:70px;resize:vertical;line-height:1.45}
+button.pri{width:100%;font:inherit;font-size:15px;font-weight:600;color:#fff;background:var(--s1);
+  border:0;border-radius:9px;padding:10px;cursor:pointer;margin-top:4px}
+button.pri:hover{filter:brightness(1.08)}
+.err{color:var(--critico);font-size:13px;margin-top:10px;min-height:19px}
+.demo{margin-top:20px;padding-top:16px;border-top:1px solid var(--borde);font-size:12.5px;color:var(--tinta-3)}
+.demo b{color:var(--tinta-2)}
+.demo code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+
+/* ---------- consola ---------- */
+#app{display:none}
+.barra{background:var(--tarjeta);border-bottom:1px solid var(--borde);position:sticky;top:0;z-index:20}
+.barra .in{max-width:1240px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.quien{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tinta-2)}
+.rol{font-size:11.5px;border:1px solid var(--borde-fuerte);border-radius:999px;padding:1px 9px;color:var(--tinta-2)}
+nav.tabs{max-width:1240px;margin:0 auto;padding:0 16px;display:flex;gap:3px;overflow-x:auto}
+nav.tabs button{font:inherit;font-size:13.5px;color:var(--tinta-2);background:transparent;border:0;
+  border-bottom:2px solid transparent;padding:10px 12px;cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--tinta);border-bottom-color:var(--s1);font-weight:600}
+main{max-width:1240px;margin:0 auto;padding:20px 16px 72px}
+section.vista{display:none}
+section.vista.on{display:block}
+h2.tit{font-size:19px;margin:0 0 3px;letter-spacing:-.01em}
+p.des{color:var(--tinta-2);font-size:13.5px;margin:0 0 18px;max-width:72ch}
+.panel{background:var(--tarjeta);border:1px solid var(--borde);border-radius:12px;padding:16px 18px;box-shadow:var(--sombra);margin-bottom:16px}
+.panel h3{font-size:15px;margin:0 0 3px}
+.panel .sub{font-size:12.5px;color:var(--tinta-2);margin:0 0 14px}
+.fila{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.dos{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+@media (max-width:900px){ .dos{grid-template-columns:1fr} }
+button.btn{font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer}
+button.btn:hover{border-color:var(--tinta-3)}
+button.btn.acc{background:var(--s1);border-color:var(--s1);color:#fff}
+button.btn.peli{color:var(--critico);border-color:var(--critico)}
+.acc-fila{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-weight:600;color:var(--tinta-2);font-size:12px;text-transform:uppercase;
+  letter-spacing:.03em;padding:6px 10px 6px 0;border-bottom:1px solid var(--borde)}
+td{padding:7px 10px 7px 0;border-bottom:1px solid var(--borde);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.tabla-env{overflow-x:auto}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+.pill{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:999px;border:1px solid;white-space:nowrap}
+.pill.ok{color:var(--bien);border-color:var(--bien)}
+.pill.no{color:var(--tinta-3);border-color:var(--borde-fuerte)}
+.pill.cri{color:var(--critico);border-color:var(--critico)}
+.pill.alt{color:var(--grave);border-color:var(--grave)}
+.pill.med{color:var(--aviso);border-color:var(--aviso)}
+.pill.baj{color:var(--s1);border-color:var(--s1)}
+.chk{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;padding:4px 0;cursor:pointer}
+.chk input{margin-top:3px;flex-shrink:0;accent-color:var(--s1)}
+.chk small{display:block;color:var(--tinta-3);font-size:12px}
+.grid-chk{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:2px 16px}
+.inter{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid var(--borde)}
+.inter:last-child{border-bottom:0}
+.inter .tx b{display:block;font-size:14px}
+.inter .tx small{color:var(--tinta-2);font-size:12.5px}
+.sw{display:inline-block;position:relative;width:42px;height:24px;flex-shrink:0;vertical-align:middle}
+.sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:1}
+.sw i{position:absolute;inset:0;background:var(--borde-fuerte);border-radius:999px;transition:background .15s}
+.sw i::after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .15s}
+.sw input:checked + i{background:var(--s1)}
+.sw input:checked + i::after{transform:translateX(18px)}
+.sw input:focus-visible + i{outline:2px solid var(--s1);outline-offset:2px}
+.aviso{border:1px solid var(--borde);border-left:3px solid var(--s2);border-radius:8px;
+  padding:11px 14px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px;margin-bottom:16px}
+.aviso b{color:var(--tinta)}
+.res{margin-top:12px;padding:11px 13px;border-radius:8px;border:1px solid var(--borde);background:var(--fondo);font-size:13px}
+.res.alto{border-color:var(--grave);color:var(--grave)}
+.res.ok{border-color:var(--bien);color:var(--bien)}
+.kpi4{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi4 .k{border:1px solid var(--borde);border-radius:10px;padding:10px 12px;background:var(--fondo)}
+.kpi4 .k .e{font-size:11.5px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
+.kpi4 .k .v{font-size:20px;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi4 .k .n{font-size:11.5px;color:var(--tinta-3)}
+dialog{border:1px solid var(--borde);border-radius:14px;background:var(--tarjeta);color:var(--tinta);
+  padding:0;max-width:720px;width:calc(100% - 32px);box-shadow:0 10px 50px rgba(0,0,0,.3)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog .cab{padding:16px 20px 0}
+dialog .cue{padding:12px 20px 20px;max-height:min(70dvh,620px);overflow:auto}
+dialog h3{margin:0 0 3px;font-size:17px}
+.sep{margin:18px 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--tinta-3);
+  border-top:1px solid var(--borde);padding-top:13px}
+.sep:first-child{border-top:0;margin-top:4px;padding-top:0}
+footer{max-width:1240px;margin:0 auto;padding:0 16px 40px;color:var(--tinta-3);font-size:12px}
+</style>
+</head>
+<body>
+
+<!-- ============ ACCESO ============ -->
+<div id="acceso">
+  <form class="caja" id="fLogin" autocomplete="off">
+    <div class="logo">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3" fill="#2a78d6"/><path d="M4 11V5h2v6zm3 0V7h2v4zm3 0V3h2v8z" fill="white"/></svg>
+      <b>digivend</b>
+    </div>
+    <h1>Consola de servicio · Serunion Vending</h1>
+
+    <label class="campo"><span>Usuario o correo</span>
+      <input type="text" id="usr" required autocapitalize="off" spellcheck="false"></label>
+    <label class="campo"><span>Contraseña</span>
+      <input type="password" id="pwd" required></label>
+    <button class="pri" type="submit">Entrar</button>
+    <p class="err" id="errLogin" role="alert"></p>
+
+    <div class="demo">
+      <b>Prototipo.</b> Esta pantalla <b>no valida contraseñas de verdad</b>: en producción el acceso
+      lo lleva Cognito y esta página nunca ve la contraseña. Aquí sirve para recorrer el flujo.<br><br>
+      Entra con <code>admin</code>, <code>operaciones</code> o <code>airbus</code> y cualquier contraseña.
+    </div>
+  </form>
+</div>
+
+<!-- ============ CONSOLA ============ -->
+<div id="app">
+  <header class="barra">
+    <div class="in">
+      <div class="logo"><svg viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3" fill="#2a78d6"/><path d="M4 11V5h2v6zm3 0V7h2v4zm3 0V3h2v8z" fill="white"/></svg><b style="font-size:17px">digivend</b></div>
+      <div class="quien">
+        <span id="quien"></span><span class="rol" id="rolTxt"></span>
+        <button class="btn" id="bTema" type="button">Oscuro</button>
+        <button class="btn" id="bSalir" type="button">Salir</button>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs" role="tablist"></nav>
+  </header>
+  <main id="vistas"></main>
+  <footer>Todo se sirve desde digivend.es. Esta consola no llama a ningún dominio externo.</footer>
+</div>
+
+<dialog id="dlg"><div class="cab"><h3 id="dlgTit"></h3><p class="sub" id="dlgSub" style="color:var(--tinta-2);font-size:12.5px;margin:2px 0 0"></p></div><div class="cue" id="dlgCue"></div></dialog>
+
+<script>
+/* ======================================================================
+   digivend · consola de administración  (prototipo sobre datos de prueba)
+   Nada sale de este dominio: la configuración vive en el navegador y en
+   producción pasa a DynamoDB a través de /api, del mismo origen.
+   ====================================================================== */
+const CLAVE = "digivend.config";
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num = n => new Intl.NumberFormat("es-ES").format(n);
+const hoy = () => new Date().toISOString().slice(0,10);
+function leer(k){ try{return localStorage.getItem(k)}catch(e){return null} }
+function escribir(k,v){ try{localStorage.setItem(k,v)}catch(e){} }
+
+/* ---------- tema ---------- */
+(function(){
+  const t=leer("digivend.tema"); if(t) document.documentElement.setAttribute("data-theme",t);
+})();
+
+/* ---------- configuración de partida ---------- */
+const SESIONES = [
+  {id:"resumen",        n:"Resumen",                     p:"cliente"},
+  {id:"venta_consumo",  n:"Venta y consumo",             p:"cliente"},
+  {id:"servicio",       n:"Servicio recibido",           p:"cliente"},
+  {id:"disponibilidad", n:"Disponibilidad",              p:"cliente"},
+  {id:"surtido",        n:"Surtido y planograma",        p:"cliente"},
+  {id:"calidad",        n:"Calidad y seguridad alimentaria", p:"cliente"},
+  {id:"rutas",          n:"Rutas y jornada",             p:"operaciones"},
+  {id:"recaudacion",    n:"Recaudación y efectivo",      p:"operaciones"},
+  {id:"stock",          n:"Stock y merma",               p:"operaciones"},
+  {id:"avisos",         n:"Avisos y acciones",           p:"operaciones"},
+  {id:"rentabilidad",   n:"Rentabilidad",                p:"direccion"},
+  {id:"cumplimiento",   n:"Cumplimiento",                p:"direccion"}
+];
+const FUENTES = {
+  jornadas:    {n:"Jornadas de ruta", campos:{temperatura_inicio:["Temperatura al arrancar","°C"], duracion:["Duración de la jornada","h"], km:["Kilómetros","km"]}},
+  visitas:     {n:"Visitas",          campos:{duracion_min:["Duración de la visita","min"], dias_sin_visita:["Días sin visita","d"], dias_sin_inventario:["Días desde el último inventario","d"]}},
+  recaudacion: {n:"Recaudación",      campos:{efectivo_sin_lectura:["Bolsas sin dato electrónico","%"], efectivo_ciego_mes:["Efectivo sin telemetría","€/mes"], dias_sin_contar:["Días desde la recogida sin contar","d"]}},
+  stock:       {n:"Stock y merma",    campos:{caducidad_mes:["Caducidad del periodo","€"], cambio_tubos:["Cambio parado en tubos","€"], articulos_sin_coste:["Artículos cargados sin coste",""]}},
+  sat:         {n:"SAT",              campos:{incidencias_30d:["Incidencias en 30 días",""], horas_abierta:["Horas con la avería abierta","h"], devoluciones_30d:["Devoluciones en 30 días",""]}},
+  telemetria:  {n:"Telemetría",       campos:{horas_sin_venta:["Horas sin venta","h"], venta_mes:["Venta mensual","€"]}}
+};
+const AGRUPAR = ["maquina","vehiculo","ruta","centro","delegacion","articulo"];
+const CANALES = [["bandeja","Sólo bandeja"],["correo","Correo"],["whatsapp","WhatsApp"]];
+const ROLES_AVISO = [["responsableven","Responsable de vending"],["responsablesat","Responsable de SAT"],["calidad","Calidad"],["supervisor","Supervisor de delegación"]];
+
+function configInicial(){ return {
+  clientes: [
+    {id:"airbus", n:"AIRBUS", centros:["AIRBUS GETAFE","AIRBUS SAN PABLO SUR","AIRBUS SAN PABLO NORTE","AIRBUS TABLADA","AIRBUS CBC","AIRBUS ILLESCAS","AIRBUS ITC","AIRBUS ALBACETE","AIRBUS ALBACETE (Parque Científico)"]},
+    {id:"consum", n:"CONSUM", centros:["CONSUM MURCIA"]}
+  ],
+  delegaciones: ["Madrid - Leganés","Cataluña - Cornellà","Levante - Murcia","Andalucía - Sevilla","Levante - Valencia","Norte - Bilbao","Madrid - Hospital La Paz","Andalucía - Málaga"],
+  perfiles: [
+    {id:"cli-airbus", n:"AIRBUS", tipo:"cliente",
+     ambito:{clientes:["airbus"],centros:[],delegaciones:[]},
+     sesiones:["resumen","venta_consumo","disponibilidad","surtido"],
+     umbrales:{rentabilidad_mes:350},
+     permisos:{reordenar:true,exportar:true,asistente:true,whatsapp:false,incidencia:false}},
+    {id:"ope-nacional", n:"Operaciones nacional", tipo:"operaciones",
+     ambito:{clientes:[],centros:[],delegaciones:[]},
+     sesiones:["resumen","venta_consumo","servicio","disponibilidad","surtido","calidad","rutas","recaudacion","stock","avisos"],
+     umbrales:{rentabilidad_mes:350},
+     permisos:{reordenar:true,exportar:true,asistente:true,whatsapp:true,incidencia:true}}
+  ],
+  usuarios: [
+    {id:"u1", n:"Gabriele Signorato", correo:"admin", perfil:"-", tipo:"admin",   alta:"2026-09-01", activo:true, asistente:true},
+    {id:"u2", n:"Operaciones",        correo:"operaciones", perfil:"ope-nacional", tipo:"operaciones", alta:"2026-09-15", activo:true, asistente:true},
+    {id:"u3", n:"Contacto AIRBUS",    correo:"airbus", perfil:"cli-airbus", tipo:"cliente", alta:"2026-10-01", activo:true, asistente:true}
+  ],
+  alarmas: [
+    {id:"frio",      n:"Frío del vehículo",            activa:true,  sev:"critica", fuente:"jornadas",    campo:"temperatura_inicio", op:">",  umbral:8,    agr:"vehiculo", ventana:"dia",  silencio:24,
+     dest:[{t:"rol",v:"supervisor",c:"whatsapp"},{t:"rol",v:"calidad",c:"correo"}],
+     asunto:"Cadena de frío: {{elemento}} arrancó a {{valor}} °C",
+     cuerpo:"El vehículo {{elemento}} de la ruta {{ruta}} inició jornada el {{fecha}} con el frigorífico a {{valor}} °C, por encima del umbral de {{umbral}} °C. Reponedor: {{empleado}}.", medido:115, base:1288, uni:"jornadas"},
+    {id:"bolsa",     n:"Bolsa sin dato electrónico",   activa:true,  sev:"alta",    fuente:"recaudacion", campo:"efectivo_sin_lectura", op:">", umbral:50, agr:"ruta",     ventana:"semana", silencio:168,
+     dest:[{t:"rol",v:"responsableven",c:"correo"}],
+     asunto:"Recaudación sin lectura en {{elemento}}",
+     cuerpo:"En {{elemento}} el {{valor}} % de las bolsas de la semana se cerró sin volcar la máquina.", medido:93, base:100, uni:"% de bolsas"},
+    {id:"reincidente",n:"Máquina reincidente",         activa:true,  sev:"alta",    fuente:"sat",         campo:"incidencias_30d", op:">=", umbral:5,  agr:"maquina",  ventana:"mes", silencio:168,
+     dest:[{t:"rol",v:"responsablesat",c:"whatsapp"}],
+     asunto:"{{elemento}}: {{valor}} incidencias en 30 días",
+     cuerpo:"La máquina {{elemento}} del centro {{centro}} acumula {{valor}} incidencias en los últimos 30 días.", medido:1317, base:2722, uni:"máquinas"},
+    {id:"inventario",n:"Inventario de máquina caducado",activa:true, sev:"media",   fuente:"visitas",     campo:"dias_sin_inventario", op:">", umbral:90, agr:"delegacion", ventana:"mes", silencio:720,
+     dest:[{t:"rol",v:"supervisor",c:"correo"}],
+     asunto:"Inventario fuera de norma en {{elemento}}",
+     cuerpo:"{{valor}} máquinas de {{elemento}} llevan más de {{umbral}} días sin inventario.", medido:2925, base:3200, uni:"máquinas"},
+    {id:"muda",      n:"Máquina muda",                 activa:false, sev:"alta",    fuente:"telemetria",  campo:"horas_sin_venta", op:">", umbral:48, agr:"maquina", ventana:"dia", silencio:24,
+     dest:[{t:"rol",v:"responsableven",c:"whatsapp"}],
+     asunto:"{{elemento}} sin ventas desde hace {{valor}} h",
+     cuerpo:"La máquina {{elemento}} de {{centro}} no registra ventas desde hace {{valor}} horas.", medido:61, base:547, uni:"máquinas"}
+  ],
+  telefonos: [
+    {n:"Gerson Eddy Espinoza Moreno", rol:"Reponedor", del:"Cataluña - Cornellà", tel:""},
+    {n:"Miguel Beltran Monzon",       rol:"Reponedor", del:"Levante - Valencia",  tel:""},
+    {n:"Jesús Darío Barea Gómez",     rol:"Técnico SAT", del:"Andalucía - Sevilla", tel:""},
+    {n:"David Gonzalez Pagador",      rol:"Técnico SAT", del:"Andalucía - Sevilla", tel:""}
+  ],
+  plantillas: [
+    {id:"frio_vehiculo_v1", n:"Aviso de cadena de frío", estado:"pendiente"},
+    {id:"maquina_parada_v1", n:"Máquina sin ventas",     estado:"pendiente"},
+    {id:"averia_reincidente_v1", n:"Máquina reincidente", estado:"pendiente"}
+  ],
+  carga: [
+    {t:"partesvisita",            f:"88.000/mes",  e:"ok"},
+    {t:"partesvisitareposiciones",f:"205.000/mes", e:"ok"},
+    {t:"partesvisitaauditmonbil", f:"200.000/mes", e:"ok"},
+    {t:"partesvisitaaudittubos",  f:"305.000/mes", e:"ok"},
+    {t:"partesvisitaventas",      f:"188.000/mes", e:"ok"},
+    {t:"prefacrecauda",           f:"48.000/mes",  e:"ok"},
+    {t:"diarmovmaq",              f:"580.000/mes", e:"ok"},
+    {t:"tareatecnica",            f:"3.400/mes",   e:"ok"},
+    {t:"rutascontrol",            f:"1.500/mes",   e:"ok"}
+  ]
+};}
+
+let C = (()=>{ try{ return JSON.parse(leer(CLAVE)) || configInicial(); }catch(e){ return configInicial(); } })();
+function guarda(){ escribir(CLAVE, JSON.stringify(C)); }
+let SESION = null;
+
+/* ---------- acceso (prototipo) ---------- */
+document.getElementById("fLogin").addEventListener("submit", e=>{
+  e.preventDefault();
+  const u = document.getElementById("usr").value.trim().toLowerCase();
+  const usuario = C.usuarios.find(x => x.correo.toLowerCase()===u && x.activo);
+  const err = document.getElementById("errLogin");
+  if(!usuario){ err.textContent = "No encontramos ese usuario. Prueba con admin, operaciones o airbus."; return; }
+  err.textContent=""; SESION = usuario;
+  document.getElementById("acceso").style.display="none";
+  document.getElementById("app").style.display="block";
+  arranca();
+});
+document.getElementById("bSalir").addEventListener("click", ()=>location.reload());
+document.getElementById("bTema").addEventListener("click", ()=>{
+  const osc = document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const n = osc?"light":"dark";
+  document.documentElement.setAttribute("data-theme",n); escribir("digivend.tema",n);
+  document.getElementById("bTema").textContent = osc?"Oscuro":"Claro";
+});
+
+/* ---------- diálogo ---------- */
+const dlg=document.getElementById("dlg");
+function abre(tit, sub, html, alGuardar){
+  document.getElementById("dlgTit").textContent=tit;
+  document.getElementById("dlgSub").textContent=sub||"";
+  document.getElementById("dlgCue").innerHTML=html;
+  dlg.showModal();
+  const g=document.getElementById("dlgGuardar");
+  if(g) g.onclick = ()=>{ if(alGuardar()!==false){ dlg.close(); } };
+  const c=document.getElementById("dlgCerrar");
+  if(c) c.onclick = ()=>dlg.close();
+}
+const pieDlg = `<div class="acc-fila" style="justify-content:flex-end">
+  <button class="btn" type="button" id="dlgCerrar">Cancelar</button>
+  <button class="btn acc" type="button" id="dlgGuardar">Guardar</button></div>`;
+
+/* ---------- utilidades de formulario ---------- */
+const campo=(et,html)=>`<label class="campo"><span>${esc(et)}</span>${html}</label>`;
+const opts=(lista,sel)=>lista.map(([v,t])=>`<option value="${esc(v)}"${v===sel?" selected":""}>${esc(t)}</option>`).join("");
+const chks=(lista,sel,name)=>lista.map(([v,t,d])=>`<label class="chk"><input type="checkbox" name="${name}" value="${esc(v)}"${sel.includes(v)?" checked":""}><span>${esc(t)}${d?`<small>${esc(d)}</small>`:""}</span></label>`).join("");
+const vals=name=>[...document.querySelectorAll(`[name="${name}"]:checked`)].map(i=>i.value);
+const sevPill=s=>({critica:'<span class="pill cri">Crítica</span>',alta:'<span class="pill alt">Alta</span>',media:'<span class="pill med">Media</span>',baja:'<span class="pill baj">Baja</span>'})[s]||s;
+
+/* ======================= VISTAS ======================= */
+const VISTAS = {
+
+/* ---------------- usuarios ---------------- */
+usuarios(){
+  const perf = id => C.perfiles.find(p=>p.id===id);
+  return `
+  <h2 class="tit">Usuarios</h2>
+  <p class="des">Alta de personas, su perfil y qué pueden ver. El ámbito es múltiple y aditivo: a un
+    usuario se le pueden dar un cliente, unos centros y una delegación a la vez.</p>
+  <div class="panel">
+    <div class="tabla-env"><table>
+      <thead><tr><th>Nombre</th><th>Correo</th><th>Perfil</th><th>Ámbito</th><th>Asistente</th><th>Estado</th><th></th></tr></thead>
+      <tbody>${C.usuarios.map(u=>{
+        const p = perf(u.perfil);
+        const amb = u.tipo==="admin" ? "Todo"
+          : p ? [ ...(p.ambito.clientes.map(c=>(C.clientes.find(x=>x.id===c)||{n:c}).n)),
+                  ...p.ambito.centros, ...p.ambito.delegaciones ].join(" · ") || "Todo" : "—";
+        return `<tr>
+          <td><b>${esc(u.n)}</b></td>
+          <td class="mono">${esc(u.correo)}</td>
+          <td>${u.tipo==="admin"?'<span class="pill baj">Administrador</span>':esc(p?p.n:"—")}</td>
+          <td style="color:var(--tinta-2)">${esc(amb)}</td>
+          <td>${u.asistente?'<span class="pill ok">Activo</span>':'<span class="pill no">Desactivado</span>'}</td>
+          <td>${u.activo?'<span class="pill ok">Alta</span>':'<span class="pill no">Baja</span>'}</td>
+          <td style="text-align:right"><button class="btn" data-edit-u="${esc(u.id)}">Editar</button></td>
+        </tr>`;}).join("")}
+      </tbody></table></div>
+    <div class="acc-fila"><button class="btn acc" id="nuevoU">Crear usuario</button></div>
+  </div>`;
+},
+
+/* ---------------- perfiles ---------------- */
+perfiles(){
+  return `
+  <h2 class="tit">Perfiles</h2>
+  <p class="des">Un perfil define el ámbito, qué sesiones se ven, los umbrales de negocio y los
+    permisos. Los usuarios cuelgan de un perfil, así que un cambio aquí los afecta a todos.</p>
+  ${C.perfiles.map(p=>`
+  <div class="panel">
+    <h3>${esc(p.n)} <span class="pill baj">${esc(p.tipo)}</span></h3>
+    <p class="sub">${p.sesiones.length} sesiones · ámbito:
+      ${esc([...(p.ambito.clientes.map(c=>(C.clientes.find(x=>x.id===c)||{n:c}).n)),...p.ambito.centros,...p.ambito.delegaciones].join(" · ") || "todo")}</p>
+    <div class="kpi4">
+      <div class="k"><div class="e">Umbral rentabilidad</div><div class="v">${num(p.umbrales.rentabilidad_mes)} €</div><div class="n">al mes, por máquina</div></div>
+      <div class="k"><div class="e">Asistente de IA</div><div class="v" style="font-size:16px;padding-top:4px">${p.permisos.asistente?"Habilitado":"Deshabilitado"}</div><div class="n">para este perfil</div></div>
+      <div class="k"><div class="e">WhatsApp</div><div class="v" style="font-size:16px;padding-top:4px">${p.permisos.whatsapp?"Sí":"No"}</div><div class="n">envío de avisos</div></div>
+      <div class="k"><div class="e">Incidencias</div><div class="v" style="font-size:16px;padding-top:4px">${p.permisos.incidencia?"Sí":"No"}</div><div class="n">alta en VenCloud</div></div>
+    </div>
+    <div class="acc-fila"><button class="btn" data-edit-p="${esc(p.id)}">Editar perfil</button></div>
+  </div>`).join("")}
+  <div class="panel"><div class="acc-fila"><button class="btn acc" id="nuevoP">Crear perfil</button></div></div>`;
+},
+
+/* ---------------- alarmas ---------------- */
+alarmas(){
+  const act = C.alarmas.filter(a=>a.activa).length;
+  return `
+  <h2 class="tit">Alarmas</h2>
+  <p class="des">Una alarma es una ficha de datos, no código: se crea, se edita, se duplica o se apaga
+    desde aquí. Cada destinatario elige su canal.</p>
+  <div class="aviso"><b>Antes de activar una alarma, pruébala.</b> El botón «Probar» la evalúa contra
+    el último día cargado y dice cuántas veces habría disparado. Un umbral mal puesto son cien
+    WhatsApps a la mañana siguiente.</div>
+  <div class="panel">
+    <h3>${act} de ${C.alarmas.length} activas</h3>
+    <p class="sub">Ordenadas por severidad.</p>
+    <div class="tabla-env"><table>
+      <thead><tr><th>Alarma</th><th>Severidad</th><th>Condición</th><th>Avisa a</th><th>Activa</th><th></th></tr></thead>
+      <tbody>${[...C.alarmas].sort((a,b)=>["critica","alta","media","baja"].indexOf(a.sev)-["critica","alta","media","baja"].indexOf(b.sev)).map(a=>{
+        const f=FUENTES[a.fuente], c=f&&f.campos[a.campo];
+        return `<tr>
+          <td><b>${esc(a.n)}</b><br><small style="color:var(--tinta-3)">por ${esc(a.agr)} · ${esc(a.ventana)} · silencio ${a.silencio} h</small></td>
+          <td>${sevPill(a.sev)}</td>
+          <td style="color:var(--tinta-2)">${esc(c?c[0]:a.campo)} ${esc(a.op)} ${num(a.umbral)} ${esc(c?c[1]:"")}</td>
+          <td style="color:var(--tinta-2)">${a.dest.map(d=>{
+              const r=ROLES_AVISO.find(x=>x[0]===d.v);
+              return esc((r?r[1]:d.v)+" ("+(CANALES.find(x=>x[0]===d.c)||["","—"])[1].toLowerCase()+")");
+            }).join("<br>")}</td>
+          <td><label class="sw"><input type="checkbox" data-tog="${esc(a.id)}"${a.activa?" checked":""} aria-label="Activar ${esc(a.n)}"><i></i></label></td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="btn" data-probar="${esc(a.id)}">Probar</button>
+            <button class="btn" data-edit-a="${esc(a.id)}">Editar</button></td>
+        </tr>`;}).join("")}
+      </tbody></table></div>
+    <div id="resProbar"></div>
+    <div class="acc-fila"><button class="btn acc" id="nuevaA">Crear alarma</button></div>
+  </div>`;
+},
+
+/* ---------------- asistente ---------------- */
+asistente(){
+  const global = C.asistente_global !== false;
+  return `
+  <h2 class="tit">Asistente de IA</h2>
+  <p class="des">Responde preguntas sobre el cuadro de mando. Se habilita por perfil y por usuario, y
+    puede apagarse de golpe para toda la plataforma.</p>
+
+  <div class="panel">
+    <div class="inter">
+      <div class="tx"><b>Asistente habilitado en toda la plataforma</b>
+        <small>Si se apaga aquí, nadie lo ve, tenga el permiso que tenga.</small></div>
+      <label class="sw"><input type="checkbox" id="togGlobal"${global?" checked":""} aria-label="Asistente en toda la plataforma"><i></i></label>
+    </div>
+    <div class="inter">
+      <div class="tx"><b>Modelo</b><small>Claude Opus 5.5, unos 2 céntimos por pregunta.</small></div>
+      <span class="mono" style="color:var(--tinta-2)">claude-opus-5-5</span>
+    </div>
+    <div class="inter">
+      <div class="tx"><b>Límite por usuario y día</b><small>Corta el gasto si alguien se desboca.</small></div>
+      <input type="number" id="limAsist" value="${C.asistente_limite||50}" min="0" step="10" style="width:110px">
+    </div>
+  </div>
+
+  <div class="dos">
+    <div class="panel">
+      <h3>Por perfil</h3>
+      <p class="sub">Quién lo tiene disponible.</p>
+      ${C.perfiles.map(p=>`<div class="inter"><div class="tx"><b>${esc(p.n)}</b><small>${esc(p.tipo)}</small></div>
+        <label class="sw"><input type="checkbox" data-asist-p="${esc(p.id)}"${p.permisos.asistente?" checked":""} aria-label="Asistente para ${esc(p.n)}"><i></i></label></div>`).join("")}
+    </div>
+    <div class="panel">
+      <h3>Por usuario</h3>
+      <p class="sub">Excepciones sobre lo que dice el perfil.</p>
+      ${C.usuarios.map(u=>`<div class="inter"><div class="tx"><b>${esc(u.n)}</b><small>${esc(u.correo)}</small></div>
+        <label class="sw"><input type="checkbox" data-asist-u="${esc(u.id)}"${u.asistente?" checked":""} aria-label="Asistente para ${esc(u.n)}"><i></i></label></div>`).join("")}
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Lo que el asistente no hace</h3>
+    <p class="sub">Fijo, no configurable. Está así a propósito.</p>
+    <ul style="margin:0;padding-left:20px;color:var(--tinta-2);font-size:13.5px;line-height:1.75">
+      <li>No consulta la base de datos: recibe funciones que la Lambda ya ha filtrado por el ámbito del usuario.</li>
+      <li>No da una cifra que no le haya devuelto una de esas funciones. Si no la tiene, lo dice.</li>
+      <li>No escribe en VenCloud ni envía mensajes por su cuenta.</li>
+      <li>No entra en devoluciones, que llevan nombre y DNI.</li>
+      <li>No opina sobre personas.</li>
+    </ul>
+  </div>`;
+},
+
+/* ---------------- teléfonos ---------------- */
+telefonos(){
+  return `
+  <h2 class="tit">Teléfonos y plantillas</h2>
+  <p class="des">Los teléfonos salen de <span class="mono">recursos.empleados</span>; aquí se corrigen
+    los que falten. Las plantillas de WhatsApp las aprueba Meta y tardan uno o dos días.</p>
+  <div class="panel">
+    <h3>Destinatarios</h3>
+    <p class="sub">Sin teléfono, el aviso cae a correo.</p>
+    <div class="tabla-env"><table>
+      <thead><tr><th>Nombre</th><th>Rol</th><th>Delegación</th><th>Teléfono</th></tr></thead>
+      <tbody>${C.telefonos.map((t,i)=>`<tr>
+        <td><b>${esc(t.n)}</b></td><td>${esc(t.rol)}</td><td style="color:var(--tinta-2)">${esc(t.del)}</td>
+        <td><input type="text" data-tel="${i}" value="${esc(t.tel)}" placeholder="+34…" style="max-width:190px"></td>
+      </tr>`).join("")}</tbody></table></div>
+  </div>
+  <div class="panel">
+    <h3>Plantillas de WhatsApp</h3>
+    <p class="sub">No se puede mandar texto libre a un número que no ha escrito antes: cada alarma
+      necesita su plantilla aprobada.</p>
+    <div class="tabla-env"><table>
+      <thead><tr><th>Identificador</th><th>Para</th><th>Estado</th></tr></thead>
+      <tbody>${C.plantillas.map(p=>`<tr><td class="mono">${esc(p.id)}</td><td>${esc(p.n)}</td>
+        <td>${p.estado==="aprobada"?'<span class="pill ok">Aprobada</span>':'<span class="pill med">Pendiente de Meta</span>'}</td></tr>`).join("")}</tbody></table></div>
+  </div>`;
+},
+
+/* ---------------- carga ---------------- */
+carga(){
+  return `
+  <h2 class="tit">Estado de la carga</h2>
+  <p class="des">La carga nocturna trae 30 tablas de VenCloud, unos 2 millones de filas al mes.</p>
+  <div class="panel">
+    <div class="kpi4">
+      <div class="k"><div class="e">Última carga</div><div class="v" style="font-size:17px;padding-top:3px">${hoy()} 03:12</div><div class="n">hora de Madrid</div></div>
+      <div class="k"><div class="e">Tablas</div><div class="v">30</div><div class="n">22 incrementales</div></div>
+      <div class="k"><div class="e">Filas del mes</div><div class="v">~2 M</div><div class="n">66.000 al día</div></div>
+      <div class="k"><div class="e">Errores</div><div class="v" style="color:var(--bien)">0</div><div class="n">en la última noche</div></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h3>Tablas principales</h3>
+    <p class="sub">El mes en curso está incompleto hasta el cierre del siguiente: le falta el cobro bancario.</p>
+    <div class="tabla-env"><table>
+      <thead><tr><th>Tabla</th><th>Volumen</th><th>Estado</th></tr></thead>
+      <tbody>${C.carga.map(x=>`<tr><td class="mono">${esc(x.t)}</td><td style="color:var(--tinta-2)">${esc(x.f)}</td>
+        <td><span class="pill ok">Al día</span></td></tr>`).join("")}</tbody></table></div>
+  </div>`;
+},
+
+/* ---------------- consolas ---------------- */
+consolas(){
+  const p = C.perfiles.find(x=>x.id===(SESION.perfil||"")) || null;
+  return `
+  <h2 class="tit">Consolas</h2>
+  <p class="des">El administrador ve todo lo que ven el cliente y operaciones.</p>
+  <div class="panel">
+    <h3>Panel de cliente AIRBUS</h3>
+    <p class="sub">Dieciséis paneles reordenables, sin llamadas fuera del dominio.</p>
+    <div class="acc-fila"><a class="btn acc" href="../airbus/" style="text-decoration:none">Abrir panel de AIRBUS</a></div>
+  </div>
+  <div class="panel">
+    <h3>Tu sesión</h3>
+    <p class="sub">Esto es lo que la Lambda resolvería a partir de tu token.</p>
+    <div class="tabla-env"><table><tbody>
+      <tr><td style="width:170px;color:var(--tinta-2)">Usuario</td><td><b>${esc(SESION.n)}</b></td></tr>
+      <tr><td style="color:var(--tinta-2)">Perfil</td><td>${esc(SESION.tipo==="admin"?"Administrador":(p?p.n:"—"))}</td></tr>
+      <tr><td style="color:var(--tinta-2)">Ámbito</td><td>${esc(SESION.tipo==="admin"?"Todo":(p?[...p.ambito.clientes,...p.ambito.centros,...p.ambito.delegaciones].join(" · ")||"Todo":"—"))}</td></tr>
+      <tr><td style="color:var(--tinta-2)">Asistente</td><td>${(C.asistente_global!==false && SESION.asistente && (SESION.tipo==="admin"||(p&&p.permisos.asistente)))?'<span class="pill ok">Habilitado</span>':'<span class="pill no">Deshabilitado</span>'}</td></tr>
+    </tbody></table></div>
+  </div>`;
+}
+};
+
+/* ======================= NAVEGACIÓN ======================= */
+const TABS = {
+  admin:       [["usuarios","Usuarios"],["perfiles","Perfiles"],["alarmas","Alarmas"],["asistente","Asistente de IA"],["telefonos","Teléfonos"],["carga","Carga"],["consolas","Consolas"]],
+  operaciones: [["consolas","Consolas"],["alarmas","Alarmas"]],
+  cliente:     [["consolas","Mi panel"]]
+};
+let actual = null;
+function arranca(){
+  document.getElementById("quien").textContent = SESION.n;
+  document.getElementById("rolTxt").textContent = SESION.tipo==="admin"?"Administrador":SESION.tipo;
+  const osc = document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.getElementById("bTema").textContent = osc?"Claro":"Oscuro";
+  const tabs = TABS[SESION.tipo] || TABS.cliente;
+  const nav=document.getElementById("tabs");
+  nav.innerHTML = tabs.map(([id,t],i)=>`<button role="tab" data-v="${id}" aria-selected="${i===0}">${esc(t)}</button>`).join("");
+  nav.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>muestra(b.dataset.v)));
+  muestra(tabs[0][0]);
+}
+function muestra(v){
+  actual=v;
+  document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected", String(b.dataset.v===v)));
+  document.getElementById("vistas").innerHTML = `<section class="vista on">${VISTAS[v]()}</section>`;
+  conecta();
+  scrollTo({top:0,behavior:"instant"});
+}
+function repinta(){ muestra(actual); }
+
+/* ======================= ACCIONES ======================= */
+function conecta(){
+  const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+
+  /* --- usuarios --- */
+  if($("#nuevoU")) $("#nuevoU").onclick = ()=>formUsuario(null);
+  $$("[data-edit-u]").forEach(b=>b.onclick=()=>formUsuario(C.usuarios.find(u=>u.id===b.dataset.editU)));
+
+  /* --- perfiles --- */
+  if($("#nuevoP")) $("#nuevoP").onclick = ()=>formPerfil(null);
+  $$("[data-edit-p]").forEach(b=>b.onclick=()=>formPerfil(C.perfiles.find(p=>p.id===b.dataset.editP)));
+
+  /* --- alarmas --- */
+  if($("#nuevaA")) $("#nuevaA").onclick = ()=>formAlarma(null);
+  $$("[data-edit-a]").forEach(b=>b.onclick=()=>formAlarma(C.alarmas.find(a=>a.id===b.dataset.editA)));
+  $$("[data-tog]").forEach(i=>i.onchange=()=>{
+    const a=C.alarmas.find(x=>x.id===i.dataset.tog); a.activa=i.checked; guarda(); repinta();
+  });
+  $$("[data-probar]").forEach(b=>b.onclick=()=>{
+    const a=C.alarmas.find(x=>x.id===b.dataset.probar);
+    const n=a.medido, tot=a.base;
+    const alto = n > tot*0.25;
+    $("#resProbar").innerHTML = `<div class="res ${alto?"alto":"ok"}">
+      <b>${esc(a.n)}</b> · con el umbral actual (${esc(a.op)} ${num(a.umbral)}) habría disparado
+      <b>${num(n)}</b> de ${num(tot)} ${esc(a.uni)} del último periodo cargado.
+      ${alto ? "Son muchas: agrupa por "+esc(a.agr)+", sube el umbral o déjala sólo en bandeja antes de enchufar el WhatsApp."
+             : "Volumen razonable para avisar."}</div>`;
+  });
+
+  /* --- asistente --- */
+  if($("#togGlobal")) $("#togGlobal").onchange = e => { C.asistente_global = e.target.checked; guarda(); };
+  if($("#limAsist")) $("#limAsist").onchange = e => { C.asistente_limite = Number(e.target.value)||0; guarda(); };
+  $$("[data-asist-p]").forEach(i=>i.onchange=()=>{
+    C.perfiles.find(p=>p.id===i.dataset.asistP).permisos.asistente=i.checked; guarda();
+  });
+  $$("[data-asist-u]").forEach(i=>i.onchange=()=>{
+    C.usuarios.find(u=>u.id===i.dataset.asistU).asistente=i.checked; guarda();
+  });
+
+  /* --- teléfonos --- */
+  $$("[data-tel]").forEach(i=>i.onchange=()=>{ C.telefonos[+i.dataset.tel].tel=i.value.trim(); guarda(); });
+}
+
+/* ---------- formulario de usuario ---------- */
+function formUsuario(u){
+  const nuevo = !u;
+  u = u || {id:"u"+Date.now(), n:"", correo:"", perfil:C.perfiles[0]?.id||"", tipo:"cliente", alta:hoy(), activo:true, asistente:true};
+  abre(nuevo?"Crear usuario":"Editar usuario",
+    nuevo?"La contraseña inicial la fijas tú; el usuario la cambia al entrar por primera vez.":"",
+    `<div class="sep">Identidad</div>
+     ${campo("Nombre y apellidos",`<input type="text" id="uN" value="${esc(u.n)}">`)}
+     ${campo("Correo electrónico",`<input type="email" id="uC" value="${esc(u.correo)}" autocapitalize="off">`)}
+     ${nuevo?campo("Contraseña inicial",`<input type="password" id="uP" autocomplete="new-password">`):""}
+     <div class="sep">Acceso</div>
+     ${campo("Perfil",`<select id="uT">
+        <option value="cliente"${u.tipo==="cliente"?" selected":""}>Cliente</option>
+        <option value="operaciones"${u.tipo==="operaciones"?" selected":""}>Operaciones</option>
+        <option value="direccion"${u.tipo==="direccion"?" selected":""}>Dirección</option>
+        <option value="admin"${u.tipo==="admin"?" selected":""}>Administrador</option></select>`)}
+     ${campo("Perfil de visibilidad",`<select id="uPf">${C.perfiles.map(p=>`<option value="${esc(p.id)}"${u.perfil===p.id?" selected":""}>${esc(p.n)}</option>`).join("")}</select>`)}
+     <label class="chk"><input type="checkbox" id="uAct"${u.activo?" checked":""}><span>Usuario de alta<small>Si se desmarca, no puede entrar.</small></span></label>
+     <label class="chk"><input type="checkbox" id="uAs"${u.asistente?" checked":""}><span>Asistente de IA habilitado<small>Además hace falta que lo esté en su perfil y en toda la plataforma.</small></span></label>
+     ${pieDlg}`,
+    ()=>{
+      const n=document.getElementById("uN").value.trim();
+      const c=document.getElementById("uC").value.trim();
+      if(!n||!c){ alert("Hacen falta el nombre y el correo."); return false; }
+      Object.assign(u,{n,correo:c,tipo:document.getElementById("uT").value,
+        perfil:document.getElementById("uPf").value,
+        activo:document.getElementById("uAct").checked,
+        asistente:document.getElementById("uAs").checked});
+      if(nuevo) C.usuarios.push(u);
+      guarda(); repinta();
+    });
+}
+
+/* ---------- formulario de perfil ---------- */
+function formPerfil(p){
+  const nuevo=!p;
+  p = p || {id:"p"+Date.now(), n:"", tipo:"cliente", ambito:{clientes:[],centros:[],delegaciones:[]},
+            sesiones:["resumen"], umbrales:{rentabilidad_mes:350},
+            permisos:{reordenar:true,exportar:true,asistente:true,whatsapp:false,incidencia:false}};
+  const centros = C.clientes.flatMap(c=>c.centros);
+  abre(nuevo?"Crear perfil":"Editar perfil","Ámbito múltiple: lo que marques se suma.",
+    `<div class="sep">Identidad</div>
+     ${campo("Nombre",`<input type="text" id="pN" value="${esc(p.n)}">`)}
+     ${campo("Tipo",`<select id="pT">${opts([["cliente","Cliente"],["operaciones","Operaciones"],["direccion","Dirección"]],p.tipo)}</select>`)}
+     <div class="sep">Ámbito · clientes</div>
+     <div class="grid-chk">${chks(C.clientes.map(c=>[c.id,c.n]),p.ambito.clientes,"pcli")}</div>
+     <div class="sep">Ámbito · centros</div>
+     <div class="grid-chk">${chks(centros.map(c=>[c,c]),p.ambito.centros,"pcen")}</div>
+     <div class="sep">Ámbito · delegaciones</div>
+     <div class="grid-chk">${chks(C.delegaciones.map(d=>[d,d]),p.ambito.delegaciones,"pdel")}</div>
+     <div class="sep">Sesiones visibles</div>
+     <div class="grid-chk">${chks(SESIONES.map(s=>[s.id,s.n,s.p]),p.sesiones,"pses")}</div>
+     <div class="sep">Umbrales de negocio</div>
+     ${campo("Umbral de rentabilidad (€/mes por máquina)",`<input type="number" id="pU" value="${p.umbrales.rentabilidad_mes}" min="0" step="25">`)}
+     <div class="sep">Permisos</div>
+     <label class="chk"><input type="checkbox" id="pAs"${p.permisos.asistente?" checked":""}><span>Asistente de IA</span></label>
+     <label class="chk"><input type="checkbox" id="pWa"${p.permisos.whatsapp?" checked":""}><span>Enviar WhatsApp<small>Sólo para operaciones y dirección.</small></span></label>
+     <label class="chk"><input type="checkbox" id="pIn"${p.permisos.incidencia?" checked":""}><span>Abrir incidencia en VenCloud</span></label>
+     <label class="chk"><input type="checkbox" id="pRe"${p.permisos.reordenar?" checked":""}><span>Reordenar los paneles</span></label>
+     <label class="chk"><input type="checkbox" id="pEx"${p.permisos.exportar?" checked":""}><span>Exportar datos</span></label>
+     ${pieDlg}`,
+    ()=>{
+      const n=document.getElementById("pN").value.trim();
+      if(!n){ alert("El perfil necesita un nombre."); return false; }
+      Object.assign(p,{n,tipo:document.getElementById("pT").value,
+        ambito:{clientes:vals("pcli"),centros:vals("pcen"),delegaciones:vals("pdel")},
+        sesiones:vals("pses"),
+        umbrales:{rentabilidad_mes:Number(document.getElementById("pU").value)||0},
+        permisos:{asistente:document.getElementById("pAs").checked,
+                  whatsapp:document.getElementById("pWa").checked,
+                  incidencia:document.getElementById("pIn").checked,
+                  reordenar:document.getElementById("pRe").checked,
+                  exportar:document.getElementById("pEx").checked}});
+      if(nuevo) C.perfiles.push(p);
+      guarda(); repinta();
+    });
+}
+
+/* ---------- formulario de alarma ---------- */
+function formAlarma(a){
+  const nuevo=!a;
+  a = a || {id:"a"+Date.now(), n:"", activa:false, sev:"media", fuente:"jornadas", campo:"temperatura_inicio",
+            op:">", umbral:0, agr:"maquina", ventana:"dia", silencio:24, dest:[],
+            asunto:"", cuerpo:"", medido:0, base:100, uni:"casos"};
+  const camposDe = f => Object.entries(FUENTES[f].campos).map(([k,v])=>[k,v[0]]);
+  abre(nuevo?"Crear alarma":"Editar alarma","Siete bloques. Pruébala antes de activarla.",
+    `<div class="sep">1 · Nombre y severidad</div>
+     ${campo("Nombre",`<input type="text" id="aN" value="${esc(a.n)}">`)}
+     ${campo("Severidad",`<select id="aS">${opts([["critica","Crítica — WhatsApp inmediato"],["alta","Alta — WhatsApp y bandeja"],["media","Media — bandeja y resumen diario"],["baja","Baja — resumen semanal"]],a.sev)}</select>`)}
+     <div class="sep">2 · Qué vigilar</div>
+     ${campo("Fuente",`<select id="aF">${opts(Object.entries(FUENTES).map(([k,v])=>[k,v.n]),a.fuente)}</select>`)}
+     ${campo("Campo",`<select id="aC">${opts(camposDe(a.fuente),a.campo)}</select>`)}
+     <div class="sep">3 · Condición</div>
+     <div class="fila">
+       ${campo("Operador",`<select id="aO">${opts([[">","mayor que"],[">=","mayor o igual"],["<","menor que"],["<=","menor o igual"],["=","igual a"]],a.op)}</select>`)}
+       ${campo("Umbral",`<input type="number" id="aU" value="${a.umbral}" step="any">`)}
+     </div>
+     <div class="sep">4 · Agrupación y ventana</div>
+     <div class="fila">
+       ${campo("Agrupar por",`<select id="aG">${opts(AGRUPAR.map(x=>[x,x]),a.agr)}</select>`)}
+       ${campo("Ventana",`<select id="aV">${opts([["dia","Del día"],["semana","De la semana"],["mes","Del mes"]],a.ventana)}</select>`)}
+       ${campo("Silencio (horas)",`<input type="number" id="aSi" value="${a.silencio}" min="0" step="1">`)}
+     </div>
+     <div class="sep">5 · Ámbito</div>
+     <div class="grid-chk">${chks(C.delegaciones.map(d=>[d,d]),(a.ambito&&a.ambito.delegaciones)||[],"adel")}</div>
+     <p class="sub" style="margin:6px 0 0">Sin marcar nada, la alarma aplica a todas las delegaciones.</p>
+     <div class="sep">6 · Destinatarios y canal</div>
+     <div id="dests">${(a.dest.length?a.dest:[{t:"rol",v:"responsableven",c:"bandeja"}]).map((d,i)=>filaDest(d,i)).join("")}</div>
+     <div class="acc-fila"><button class="btn" type="button" id="masDest">Añadir destinatario</button></div>
+     <div class="sep">7 · Mensaje</div>
+     ${campo("Asunto",`<input type="text" id="aA" value="${esc(a.asunto)}">`)}
+     ${campo("Cuerpo",`<textarea id="aB">${esc(a.cuerpo)}</textarea>`)}
+     <p class="sub" style="margin:2px 0 0">Variables: <span class="mono">{{elemento}} {{valor}} {{umbral}} {{fecha}} {{ruta}} {{centro}} {{empleado}}</span></p>
+     ${pieDlg}`,
+    ()=>{
+      const n=document.getElementById("aN").value.trim();
+      if(!n){ alert("La alarma necesita un nombre."); return false; }
+      const dest=[...document.querySelectorAll("[data-dest]")].map(fila=>({
+        t:"rol", v:fila.querySelector(".dv").value, c:fila.querySelector(".dc").value }));
+      Object.assign(a,{n, sev:document.getElementById("aS").value,
+        fuente:document.getElementById("aF").value, campo:document.getElementById("aC").value,
+        op:document.getElementById("aO").value, umbral:Number(document.getElementById("aU").value)||0,
+        agr:document.getElementById("aG").value, ventana:document.getElementById("aV").value,
+        silencio:Number(document.getElementById("aSi").value)||0,
+        ambito:{delegaciones:vals("adel")},
+        dest, asunto:document.getElementById("aA").value, cuerpo:document.getElementById("aB").value});
+      if(nuevo) C.alarmas.push(a);
+      guarda(); repinta();
+    });
+  /* fuente -> campos */
+  document.getElementById("aF").onchange = e => {
+    const sel=document.getElementById("aC");
+    sel.innerHTML = opts(camposDe(e.target.value), null);
+  };
+  document.getElementById("masDest").onclick = () => {
+    document.getElementById("dests").insertAdjacentHTML("beforeend", filaDest({t:"rol",v:"responsableven",c:"bandeja"}));
+  };
+}
+function filaDest(d){
+  return `<div class="fila" data-dest style="margin-bottom:6px">
+    <label class="campo" style="margin:0"><span>Avisar a</span><select class="dv">${opts(ROLES_AVISO,d.v)}</select></label>
+    <label class="campo" style="margin:0"><span>Canal</span><select class="dc">${opts(CANALES,d.c)}</select></label>
+  </div>`;
+}
+</script>
+</body>
+</html>

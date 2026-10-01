@@ -17,12 +17,28 @@ de los informes de trabajo.
 2. Nunca `sum(alias.columna)` en un informe con parámetros. Estas extracciones no agregan, así
    que no aplica, pero si alguna vez añades un total, mételo en una subconsulta.
 3. En este modelo «sin referencia» es **0**, no nulo: `coalesce(campo,0) = 0`.
+4. **Toda consulta necesita `from`.** Un `select` de subconsultas escalares sin cláusula `from`
+   —`select (select count(*) from a), (select count(*) from b)`— lo rechaza el validador. Para
+   poner varios agregados en una fila, van como tablas derivadas en el `from`, cruzadas entre sí.
+5. **Los partes del sistema se extraen, pero no se cuentan como visitas.** Dos tercios de las
+   filas de `partesvisita` son partes automáticos (`tipo` 2 y 3, `empleadoid` 0, ruta -99, 0
+   minutos, todos a las 00:00:09). No son visitas, pero traen lectura de máquina, así que **se
+   bajan igual**: la extracción no filtra. Quien filtra es la cabina, y siempre que cuente
+   visitas, tiempos o coste de servicio: `coalesce(empleadoid,0) <> 0 and tipo in (0, 100)`.
+   Sin ese filtro los indicadores salen más del triple. Comprobado el 25/09: 3.504 filas, 1.107
+   visitas reales ([21-visita-cabecera-25-09.md](21-visita-cabecera-25-09.md)).
 
 **Toda fila lleva su `id`.** Es lo que permite que la carga sea idempotente: si una noche falla y
 se repite, se actualiza la fila en vez de duplicarla.
 
 **Las hijas de la visita se filtran por la fecha de la madre**, no por la suya. Así todas las
 tablas de una misma noche contienen exactamente el mismo conjunto de visitas y cuadran entre sí.
+
+**Con una excepción: lo que ocurre después de la visita se filtra por su propia fecha.** El
+contaje de la bolsa (A5, A6) se hace días más tarde, así que filtrarlo por la fecha de la visita
+haría que no entrara nunca en la carga nocturna. Va por `fechacontaje`. La idempotencia la sigue
+garantizando el `id` de cada fila, aunque la carga toque visitas de días anteriores. Lo mismo hay
+que comprobar en devoluciones antes de darla por buena.
 
 ---
 
@@ -80,10 +96,10 @@ select
   p.cal_impcostecaducidad    as coste_caducidad,
   p.cal_impcosterotura       as coste_rotura,
   p.cal_impcosteinv          as coste_inventario,
-  p.cal_cm                   as lineas_carga,
-  p.cal_rc                   as lineas_ret_caducidad,
-  p.cal_rm                   as lineas_rm,
-  p.cal_rr                   as lineas_rr,
+  p.cal_cm                   as und_carga,
+  p.cal_rc                   as und_ret_caducidad,
+  p.cal_rm                   as und_rm,
+  p.cal_rr                   as und_rr,
   p.cal_haydifprecios        as dif_precios,
   p.cal_numcambioscanal      as cambios_canal,
   p.numcanalesvacios         as canales_vacios,
@@ -131,6 +147,22 @@ where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 `tipo_linea` es `CM` carga, `RC` retirada por caducidad, y `RM`/`RR`, cuyo significado todavía
 tienes que confirmarme.
 
+**Probado el 25/09: 8.187 filas en 2 segundos.** Mediana de 5 líneas por visita. El mes entero
+cabe de sobra en una llamada.
+
+**Cuadra con el A1 sin una sola diferencia por parte**
+([22-reposiciones-25-09.md](22-reposiciones-25-09.md)): `CM` = `cal_cm` (154.312 unidades),
+`RC` = `cal_rc` y su coste = `cal_impcostecaducidad`, `RR` = `cal_rr` y su coste =
+`cal_impcosterotura`.
+
+**Cuidado con `cal_impcarga`: es carga NETA**, `CM − RC − RM − RR`. Para valorar lo cargado hay
+que sumar las líneas `CM` de esta tabla, no leer el campo de la cabecera.
+
+**`etiq_canal` es texto, no entero** (`11`, pero también `V58`, `A12`, `VI001`, `DC`), y
+`cod_canal` viene a 0 en una de cada cinco filas: no sirve. Las líneas **sin `etiq_canal` son
+carriles de máquina caliente** — azúcar, vasos, paletinas, café —, el 62 % de las unidades y sólo
+el 19 % del coste. Hay que separarlas de las de canal en cualquier indicador.
+
 ## A3 · EXT_VISITA_INVENTARIO
 
 ```sql
@@ -152,6 +184,92 @@ join vending.partesvisita p on p.id = i.partevisitaid
 left join recursos.maquinas m on m.id = p.maquinaid
 left join stocks.articulos a  on a.id = i.articuloid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
+```
+
+**Probado el 25/09: 40 filas, 2 máquinas.** El inventario no se hace en cada visita —
+ese día lo hicieron dos de 1.061. Este informe sigue haciendo falta en la carga nocturna, porque
+es el que va trayendo los inventarios nuevos, pero **no sirve para consultar stock**: para eso
+está el A3B, que trae el último inventario de cada máquina sea de la fecha que sea
+([23-inventario.md](23-inventario.md)).
+
+## A3B · EXT_INVENTARIO_CUMPLIMIENTO
+
+Sin parámetros. Una fila **por máquina del parque**, tenga inventario o no. Es el informe de
+cumplimiento de la norma: inventario cada tres meses, y un inventario inicial antes de instalar
+([23-inventario.md](23-inventario.md)).
+
+Arranca de `recursos.maquinas`, no de los inventarios, porque **las máquinas que nunca se han
+inventariado son justo las que hay que ver** y en una consulta que salga de la tabla de
+inventarios no aparecerían.
+
+```sql
+select
+  m.codigo                     as matricula,
+  pdv.codigo                   as cod_pdv,
+  pdv.estado                   as estado_pdv,
+  cen.numcentro                as num_centro,
+  cen.denomina                 as centro,
+  del.nombre                   as delegacion,
+  cast(pdv.fechaalta as text)  as alta_pdv,
+  cast(inv.primera as text)    as primer_inventario,
+  cast(inv.ultima as text)     as ultimo_inventario,
+  coalesce(inv.inventarios, 0) as inventarios
+from recursos.maquinas m
+left join vending.pdvs pdv              on pdv.maquinaid = m.id
+left join comercial.clientescentros cen on cen.id = pdv.clientecentroid
+left join general.delegaciones del      on del.id = pdv.delegacionid
+left join (
+  select
+    p2.maquinaid                     as maquinaid,
+    min(i2.fecha)                    as primera,
+    max(i2.fecha)                    as ultima,
+    count(distinct i2.partevisitaid) as inventarios
+  from vending.partesvisitarecinventarios i2
+  join vending.partesvisita p2 on p2.id = i2.partevisitaid
+  group by p2.maquinaid
+) inv on inv.maquinaid = m.id
+order by m.codigo
+```
+
+El sentido de las columnas nuevas:
+
+- `inventarios = 0` → nunca se ha inventariado.
+- `ultimo_inventario` a más de 90 días → fuera de norma.
+- `primer_inventario` posterior a `alta_pdv` → se instaló sin inventario inicial.
+
+Si diera error, lo primero que hay que quitar es el `count(distinct ...)`, que es lo más raro de
+la consulta; con `min` y `max` solos tiene que funcionar.
+
+## A3C · EXT_INVENTARIO_ULTIMO
+
+Sin parámetros. Las líneas del último inventario de cada máquina. Es la foto de stock que usa la
+cabina; se regenera entera cada noche, no es incremental.
+
+```sql
+select
+  i.id                  as id,
+  i.partevisitaid       as parte_id,
+  ult.matricula         as matricula,
+  cast(i.fecha as text) as fecha,
+  i.cantidad            as cantidad,
+  i.capacmax            as capacidad_max,
+  i.stockrecom          as stock_recomendado,
+  i.difcapacidad        as dif_capacidad,
+  i.huecosrecom         as huecos_recomendados,
+  i.preciocoste         as precio_coste,
+  a.codigo              as cod_articulo,
+  a.denomina            as articulo
+from vending.partesvisitarecinventarios i
+join vending.partesvisita p on p.id = i.partevisitaid
+join (
+  select m.id as maquinaid, max(i2.fecha) as ultima, m.codigo as matricula
+  from vending.partesvisitarecinventarios i2
+  join vending.partesvisita p2 on p2.id = i2.partevisitaid
+  join recursos.maquinas m     on m.id = p2.maquinaid
+  group by m.id, m.codigo
+) ult on ult.maquinaid = p.maquinaid and ult.ultima = i.fecha
+left join stocks.articulos a on a.id = i.articuloid
+order by ult.matricula
 ```
 
 ## A4 · EXT_VISITA_INVCANALES
@@ -178,9 +296,59 @@ left join stocks.articulos a  on a.id = c.articuloid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
-## A5 · EXT_VISITA_CONTAJES
+**El 25/09 devuelve 0 filas**, y ese mismo día dos máquinas sí hicieron inventario por artículo
+(A3). Las dos tablas no son complementarias: el inventario se guarda en una o en la otra. Antes de
+darle más vueltas hay que saber si `partesvisitainvcanales` tiene datos, y de cuándo: eso es la
+sonda A4Z ([23-inventario.md](23-inventario.md)).
 
-La tabla más interesante de todo el paquete: guarda el importe anterior y quién lo cambió.
+## A4Z · EXT_SONDA_INVCANALES
+
+Sin parámetros. Una fila por mes. Dice si la tabla está viva y desde cuándo.
+
+```sql
+select
+  substring(cast(c.fecha as text) from 1 for 7) as mes,
+  count(c.id)                                   as lineas,
+  count(distinct c.partevisitaid)               as inventarios,
+  count(distinct c.articuloid)                  as articulos
+from vending.partesvisitainvcanales c
+group by substring(cast(c.fecha as text) from 1 for 7)
+order by 1
+```
+
+## A3Z · EXT_SONDA_INVENTARIO
+
+La misma sonda sobre la tabla por artículo, para comparar las dos.
+
+```sql
+select
+  substring(cast(i.fecha as text) from 1 for 7) as mes,
+  count(i.id)                                   as lineas,
+  count(distinct i.partevisitaid)               as inventarios,
+  count(distinct i.articuloid)                  as articulos
+from vending.partesvisitarecinventarios i
+group by substring(cast(i.fecha as text) from 1 for 7)
+order by 1
+```
+
+## A5 · EXT_VISITA_CONTAJES  ·  **descartado**
+
+Era, sobre el papel, la tabla más interesante del paquete: guarda el importe anterior y quién lo
+cambió. Pero está muerta —107 filas de agosto de 2023— porque aquí no se cuenta dentro de
+VenCloud: cuenta Loomis y el resultado se importa. **No entra en la carga nocturna.** El contaje
+real vive en `facturacion.prefacrecauda`.
+
+**Esta es la excepción a la regla de filtrar por la fecha de la madre.** El contaje no ocurre
+durante la visita: la bolsa se recoge un día y se cuenta otro. Filtrando por `p.fechaini` sobre el
+25/09 el informe devuelve **0 filas**, porque esos contajes todavía no se habían hecho — cuadra
+con lo que ya vimos en la cabecera, 340 partes con bolsa y sólo 12 con importe.
+
+Si la carga nocturna filtrara por la fecha de la visita, **esos contajes no entrarían nunca**: la
+noche en que se ejecuta aún no existen, y esa fecha no se vuelve a pedir. Por eso el filtro va
+sobre `c.fechacontaje`, la fecha propia de la fila. Como cada fila lleva su `id`, la carga sigue
+siendo idempotente aunque toque visitas de días anteriores.
+
+Se añade `fecha_visita` para poder medir el retraso entre recoger y contar, que es dinero parado.
 
 ```sql
 select
@@ -189,6 +357,7 @@ select
   m.codigo        as matricula,
   cen.denomina    as centro,
   ru.denomina     as ruta,
+  cast(p.fechaini as text)     as fecha_visita,
   cast(c.fechacontaje as text) as fecha_contaje,
   c.modocontaje   as modo,
   c.registradopor as registrado_por,
@@ -204,10 +373,30 @@ join vending.partesvisita p on p.id = c.partevisitaid
 left join recursos.maquinas m           on m.id   = p.maquinaid
 left join comercial.clientescentros cen on cen.id = p.clientecentroid
 left join vending.rutas ru              on ru.id  = p.rutaid
-where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
+where c.fechacontaje >= '{0}' and c.fechacontaje <= '{1} 23:59:59'
 ```
 
-## A6 · EXT_VISITA_CONTAJES_DETALLE
+## A5Z · EXT_SONDA_CONTAJES
+
+Sin parámetros. Antes de nada, saber si la tabla está viva: `partesvisitainvcanales` ya nos enseñó
+que una tabla puede existir en el modelo y no tener una sola fila.
+
+```sql
+select
+  substring(cast(c.fechacontaje as text) from 1 for 7) as mes,
+  count(c.id)                     as contajes,
+  count(distinct c.partevisitaid) as partes,
+  count(distinct c.registradopor) as usuarios
+from vending.partesvisitacontajes c
+group by substring(cast(c.fechacontaje as text) from 1 for 7)
+order by 1
+```
+
+## A6 · EXT_VISITA_CONTAJES_DETALLE  ·  **descartado**
+
+La tabla madre está muerta (107 filas de agosto de 2023 y nada más), así que el detalle tampoco
+tiene nada. Se queda escrito por si algún día se empieza a contar dentro de VenCloud, pero **no
+entra en la carga nocturna**. Ver [24-cadena-del-efectivo.md](24-cadena-del-efectivo.md).
 
 ```sql
 select
@@ -227,9 +416,12 @@ left join recursos.maquinas m on m.id = p.maquinaid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
-## A7 · EXT_VISITA_MONBIL
+## A7 · EXT_VISITA_MONBIL  ·  **probado**
 
-Lo que la máquina dice que tiene, frente a lo que el reponedor cuenta.
+Lo que la máquina dice que tiene, frente a lo que el reponedor cuenta. Es el «dato electrónico»
+del circuito. Probado del 01 al 25 de septiembre: 167.374 filas, 26.428 partes. Cómo se leen sus
+contadores y por qué no se pueden sumar en bruto, en
+[25-recaudacion-oficial-y-audit.md](25-recaudacion-oficial-y-audit.md).
 
 ```sql
 select
@@ -251,7 +443,10 @@ left join recursos.maquinas m on m.id = p.maquinaid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
-## A8 · EXT_VISITA_TUBOS
+## A8 · EXT_VISITA_TUBOS  ·  **probado**
+
+254.306 filas del 01 al 25 de septiembre. `cantidad_actual` es stock, no contador: mediana de
+52,00 € de cambio por máquina ([27-ventas-del-parte-y-tubos.md](27-ventas-del-parte-y-tubos.md)).
 
 ```sql
 select
@@ -270,9 +465,11 @@ left join recursos.maquinas m on m.id = p.maquinaid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
-## A9 · EXT_VISITA_INCIDENCIAS
+## A9 · EXT_VISITA_INCIDENCIAS  ·  **descartado**
 
-Caducado, rotura y robo, canal a canal. El dato de caducado que decías que es fundamental.
+La tabla está vacía: 0 filas del 01 al 25 de septiembre. El caducado y la rotura se registran en
+las líneas `RC` y `RR` del A2, con artículo, canal, unidades y coste, y cuadran con la cabecera.
+**No entra en la carga nocturna.** Ver [26-mermas-y-devoluciones.md](26-mermas-y-devoluciones.md).
 
 ```sql
 select
@@ -301,7 +498,10 @@ left join stocks.articulos a            on a.id   = i.articuloid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
-## A10 · EXT_VISITA_DEVOLUCIONES
+## A10 · EXT_VISITA_DEVOLUCIONES  ·  **probado**
+
+167 filas y 409,10 € del 01 al 25 de septiembre. Viva pero infrautilizada; se usa como alarma de
+monedero, no como control de dinero ([26-mermas-y-devoluciones.md](26-mermas-y-devoluciones.md)).
 
 ```sql
 select
@@ -325,7 +525,11 @@ where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 **Este informe lleva DNI y nombre de personas.** No debe entrar nunca en la consola de cliente, y
 en el almacén de datos conviene guardarlo en su propio prefijo, con acceso restringido.
 
-## A11 · EXT_VISITA_VENTAS
+## A11 · EXT_VISITA_VENTAS  ·  **probado, y clave**
+
+156.443 filas. Trae las bebidas calientes por **código de receta** `R01…R72` con su coste
+unitario: es la única fuente que costea el café. No uses su campo `beneficio`, no cuadra
+([27-ventas-del-parte-y-tubos.md](27-ventas-del-parte-y-tubos.md)).
 
 ```sql
 select
@@ -665,7 +869,10 @@ left join recursos.empleados emp   on emp.id = r.empleadoid
 where r.fecha >= '{0}' and r.fecha <= '{1} 23:59:59'
 ```
 
-## C6 · EXT_STOCK_RECOGIDAS
+## C6 · EXT_STOCK_RECOGIDAS  ·  **descartado**
+
+`stocks.planrecogida` está vacía. La caducidad se mide en las líneas `RC` de la reposición y en
+los diarios de stock. **No entra en la carga nocturna.**
 
 Caducado y rotura separados, que es justo lo que pedías.
 
@@ -754,7 +961,11 @@ left join stocks.articulos a   on a.id  = d.articuloid
 where r.fechacrea >= '{0}' and r.fechacrea <= '{1} 23:59:59'
 ```
 
-## C9 · EXT_STOCK_INVENTARIOS_ALM
+## C9 · EXT_STOCK_INVENTARIOS_ALM  ·  **probado, y mal nombrado**
+
+No son inventarios de almacén: es el **balance mensual de existencias de los tres eslabones**
+(`tipo_elemento` A, M y V), 8,29 M € en total
+([33-tanda-c-resultados.md](33-tanda-c-resultados.md)).
 
 ```sql
 select
@@ -1093,27 +1304,55 @@ left join stocks.articulos a  on a.id = mt.recambioid
 where t.fecha >= '{0}' and t.fecha <= '{1} 23:59:59'
 ```
 
-## D11 · EXT_SAT_CATALOGO  *(sin parámetros)*
+## D11 · EXT_SAT_CATALOGO  *(sin parámetros)*  ·  **probado**
+
+**101 operaciones y 6 categorías.** Las dos sondas confirmaron las doce columnas que había
+inferido —todas existen— y revelaron cuatro más: `notificaemail`, `descripcion`, `qrcs` y
+`causaccep` en las operaciones, y `refexterna` en las categorías.
+
+Pero tres de esas columnas no sirven y una join tampoco, así que la versión final las deja
+fuera:
+
+| fuera | por qué |
+|---|---|
+| `left join general.fabricantes` | **`fabricanteid` es nulo en las 101**. La join no aporta una sola fila |
+| `notificaemail` | `false` en las 101 |
+| `qrcs` | `false` en las 101 |
+| `causaccep` | nulo en las 101 |
+| `op.tipo` | redundante: coincide con `categoria.tipo` en las 101 filas. Se extrae el de la categoría |
 
 ```sql
 select
   op.id        as id,
   op.codigo    as codigo,
   op.nombre    as operacion,
-  op.tipo      as tipo,
   op.severidad as severidad,
-  op.tiempoestimado as tiempo_estimado,
   op.averiarapida   as averia_rapida,
   op.tipoasignacion as tipo_asignacion,
+  op.tiempoestimado as tiempo_estimado,
   op.desactivada    as desactivada,
+  op.descripcion    as descripcion,
+  cat.id       as categoria_id,
   cat.nombre   as categoria,
-  cat.tipo     as tipo_categoria,
-  f.nombre     as fabricante
+  cat.tipo     as tipo_categoria
 from configuracion.satoperaciones op
 left join configuracion.satoperacionescategorias cat on cat.id = op.satoperacioncategoriaid
-left join general.fabricantes f on f.id = op.fabricanteid
 order by cat.nombre, op.codigo
 ```
+
+**Sin parámetros**: es maestro, no lleva fechas y por tanto tampoco le aplica la regla del
+`Orden`. Se baja entero cada noche a `maestros/sat_catalogo`, sin partición.
+
+### Lo que el catálogo cambia
+
+No es un volcado más: **desmonta la clasificación del SAT**. La categoría dice en qué lista
+se archivó la operación, no si es un fallo técnico. `C06 · SNACK/BEBIDA - Distribuidor fuera
+de servicio` está en ATENCIÓN AL CLIENTE mientras su gemela de café, `T08 · CAFÉ -
+Distribuidor fuera de servicio`, está en AVERÍAS TÉCNICAS. Contando por operación y no por
+categoría, los fallos técnicos de 2026 pasan de **6.400 a 10.223**.
+
+Está medido y detallado en [41-catalogo-sat.md](41-catalogo-sat.md), con la corrección a
+[34-sat-averias.md](34-sat-averias.md).
 
 ---
 

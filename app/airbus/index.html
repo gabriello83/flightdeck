@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Todo se sirve desde digivend.es. Esta politica bloquea cualquier llamada a otro dominio. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M4 11V5h2v6zm3 0V7h2v4zm3 0V3h2v8z' fill='white'/%3E%3C/svg%3E">
+<title>Panel AIRBUS</title>
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --bien:#0ca30c; --aviso:#fab219; --grave:#ec835a; --critico:#d03b3b;
+  --rejilla:#e8e7e2; --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --rejilla:#2a2a27; --sombra:none;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --rejilla:#2a2a27; --sombra:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1240px;margin:0 auto;padding:20px 16px 72px}
+
+/* cabecera */
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between;margin-bottom:4px}
+.marca{display:flex;align-items:baseline;gap:10px}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px}
+.periodo{color:var(--tinta-2);font-size:13px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
+button.btn:hover{border-color:var(--tinta-3)}
+button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);color:#fff}
+
+.nota{
+  margin:14px 0 18px;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+
+/* kpis */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:10px;margin-bottom:18px}
+.kpi{background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:12px 14px;box-shadow:var(--sombra)}
+.kpi .et{font-size:12px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
+.kpi .vl{font-size:23px;font-weight:650;letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.kpi .nt{font-size:12px;color:var(--tinta-3);margin-top:2px}
+
+/* tarjetas */
+.rejilla{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.panel{
+  grid-column:span 6;background:var(--tarjeta);border:1px solid var(--borde);
+  border-radius:12px;padding:14px 16px 16px;box-shadow:var(--sombra);min-width:0
+}
+.panel[data-ancho="todo"]{grid-column:span 12}
+.panel.arrastrando{opacity:.4}
+.panel.destino{outline:2px dashed var(--s1);outline-offset:3px}
+.ph{display:flex;align-items:flex-start;gap:8px;margin-bottom:2px}
+.ph h2{font-size:15px;margin:0;font-weight:650;letter-spacing:-.01em;flex:1}
+.ph .sub{font-size:12.5px;color:var(--tinta-2);margin:2px 0 10px}
+.mover{display:flex;gap:2px;flex-shrink:0}
+.mover button{
+  font:inherit;font-size:12px;line-height:1;color:var(--tinta-2);background:transparent;
+  border:1px solid var(--borde);border-radius:6px;width:24px;height:22px;cursor:pointer;padding:0
+}
+.mover button:hover{color:var(--tinta);border-color:var(--tinta-3)}
+.asa{cursor:grab;color:var(--tinta-3);font-size:14px;letter-spacing:-2px;padding:0 2px;user-select:none}
+.asa:active{cursor:grabbing}
+
+/* graficos */
+svg{display:block;width:100%;height:auto;overflow:visible}
+.gx,.gy{stroke:var(--rejilla);stroke-width:1}
+.ejet{fill:var(--tinta-3);font-size:11px}
+.vlab{fill:var(--tinta-2);font-size:11px;font-variant-numeric:tabular-nums}
+.leyenda{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--tinta-2);margin-bottom:8px}
+.leyenda i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+/* tablas */
+.panel table{width:100%;border-collapse:collapse;font-size:13px}
+.panel>div{overflow-x:auto}
+th{text-align:left;font-weight:600;color:var(--tinta-2);font-size:12px;text-transform:uppercase;letter-spacing:.03em;padding:5px 8px 5px 0;border-bottom:1px solid var(--borde)}
+td{padding:5px 8px 5px 0;border-bottom:1px solid var(--borde);font-variant-numeric:tabular-nums}
+td.n,th.n{text-align:right;padding-right:0}
+tr:last-child td{border-bottom:0}
+.mat{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:1px 7px;border-radius:999px;border:1px solid}
+.pill.b{color:var(--bien);border-color:var(--bien)}
+.pill.a{color:var(--grave);border-color:var(--grave)}
+.pill.c{color:var(--critico);border-color:var(--critico)}
+
+#tt{
+  position:fixed;pointer-events:none;opacity:0;transition:opacity .08s;z-index:50;
+  background:var(--tinta);color:var(--fondo);font-size:12px;padding:5px 9px;border-radius:6px;
+  white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 2px 10px rgba(0,0,0,.25)
+}
+footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+@media (max-width:860px){ .panel{grid-column:span 12} }
+#cargando{padding:40px 0;color:var(--tinta-2)}
+.ajuste{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px;font-size:13px;color:var(--tinta-2)}
+.ajuste input{
+  font:inherit;font-size:13px;width:92px;color:var(--tinta);background:var(--fondo);
+  border:1px solid var(--borde-fuerte);border-radius:7px;padding:5px 8px;text-align:right;font-variant-numeric:tabular-nums
+}
+.ajuste input:focus{outline:2px solid var(--s1);outline-offset:1px;border-color:var(--s1)}
+.ajuste .def{color:var(--tinta-3);font-size:12px}
+</style>
+</head>
+<body>
+<div class="env">
+
+  <header class="top">
+    <div class="marca">
+      <b>AIRBUS</b>
+      <span>Panel de servicio · Serunion Vending</span>
+    </div>
+    <div class="acciones">
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn" id="bOrden" type="button">Restablecer orden</button>
+    </div>
+  </header>
+  <div class="periodo" id="periodo"></div>
+
+  <div class="nota">
+    Puedes <b>reordenar los paneles</b> arrastrándolos por el asa <span aria-hidden="true">⠿</span> o con las flechas
+    de cada cabecera. El orden se guarda en este navegador.
+  </div>
+
+  <div id="cargando">Cargando datos…</div>
+  <div class="kpis" id="kpis" hidden></div>
+  <div class="rejilla" id="rejilla" hidden></div>
+
+  <footer id="pie" hidden></footer>
+</div>
+<div id="tt" role="status" aria-live="polite"></div>
+
+<script>
+/* ===================================================================
+   Panel de cliente AIRBUS · digivend.es
+   Sin ninguna llamada externa: los datos salen de datos/airbus.json,
+   del mismo dominio, y la politica CSP de la cabecera lo impone.
+   =================================================================== */
+const ORIGEN = "datos/airbus.json";
+const CLAVE_ORDEN = "digivend.airbus.orden";
+const CLAVE_TEMA  = "digivend.tema";
+const CLAVE_UMBRAL= "digivend.airbus.umbral";
+
+const eur = n => new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n);
+const eur2= n => new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+const num = n => new Intl.NumberFormat("es-ES").format(n);
+const pct = n => new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(n)+" %";
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- tema ---------- */
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = document.getElementById("bTema");
+  const pinta = () => {
+    const osc = document.documentElement.getAttribute("data-theme")==="dark"
+      || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+    b.textContent = osc ? "Modo claro" : "Modo oscuro";
+  };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const osc = document.documentElement.getAttribute("data-theme")==="dark"
+      || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+    const n = osc ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+  });
+})();
+
+/* ---------- tooltip ---------- */
+const tt = document.getElementById("tt");
+function muestra(e, html){ tt.innerHTML = html; tt.style.opacity=1; mueve(e); }
+function mueve(e){
+  const r = tt.getBoundingClientRect();
+  let x = e.clientX + 14, y = e.clientY - r.height - 10;
+  if(x + r.width > innerWidth - 8) x = e.clientX - r.width - 14;
+  if(y < 8) y = e.clientY + 16;
+  tt.style.left = x+"px"; tt.style.top = y+"px";
+}
+function oculta(){ tt.style.opacity=0; }
+function conTooltip(el, html){
+  el.addEventListener("mouseenter", e=>muestra(e,html));
+  el.addEventListener("mousemove", mueve);
+  el.addEventListener("mouseleave", oculta);
+}
+
+/* ---------- graficos ---------- */
+const SVGNS="http://www.w3.org/2000/svg";
+function svg(w,h){ const s=document.createElementNS(SVGNS,"svg"); s.setAttribute("viewBox",`0 0 ${w} ${h}`); s.setAttribute("role","img"); return s; }
+function el(n,a={}){ const e=document.createElementNS(SVGNS,n); for(const k in a) e.setAttribute(k,a[k]); return e; }
+
+/* barras horizontales con etiqueta directa — una serie, sin leyenda */
+function barrasH(datos,{etiqueta,valor,fmt=eur,color="var(--s1)",alto=22,anchoEt=150,W=640}){
+  const n=datos.length, H=n*alto+6, max=Math.max(...datos.map(valor),1);
+  const s=svg(W,H), zona=W-anchoEt-72;
+  datos.forEach((d,i)=>{
+    const y=i*alto+3, v=valor(d), w=Math.max(2, v/max*zona);
+    const t=el("text",{x:0,y:y+alto/2+4,class:"ejet"}); t.textContent=etiqueta(d); s.appendChild(t);
+    const r=el("rect",{x:anchoEt,y:y+3,width:w,height:alto-9,rx:4,fill:color});
+    s.appendChild(r);
+    const l=el("text",{x:anchoEt+w+7,y:y+alto/2+4,class:"vlab"}); l.textContent=fmt(v); s.appendChild(l);
+    conTooltip(r, `<b>${esc(etiqueta(d))}</b> · ${fmt(v)}`);
+  });
+  s.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  return s;
+}
+
+/* barras verticales */
+function barrasV(datos,{etiqueta,valor,fmt=eur,color="var(--s1)",W=640}){
+  const n=datos.length, H=190, m={t:18,r:4,b:26,l:4};
+  const s=svg(W,H), zw=W-m.l-m.r, zh=H-m.t-m.b, max=Math.max(...datos.map(valor),1);
+  const bw=Math.min(64, zw/n-10);
+  datos.forEach((d,i)=>{
+    const v=valor(d), h=Math.max(2, v/max*zh);
+    const x=m.l+(zw/n)*i+(zw/n-bw)/2, y=m.t+zh-h;
+    const r=el("rect",{x,y,width:bw,height:h,rx:4,fill:color}); s.appendChild(r);
+    const t=el("text",{x:x+bw/2,y:H-9,class:"ejet","text-anchor":"middle"}); t.textContent=etiqueta(d); s.appendChild(t);
+    const l=el("text",{x:x+bw/2,y:y-5,class:"vlab","text-anchor":"middle"}); l.textContent=fmt(v); s.appendChild(l);
+    conTooltip(r, `<b>${esc(etiqueta(d))}</b> · ${fmt(v)}`);
+  });
+  return s;
+}
+
+/* linea con cruceta */
+function lineaTemporal(serie,{fmt=eur,W=980}={}){
+  const H=250, m={t:14,r:12,b:28,l:58};
+  const s=svg(W,H), zw=W-m.l-m.r, zh=H-m.t-m.b;
+  const vs=serie.map(d=>d.v), max=Math.max(...vs,1);
+  const esc0 = v => m.t+zh - (v/max)*zh;
+  const px = i => m.l + (serie.length<2?0:(i/(serie.length-1))*zw);
+  /* rejilla y eje y */
+  for(let k=0;k<=4;k++){
+    const v=max*k/4, y=esc0(v);
+    s.appendChild(el("line",{x1:m.l,x2:m.l+zw,y1:y,y2:y,class:"gy"}));
+    const t=el("text",{x:m.l-8,y:y+4,class:"ejet","text-anchor":"end"}); t.textContent=eur(v); s.appendChild(t);
+  }
+  /* area + linea */
+  const d1=serie.map((d,i)=>`${i?"L":"M"}${px(i).toFixed(1)},${esc0(d.v).toFixed(1)}`).join(" ");
+  const grad=el("linearGradient",{id:"gserie",x1:0,y1:0,x2:0,y2:1});
+  grad.appendChild(el("stop",{offset:"0%","stop-color":"var(--s1)","stop-opacity":.18}));
+  grad.appendChild(el("stop",{offset:"100%","stop-color":"var(--s1)","stop-opacity":0}));
+  const defs=el("defs"); defs.appendChild(grad); s.appendChild(defs);
+  s.appendChild(el("path",{d:`${d1} L${px(serie.length-1)},${m.t+zh} L${m.l},${m.t+zh} Z`,fill:"url(#gserie)"}));
+  s.appendChild(el("path",{d:d1,fill:"none",stroke:"var(--s1)","stroke-width":2,"stroke-linejoin":"round"}));
+  /* etiquetas de mes */
+  let mesPrev=null;
+  serie.forEach((d,i)=>{
+    const mes=d.f.slice(0,7);
+    if(mes!==mesPrev){
+      mesPrev=mes;
+      const t=el("text",{x:px(i),y:H-9,class:"ejet","text-anchor":"middle"});
+      t.textContent=new Date(d.f+"T00:00:00").toLocaleDateString("es-ES",{month:"short"});
+      s.appendChild(t);
+    }
+  });
+  /* cruceta */
+  const cl=el("line",{x1:0,x2:0,y1:m.t,y2:m.t+zh,stroke:"var(--borde-fuerte)","stroke-width":1,opacity:0});
+  const cp=el("circle",{r:4.5,fill:"var(--s1)",stroke:"var(--tarjeta)","stroke-width":2,opacity:0});
+  s.appendChild(cl); s.appendChild(cp);
+  const cap=el("rect",{x:m.l,y:m.t,width:zw,height:zh,fill:"transparent"});
+  s.appendChild(cap);
+  cap.addEventListener("mousemove", e=>{
+    const b=s.getBoundingClientRect(), xr=(e.clientX-b.left)/b.width*W;
+    let i=Math.round((xr-m.l)/zw*(serie.length-1)); i=Math.max(0,Math.min(serie.length-1,i));
+    const d=serie[i], x=px(i), y=esc0(d.v);
+    cl.setAttribute("x1",x); cl.setAttribute("x2",x); cl.setAttribute("opacity",1);
+    cp.setAttribute("cx",x); cp.setAttribute("cy",y); cp.setAttribute("opacity",1);
+    const f=new Date(d.f+"T00:00:00").toLocaleDateString("es-ES",{weekday:"short",day:"numeric",month:"short"});
+    muestra(e, `<b>${f}</b> · ${fmt(d.v)}`);
+  });
+  cap.addEventListener("mouseleave", ()=>{ cl.setAttribute("opacity",0); cp.setAttribute("opacity",0); oculta(); });
+  return s;
+}
+
+function tabla(cols, filas){
+  const t=document.createElement("table");
+  t.innerHTML = "<thead><tr>"+cols.map(c=>`<th class="${c.n?"n":""}">${esc(c.t)}</th>`).join("")+"</tr></thead>"
+    + "<tbody>"+filas.map(f=>"<tr>"+f.map((c,i)=>`<td class="${cols[i].n?"n":""}${cols[i].mono?" mat":""}">${c}</td>`).join("")+"</tr>").join("")+"</tbody>";
+  return t;
+}
+
+/* ---------- paneles ---------- */
+/* Cada panel: id estable, titulo, subtitulo, ancho y una funcion que pinta.
+   El orden lo decide el cliente; el id es lo que se guarda.               */
+function definePaneles(D){
+  const C = D.centros, S = D.sept;
+  return [
+    { id:"evolucion", titulo:"Evolución diaria", ancho:"todo",
+      sub:`Venta por día, ${D.periodo.dias} días. Pasa el ratón para ver cada jornada.`,
+      pinta: (c,W) => c.appendChild(lineaTemporal(D.serie,{W})) },
+
+    { id:"centros", titulo:"Venta por centro",
+      sub:`${C.length} centros con venta en el periodo.`,
+      pinta: (c,W) => c.appendChild(barrasH(C,{etiqueta:d=>d.centro, valor:d=>d.importe, anchoEt:120, W})) },
+
+    { id:"semana", titulo:"Patrón semanal",
+      sub:"Media por día de la semana. El viernes vende menos que el martes, así que comparar contra «ayer» da falsas alarmas.",
+      pinta: (c,W) => c.appendChild(barrasV(D.semana,{etiqueta:d=>d.dia, valor:d=>d.media, W})) },
+
+    { id:"articulos", titulo:"Mix de artículos", ancho:"todo",
+      sub:`Los 12 que más facturan, de ${num(D.global.articulos)} referencias.`,
+      pinta: (c,W) => c.appendChild(barrasH(D.articulos,{etiqueta:d=>d.a, valor:d=>d.i, anchoEt:230, W})) },
+
+    { id:"concentracion", titulo:"Concentración del surtido",
+      sub:"Qué parte de la venta aportan las primeras referencias.",
+      pinta: (c,W) => {
+        c.appendChild(barrasH(D.pareto,{etiqueta:d=>`Top ${d.n}`, valor:d=>d.pct, fmt:pct, color:"var(--s3)", anchoEt:70, W}));
+        const p=document.createElement("p"); p.className="ph"; p.style.marginTop="10px";
+        p.innerHTML = `<span class="sub" style="margin:0">Y hay <b>${num(D.cola)}</b> referencias que no llegan al 0,1 % cada una: son candidatas a salir del surtido.</span>`;
+        c.appendChild(p);
+      } },
+
+    { id:"rendimiento", titulo:"Rendimiento por máquina", ancho:"todo",
+      sub:"Las ocho que más y las ocho que menos facturan al día.",
+      pinta: c => {
+        const d1=document.createElement("div"); d1.className="leyenda";
+        d1.innerHTML = `<span><i style="background:var(--s1)"></i>Mejores</span><span><i style="background:var(--s2)"></i>Peores</span>`;
+        c.appendChild(d1);
+        c.appendChild(tabla(
+          [{t:"Máquina",mono:true},{t:"Centro"},{t:"€/día",n:true},{t:"Periodo",n:true},{t:""}],
+          D.top_maq.map(d=>[esc(d.m),esc(d.c),eur2(d.dia),eur(d.i),`<span class="pill b">alta</span>`])
+           .concat(D.bot_maq.map(d=>[esc(d.m),esc(d.c),eur2(d.dia),eur(d.i),`<span class="pill c">baja</span>`]))
+        ));
+      } },
+
+    { id:"umbral350", titulo:"Máquinas de menor rendimiento",
+      sub:"Las que no llegan al umbral de rentabilidad. Candidatas a reubicar o retirar.",
+      pinta: c => {
+        /* El umbral lo fija el administrador en el perfil y el usuario puede ajustarlo aqui. */
+        const aj=document.createElement("div"); aj.className="ajuste";
+        aj.innerHTML = `<label for="umbral">Umbral de rentabilidad</label>
+          <input id="umbral" type="number" min="0" step="25" value="${umbralActual()}" inputmode="numeric">
+          <span>€/mes</span>
+          <span class="def">(por defecto ${num(UMBRAL_PERFIL)} €)</span>
+          <button class="btn" type="button" id="umbralDef" style="padding:4px 9px">Restablecer</button>`;
+        c.appendChild(aj);
+        const salida=document.createElement("div"); c.appendChild(salida);
+        const dibuja = () => {
+          const u = umbralActual();
+          const bajo = D.bot_maq.filter(d=>d.dia*30 < u);
+          salida.innerHTML="";
+          const k=document.createElement("div"); k.className="kpi"; k.style.marginBottom="10px";
+          k.innerHTML = bajo.length
+            ? `<div class="et">Venta conjunta</div><div class="vl">${eur(bajo.reduce((a,d)=>a+d.i,0))}</div>
+               <div class="nt">entre las ${bajo.length} que no llegan a ${num(u)} €/mes, en ${D.periodo.dias} días</div>`
+            : `<div class="et">Por debajo del umbral</div><div class="vl">0</div>
+               <div class="nt">ninguna de las ocho de menor venta baja de ${num(u)} €/mes</div>`;
+          salida.appendChild(k);
+          if(bajo.length) salida.appendChild(tabla([{t:"Máquina",mono:true},{t:"Centro"},{t:"€/mes estimado",n:true}],
+            bajo.map(d=>[esc(d.m),esc(d.c),eur(d.dia*30)])));
+        };
+        dibuja();
+        const inp=aj.querySelector("#umbral");
+        inp.addEventListener("input", ()=>{
+          const v=Number(inp.value);
+          if(Number.isFinite(v) && v>=0){ escribir(CLAVE_UMBRAL, String(v)); dibuja(); }
+        });
+        aj.querySelector("#umbralDef").addEventListener("click", ()=>{
+          try{ localStorage.removeItem(CLAVE_UMBRAL); }catch(e){}
+          inp.value = UMBRAL_PERFIL; dibuja();
+        });
+      } },
+
+    { id:"mudas", titulo:"Máquinas sin venta",
+      sub:`${D.mudas.n} máquinas acumulan ${num(D.mudas.dias)} días sin una sola venta en el periodo.`,
+      pinta: c => c.appendChild(tabla(
+        [{t:"Máquina",mono:true},{t:"Centro"},{t:"Racha máx.",n:true},{t:"Días totales",n:true}],
+        D.mudas.top.map(d=>[esc(d.m),esc(d.c),`${d.max} d`,`${d.tot} d`]))) },
+
+    { id:"incidencias", titulo:"Incidencias por categoría",
+      sub:`${num(D.averias.n)} incidencias en el periodo, ${D.averias.abiertas} abiertas.`,
+      pinta: (c,W) => c.appendChild(barrasH(D.averias.cat,{etiqueta:d=>d.k, valor:d=>d.v, fmt:num, color:"var(--s2)", anchoEt:160, W})) },
+
+    { id:"operaciones", titulo:"Incidencias por operación", ancho:"todo",
+      sub:`Mediana de cierre ${D.averias.mediana_h} h · ${D.averias.mismo_dia} % se resuelve el mismo día · percentil 90 en ${D.averias.p90} días.`,
+      pinta: (c,W) => c.appendChild(barrasH(D.averias.ope,{etiqueta:d=>d.k, valor:d=>d.v, fmt:num, color:"var(--s2)", anchoEt:290, W})) },
+
+    { id:"reincidencia", titulo:"Máquinas reincidentes",
+      sub:"Las que más incidencias acumulan. Más de diez en un periodo apunta a sustitución, no a reparación.",
+      pinta: c => c.appendChild(tabla(
+        [{t:"Máquina",mono:true},{t:"Centro"},{t:"Incidencias",n:true},{t:""}],
+        D.averias.rein.map(d=>[esc(d.m),esc(d.c),num(d.n), d.n>=10?`<span class="pill c">revisar</span>`:`<span class="pill a">vigilar</span>`]))) },
+
+    { id:"modelos", titulo:"Incidencias por modelo",
+      sub:"Si un modelo concentra averías, el problema es del equipo y no del centro.",
+      pinta: (c,W) => c.appendChild(barrasH(D.averias.modelos,{etiqueta:d=>d.k, valor:d=>d.v, fmt:num, color:"var(--s3)", anchoEt:200, W})) },
+
+    { id:"visitas", titulo:"Visitas por ruta",
+      sub:`${num(D.visitas.n)} visitas a ${num(D.visitas.maquinas)} máquinas, ${D.visitas.rutas} rutas y ${D.visitas.empleados} reponedores.`,
+      pinta: (c,W) => c.appendChild(barrasH(D.visitas.rutas_top,{etiqueta:d=>d.k, valor:d=>d.v, fmt:num, anchoEt:240, W})) },
+
+    { id:"retorno", titulo:"Retorno por visita", ancho:"todo",
+      sub:"Euros de venta por cada visita. Señala dónde sobran visitas y dónde faltan.",
+      pinta: c => {
+        const d1=document.createElement("div"); d1.className="leyenda";
+        d1.innerHTML = `<span><i style="background:var(--s1)"></i>Mejor retorno</span><span><i style="background:var(--s2)"></i>Peor retorno</span>`;
+        c.appendChild(d1);
+        c.appendChild(tabla([{t:"Máquina",mono:true},{t:"Visitas",n:true},{t:"Venta",n:true},{t:"€/visita",n:true},{t:""}],
+          D.visitas.mejor.map(d=>[esc(d.m),num(d.n),eur(d.i),eur2(d.r),`<span class="pill b">alto</span>`])
+           .concat(D.visitas.peor.map(d=>[esc(d.m),num(d.n),eur(d.i),eur2(d.r),`<span class="pill c">bajo</span>`]))));
+      } },
+
+    { id:"preventivos", titulo:"Mantenimientos preventivos",
+      sub:"Preventivos realizados en el periodo.",
+      pinta: c => {
+        const g=document.createElement("div"); g.className="kpis"; g.style.margin="0";
+        g.innerHTML = `
+          <div class="kpi"><div class="et">Preventivos</div><div class="vl">${num(D.preventivos.n)}</div><div class="nt">en el periodo</div></div>
+          <div class="kpi"><div class="et">Máquinas cubiertas</div><div class="vl">${num(D.preventivos.maquinas)}</div>
+            <div class="nt">${pct(D.preventivos.maquinas/D.global.maquinas*100)} del parque</div></div>`;
+        c.appendChild(g);
+      } },
+
+    { id:"estado", titulo:"Estado del servicio este mes", ancho:"todo",
+      sub:"Situación del parque a cierre del último mes cargado.",
+      pinta: c => {
+        const g=document.createElement("div"); g.className="kpis"; g.style.margin="0";
+        const f = (et,v,nt,cls) => `<div class="kpi"><div class="et">${et}</div>
+          <div class="vl" ${cls?`style="color:${cls}"`:""}>${v}</div><div class="nt">${nt}</div></div>`;
+        g.innerHTML =
+          f("Máquinas","" + num(S.maquinas), `${S.centros} centros`) +
+          f("Sin reposición", num(S.sin_reposicion), "en el mes", S.sin_reposicion>0?"var(--grave)":"") +
+          f("Sin venta 4 meses", num(S.sin_venta_4m), "candidatas a retirar", S.sin_venta_4m>0?"var(--critico)":"") +
+          f("Sin planograma", num(S.sin_planograma), "surtido no configurado", S.sin_planograma>0?"var(--grave)":"") +
+          f("Cobertura telemetría", pct(S.nayax.si/(S.nayax.si+S.nayax.no)*100), `${num(S.nayax.si)} de ${num(S.nayax.si+S.nayax.no)} dispositivos`);
+        c.appendChild(g);
+      } }
+  ];
+}
+
+/* ---------- montaje y reordenacion ---------- */
+let PANELES=[], D=null;
+/* Umbral de rentabilidad: lo fija el administrador en el perfil del cliente
+   (reglas_negocio.umbral_rentabilidad_mes) y el usuario puede ajustarlo en pantalla. */
+let UMBRAL_PERFIL = 350;
+function umbralActual(){
+  const v = Number(leer(CLAVE_UMBRAL));
+  return Number.isFinite(v) && v > 0 ? v : UMBRAL_PERFIL;
+}
+
+function ordenGuardado(){
+  try{ const v=JSON.parse(leer(CLAVE_ORDEN)||"null"); return Array.isArray(v)?v:null; }catch(e){ return null; }
+}
+function guardaOrden(){
+  escribir(CLAVE_ORDEN, JSON.stringify([...document.querySelectorAll(".panel")].map(p=>p.dataset.id)));
+}
+function ordena(){
+  const g=ordenGuardado(); if(!g) return PANELES;
+  const porId=new Map(PANELES.map(p=>[p.id,p]));
+  const out=[]; g.forEach(id=>{ if(porId.has(id)){ out.push(porId.get(id)); porId.delete(id); } });
+  return out.concat([...porId.values()]);   /* paneles nuevos van al final */
+}
+
+function pintaTodo(){
+  const r=document.getElementById("rejilla");
+  r.innerHTML="";
+  ordena().forEach(p=>{
+    const card=document.createElement("section");
+    card.className="panel"; card.dataset.id=p.id;
+    if(p.ancho) card.dataset.ancho=p.ancho;
+    card.setAttribute("aria-label",p.titulo);
+    const h=document.createElement("div"); h.className="ph";
+    h.innerHTML = `<span class="asa" draggable="true" title="Arrastra para mover" aria-hidden="true">⠿</span>
+      <h2>${esc(p.titulo)}</h2>
+      <span class="mover">
+        <button type="button" data-d="-1" title="Subir" aria-label="Subir ${esc(p.titulo)}">↑</button>
+        <button type="button" data-d="1" title="Bajar" aria-label="Bajar ${esc(p.titulo)}">↓</button>
+      </span>`;
+    card.appendChild(h);
+    if(p.sub){ const s=document.createElement("p"); s.className="sub"; s.textContent=p.sub; card.appendChild(s); }
+    const cuerpo=document.createElement("div"); card.appendChild(cuerpo);
+    r.appendChild(card);
+    /* el ancho real manda: asi 1 unidad de SVG es 1 pixel y el texto no encoge */
+    const W = Math.max(280, Math.round(cuerpo.clientWidth));
+    try{ p.pinta(cuerpo, W); }
+    catch(e){ cuerpo.innerHTML = `<p class="sub">Este panel no se ha podido dibujar.</p>`; }
+  });
+  conectaReordenacion();
+}
+
+function conectaReordenacion(){
+  const r=document.getElementById("rejilla");
+  let origen=null;
+  r.querySelectorAll(".asa").forEach(a=>{
+    const card=a.closest(".panel");
+    a.addEventListener("dragstart", e=>{
+      origen=card; card.classList.add("arrastrando");
+      e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain",card.dataset.id);
+    });
+    a.addEventListener("dragend", ()=>{
+      card.classList.remove("arrastrando");
+      r.querySelectorAll(".panel").forEach(p=>p.classList.remove("destino"));
+      origen=null; guardaOrden();
+    });
+  });
+  r.querySelectorAll(".panel").forEach(card=>{
+    card.addEventListener("dragover", e=>{
+      if(!origen || origen===card) return;
+      e.preventDefault(); card.classList.add("destino");
+    });
+    card.addEventListener("dragleave", ()=>card.classList.remove("destino"));
+    card.addEventListener("drop", e=>{
+      e.preventDefault(); card.classList.remove("destino");
+      if(!origen || origen===card) return;
+      const cards=[...r.querySelectorAll(".panel")];
+      const antes = cards.indexOf(origen) < cards.indexOf(card);
+      card.parentNode.insertBefore(origen, antes ? card.nextSibling : card);
+      guardaOrden();
+    });
+  });
+  r.querySelectorAll(".mover button").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const card=b.closest(".panel"), d=+b.dataset.d;
+      if(d<0 && card.previousElementSibling) card.parentNode.insertBefore(card, card.previousElementSibling);
+      if(d>0 && card.nextElementSibling) card.parentNode.insertBefore(card.nextElementSibling, card);
+      guardaOrden(); card.scrollIntoView({block:"nearest",behavior:"smooth"});
+    });
+  });
+}
+
+document.getElementById("bOrden").addEventListener("click", ()=>{
+  try{ localStorage.removeItem(CLAVE_ORDEN); }catch(e){}
+  pintaTodo();
+});
+
+/* ---------- arranque ---------- */
+(async function(){
+  try{
+    const resp = await fetch(ORIGEN, {cache:"no-store"});
+    if(!resp.ok) throw new Error(resp.status);
+    D = await resp.json();
+  }catch(e){
+    document.getElementById("cargando").innerHTML =
+      `No se han podido cargar los datos (<code>${esc(ORIGEN)}</code>). Avisa a Serunion Vending.`;
+    return;
+  }
+  if(D.perfil && Number(D.perfil.umbral_rentabilidad_mes) > 0) UMBRAL_PERFIL = Number(D.perfil.umbral_rentabilidad_mes);
+  const f = s => new Date(s+"T00:00:00").toLocaleDateString("es-ES",{day:"numeric",month:"long",year:"numeric"});
+  document.getElementById("periodo").textContent = `Del ${f(D.periodo.desde)} al ${f(D.periodo.hasta)} · ${D.periodo.dias} días`;
+
+  const k=document.getElementById("kpis");
+  const kpi=(et,vl,nt)=>`<div class="kpi"><div class="et">${et}</div><div class="vl">${vl}</div><div class="nt">${nt}</div></div>`;
+  k.innerHTML =
+    kpi("Venta del periodo", eur(D.global.importe), `${num(D.global.unidades)} unidades`) +
+    kpi("Ticket medio", eur2(D.global.ticket), "por consumición") +
+    kpi("Máquinas", num(D.global.maquinas), `${D.sept.centros} centros`) +
+    kpi("Referencias", num(D.global.articulos), "en surtido") +
+    kpi("Visitas", num(D.visitas.n), `${D.visitas.rutas} rutas`) +
+    kpi("Incidencias", num(D.averias.n), `${D.averias.abiertas} abiertas`);
+
+  document.getElementById("pie").innerHTML =
+    `Datos de VenCloud, servidos desde digivend.es. Esta página no realiza ninguna llamada a dominios externos.
+     La venta sale de la telemetría de las máquinas; donde no hay telemetría, la cifra no aparece en vez de estimarse.`;
+
+  PANELES = definePaneles(D);
+  document.getElementById("cargando").hidden = true;
+  k.hidden = false;
+  document.getElementById("rejilla").hidden = false;
+  document.getElementById("pie").hidden = false;
+  pintaTodo();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+{
+  "_comentario": "Ficha que crea el administrador. Vive en DynamoDB; aqui se guarda como ejemplo del contrato.",
+  "perfil_id": "cli-airbus",
+  "nombre": "AIRBUS",
+  "tipo": "cliente",
+  "creado_por": "admin",
+  "ambito": {
+    "clientes": ["AIRBUS"],
+    "centros": [
+      "AIRBUS GETAFE", "AIRBUS SAN PABLO SUR", "AIRBUS SAN PABLO NORTE",
+      "AIRBUS TABLADA", "AIRBUS CBC", "AIRBUS ILLESCAS", "AIRBUS ITC",
+      "AIRBUS ALBACETE", "AIRBUS ALBACETE (Parque Científico)"
+    ],
+    "delegaciones": []
+  },
+  "sesiones": ["resumen", "venta_consumo", "disponibilidad", "surtido_planograma"],
+  "paneles": [
+    "evolucion", "centros", "semana", "articulos", "concentracion",
+    "rendimiento", "umbral350", "mudas", "incidencias", "operaciones",
+    "reincidencia", "modelos", "visitas", "retorno", "preventivos", "estado"
+  ],
+  "reglas_negocio": {
+    "umbral_rentabilidad_mes": 350,
+    "_nota": "El umbral de 350 EUR/mes es de AIRBUS, no nuestro. Se respeta tal cual."
+  },
+  "permisos": {
+    "ver": true,
+    "reordenar_paneles": true,
+    "exportar": true,
+    "enviar_whatsapp": false,
+    "crear_incidencia": false,
+    "asistente_ia": true
+  },
+  "usuarios": [
+    {
+      "correo": "ejemplo@airbus.com",
+      "nombre": "Usuario de ejemplo",
+      "estado": "pendiente_de_alta",
+      "_nota": "El admin fija la contrasena inicial; el usuario la cambia al primer acceso."
+    }
+  ]
+}

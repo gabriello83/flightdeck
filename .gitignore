@@ -16,3 +16,5 @@ data/raw/*.html
 
 # Descargas crudas de la API
 data/vencloud/
+__pycache__/
+*.pyc
