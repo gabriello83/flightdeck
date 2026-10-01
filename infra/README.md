@@ -9,6 +9,7 @@ Lo que convierte el prototipo en un sistema vivo. Cinco ficheros:
 | `lambda_extraccion.py` | llama a VenCloud y deja el crudo en S3 |
 | `reglas.py` | **las trampas del modelo, en código** |
 | `lambda_agregados.py` | lee el crudo, aplica las reglas y escribe lo que leen los paneles |
+| `AISLAMIENTO.md` | **por qué esto no toca nada de lo que ya tienes en AWS** |
 
 Y dos baterías de pruebas que se ejecutan sin AWS: `test_reglas.py` y `test_agregados.py`.
 
@@ -44,8 +45,13 @@ alguno** y dice cuáles: preferimos parar a bajar el informe equivocado en silen
 
 Todo desde la consola de AWS, en **eu-west-1**. No hace falta tener nada instalado.
 
-1. **CloudFormation → Crear pila → Subir `plantilla.yaml`.** Pide prefijo, endpoint, empresa, hora
-   de carga y un correo para los avisos.
+0. **Decidir dónde.** Lo recomendado es una **cuenta AWS nueva** sólo para esto; si ha de ir en la
+   que ya usas, la plantilla está escrita para no tocar nada existente. Está explicado en
+   [`AISLAMIENTO.md`](AISLAMIENTO.md).
+1. **CloudFormation → Crear pila → Subir `plantilla.yaml`.** Pide prefijo, etiqueta de coste,
+   endpoint, empresa, horas de carga y un correo para los avisos. Al final hay que **marcar la
+   casilla de IAM con nombres propios** (`CAPABILITY_NAMED_IAM`): los roles se llaman
+   `digivend-rol-*` para que se vea de quién son.
 2. **Secrets Manager → el secreto `digivend/vencloud/token` → poner el token.** No va en una
    variable de entorno a la vista: así no aparece en la consola de Lambda ni en una captura.
 3. **Subir al bucket** `config/manifiesto.json` (con los números rellenos) y `config/perfiles.json`.
@@ -56,6 +62,10 @@ Todo desde la consola de AWS, en **eu-west-1**. No hace falta tener nada instala
 A partir de ahí va sola: extracción a las 3:15 y agregados a las 4:45, hora de Madrid — el
 planificador lleva `Europe/Madrid`, así que el horario de verano se arregla solo.
 
+Hay **dos alarmas**, no una: una salta si la carga falla, y la otra si la carga **no ha corrido**
+en 24 h. Una noche que no se ejecuta no produce ningún error, así que sin la segunda alarma el
+silencio sería indistinguible del éxito.
+
 ## Cómo está puesto el bucket
 
 - **Cifrado, sin acceso público y con versiones.**
@@ -65,6 +75,17 @@ planificador lleva `Europe/Madrid`, así que el horario de verano se arregla sol
   agregados tiene un `Deny` explícito sobre él: aunque alguien lo añadiera a un agregado por
   descuido, no podría leerlo.
 - El rol de extracción **sólo puede escribir**, no borrar.
+- Una política de bucket **rechaza cualquier petición sin cifrar**.
+
+## Y está separado de lo que ya tienes
+
+Los dos roles llevan una **frontera de permisos** (`digivend-frontera`) que sólo les deja tocar
+el bucket de digivend, el secreto de digivend y sus propios registros. Es un techo: aunque
+mañana alguien les añadiera una política de «S3 en todo», seguirían sin poder leer ningún otro
+bucket de la cuenta. La plantilla **no referencia ni adopta ningún recurso existente** —todo lo
+crea—, los horarios van en su propio grupo de Scheduler, y todo lleva la etiqueta
+`Proyecto=digivend` para que el gasto salga aparte en la factura. El detalle, en
+[`AISLAMIENTO.md`](AISLAMIENTO.md).
 
 ## La carga es idempotente
 

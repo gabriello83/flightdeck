@@ -4,11 +4,35 @@ Description: >
   y el planificador nocturno. Se sube desde la consola de CloudFormation en
   eu-west-1; no hace falta ninguna herramienta instalada.
 
+  TODO LO QUE CREA ES NUEVO. No referencia, no modifica y no lee ningun recurso
+  que ya exista en la cuenta: cada nombre lleva el prefijo, los horarios van en
+  su propio grupo, y los dos roles llevan una FRONTERA DE PERMISOS que les
+  impide tocar nada que no sea de esta pila. Ver infra/AISLAMIENTO.md.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: "Identidad de la pila" }
+        Parameters: [Prefijo, Proyecto]
+      - Label: { default: "VenCloud" }
+        Parameters: [VenCloudEndpoint, VenCloudEmpresa]
+      - Label: { default: "Operacion" }
+        Parameters: [HoraCarga, HoraRecalculo, DiasRetencionLog, AvisoCorreo]
+
 Parameters:
   Prefijo:
     Type: String
     Default: digivend
-    Description: Prefijo de todos los recursos.
+    AllowedPattern: "[a-z][a-z0-9-]{2,20}"
+    Description: >
+      Prefijo de TODOS los recursos. Es la frontera del proyecto: cambiarlo crea
+      una instalacion entera aparte (pruebas, por ejemplo) sin tocar la otra.
+  Proyecto:
+    Type: String
+    Default: digivend
+    Description: >
+      Etiqueta de coste. Va en todos los recursos para que el proyecto salga en
+      una linea propia en la factura, separado del resto de la cuenta.
   VenCloudEndpoint:
     Type: String
     Default: https://vencloudpro.eac.es/2311_api/webservices//VenCloudExternalApi/VenCloudExternalApi.svc
@@ -19,6 +43,14 @@ Parameters:
     Type: String
     Default: "cron(15 3 * * ? *)"
     Description: Hora de la carga, en hora de Madrid (ver ScheduleExpressionTimezone).
+  HoraRecalculo:
+    Type: String
+    Default: "cron(45 4 * * ? *)"
+    Description: Hora de los agregados. Debe dejar margen a la carga.
+  DiasRetencionLog:
+    Type: Number
+    Default: 30
+    Description: Dias que se guardan los registros de las Lambdas.
   AvisoCorreo:
     Type: String
     Default: ""
@@ -57,6 +89,25 @@ Resources:
           - Id: LimpiarVersionesViejas
             Status: Enabled
             NoncurrentVersionExpirationInDays: 90
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
+
+  # Nadie entra a este bucket si no es de esta pila: ni un rol de otro proyecto
+  # ni una peticion sin cifrar. Es la mitad del aislamiento que mira hacia dentro.
+  PoliticaBucket:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref Bucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: SoloCifrado
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource: [!GetAtt Bucket.Arn, !Sub "${Bucket.Arn}/*"]
+            Condition:
+              Bool: { "aws:SecureTransport": "false" }
 
   # El token de VenCloud no va en una variable de entorno a la vista.
   TokenVenCloud:
@@ -64,19 +115,47 @@ Resources:
     Properties:
       Name: !Sub "${Prefijo}/vencloud/token"
       Description: Token de la API de VenCloud. Se rellena a mano tras crear la pila.
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
+
+  # ------------------------------------------------------------------ frontera
+  # Lo que de verdad separa este proyecto del resto de la cuenta. Es el techo de
+  # los dos roles: aunque alguien les anadiera manana una politica que diga
+  # "s3:* en todo", seguirian sin poder salir de aqui. Un error de dedo en una
+  # politica no puede alcanzar nada que ya existiera en la cuenta.
+  Frontera:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${Prefijo}-frontera"
+      Description: Techo de permisos de las Lambdas de digivend. Nada fuera de esta pila.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: SoloNuestroBucket
+            Effect: Allow
+            Action: [s3:GetObject, s3:PutObject, s3:ListBucket, s3:GetBucketLocation]
+            Resource: [!GetAtt Bucket.Arn, !Sub "${Bucket.Arn}/*"]
+          - Sid: SoloNuestroSecreto
+            Effect: Allow
+            Action: secretsmanager:GetSecretValue
+            Resource: !Ref TokenVenCloud
+          - Sid: SoloNuestrosRegistros
+            Effect: Allow
+            Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+            Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Prefijo}-*"
 
   # ------------------------------------------------------------------ permisos
   RolExtraccion:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub "${Prefijo}-rol-extraccion"
+      PermissionsBoundary: !Ref Frontera
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal: { Service: lambda.amazonaws.com }
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: escribir-crudo
           PolicyDocument:
@@ -92,18 +171,24 @@ Resources:
               - Effect: Allow
                 Action: [secretsmanager:GetSecretValue]
                 Resource: !Ref TokenVenCloud
+              # Sus propios registros, y solo los suyos.
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Prefijo}-*"
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
 
   RolAgregados:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub "${Prefijo}-rol-agregados"
+      PermissionsBoundary: !Ref Frontera
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal: { Service: lambda.amazonaws.com }
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: leer-crudo-escribir-cabina
           PolicyDocument:
@@ -119,6 +204,32 @@ Resources:
               - Effect: Deny
                 Action: [s3:GetObject]
                 Resource: !Sub "${Bucket.Arn}/restringido/*"
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Prefijo}-*"
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
+
+  # ------------------------------------------------------------------ registros
+  # Creados aqui para que tengan caducidad desde el primer dia: si los crea
+  # Lambda por su cuenta, se guardan para siempre y se paga para siempre.
+  LogExtraccion:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Prefijo}-extraccion"
+      RetentionInDays: !Ref DiasRetencionLog
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
+
+  LogAgregados:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Prefijo}-agregados"
+      RetentionInDays: !Ref DiasRetencionLog
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
 
   # ------------------------------------------------------------------ lambdas
   # El codigo va aparte: se pega en el editor de la consola o se sube como zip.
@@ -126,8 +237,10 @@ Resources:
   # pueda levantarse de una vez sin depender de un bucket de artefactos.
   Extraccion:
     Type: AWS::Lambda::Function
+    DependsOn: LogExtraccion
     Properties:
       FunctionName: !Sub "${Prefijo}-extraccion"
+      Description: Baja los informes de VenCloud y deja el crudo en S3.
       Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt RolExtraccion.Arn
@@ -141,6 +254,8 @@ Resources:
           BUCKET: !Ref Bucket
           MANIFIESTO: config/manifiesto.json
           FORMATO_FECHA: "%d/%m/%Y"
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -149,8 +264,10 @@ Resources:
 
   Agregados:
     Type: AWS::Lambda::Function
+    DependsOn: LogAgregados
     Properties:
       FunctionName: !Sub "${Prefijo}-agregados"
+      Description: Aplica las reglas del modelo y escribe los paneles de la cabina.
       Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt RolAgregados.Arn
@@ -161,6 +278,8 @@ Resources:
           BUCKET: !Ref Bucket
           DIAS: "120"
           PERFILES: config/perfiles.json
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
       Code:
         ZipFile: |
           def lambda_handler(event, context):
@@ -168,15 +287,28 @@ Resources:
                   "Sube aqui lambda_agregados.py y reglas.py del repositorio.")
 
   # ------------------------------------------------------------------ horario
+  # Grupo propio: los horarios de digivend no se mezclan en el grupo "default"
+  # con nada que ya hubiera en la cuenta, y se ven de un golpe en la consola.
+  GrupoHorario:
+    Type: AWS::Scheduler::ScheduleGroup
+    Properties:
+      Name: !Sub "${Prefijo}-horarios"
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
+
   RolPlanificador:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub "${Prefijo}-rol-planificador"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal: { Service: scheduler.amazonaws.com }
             Action: sts:AssumeRole
+            # Solo nuestro propio planificador puede usar este rol.
+            Condition:
+              StringEquals: { "aws:SourceAccount": !Ref AWS::AccountId }
       Policies:
         - PolicyName: invocar
           PolicyDocument:
@@ -185,11 +317,14 @@ Resources:
               - Effect: Allow
                 Action: lambda:InvokeFunction
                 Resource: [!GetAtt Extraccion.Arn, !GetAtt Agregados.Arn]
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
 
   CargaNocturna:
     Type: AWS::Scheduler::Schedule
     Properties:
       Name: !Sub "${Prefijo}-carga-nocturna"
+      GroupName: !Ref GrupoHorario
       Description: Extraccion de VenCloud, de madrugada.
       ScheduleExpression: !Ref HoraCarga
       # Hora de Madrid: cambia solo con el horario de verano.
@@ -204,8 +339,9 @@ Resources:
     Type: AWS::Scheduler::Schedule
     Properties:
       Name: !Sub "${Prefijo}-recalculo"
+      GroupName: !Ref GrupoHorario
       Description: Agregados de la cabina, hora y media despues de la extraccion.
-      ScheduleExpression: "cron(45 4 * * ? *)"
+      ScheduleExpression: !Ref HoraRecalculo
       ScheduleExpressionTimezone: Europe/Madrid
       FlexibleTimeWindow: { Mode: "OFF" }
       Target:
@@ -221,6 +357,8 @@ Resources:
       Subscription:
         - Protocol: email
           Endpoint: !Ref AvisoCorreo
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
 
   AlarmaExtraccion:
     Type: AWS::CloudWatch::Alarm
@@ -238,6 +376,29 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
       AlarmActions: [!Ref TemaAvisos]
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
+
+  # La noche que no corre no da error: no hay error. Esta alarma mira lo
+  # contrario, que haya corrido al menos una vez en 24 h.
+  AlarmaSinCarga:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HayAviso
+    Properties:
+      AlarmName: !Sub "${Prefijo}-extraccion-no-ha-corrido"
+      AlarmDescription: La carga nocturna de VenCloud no se ha ejecutado en 24 h.
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions: [{ Name: FunctionName, Value: !Ref Extraccion }]
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref TemaAvisos]
+      Tags:
+        - { Key: Proyecto, Value: !Ref Proyecto }
 
 Outputs:
   NombreBucket:
@@ -245,5 +406,11 @@ Outputs:
   SecretoToken:
     Value: !Ref TokenVenCloud
     Description: Rellena aqui el token de VenCloud antes de la primera carga.
+  Frontera:
+    Value: !Ref Frontera
+    Description: Techo de permisos. Las Lambdas no pueden tocar nada fuera de esta pila.
+  EtiquetaCoste:
+    Value: !Sub "Proyecto=${Proyecto}"
+    Description: Activala en Billing > Cost allocation tags para ver el gasto aparte.
   SiguientePaso:
     Value: "Sube config/manifiesto.json y config/perfiles.json al bucket, pega el codigo de las dos Lambdas y lanza la extraccion a mano una vez."
