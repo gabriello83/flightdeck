@@ -107,38 +107,107 @@ def filtros_de(clave_fecha, dia):
 # ----------------------------------------------------------------------
 # llamada
 # ----------------------------------------------------------------------
-def llamar(informe, filtros, codificar_barra):
-    """POST a GetReportV2. Todos los parametros van en la ruta."""
-    segmento = "|".join([str(informe), *filtros])
-    if codificar_barra:
-        segmento = urllib.parse.quote(segmento, safe="/:")
-    url = f"{ENDPOINT}/GetReportV2/{TOKEN}/{EMPRESA}/{segmento}"
-    peticion = urllib.request.Request(url, data=b"", method="POST")
+# Un abridor que NO sigue las redirecciones solo. Urllib, en un POST, se niega
+# a seguir un 307 y lanza el error sin mas; asi al menos podemos leer a donde
+# nos manda el servidor, que es la mitad del diagnostico.
+class _SinSeguirRedirecciones(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+ABRIDOR = urllib.request.build_opener(_SinSeguirRedirecciones)
+
+MAX_SALTOS = 3
+
+
+def una_llamada(url, metodo="POST", cuerpo=b"", espera=None):
+    """UNA peticion, sin seguir redirecciones. Devuelve (codigo, cabeceras, bytes).
+
+    Un 3xx no es una excepcion aqui: es una respuesta mas, con su Location, que
+    es lo que hay que leer.
+    """
+    peticion = urllib.request.Request(url, data=cuerpo, method=metodo)
     peticion.add_header("Content-Type", "application/json")
-    peticion.add_header("Content-Length", "0")
-    with urllib.request.urlopen(peticion, timeout=TIEMPO_ESPERA) as respuesta:
-        return respuesta.read()
+    peticion.add_header("Accept", "application/json")
+    try:
+        with ABRIDOR.open(peticion, timeout=espera or TIEMPO_ESPERA) as r:
+            return r.status, dict(r.headers), r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, dict(e.headers or {}), e.read()
+
+
+def llamar(url, metodo="POST", cuerpo=b""):
+    """Como una_llamada, pero siguiendo las redirecciones sin cambiar de metodo.
+
+    Si se agotan los saltos DEVUELVE la ultima respuesta en vez de lanzar: un
+    bucle de redirecciones tiene que acabar en "HTTP 307 -> a donde", que es
+    informacion, y no en "demasiados saltos", que no dice nada.
+    """
+    codigo, cabeceras, datos = 0, {}, b""
+    for _ in range(MAX_SALTOS + 1):
+        codigo, cabeceras, datos = una_llamada(url, metodo, cuerpo)
+        destino = cabeceras.get("Location")
+        if codigo in (301, 302, 303, 307, 308) and destino:
+            # 307 y 308 conservan el metodo; 301, 302 y 303 lo pasan a GET.
+            url = urllib.parse.urljoin(url, destino)
+            if codigo in (301, 302, 303):
+                metodo, cuerpo = "GET", None
+            continue
+        break
+    return codigo, cabeceras, datos
+
+
+def rutas_posibles(informe, filtros):
+    """Las formas de poner los parametros en la ruta, de mas a menos probable.
+
+    Las fechas llevan barras (30/09/2026) y la ruta tambien, asi que una fecha
+    sin codificar parte la URL en segmentos de mas: eso era el 404 de la primera
+    noche. Se prueba primero todo codificado, que es lo correcto, y luego las
+    variantes por si el servicio espera los separadores en claro.
+    """
+    partes = [str(informe), *filtros]
+    bruto = "|".join(partes)
+    formas = [
+        urllib.parse.quote(bruto, safe="|"),   # fechas %2F, barra vertical literal
+        urllib.parse.quote(bruto, safe=""),    # todo codificado, tambien el |
+        bruto,                                 # en claro, como estaba
+        "/".join(urllib.parse.quote(x, safe="") for x in partes),  # un segmento por campo
+    ]
+    # Sin repetir: un maestro no lleva separadores, asi que las cuatro formas dan
+    # la misma cadena y lo llamariamos cuatro veces con la URL identica.
+    return list(dict.fromkeys(formas))
 
 
 def descargar(informe, filtros):
-    """Prueba barra literal y codificada, y reintenta con espera creciente.
+    """Prueba las formas de ruta y reintenta con espera creciente.
 
-    Reintenta en fallo de red y en 5xx. En 4xx no: un 404 no mejora esperando.
+    Reintenta en fallo de red y en 5xx. En 4xx no espera —un 404 no mejora
+    esperando— pero SI prueba la siguiente forma de ruta, porque un 404 puede
+    ser exactamente eso: la ruta mal montada.
     """
     errores = []
     for intento in range(REINTENTOS):
-        for codificar in (False, True):
+        reintentable = False
+        for segmento in rutas_posibles(informe, filtros):
+            url = f"{ENDPOINT}/GetReportV2/{TOKEN}/{EMPRESA}/{segmento}"
             try:
-                return llamar(informe, filtros, codificar)
-            except urllib.error.HTTPError as e:
-                errores.append(f"HTTP {e.code}")
-                if e.code < 500:
-                    raise RuntimeError(sin_token(f"HTTP {e.code} {e.reason}")) from None
+                codigo, cabeceras, cuerpo = llamar(url)
             except (urllib.error.URLError, TimeoutError, OSError) as e:
                 errores.append(sin_token(str(e)))
-        if intento < REINTENTOS - 1:
-            time.sleep(2 ** intento)
-    raise RuntimeError(" | ".join(errores[-4:]))
+                reintentable = True
+                continue
+            if codigo == 200:
+                return cuerpo
+            detalle = f"HTTP {codigo}"
+            if cabeceras.get("Location"):
+                detalle += f" -> {sin_token(cabeceras['Location'])}"
+            errores.append(detalle)
+            if codigo >= 500:
+                reintentable = True
+        if not reintentable or intento == REINTENTOS - 1:
+            break
+        time.sleep(2 ** intento)
+    raise RuntimeError(" | ".join(dict.fromkeys(errores))[:400])
 
 
 # ----------------------------------------------------------------------
@@ -202,9 +271,97 @@ def guardar_registro(hoy, resultado):
 
 
 # ----------------------------------------------------------------------
+# sonda: descubrir la forma real de la API en UNA sola ejecucion
+# ----------------------------------------------------------------------
+# Se lanza con el evento de prueba {"sonda": true}. No escribe nada en S3: solo
+# llama y cuenta lo que contesta cada forma. Existe porque ir probando de una en
+# una, con una persona de intermediario, cuesta un dia; esto cuesta un minuto.
+
+def _limpio(datos, limite=300):
+    texto = datos.decode("utf-8", "replace") if datos else ""
+    return " ".join(texto.split())[:limite]
+
+
+def _sin_doble_barra(url):
+    """La doble barra del endpoint es sospechosa: puede ser lo que redirige."""
+    esquema, resto = url.split("://", 1)
+    return esquema + "://" + resto.replace("//", "/")
+
+
+def sonda(event):
+    base = ENDPOINT
+    base1 = _sin_doble_barra(ENDPOINT)
+    hoy = (datetime.date.today() - datetime.timedelta(days=1)).strftime(FORMATO_FECHA)
+
+    # Un maestro y un incremental de verdad, sacados del manifiesto.
+    try:
+        _, informes = manifiesto()
+        maestro = next(i["informe"] for i in informes if i["clave_fecha"] == "ninguna")
+        incremental = next(i["informe"] for i in informes if i["clave_fecha"] != "ninguna")
+    except Exception:
+        maestro, incremental = 157, 105
+
+    t, e = TOKEN, EMPRESA
+    f = urllib.parse.quote(hoy, safe="")          # 30%2F09%2F2026
+    casos = [
+        # --- que servicio hay ahi detras -----------------------------------
+        ("raiz del .svc",            "GET",  base, b""),
+        ("raiz sin doble barra",     "GET",  base1, b""),
+        ("pagina de ayuda REST",     "GET",  f"{base}/help", b""),
+        ("wsdl",                     "GET",  f"{base}?wsdl", b""),
+
+        # --- la forma de GetReportV2, con un maestro (sin fechas) ----------
+        ("maestro, POST",            "POST", f"{base}/GetReportV2/{t}/{e}/{maestro}", b""),
+        ("maestro, GET",             "GET",  f"{base}/GetReportV2/{t}/{e}/{maestro}", b""),
+        ("maestro, sin doble barra", "POST", f"{base1}/GetReportV2/{t}/{e}/{maestro}", b""),
+        ("maestro, barra final",     "POST", f"{base}/GetReportV2/{t}/{e}/{maestro}/", b""),
+        ("maestro, prefijo json",    "POST", f"{base}/json/GetReportV2/{t}/{e}/{maestro}", b""),
+        ("maestro, en la query",     "POST", f"{base}/GetReportV2?token={t}&empresa={e}&informe={maestro}", b""),
+        ("maestro, en el cuerpo",    "POST", f"{base}/GetReportV2",
+         json.dumps({"token": t, "empresa": e, "informe": maestro}).encode()),
+
+        # --- como viajan las fechas, con un incremental --------------------
+        ("fechas %2F, | literal",    "POST", f"{base}/GetReportV2/{t}/{e}/{incremental}|{f}|{f}", b""),
+        ("fechas y | codificados",   "POST", f"{base}/GetReportV2/{t}/{e}/{incremental}%7C{f}%7C{f}", b""),
+        ("fecha ISO",                "POST", f"{base}/GetReportV2/{t}/{e}/{incremental}|2026-09-30|2026-09-30", b""),
+        ("un segmento por campo",    "POST", f"{base}/GetReportV2/{t}/{e}/{incremental}/{f}/{f}", b""),
+    ]
+
+    salida = []
+    for nombre, metodo, url, cuerpo in casos:
+        try:
+            codigo, cabeceras, datos = una_llamada(url, metodo, cuerpo, espera=25)
+            fila = {
+                "caso": nombre,
+                "metodo": metodo,
+                "url": sin_token(url),
+                "codigo": codigo,
+                "redirige_a": sin_token(cabeceras.get("Location", "")) or None,
+                "tipo": cabeceras.get("Content-Type", ""),
+                "bytes": len(datos or b""),
+                # La pagina de ayuda, si existe, lista TODAS las operaciones y
+                # sus plantillas de URI: ahi se acaba el misterio, asi que de esa
+                # se guarda mas texto.
+                "respuesta": _limpio(datos, 1500 if "ayuda" in nombre or "wsdl" in nombre else 300),
+            }
+        except Exception as ex:  # noqa: BLE001
+            fila = {"caso": nombre, "metodo": metodo, "url": sin_token(url),
+                    "error": sin_token(f"{type(ex).__name__}: {ex}")}
+        salida.append(fila)
+        print(f"{fila.get('codigo', '---'):>4}  {nombre:28} {fila.get('redirige_a') or ''}")
+        time.sleep(0.3)
+
+    print(json.dumps(salida, ensure_ascii=False, indent=1))
+    return {"sonda": salida}
+
+
+# ----------------------------------------------------------------------
 # ejecucion
 # ----------------------------------------------------------------------
 def lambda_handler(event, context):
+    if (event or {}).get("sonda"):
+        return sonda(event)
+
     hoy = datetime.date.today()
     m, informes = manifiesto()
     ventana = int(os.environ.get("VENTANA_DIAS", m.get("ventana_reproceso_dias", 3)))
