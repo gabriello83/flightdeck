@@ -23,8 +23,10 @@ Variables de entorno:
 
 import datetime
 import gzip
+import html
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -34,7 +36,17 @@ import boto3
 
 s3 = boto3.client("s3")
 
-ENDPOINT = os.environ["VENCLOUD_ENDPOINT"].rstrip("/")
+def _endpoint(url):
+    """Quita la doble barra del endpoint: el servicio redirige para quitarla.
+
+    Dejarla cuesta una redireccion en cada una de las 74 llamadas de la noche,
+    para acabar exactamente en la misma URL.
+    """
+    esquema, resto = url.rstrip("/").split("://", 1)
+    return esquema + "://" + resto.replace("//", "/")
+
+
+ENDPOINT = _endpoint(os.environ["VENCLOUD_ENDPOINT"])
 
 
 def _token():
@@ -54,7 +66,14 @@ TOKEN = _token()
 EMPRESA = os.environ.get("VENCLOUD_EMPRESA", "2311")
 BUCKET = os.environ["BUCKET"]
 CLAVE_MANIFIESTO = os.environ.get("MANIFIESTO", "config/manifiesto.json")
-FORMATO_FECHA = os.environ.get("FORMATO_FECHA", "%d/%m/%Y")
+# ISO, no dd/mm/aaaa. La barra de una fecha va dentro de la RUTA, y IIS rechaza
+# con un 404 cualquier barra codificada (%2F) en la ruta: es una proteccion suya
+# contra el doble escapado, y no se puede sortear desde el cliente. Con
+# 2026-09-30 la ruta encaja. Medido: dd/MM/yyyy daba 404 y la ISO, 307.
+FORMATO_FECHA = os.environ.get("FORMATO_FECHA", "%Y-%m-%d")
+# GET, no POST: con la barra final el servicio contesta 405 a un POST, que es su
+# forma de decir "la ruta es buena, el metodo no".
+METODO = os.environ.get("VENCLOUD_METODO", "GET")
 TIEMPO_ESPERA = int(os.environ.get("TIEMPO_ESPERA", "300"))
 REINTENTOS = int(os.environ.get("REINTENTOS", "3"))
 PAUSA = float(os.environ.get("PAUSA_ENTRE_LLAMADAS", "1"))
@@ -158,24 +177,14 @@ def llamar(url, metodo="POST", cuerpo=b""):
 
 
 def rutas_posibles(informe, filtros):
-    """Las formas de poner los parametros en la ruta, de mas a menos probable.
+    """El segmento de parametros, en las dos formas que el servicio acepta.
 
-    Las fechas llevan barras (30/09/2026) y la ruta tambien, asi que una fecha
-    sin codificar parte la URL en segmentos de mas: eso era el 404 de la primera
-    noche. Se prueba primero todo codificado, que es lo correcto, y luego las
-    variantes por si el servicio espera los separadores en claro.
+    Con las fechas en ISO ya no hay barras que codificar, asi que lo unico que
+    varia es la barra vertical: el servicio la acepta literal y la reescribe a
+    %7C el solo. Se dejan las dos por si algun dia deja de hacerlo.
     """
-    partes = [str(informe), *filtros]
-    bruto = "|".join(partes)
-    formas = [
-        urllib.parse.quote(bruto, safe="|"),   # fechas %2F, barra vertical literal
-        urllib.parse.quote(bruto, safe=""),    # todo codificado, tambien el |
-        bruto,                                 # en claro, como estaba
-        "/".join(urllib.parse.quote(x, safe="") for x in partes),  # un segmento por campo
-    ]
-    # Sin repetir: un maestro no lleva separadores, asi que las cuatro formas dan
-    # la misma cadena y lo llamariamos cuatro veces con la URL identica.
-    return list(dict.fromkeys(formas))
+    bruto = "|".join([str(informe), *filtros])
+    return list(dict.fromkeys([urllib.parse.quote(bruto, safe=""), bruto]))
 
 
 def descargar(informe, filtros):
@@ -189,9 +198,11 @@ def descargar(informe, filtros):
     for intento in range(REINTENTOS):
         reintentable = False
         for segmento in rutas_posibles(informe, filtros):
-            url = f"{ENDPOINT}/GetReportV2/{TOKEN}/{EMPRESA}/{segmento}"
+            # La barra final no es cosmetica: sin ella el servicio contesta 307
+            # para anadirla, y nos cuesta una redireccion por llamada.
+            url = f"{ENDPOINT}/GetReportV2/{TOKEN}/{EMPRESA}/{segmento}/"
             try:
-                codigo, cabeceras, cuerpo = llamar(url)
+                codigo, cabeceras, cuerpo = llamar(url, METODO)
             except (urllib.error.URLError, TimeoutError, OSError) as e:
                 errores.append(sin_token(str(e)))
                 reintentable = True
@@ -199,6 +210,8 @@ def descargar(informe, filtros):
             if codigo == 200:
                 return cuerpo
             detalle = f"HTTP {codigo}"
+            if codigo == 405 and cabeceras.get("Allow"):
+                detalle += f" (acepta {cabeceras['Allow']})"
             if cabeceras.get("Location"):
                 detalle += f" -> {sin_token(cabeceras['Location'])}"
             errores.append(detalle)
@@ -278,7 +291,17 @@ def guardar_registro(hoy, resultado):
 # una, con una persona de intermediario, cuesta un dia; esto cuesta un minuto.
 
 def _limpio(datos, limite=300):
+    """El texto util, sin la hojarasca HTML.
+
+    Las paginas de error de WCF son 1.500 bytes de CSS y una sola frase al
+    final: «Extremo no encontrado». Quedarse con los primeros 300 caracteres
+    deja justo el CSS y esconde el mensaje, que es lo unico que importa.
+    """
     texto = datos.decode("utf-8", "replace") if datos else ""
+    if "<" in texto[:200]:
+        texto = re.sub(r"(?is)<(style|script|head)[^>]*>.*?</\1>", " ", texto)
+        texto = re.sub(r"(?s)<[^>]+>", " ", texto)
+        texto = html.unescape(texto)
     return " ".join(texto.split())[:limite]
 
 
@@ -291,7 +314,6 @@ def _sin_doble_barra(url):
 def sonda(event):
     base = ENDPOINT
     base1 = _sin_doble_barra(ENDPOINT)
-    hoy = (datetime.date.today() - datetime.timedelta(days=1)).strftime(FORMATO_FECHA)
 
     # Un maestro y un incremental de verdad, sacados del manifiesto.
     try:
@@ -302,29 +324,31 @@ def sonda(event):
         maestro, incremental = 157, 105
 
     t, e = TOKEN, EMPRESA
-    f = urllib.parse.quote(hoy, safe="")          # 30%2F09%2F2026
+    base = ENDPOINT                      # ya viene sin la doble barra
+    ayer = datetime.date.today() - datetime.timedelta(days=1)
+
+    def ruta(parametros):
+        return f"{base}/GetReportV2/{t}/{e}/" + urllib.parse.quote(parametros, safe="") + "/"
+
+    iso = ayer.strftime("%Y-%m-%d")
     casos = [
-        # --- que servicio hay ahi detras -----------------------------------
-        ("raiz del .svc",            "GET",  base, b""),
-        ("raiz sin doble barra",     "GET",  base1, b""),
-        ("pagina de ayuda REST",     "GET",  f"{base}/help", b""),
-        ("wsdl",                     "GET",  f"{base}?wsdl", b""),
+        # --- la candidata, y la prueba de que el metodo es ese -------------
+        ("maestro GET, barra final",   "GET",     ruta(str(maestro)), b""),
+        ("maestro POST (para Allow)",  "POST",    ruta(str(maestro)), b""),
+        ("maestro OPTIONS",            "OPTIONS", ruta(str(maestro)), b""),
 
-        # --- la forma de GetReportV2, con un maestro (sin fechas) ----------
-        ("maestro, POST",            "POST", f"{base}/GetReportV2/{t}/{e}/{maestro}", b""),
-        ("maestro, GET",             "GET",  f"{base}/GetReportV2/{t}/{e}/{maestro}", b""),
-        ("maestro, sin doble barra", "POST", f"{base1}/GetReportV2/{t}/{e}/{maestro}", b""),
-        ("maestro, barra final",     "POST", f"{base}/GetReportV2/{t}/{e}/{maestro}/", b""),
-        ("maestro, prefijo json",    "POST", f"{base}/json/GetReportV2/{t}/{e}/{maestro}", b""),
-        ("maestro, en la query",     "POST", f"{base}/GetReportV2?token={t}&empresa={e}&informe={maestro}", b""),
-        ("maestro, en el cuerpo",    "POST", f"{base}/GetReportV2",
-         json.dumps({"token": t, "empresa": e, "informe": maestro}).encode()),
+        # --- el incremental, que es el que lleva fechas --------------------
+        ("incremental GET ISO",        "GET",  ruta(f"{incremental}|{iso}|{iso}"), b""),
+        ("incremental, | literal",     "GET",
+         f"{base}/GetReportV2/{t}/{e}/{incremental}|{iso}|{iso}/", b""),
 
-        # --- como viajan las fechas, con un incremental --------------------
-        ("fechas %2F, | literal",    "POST", f"{base}/GetReportV2/{t}/{e}/{incremental}|{f}|{f}", b""),
-        ("fechas y | codificados",   "POST", f"{base}/GetReportV2/{t}/{e}/{incremental}%7C{f}%7C{f}", b""),
-        ("fecha ISO",                "POST", f"{base}/GetReportV2/{t}/{e}/{incremental}|2026-09-30|2026-09-30", b""),
-        ("un segmento por campo",    "POST", f"{base}/GetReportV2/{t}/{e}/{incremental}/{f}/{f}", b""),
+        # --- por si el informe interpreta mal la ISO -----------------------
+        ("fecha dd-MM-yyyy",           "GET", ruta(f"{incremental}|{ayer.strftime('%d-%m-%Y')}|{ayer.strftime('%d-%m-%Y')}"), b""),
+        ("fecha yyyyMMdd",             "GET", ruta(f"{incremental}|{ayer.strftime('%Y%m%d')}|{ayer.strftime('%Y%m%d')}"), b""),
+        ("fecha ISO con hora",         "GET", ruta(f"{incremental}|{iso} 00:00:00|{iso} 23:59:59"), b""),
+
+        # --- una ventana mas ancha, por si ayer no tiene filas -------------
+        ("incremental, mes de agosto", "GET", ruta(f"{incremental}|2026-08-01|2026-08-31"), b""),
     ]
 
     salida = []
@@ -338,17 +362,19 @@ def sonda(event):
                 "codigo": codigo,
                 "redirige_a": sin_token(cabeceras.get("Location", "")) or None,
                 "tipo": cabeceras.get("Content-Type", ""),
+                "acepta": cabeceras.get("Allow"),
                 "bytes": len(datos or b""),
                 # La pagina de ayuda, si existe, lista TODAS las operaciones y
                 # sus plantillas de URI: ahi se acaba el misterio, asi que de esa
                 # se guarda mas texto.
-                "respuesta": _limpio(datos, 1500 if "ayuda" in nombre or "wsdl" in nombre else 300),
+                "respuesta": _limpio(datos, 400),
             }
         except Exception as ex:  # noqa: BLE001
             fila = {"caso": nombre, "metodo": metodo, "url": sin_token(url),
                     "error": sin_token(f"{type(ex).__name__}: {ex}")}
         salida.append(fila)
-        print(f"{fila.get('codigo', '---'):>4}  {nombre:28} {fila.get('redirige_a') or ''}")
+        print(f"{fila.get('codigo', '---'):>4}  {nombre:28} "
+              f"{fila.get('bytes', 0):>7} B  {fila.get('acepta') or fila.get('redirige_a') or ''}")
         time.sleep(0.3)
 
     print(json.dumps(salida, ensure_ascii=False, indent=1))

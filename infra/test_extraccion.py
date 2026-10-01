@@ -1,10 +1,15 @@
 """
 La capa de red de la extraccion, con un servidor falso.
 
-Reproduce lo que VenCloud contesto de verdad la primera noche —404 en los
-informes con fechas y 307 en los maestros— y comprueba que el codigo nuevo lo
-maneja: codifica las barras de la fecha, sigue el 307 sin cambiar de metodo, y
-cuando falla deja dicho A DONDE redirigia, que es la mitad del diagnostico.
+Reproduce lo que VenCloud contesto de verdad —404 en los informes con fechas,
+307 en los maestros, 405 con la barra final— y comprueba que el codigo monta la
+URL que el propio servicio nos dijo que queria:
+
+    GET .../GetReportV2/{token}/{empresa}/{informe}%7C{aaaa-mm-dd}%7C{aaaa-mm-dd}/
+
+Tres cosas, cada una medida: GET y no POST (el 405 con barra final lo dijo),
+barra final (el 307 la anadia), y fecha ISO (dd/MM/yyyy daba 404 porque IIS
+rechaza la barra codificada dentro de la ruta).
 
     python3 infra/test_extraccion.py
 """
@@ -19,7 +24,7 @@ sys.path.insert(0, AQUI)
 
 sys.modules["boto3"] = types.SimpleNamespace(client=lambda *a, **k: None)
 os.environ.update(
-    VENCLOUD_ENDPOINT="https://vencloudpro.eac.es/2311_api/webservices//Api/Api.svc",
+    VENCLOUD_ENDPOINT="https://vencloudpro.eac.es/2311_api/webservices//Api/Api.svc",  # con la doble barra, como venia
     VENCLOUD_TOKEN="EL-TOKEN-SECRETO",
     VENCLOUD_EMPRESA="2311",
     BUCKET="b",
@@ -97,15 +102,23 @@ def guion(*casos):
 
 
 # ----------------------------------------------------------------------
-print("\nLas barras de la fecha se codifican: eso era el 404")
-rutas = list(L.rutas_posibles(105, ["30/09/2026", "30/09/2026"]))
-comprueba("cuatro formas", len(rutas), 4)
-comprueba("la primera lleva %2F", rutas[0], "105|30%2F09%2F2026|30%2F09%2F2026")
-comprueba("y conserva la barra vertical", "|" in rutas[0], True)
-comprueba("la segunda codifica tambien el |", rutas[1], "105%7C30%2F09%2F2026%7C30%2F09%2F2026")
-comprueba("la tercera es en claro, como estaba", rutas[2], "105|30/09/2026|30/09/2026")
-comprueba("la cuarta parte por segmentos", rutas[3], "105/30%2F09%2F2026/30%2F09%2F2026")
-comprueba("un maestro no lleva separadores", list(L.rutas_posibles(157, []))[0], "157")
+import datetime  # noqa: E402
+
+print("\nLa URL es exactamente la que el servicio pidio")
+comprueba("fecha en ISO", L.FORMATO_FECHA, "%Y-%m-%d")
+comprueba("metodo GET", L.METODO, "GET")
+comprueba("el endpoint pierde la doble barra",
+          L.ENDPOINT, "https://vencloudpro.eac.es/2311_api/webservices/Api/Api.svc")
+comprueba("las fechas salen sin barras",
+          L.filtros_de("propia", datetime.date(2026, 9, 30)), ["2026-09-30", "2026-09-30"])
+
+rutas = L.rutas_posibles(105, ["2026-09-30", "2026-09-30"])
+comprueba("dos formas", len(rutas), 2)
+comprueba("la primera con %7C", rutas[0], "105%7C2026-09-30%7C2026-09-30")
+comprueba("la segunda con | literal", rutas[1], "105|2026-09-30|2026-09-30")
+comprueba("un maestro va solo", L.rutas_posibles(157, []), ["157"])
+comprueba("y sin %2F en ninguna, que es lo que daba 404",
+          any("%2F" in r for r in rutas), False)
 
 print("\nUn 307 se sigue SIN cambiar de metodo")
 guion(
@@ -136,13 +149,34 @@ comprueba("devuelve el 307", codigo, 307)
 comprueba("con su destino", cabeceras["Location"], "/da/vueltas")
 comprueba("y para a los cuatro intentos", len(PETICIONES), L.MAX_SALTOS + 1)
 
+print("\nLa llamada de verdad: GET, barra final y nada de POST")
+guion((lambda p: True, 200, {}, b'[{"ok":true}]'))
+comprueba("devuelve el cuerpo", L.descargar(157, []), b'[{"ok":true}]')
+comprueba("va por GET", PETICIONES[0]["metodo"], "GET")
+comprueba("acaba en barra", PETICIONES[0]["url"].endswith("/157/"), True)
+comprueba("sin doble barra", "//" in PETICIONES[0]["url"].split("://", 1)[1], False)
+
+guion((lambda p: True, 200, {}, b"[]"))
+L.descargar(105, ["2026-09-30", "2026-09-30"])
+comprueba("el incremental tambien acaba en barra",
+          PETICIONES[0]["url"].endswith("105%7C2026-09-30%7C2026-09-30/"), True)
+
 print("\nUn 404 prueba la forma siguiente de ruta, no se rinde")
 guion(
-    (lambda p: "%2F" in p.full_url, 200, {}, b'[{"ok":true}]'),
+    (lambda p: "%7C" not in p.full_url, 200, {}, b'[{"ok":true}]'),
     (lambda p: True, 404, {}, b"no"),
 )
-comprueba("encuentra la buena", L.descargar(105, ["30/09/2026", "30/09/2026"]), b'[{"ok":true}]')
-comprueba("a la primera, porque %2F va primero", len(PETICIONES), 1)
+comprueba("encuentra la segunda", L.descargar(105, ["2026-09-30", "2026-09-30"]), b'[{"ok":true}]')
+comprueba("tras probar las dos", len(PETICIONES), 2)
+
+print("\nUn 405 dice que metodos acepta, y eso va en el mensaje")
+guion((lambda p: True, 405, {"Allow": "GET, HEAD"}, b""))
+try:
+    L.descargar(157, [])
+    comprueba("deberia fallar", True, False)
+except RuntimeError as e:
+    comprueba("trae el 405", "HTTP 405" in str(e), True)
+    comprueba("y lo que acepta", "acepta GET, HEAD" in str(e), True)
 
 print("\nSi fallan todas, el error dice el codigo Y a donde redirigia")
 guion((lambda p: True, 307, {"Location": "https://vencloudpro.eac.es/login"}, b""))
@@ -181,9 +215,17 @@ except RuntimeError as e:
     comprueba("redactado", "EL-TOKEN-SECRETO" in str(e), False)
     comprueba("y se ve que estaba", "TOKEN" in str(e), True)
 
-print("\nLa sonda quita la doble barra del endpoint, pero no la del esquema")
-comprueba("colapsa", L._sin_doble_barra("https://a.es/x//y/z.svc"), "https://a.es/x/y/z.svc")
-comprueba("no toca https://", L._sin_doble_barra("https://a.es/x").startswith("https://"), True)
+print("\nEl endpoint se normaliza sin romper el esquema")
+comprueba("colapsa", L._endpoint("https://a.es/x//y/z.svc"), "https://a.es/x/y/z.svc")
+comprueba("no toca https://", L._endpoint("https://a.es/x"), "https://a.es/x")
+comprueba("y quita la barra final", L._endpoint("https://a.es/x/"), "https://a.es/x")
+
+print("\nDe una pagina de error de WCF se lee el mensaje, no el CSS")
+pagina = (b"<html><head><style>BODY{color:#000;font-family:Verdana}</style></head>"
+          b"<body><div id='content'><p class='heading1'>Servicio</p>"
+          b"<p>Extremo no encontrado.</p></div></body></html>")
+comprueba("el mensaje", L._limpio(pagina), "Servicio Extremo no encontrado.")
+comprueba("un JSON pasa intacto", L._limpio(b'[{"id":1}]'), '[{"id":1}]')
 
 print()
 if fallos:
