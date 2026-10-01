@@ -1304,7 +1304,55 @@ left join stocks.articulos a  on a.id = mt.recambioid
 where t.fecha >= '{0}' and t.fecha <= '{1} 23:59:59'
 ```
 
-## D11 · EXT_SAT_CATALOGO  *(sin parámetros)*
+## D11 · EXT_SAT_CATALOGO  *(sin parámetros)*  ·  **sin lanzar**
+
+Es el único de la tanda D que no se ha ejecutado nunca. De sus columnas, **sólo cuatro
+están confirmadas**, y lo están porque D7 las usa y D7 funcionó:
+
+| confirmado por D7 | sin confirmar (nombre inferido del modelo) |
+|---|---|
+| `satoperaciones.id`, `.codigo`, `.nombre`, `.satoperacioncategoriaid` | `.tipo`, `.severidad`, `.tiempoestimado`, `.averiarapida`, `.tipoasignacion`, `.desactivada`, `.fabricanteid` |
+| `satoperacionescategorias.id`, `.nombre` | `satoperacionescategorias.tipo` |
+
+Así que **primero las dos sondas**, que es lo que ha funcionado toda la campaña: un
+`select tabla.*` dice los nombres de verdad y evita gastar intentos adivinando.
+
+### Sonda D11-A · columnas reales de las operaciones
+
+```sql
+select op.* from configuracion.satoperaciones op order by op.id
+```
+
+### Sonda D11-B · columnas reales de las categorías
+
+```sql
+select cat.* from configuracion.satoperacionescategorias cat order by cat.id
+```
+
+Las dos tablas son catálogos cerrados —cientos de filas, no miles—, así que bajarlas
+enteras no cuesta nada y de paso **ya son la extracción**: si las sondas salen, el maestro
+está volcado.
+
+### D11 · versión que no puede fallar
+
+Sólo columnas confirmadas. Si hay prisa, créala así y se amplía después.
+
+```sql
+select
+  op.id      as id,
+  op.codigo  as codigo,
+  op.nombre  as operacion,
+  cat.id     as categoria_id,
+  cat.nombre as categoria
+from configuracion.satoperaciones op
+left join configuracion.satoperacionescategorias cat on cat.id = op.satoperacioncategoriaid
+order by cat.nombre, op.codigo
+```
+
+### D11 · versión completa
+
+Para cuando las sondas confirmen los nombres. Si alguno no coincide, se cambia esa línea
+y nada más; el resto de la consulta no depende de ella.
 
 ```sql
 select
@@ -1317,6 +1365,7 @@ select
   op.averiarapida   as averia_rapida,
   op.tipoasignacion as tipo_asignacion,
   op.desactivada    as desactivada,
+  cat.id       as categoria_id,
   cat.nombre   as categoria,
   cat.tipo     as tipo_categoria,
   f.nombre     as fabricante
@@ -1325,6 +1374,16 @@ left join configuracion.satoperacionescategorias cat on cat.id = op.satoperacion
 left join general.fabricantes f on f.id = op.fabricanteid
 order by cat.nombre, op.codigo
 ```
+
+**Sin parámetros**: es un maestro, así que no lleva FECHA DESDE ni FECHA HASTA, y por tanto
+tampoco le aplica la regla del `Orden`. En el manifiesto va con `clave_fecha: "ninguna"` y
+destino `maestros/sat_catalogo`: se baja entero cada noche, sin partición por fecha.
+
+**Para qué sirve**: es el diccionario que cierra el SAT. D7 trae el `cod_operacion` y la
+`categoria` de cada tarea, pero no sabe qué operaciones existen ni cuáles están
+desactivadas. Con este catálogo se puede decir **qué operaciones no se usan nunca** y
+cuáles se usan con una categoría que no les corresponde — y es lo que hace falta para que
+el `tipo_tarea` ('A' avería, 'E' preventivo) deje de ser la única clasificación disponible.
 
 ---
 
