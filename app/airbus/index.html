@@ -118,6 +118,13 @@ tr:last-child td{border-bottom:0}
 footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
 @media (max-width:860px){ .panel{grid-column:span 12} }
 #cargando{padding:40px 0;color:var(--tinta-2)}
+.ajuste{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px;font-size:13px;color:var(--tinta-2)}
+.ajuste input{
+  font:inherit;font-size:13px;width:92px;color:var(--tinta);background:var(--fondo);
+  border:1px solid var(--borde-fuerte);border-radius:7px;padding:5px 8px;text-align:right;font-variant-numeric:tabular-nums
+}
+.ajuste input:focus{outline:2px solid var(--s1);outline-offset:1px;border-color:var(--s1)}
+.ajuste .def{color:var(--tinta-3);font-size:12px}
 </style>
 </head>
 <body>
@@ -157,6 +164,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 const ORIGEN = "datos/airbus.json";
 const CLAVE_ORDEN = "digivend.airbus.orden";
 const CLAVE_TEMA  = "digivend.tema";
+const CLAVE_UMBRAL= "digivend.airbus.umbral";
 
 const eur = n => new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n);
 const eur2= n => new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
@@ -342,15 +350,41 @@ function definePaneles(D){
       } },
 
     { id:"umbral350", titulo:"Máquinas de menor rendimiento",
-      sub:"Las ocho con menos venta, todas por debajo del umbral de 350 €/mes. Candidatas a reubicar o retirar.",
+      sub:"Las que no llegan al umbral de rentabilidad. Candidatas a reubicar o retirar.",
       pinta: c => {
-        const bajo = D.bot_maq.filter(d=>d.dia*30 < 350);
-        const k=document.createElement("div"); k.className="kpi"; k.style.marginBottom="10px";
-        k.innerHTML = `<div class="et">Venta conjunta</div><div class="vl">${eur(bajo.reduce((a,d)=>a+d.i,0))}</div>
-          <div class="nt">entre las ${bajo.length} en ${D.periodo.dias} días</div>`;
-        c.appendChild(k);
-        c.appendChild(tabla([{t:"Máquina",mono:true},{t:"Centro"},{t:"€/mes estimado",n:true}],
-          bajo.map(d=>[esc(d.m),esc(d.c),eur(d.dia*30)])));
+        /* El umbral lo fija el administrador en el perfil y el usuario puede ajustarlo aqui. */
+        const aj=document.createElement("div"); aj.className="ajuste";
+        aj.innerHTML = `<label for="umbral">Umbral de rentabilidad</label>
+          <input id="umbral" type="number" min="0" step="25" value="${umbralActual()}" inputmode="numeric">
+          <span>€/mes</span>
+          <span class="def">(por defecto ${num(UMBRAL_PERFIL)} €)</span>
+          <button class="btn" type="button" id="umbralDef" style="padding:4px 9px">Restablecer</button>`;
+        c.appendChild(aj);
+        const salida=document.createElement("div"); c.appendChild(salida);
+        const dibuja = () => {
+          const u = umbralActual();
+          const bajo = D.bot_maq.filter(d=>d.dia*30 < u);
+          salida.innerHTML="";
+          const k=document.createElement("div"); k.className="kpi"; k.style.marginBottom="10px";
+          k.innerHTML = bajo.length
+            ? `<div class="et">Venta conjunta</div><div class="vl">${eur(bajo.reduce((a,d)=>a+d.i,0))}</div>
+               <div class="nt">entre las ${bajo.length} que no llegan a ${num(u)} €/mes, en ${D.periodo.dias} días</div>`
+            : `<div class="et">Por debajo del umbral</div><div class="vl">0</div>
+               <div class="nt">ninguna de las ocho de menor venta baja de ${num(u)} €/mes</div>`;
+          salida.appendChild(k);
+          if(bajo.length) salida.appendChild(tabla([{t:"Máquina",mono:true},{t:"Centro"},{t:"€/mes estimado",n:true}],
+            bajo.map(d=>[esc(d.m),esc(d.c),eur(d.dia*30)])));
+        };
+        dibuja();
+        const inp=aj.querySelector("#umbral");
+        inp.addEventListener("input", ()=>{
+          const v=Number(inp.value);
+          if(Number.isFinite(v) && v>=0){ escribir(CLAVE_UMBRAL, String(v)); dibuja(); }
+        });
+        aj.querySelector("#umbralDef").addEventListener("click", ()=>{
+          try{ localStorage.removeItem(CLAVE_UMBRAL); }catch(e){}
+          inp.value = UMBRAL_PERFIL; dibuja();
+        });
       } },
 
     { id:"mudas", titulo:"Máquinas sin venta",
@@ -422,6 +456,13 @@ function definePaneles(D){
 
 /* ---------- montaje y reordenacion ---------- */
 let PANELES=[], D=null;
+/* Umbral de rentabilidad: lo fija el administrador en el perfil del cliente
+   (reglas_negocio.umbral_rentabilidad_mes) y el usuario puede ajustarlo en pantalla. */
+let UMBRAL_PERFIL = 350;
+function umbralActual(){
+  const v = Number(leer(CLAVE_UMBRAL));
+  return Number.isFinite(v) && v > 0 ? v : UMBRAL_PERFIL;
+}
 
 function ordenGuardado(){
   try{ const v=JSON.parse(leer(CLAVE_ORDEN)||"null"); return Array.isArray(v)?v:null; }catch(e){ return null; }
@@ -519,6 +560,7 @@ document.getElementById("bOrden").addEventListener("click", ()=>{
       `No se han podido cargar los datos (<code>${esc(ORIGEN)}</code>). Avisa a Serunion Vending.`;
     return;
   }
+  if(D.perfil && Number(D.perfil.umbral_rentabilidad_mes) > 0) UMBRAL_PERFIL = Number(D.perfil.umbral_rentabilidad_mes);
   const f = s => new Date(s+"T00:00:00").toLocaleDateString("es-ES",{day:"numeric",month:"long",year:"numeric"});
   document.getElementById("periodo").textContent = `Del ${f(D.periodo.desde)} al ${f(D.periodo.hasta)} · ${D.periodo.dias} días`;
 
