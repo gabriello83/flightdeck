@@ -188,27 +188,26 @@ la raíz del bucket, la extracción no los encuentra y se para nada más empezar
 
 ## Paso 5 · El código de las dos Lambdas — 10 min
 
-### 5a · La extracción se pega
+**Las dos van en zip, ninguna se pega.** Pegar en el editor de la consola parece más cómodo y
+no lo es: con cuatrocientas líneas el navegador puede truncar el pegado, y el error que sale
+luego es un fallo de sintaxis a mitad del fichero que **no apunta a la causa**. Ya nos pasó.
 
-Es un solo fichero. `Lambda → Functions → digivend-extraccion → pestaña Code`.
-
-Doble clic en `index.py`, **selecciona todo lo que hay y bórralo**, pega el contenido entero de
-`infra/lambda_extraccion.py`, y pulsa **Deploy** (arriba a la derecha del editor). Espera a que
-diga que se ha desplegado.
-
-### 5b · Los agregados van en zip
-
-Son dos ficheros, así que no se pueden pegar. En tu ordenador, dentro de la carpeta `infra/`:
+Prepara los dos zips de una vez:
 
 ```bash
-cd infra
-zip agregados.zip lambda_agregados.py reglas.py
+sh infra/empaquetar.sh
 ```
 
-En Windows sin `zip`: selecciona **esos dos ficheros**, botón derecho → *Enviar a → Carpeta
-comprimida*. **Los dos ficheros tienen que quedar en la raíz del zip, no dentro de una carpeta.**
+Deja `paquetes/extraccion.zip` y `paquetes/agregados.zip` (y de paso los de la web, para el paso
+12). Si no tienes `sh` a mano, se hacen a mano:
 
-`Lambda → digivend-agregados → Code → Upload from → .zip file` → elige `agregados.zip` → **Save**.
+- **`extraccion.zip`**: una copia de `infra/lambda_extraccion.py` **renombrada a `index.py`**, y
+  nada más. El nombre importa: el handler de esa función es `index.lambda_handler`.
+- **`agregados.zip`**: `lambda_agregados.py` y `reglas.py`, con sus nombres.
+
+En los dos casos, **los ficheros van en la raíz del zip, no dentro de una carpeta**.
+
+Y se suben igual: `Lambda → la función → Code → Upload from → .zip file` → el zip → **Save**.
 
 ## Paso 6 · La primera carga, a mano — 5 min + espera
 
