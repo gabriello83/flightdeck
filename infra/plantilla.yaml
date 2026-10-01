@@ -269,7 +269,9 @@ Resources:
       FunctionName: !Sub "${Prefijo}-agregados"
       Description: Aplica las reglas del modelo y escribe los paneles de la cabina.
       Runtime: python3.12
-      Handler: index.lambda_handler
+      # El nombre del modulo, no index: esta funcion son dos ficheros y va como
+      # zip, asi que no hay que renombrar nada al subirla.
+      Handler: lambda_agregados.lambda_handler
       Role: !GetAtt RolAgregados.Arn
       Timeout: 900
       MemorySize: 2048
@@ -282,9 +284,10 @@ Resources:
         - { Key: Proyecto, Value: !Ref Proyecto }
       Code:
         ZipFile: |
+          # Marcador. Al subir el zip con lambda_agregados.py y reglas.py este
+          # fichero deja de usarse: el handler apunta al modulo, no a index.
           def lambda_handler(event, context):
-              raise RuntimeError(
-                  "Sube aqui lambda_agregados.py y reglas.py del repositorio.")
+              raise RuntimeError("Sube el zip de infra/ del repositorio.")
 
   # ------------------------------------------------------------------ horario
   # Grupo propio: los horarios de digivend no se mezclan en el grupo "default"

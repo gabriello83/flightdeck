@@ -1,0 +1,23 @@
+{
+  "_comentario": "Un panel por perfil. El ambito se aplica AQUI, al escribir: cada panel sale con los centros de su perfil y ningun otro, asi que la web no puede servir de mas aunque quisiera. Los perfiles de la plataforma (usuarios, permisos, sesiones) viven en DynamoDB; esto es solo la lista de paneles que hay que calcular.",
+  "perfiles": [
+    {
+      "id": "interno",
+      "nombre": "Serunion",
+      "ambito": {},
+      "_nota": "Ambito vacio es TODO. Solo para perfiles internos."
+    },
+    {
+      "id": "cli-airbus",
+      "nombre": "AIRBUS",
+      "ambito": {
+        "clientes": [
+          "AIRBUS"
+        ],
+        "centros": [],
+        "delegaciones": []
+      },
+      "_nota": "Por nombre de cliente: coge los nueve centros de AIRBUS sin listarlos."
+    }
+  ]
+}
