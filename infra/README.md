@@ -46,13 +46,38 @@ operación `GetReport` devuelve un `Message` en crudo, y no hay página de ayuda
 había nada que consultar y hubo que medirlo. Y una fecha con hora (`2026-09-30 00:00:00`) da
 **400**, lo que confirma de paso que el parámetro se valida de verdad y no se ignora.
 
-### Lo que sigue sin estar comprobado
+### El filtro de fechas: comprobado
 
-**Que el filtro de fechas acote lo que creemos.** Un día de `visita_cabecera` son 6,4 MB, que
-cuadran con unas 2.900 filas a 2,2 KB cada una; si ignorara la fecha serían nueve meses, es
-decir cerca de un giga. La magnitud dice que filtra, pero **no está medido contra un rango
-distinto**, y esa comprobación es la primera que hay que hacer con el registro de la primera
-carga delante: si un día y un mes entero pesan lo mismo, el filtro no está haciendo nada.
+La primera carga completa (02/10/2026) cerró **74 de 74 descargas, cero errores, 143,8 MB**.
+Y el filtro quedó demostrado sin lugar a dudas: `visita_inventario` devolvió **1.212, 9 y 131
+filas** en tres días consecutivos. Un informe que ignorase la fecha no puede producir eso.
+
+Volúmenes medidos, que son los que hay que esperar cada noche:
+
+| | |
+|---|---|
+| incrementales | **43 MB al día** repartidos en 22 informes |
+| maestros | **13,8 MB**, enteros cada noche |
+| una noche en régimen | unos **57 MB en crudo**, que comprimidos son muchos menos |
+
+Los conteos cuadran con lo que medimos informe a informe durante la campaña: 10.447 líneas de
+tubos al día contra 10.167 esperadas, 6.827 de monedero contra 6.667, 143 tareas de SAT contra
+113. Todo dentro de la variación normal entre meses.
+
+### Dos informes que devuelven cero, y está bien
+
+`stock_balance` y `stock_balance_prod` dieron **cero filas los tres días**. No es un fallo: los
+dos filtran por `infinventarioresumenes.fecha`, que es la fecha de un **cierre mensual**. Sólo
+hay filas el día que se genera el cierre, y ese día no cayó dentro de la ventana.
+
+Tiene dos consecuencias prácticas:
+
+1. **El agregado no puede sumar varios cierres.** En una ventana de 120 días caben tres o cuatro,
+   y sumarlos multiplicaría las existencias por cuatro y contaría cada máquina cuatro veces en el
+   cumplimiento de inventario. `bloque_inventario` se queda con la foto más reciente y publica de
+   qué periodo es.
+2. **Si la carga nocturna falla cuatro días seguidos justo en el cierre, ese mes se pierde** hasta
+   que se rellene a mano. Es el caso que justifica el modo de relleno histórico.
 
 ## Los números de informe · **los 30 rellenos**
 
@@ -113,6 +138,32 @@ bucket de la cuenta. La plantilla **no referencia ni adopta ningún recurso exis
 crea—, los horarios van en su propio grupo de Scheduler, y todo lleva la etiqueta
 `Proyecto=digivend` para que el gasto salga aparte en la factura. El detalle, en
 [`AISLAMIENTO.md`](AISLAMIENTO.md).
+
+## El relleno histórico
+
+La carga nocturna trae tres días. **La cabina necesita nueve meses**, y esa historia no la trae
+nunca una ventana de tres días: hay que rellenarla una vez.
+
+```json
+{"desde": "2026-01-01", "hasta": "2026-01-31"}
+```
+
+Como evento de prueba de la Lambda de extracción. Carga ese rango **del día más antiguo al más
+nuevo**, y si se le acaba el tiempo **para a los 90 segundos del límite y dice por dónde
+continuar**:
+
+```json
+{"descargas_ok": 440, "incompleto": true, "continuar_desde": "2026-01-21",
+ "_siguiente": "Relanza con {\"desde\": \"2026-01-21\", \"hasta\": \"...\"}"}
+```
+
+Se relanza con esa fecha y se sigue. Como los días se cargan en orden, lo ya cargado queda
+siempre seguido: no hay huecos que buscar después.
+
+Dos detalles pensados: **un relleno no vuelve a bajar los maestros** —son la foto de hoy, no
+tienen historia que rellenar— y **su registro va a `registro/extraccion/historico/`**, para no
+pisar el de la noche. Admite también `"solo": ["visita_cabecera"]` para rellenar un informe
+suelto, y `"pausa"` para espaciar las llamadas; con esto último, cuidado, que es su ERP.
 
 ## La carga es idempotente
 

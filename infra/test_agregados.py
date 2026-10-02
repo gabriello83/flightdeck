@@ -91,10 +91,19 @@ pon("crudo/jornadas", "jornadas", AYER,
     [{"temperaturaini": 2.0, "kminiciales": 100, "kmfinales": 150, "maplatitudini": 37.4, "centro": "AIRBUS GETAFE"}] * 9
     + [{"temperaturaini": 26.0, "kminiciales": 100, "kmfinales": 160, "maplatitudini": 0, "centro": "AIRBUS GETAFE"}])
 
+# DOS cierres mensuales dentro de la ventana: el de agosto y el de septiembre.
+# Es lo normal con 120 dias, y sumarlos multiplicaria las existencias.
 pon("crudo/stock_balance", "stock_balance", AYER,
-    [{"tipo_elemento": "M", "valor_total": 1000, "fecha_ult_inventario": str(HOY), "centro": "AIRBUS GETAFE"}] * 2
-    + [{"tipo_elemento": "M", "valor_total": 500, "fecha_ult_inventario": "1900-01-01", "centro": "AIRBUS GETAFE"}] * 2
-    + [{"tipo_elemento": "A", "valor_total": 9000, "fecha_ult_inventario": str(HOY), "centro": "AIRBUS GETAFE"}])
+    [{"anho": 2026, "mes": 9, "tipo_elemento": "M", "valor_total": 1000,
+      "fecha_ult_inventario": str(HOY), "centro": "AIRBUS GETAFE"}] * 2
+    + [{"anho": 2026, "mes": 9, "tipo_elemento": "M", "valor_total": 500,
+        "fecha_ult_inventario": "1900-01-01", "centro": "AIRBUS GETAFE"}] * 2
+    + [{"anho": 2026, "mes": 9, "tipo_elemento": "A", "valor_total": 9000,
+        "fecha_ult_inventario": str(HOY), "centro": "AIRBUS GETAFE"}]
+    + [{"anho": 2026, "mes": 8, "tipo_elemento": "M", "valor_total": 7777,
+        "fecha_ult_inventario": str(HOY), "centro": "AIRBUS GETAFE"}] * 6
+    + [{"anho": 2026, "mes": 8, "tipo_elemento": "A", "valor_total": 123456,
+        "fecha_ult_inventario": str(HOY), "centro": "AIRBUS GETAFE"}])
 
 ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
     {"id": "interno", "ambito": {}},
@@ -161,11 +170,13 @@ comprueba("1 fuera de temperatura", airbus["jornadas"]["temperatura_fuera"], 1)
 comprueba("510 km", airbus["jornadas"]["km_total"], 510)
 comprueba("90 % con GPS", airbus["jornadas"]["gps"]["pct"], 90.0)
 
-print("\nInventario y existencias")
+print("\nInventario y existencias: solo el ultimo cierre, nunca la suma")
+comprueba("se queda con septiembre", airbus["inventario"]["periodo_balance"], "2026-09")
 comprueba("4 maquinas", airbus["inventario"]["cumplimiento"]["maquinas"], 4)
 comprueba("2 nunca inventariadas", airbus["inventario"]["cumplimiento"]["nunca"], 2)
 comprueba("50 % en norma", airbus["inventario"]["cumplimiento"]["pct_en_norma"], 50.0)
-comprueba("existencias en almacen", airbus["inventario"]["existencias"]["A"], 9000.0)
+comprueba("existencias de septiembre, no 132.456", airbus["inventario"]["existencias"]["A"], 9000.0)
+comprueba("y no cuenta las 6 maquinas de agosto", airbus["inventario"]["cumplimiento"]["maquinas"], 4)
 
 print("\nEl estado de la carga queda donde la web puede leerlo")
 import datetime as _dt

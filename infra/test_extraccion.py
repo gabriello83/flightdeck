@@ -22,7 +22,32 @@ import urllib.error
 AQUI = __file__.rsplit("/", 1)[0]
 sys.path.insert(0, AQUI)
 
-sys.modules["boto3"] = types.SimpleNamespace(client=lambda *a, **k: None)
+import json as _j
+
+
+class _S3Falso:
+    """Lo justo para que el handler pueda leer el manifiesto y escribir."""
+
+    GUARDADO = {}
+
+    def get_object(self, Bucket, Key):
+        cuerpo = _j.dumps({
+            "ventana_reproceso_dias": 3,
+            "informes": [
+                {"id": "visita_cabecera", "nombre": "EXT_VISITA_CABECERA", "informe": 105,
+                 "clave_fecha": "propia", "destino": "crudo/visita_cabecera"},
+                {"id": "m_rutas", "nombre": "EXT_RUTAS_MAESTRO", "informe": 157,
+                 "clave_fecha": "ninguna", "destino": "maestros/rutas"},
+            ],
+        }).encode()
+        return {"Body": types.SimpleNamespace(read=lambda: cuerpo)}
+
+    def put_object(self, Bucket, Key, Body, **kw):
+        self.GUARDADO[Key] = Body
+        return {}
+
+
+sys.modules["boto3"] = types.SimpleNamespace(client=lambda *a, **k: _S3Falso())
 os.environ.update(
     VENCLOUD_ENDPOINT="https://vencloudpro.eac.es/2311_api/webservices//Api/Api.svc",  # con la doble barra, como venia
     VENCLOUD_TOKEN="EL-TOKEN-SECRETO",
@@ -230,6 +255,66 @@ try:
 except RuntimeError as e:
     comprueba("redactado", "EL-TOKEN-SECRETO" in str(e), False)
     comprueba("y se ve que estaba", "TOKEN" in str(e), True)
+
+print("\nLos dias: ventana nocturna o relleno historico")
+HOY = datetime.date(2026, 10, 2)
+comprueba("la noche son los tres anteriores",
+          [d.isoformat() for d in L.dias_a_cargar(HOY, 3)],
+          ["2026-10-01", "2026-09-30", "2026-09-29"])
+comprueba("el historico va del mas antiguo al mas nuevo",
+          [d.isoformat() for d in L.dias_a_cargar(HOY, 3, {"desde": "2026-01-01", "hasta": "2026-01-04"})],
+          ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"])
+comprueba("sin 'hasta', un solo dia",
+          [d.isoformat() for d in L.dias_a_cargar(HOY, 3, {"desde": "2026-02-10"})],
+          [datetime.date(2026, 2, 10).isoformat()])
+try:
+    L.dias_a_cargar(HOY, 3, {"desde": "2026-02-10", "hasta": "2026-01-01"})
+    comprueba("un rango al reves deberia fallar", True, False)
+except ValueError:
+    comprueba("un rango al reves falla pronto", True, True)
+
+print("\nUn relleno historico que se queda sin tiempo dice por donde iba")
+
+
+class _Reloj:
+    """El contexto de Lambda: el tiempo que queda, en milisegundos."""
+
+    def __init__(self, llamadas_antes_de_agotarse):
+        self.quedan = llamadas_antes_de_agotarse
+
+    def get_remaining_time_in_millis(self):
+        self.quedan -= 1
+        return 900_000 if self.quedan > 0 else 10_000
+
+
+L.PAUSA = 0
+guion((lambda p: True, 200, {}, b'[{"a":1}]'))
+res = L.lambda_handler(
+    {"desde": "2026-01-01", "hasta": "2026-01-10", "solo": ["visita_cabecera"], "pausa": 0},
+    _Reloj(4))
+comprueba("para antes de morir", res.get("incompleto"), True)
+comprueba("y dice por donde continuar", res["continuar_desde"], "2026-01-04")
+comprueba("con los tres primeros dias completos", res["descargas_ok"], 3)
+comprueba("y queda marcado como historico", res["modo"], "historico")
+comprueba("la respuesta trae la instruccion de como seguir",
+          "2026-01-04" in res["_siguiente"], True)
+
+# El registro va a una clave aparte: un relleno historico no pisa el de la noche.
+claves = [k for k in _S3Falso.GUARDADO if k.startswith("registro/")]
+comprueba("el registro del historico va aparte",
+          claves, ["registro/extraccion/historico/2026-01-01_2026-01-10.json"])
+detalle = _j.loads(_S3Falso.GUARDADO[claves[0]])
+comprueba("y guarda el detalle de los tres dias", len(detalle["ok"]), 3)
+comprueba("del mas antiguo", detalle["ok"][0]["dia"], "2026-01-01")
+
+print("\nUn relleno historico NO vuelve a bajar los maestros")
+# Un maestro es la foto de hoy: no tiene historia que rellenar, y bajarlo una
+# vez por cada dia del rango seria tirar el tiempo del relleno.
+_S3Falso.GUARDADO.clear()
+guion((lambda p: True, 200, {}, b"[]"))
+res2 = L.lambda_handler({"desde": "2026-01-01", "hasta": "2026-01-02", "pausa": 0}, None)
+comprueba("dos dias de un solo informe con fecha", res2["descargas_ok"], 2)
+comprueba("ningun maestro", any("maestros/" in k for k in _S3Falso.GUARDADO), False)
 
 print("\nEl endpoint se normaliza sin romper el esquema")
 comprueba("colapsa", L._endpoint("https://a.es/x//y/z.svc"), "https://a.es/x/y/z.svc")

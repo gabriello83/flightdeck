@@ -19,6 +19,16 @@ Variables de entorno:
   FORMATO_FECHA      (opcional) %Y-%m-%d. NO puede llevar barras: ver mas abajo
   VENTANA_DIAS       (opcional) dias hacia atras que se reprocesan; por defecto el del manifiesto
   SOLO               (opcional) lista de ids separados por coma, para una carga parcial
+
+Eventos que entiende:
+  {}                                       la carga nocturna
+  {"sonda": true}                          prueba formas de llamada, no escribe nada
+  {"desde": "2026-01-01",
+   "hasta": "2026-01-31",
+   "solo": ["visita_cabecera"],            (opcional)
+   "pausa": 0.5}                           (opcional, con cuidado: es su ERP)
+                                           relleno historico. Si se acaba el
+                                           tiempo para y dice continuar_desde.
 """
 
 import datetime
@@ -94,10 +104,12 @@ def sin_token(texto):
 # ----------------------------------------------------------------------
 # manifiesto
 # ----------------------------------------------------------------------
-def manifiesto():
+def manifiesto(solo_evento=None):
     cuerpo = s3.get_object(Bucket=BUCKET, Key=CLAVE_MANIFIESTO)["Body"].read()
     m = json.loads(cuerpo)
     solo = {x.strip() for x in os.environ.get("SOLO", "").split(",") if x.strip()}
+    if solo_evento:
+        solo = {str(x).strip() for x in solo_evento if str(x).strip()}
     informes = [i for i in m["informes"] if not solo or i["id"] in solo]
     sin_numero = [i["id"] for i in informes if not i.get("informe")]
     if sin_numero:
@@ -112,13 +124,26 @@ def manifiesto():
 # ----------------------------------------------------------------------
 # fechas
 # ----------------------------------------------------------------------
-def dias_a_cargar(hoy, ventana):
-    """Ayer, y los dias anteriores de la ventana de reproceso.
+def dias_a_cargar(hoy, ventana, evento=None):
+    """Los dias de esta ejecucion: la ventana de anoche, o un rango historico.
 
-    La ventana existe porque hay filas que llegan tarde: la carga de una noche
-    vuelve a pedir los dias anteriores y, como cada fila lleva su id, repetirlas
-    no duplica nada.
+    De noche son ayer y los dias anteriores de la ventana de reproceso, que
+    existe porque hay filas que llegan tarde; como cada fila lleva su id,
+    repetirlas no duplica nada.
+
+    Con {"desde": "2026-01-01", "hasta": "2026-09-30"} carga ese rango, del mas
+    antiguo al mas nuevo. Hace falta: la cabina necesita nueve meses de
+    historia, y una carga nocturna de tres dias no los trae nunca.
     """
+    e = evento or {}
+    if e.get("desde"):
+        d0 = datetime.date.fromisoformat(e["desde"])
+        d1 = datetime.date.fromisoformat(e.get("hasta") or e["desde"])
+        if d1 < d0:
+            raise ValueError("'hasta' es anterior a 'desde'")
+        # De mas antiguo a mas nuevo: si se agota el tiempo, lo cargado queda
+        # seguido y basta con continuar por donde se quedo.
+        return [d0 + datetime.timedelta(days=i) for i in range((d1 - d0).days + 1)]
     return [hoy - datetime.timedelta(days=d) for d in range(1, ventana + 1)]
 
 
@@ -334,9 +359,14 @@ def guardar(destino, id_informe, dia, cuerpo):
 
 
 def guardar_registro(hoy, resultado):
+    if resultado.get("modo") == "historico":
+        d = resultado["dias"]
+        clave = f"registro/extraccion/historico/{d[0]}_{d[-1]}.json"
+    else:
+        clave = f"registro/extraccion/anio={hoy.year}/mes={hoy.month:02d}/{hoy.isoformat()}.json"
     s3.put_object(
         Bucket=BUCKET,
-        Key=f"registro/extraccion/anio={hoy.year}/mes={hoy.month:02d}/{hoy.isoformat()}.json",
+        Key=clave,
         Body=json.dumps(resultado, ensure_ascii=False, indent=2).encode("utf-8"),
         ContentType="application/json",
         ServerSideEncryption="AES256",
@@ -449,53 +479,88 @@ def sonda(event):
 # ejecucion
 # ----------------------------------------------------------------------
 def lambda_handler(event, context):
-    if (event or {}).get("sonda"):
+    event = event or {}
+    if event.get("sonda"):
         return sonda(event)
 
     hoy = datetime.date.today()
-    m, informes = manifiesto()
+    m, informes = manifiesto(event.get("solo"))
+    historico = bool(event.get("desde"))
     ventana = int(os.environ.get("VENTANA_DIAS", m.get("ventana_reproceso_dias", 3)))
-    dias = dias_a_cargar(hoy, ventana)
+    dias = dias_a_cargar(hoy, ventana, event)
+    pausa = float(event.get("pausa", PAUSA))
 
     resultado = {
         "ejecucion": datetime.datetime.utcnow().isoformat() + "Z",
-        "ventana_dias": ventana,
-        "dias": [d.isoformat() for d in dias],
+        "modo": "historico" if historico else "nocturna",
+        "ventana_dias": None if historico else ventana,
+        "dias": [dias[0].isoformat(), dias[-1].isoformat()] if historico else [d.isoformat() for d in dias],
         "ok": [],
         "errores": [],
     }
 
-    for cfg in informes:
-        maestro = cfg["clave_fecha"] == "ninguna"
-        objetivos = [None] if maestro else dias
-        for dia in objetivos:
-            etiqueta = cfg["id"] if dia is None else f"{cfg['id']} {dia.isoformat()}"
-            try:
-                cuerpo = descargar(cfg["informe"], filtros_de(cfg["clave_fecha"], dia))
-                clave = guardar(cfg["destino"], cfg["id"], dia, cuerpo)
-                filas = filas_de(cuerpo)
-                resultado["ok"].append(
-                    {
-                        "id": cfg["id"],
-                        "dia": dia.isoformat() if dia else None,
-                        "bytes": len(cuerpo),
-                        "filas": filas,
-                        "clave": clave,
-                    }
-                )
-                print(f"OK  {etiqueta}: {len(cuerpo)} bytes, {filas} filas -> {clave}")
-            except Exception as e:  # noqa: BLE001 - un informe que falla no para la noche
-                mensaje = sin_token(f"{type(e).__name__}: {e}")
-                resultado["errores"].append({"id": cfg["id"], "dia": dia.isoformat() if dia else None, "error": mensaje})
-                print(f"FALLO {etiqueta}: {mensaje}")
-            time.sleep(PAUSA)
+    # Las tareas, en el orden que conviene a cada modo. En el relleno historico
+    # se recorre DIA A DIA para que, si se acaba el tiempo, los dias cargados
+    # esten completos y el que falta sea solo el ultimo.
+    tareas = []
+    if historico:
+        # Un maestro es la foto de hoy: no tiene historia que rellenar.
+        for dia in dias:
+            for cfg in informes:
+                if cfg["clave_fecha"] != "ninguna":
+                    tareas.append((cfg, dia))
+    else:
+        for cfg in informes:
+            if cfg["clave_fecha"] == "ninguna":
+                tareas.append((cfg, None))
+            else:
+                tareas.extend((cfg, d) for d in dias)
+
+    for cfg, dia in tareas:
+        # Parar a tiempo y decir por donde se iba vale mas que morir a mitad.
+        if context is not None and hasattr(context, "get_remaining_time_in_millis"):
+            if context.get_remaining_time_in_millis() < 90_000:
+                resultado["incompleto"] = True
+                resultado["continuar_desde"] = dia.isoformat() if dia else None
+                print(f"PARO por tiempo. Continua con desde={resultado['continuar_desde']}")
+                break
+        etiqueta = cfg["id"] if dia is None else f"{cfg['id']} {dia.isoformat()}"
+        try:
+            cuerpo = descargar(cfg["informe"], filtros_de(cfg["clave_fecha"], dia))
+            clave = guardar(cfg["destino"], cfg["id"], dia, cuerpo)
+            filas = filas_de(cuerpo)
+            resultado["ok"].append(
+                {
+                    "id": cfg["id"],
+                    "dia": dia.isoformat() if dia else None,
+                    "bytes": len(cuerpo),
+                    "filas": filas,
+                    "clave": clave,
+                }
+            )
+            print(f"OK  {etiqueta}: {len(cuerpo)} bytes, {filas} filas -> {clave}")
+        except Exception as e:  # noqa: BLE001 - un informe que falla no para la noche
+            mensaje = sin_token(f"{type(e).__name__}: {e}")
+            resultado["errores"].append({"id": cfg["id"], "dia": dia.isoformat() if dia else None, "error": mensaje})
+            print(f"FALLO {etiqueta}: {mensaje}")
+        time.sleep(pausa)
 
     resultado["resumen"] = {
+        "modo": resultado["modo"],
+        "dias": resultado["dias"],
         "informes": len(informes),
         "descargas_ok": len(resultado["ok"]),
         "descargas_fallidas": len(resultado["errores"]),
         "bytes": sum(x["bytes"] for x in resultado["ok"]),
     }
+    if resultado.get("incompleto"):
+        # Esto tiene que verse en la RESPUESTA, no solo en el registro: es la
+        # instruccion de como seguir, y quien lanza un relleno historico mira la
+        # respuesta, no S3.
+        resultado["resumen"]["incompleto"] = True
+        resultado["resumen"]["continuar_desde"] = resultado["continuar_desde"]
+        resultado["resumen"]["_siguiente"] = (
+            f'Relanza con {{"desde": "{resultado["continuar_desde"]}", "hasta": "..."}}')
     guardar_registro(hoy, resultado)
 
     if resultado["errores"]:

@@ -195,13 +195,37 @@ def bloque_jornadas(jornadas):
     }
 
 
+def ultimo_balance(balance):
+    """Solo la foto MAS RECIENTE, nunca la suma de varias.
+
+    El balance de existencias es un cierre MENSUAL: la extraccion lo baja el dia
+    que se genera, asi que en una ventana de 120 dias caben tres o cuatro
+    cierres. Sumarlos todos multiplicaria las existencias por cuatro y contaria
+    cada maquina cuatro veces en el cumplimiento de inventario. Medido el
+    02/10: tres dias seguidos con cero filas, porque ese mes el cierre no cayo
+    dentro de la ventana.
+    """
+    if not balance:
+        return [], None
+    periodos = {(int(R.v(b, "anho", 0) or 0), int(R.v(b, "mes", 0) or 0)) for b in balance}
+    ultimo = max(periodos)
+    filas = [b for b in balance
+             if (int(R.v(b, "anho", 0) or 0), int(R.v(b, "mes", 0) or 0)) == ultimo]
+    return filas, f"{ultimo[0]}-{ultimo[1]:02d}"
+
+
 def bloque_inventario(balance, hoy):
-    maquinas = [b for b in balance if R.v(b, "tipo_elemento") == "M"]
+    filas, periodo = ultimo_balance(balance)
+    maquinas = [b for b in filas if R.v(b, "tipo_elemento") == "M"]
     return {
+        "periodo_balance": periodo,
+        "_nota_balance": ("El balance es un cierre mensual. Esto es la ultima foto, "
+                          "no un acumulado: sumar varios cierres multiplicaria las "
+                          "existencias."),
         "cumplimiento": R.cumplimiento_inventario(
             [{"ultimo_inventario": R.v(b, "fecha_ult_inventario", "")} for b in maquinas], hoy),
         "existencias": {
-            t: round(sum(float(R.v(b, "valor_total")) for b in balance if R.v(b, "tipo_elemento") == t), 2)
+            t: round(sum(float(R.v(b, "valor_total")) for b in filas if R.v(b, "tipo_elemento") == t), 2)
             for t in ("A", "M", "V")
         },
     }
