@@ -64,9 +64,16 @@ pon("crudo/visita_cabecera", "visita_cabecera", AYER,
     + [{"empleadoid": 7, "empleado": "Ana", "tipo_parte": 0, "centro": "CONSUM MURCIA",
         "matricula": "C1", "minutos": 400, "fecha_ini": str(AYER)}] * 10)
 
+# OJO: los informes de aqui abajo van SIN columna `centro`, porque el de verdad
+# no la trae. La primera version de esta prueba se la inventaba, y por eso no
+# descubrio que el panel de AIRBUS salia con 0 EUR de recaudacion y 0 unidades
+# cargadas: las filas sin centro no encajaban en ningun ambito y se caian.
+# Lo que si traen es `matricula`, y de ahi sale el centro por el mapa.
 pon("crudo/visita_reposiciones", "visita_reposiciones", AYER,
-    [{"tipo_linea": "CM", "cantidad": 10, "precio_coste": 1.0, "etiq_canal": "44", "centro": "AIRBUS GETAFE"}] * 50
-    + [{"tipo_linea": "CM", "cantidad": 100, "precio_coste": 0.004, "etiq_canal": "", "centro": "AIRBUS GETAFE"}] * 50)
+    [{"tipo_linea": "CM", "cantidad": 10, "precio_coste": 1.0, "etiq_canal": "44", "matricula": "A1"}] * 50
+    + [{"tipo_linea": "CM", "cantidad": 100, "precio_coste": 0.004, "etiq_canal": "", "matricula": "A1"}] * 50
+    # Y una maquina de Consum, que a AIRBUS no le toca.
+    + [{"tipo_linea": "CM", "cantidad": 7, "precio_coste": 1.0, "etiq_canal": "44", "matricula": "C1"}] * 20)
 
 pon("crudo/stock_maquina", "stock_maquina", AYER,
     [{"motivo": "RC", "cantidad": -2, "puc": 0.60, "articulo": "DONETTES CLASICO",
@@ -78,14 +85,17 @@ pon("crudo/stock_maquina", "stock_maquina", AYER,
 
 pon("crudo/recaudacion", "recaudacion", AYER,
     [{"anho": HOY.year, "mes": HOY.month, "imp_recaudado": 100, "imp_pago_bancario": 0,
-      "tipo_telemetria": 40, "criterio_calculo": 3, "centro": "AIRBUS GETAFE"}] * 3
+      "tipo_telemetria": 40, "criterio_calculo": 3, "matricula": "A1"}] * 3
     + [{"anho": 2026, "mes": 1, "imp_recaudado": 100, "imp_pago_bancario": 120,
-        "tipo_telemetria": 0, "criterio_calculo": 3, "centro": "AIRBUS GETAFE"}] * 2
+        "tipo_telemetria": 0, "criterio_calculo": 3, "matricula": "A1"}] * 2
     # La fila rota de junio, como la de verdad
     + [{"anho": 2026, "mes": 6, "imp_recaudado": -7_521_760_075.56, "imp_pago_bancario": 0,
-        "tipo_telemetria": 40, "criterio_calculo": 3, "centro": "AIRBUS GETAFE"}]
+        "tipo_telemetria": 40, "criterio_calculo": 3, "matricula": "A1"}]
     + [{"anho": 2026, "mes": 6, "imp_recaudado": 50, "imp_pago_bancario": 10,
-        "tipo_telemetria": 40, "criterio_calculo": 3, "centro": "AIRBUS GETAFE"}] * 4)
+        "tipo_telemetria": 40, "criterio_calculo": 3, "matricula": "A1"}] * 4
+    # De Consum, para que se vea que el ambito sigue filtrando con el mapa puesto.
+    + [{"anho": 2026, "mes": 1, "imp_recaudado": 9_999, "imp_pago_bancario": 0,
+        "tipo_telemetria": 40, "criterio_calculo": 3, "matricula": "C1"}])
 
 pon("crudo/sat_averias", "sat_averias", AYER,
     [{"matricula": "00SE0000", "categoria": "ATENCION AL CLIENTE", "tipo_tarea": "A", "centro": "AIRBUS GETAFE"}] * 40
@@ -93,26 +103,30 @@ pon("crudo/sat_averias", "sat_averias", AYER,
     + [{"matricula": "A1", "categoria": "AVERIAS TECNICAS", "tipo_tarea": "E", "centro": "AIRBUS GETAFE"}] * 3)
 
 pon("crudo/sat_eventos", "sat_eventos", AYER,
-    [{"averia_id": 1, "estado": 0, "fecha": f"{AYER}T08:00:00", "centro": "AIRBUS GETAFE"},
-     {"averia_id": 1, "estado": 99, "fecha": f"{AYER}T14:00:00", "centro": "AIRBUS GETAFE"}])
+    [{"averia_id": 1, "estado": 0, "fecha": f"{AYER}T08:00:00", "matricula": "A1"},
+     {"averia_id": 1, "estado": 99, "fecha": f"{AYER}T14:00:00", "matricula": "A1"}])
 
+# Las jornadas son de una RUTA y un vehiculo, no de un centro, y el informe no
+# trae matricula: no hay forma de atribuirlas a un cliente, asi que solo salen en
+# el panel interno. Tampoco hace falta: el bloque de jornadas no llega a un
+# perfil de cliente (autorizacion.SESIONES lo pide a partir de «operaciones»).
 pon("crudo/jornadas", "jornadas", AYER,
-    [{"temperaturaini": 2.0, "kminiciales": 100, "kmfinales": 150, "maplatitudini": 37.4, "centro": "AIRBUS GETAFE"}] * 9
-    + [{"temperaturaini": 26.0, "kminiciales": 100, "kmfinales": 160, "maplatitudini": 0, "centro": "AIRBUS GETAFE"}])
+    [{"temperaturaini": 2.0, "kminiciales": 100, "kmfinales": 150, "maplatitudini": 37.4}] * 9
+    + [{"temperaturaini": 26.0, "kminiciales": 100, "kmfinales": 160, "maplatitudini": 0}])
 
 # DOS cierres mensuales dentro de la ventana: el de agosto y el de septiembre.
 # Es lo normal con 120 dias, y sumarlos multiplicaria las existencias.
 pon("crudo/stock_balance", "stock_balance", AYER,
     [{"anho": 2026, "mes": 9, "tipo_elemento": "M", "valor_total": 1000,
-      "fecha_ult_inventario": str(HOY), "centro": "AIRBUS GETAFE"}] * 2
+      "fecha_ult_inventario": str(HOY), "matricula": "A1"}] * 2
     + [{"anho": 2026, "mes": 9, "tipo_elemento": "M", "valor_total": 500,
-        "fecha_ult_inventario": "1900-01-01", "centro": "AIRBUS GETAFE"}] * 2
+        "fecha_ult_inventario": "1900-01-01", "matricula": "A1"}] * 2
     + [{"anho": 2026, "mes": 9, "tipo_elemento": "A", "valor_total": 9000,
-        "fecha_ult_inventario": str(HOY), "centro": "AIRBUS GETAFE"}]
+        "fecha_ult_inventario": str(HOY), "matricula": "A1"}]
     + [{"anho": 2026, "mes": 8, "tipo_elemento": "M", "valor_total": 7777,
-        "fecha_ult_inventario": str(HOY), "centro": "AIRBUS GETAFE"}] * 6
+        "fecha_ult_inventario": str(HOY), "matricula": "A1"}] * 6
     + [{"anho": 2026, "mes": 8, "tipo_elemento": "A", "valor_total": 123456,
-        "fecha_ult_inventario": str(HOY), "centro": "AIRBUS GETAFE"}])
+        "fecha_ult_inventario": str(HOY), "matricula": "A1"}])
 
 ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
     {"id": "interno", "ambito": {}},
@@ -191,11 +205,49 @@ comprueba("12 averias tecnicas", airbus["sat"]["averias_tecnicas"], 12)
 comprueba("3 preventivos", airbus["sat"]["preventivos"], 3)
 comprueba("6 h de cierre", airbus["sat"]["horas_cierre"]["mediana"], 6.0)
 
-print("\nJornadas: temperatura, km y GPS")
-comprueba("10 jornadas", airbus["jornadas"]["jornadas"], 10)
-comprueba("1 fuera de temperatura", airbus["jornadas"]["temperatura_fuera"], 1)
-comprueba("510 km", airbus["jornadas"]["km_total"], 510)
-comprueba("90 % con GPS", airbus["jornadas"]["gps"]["pct"], 90.0)
+print("\nJornadas: temperatura, km y GPS (solo en el panel interno)")
+comprueba("10 jornadas", interno["jornadas"]["jornadas"], 10)
+comprueba("1 fuera de temperatura", interno["jornadas"]["temperatura_fuera"], 1)
+comprueba("510 km", interno["jornadas"]["km_total"], 510)
+comprueba("90 % con GPS", interno["jornadas"]["gps"]["pct"], 90.0)
+comprueba("y a un cliente no se le atribuye ninguna", airbus["jornadas"]["jornadas"], 0)
+
+print("\nEl mapa de centros: una fila sin centro acaba en el panel de su cliente")
+# Esto es lo que estaba roto. Las tres comprobaciones de arriba —carga 520 EUR,
+# 5.500 unidades y la recaudacion de enero— ya pasan por el mapa: sus informes no
+# traen centro. Aqui se mira el mapa de frente.
+comprueba("aprende las matriculas", res["maquinas_con_centro"] >= 2, True)
+_m = L.MapaCentros()
+_m.aprende([{"matricula": "A1", "centro": "AIRBUS GETAFE", "cod_pdv": "P1"}])
+comprueba("resuelve por matricula", _m.centro_de({"matricula": "A1"}), "AIRBUS GETAFE")
+comprueba("resuelve por pdv", _m.centro_de({"cod_pdv": "P1"}), "AIRBUS GETAFE")
+comprueba("respeta el centro que ya trae la fila",
+          _m.centro_de({"matricula": "A1", "centro": "OTRO"}), "OTRO")
+comprueba("y una maquina que no conoce no se la inventa",
+          _m.centro_de({"matricula": "ZZ"}), "")
+comprueba("con mapa, la fila de recaudacion entra en el ambito",
+          L.en_ambito({"matricula": "A1"}, {"clientes": ["AIRBUS"]}, _m), True)
+comprueba("y la de otro cliente, no",
+          L.en_ambito({"matricula": "ZZ"}, {"clientes": ["AIRBUS"]}, _m), False)
+comprueba("un ambito vacio sigue cogiendolo todo",
+          L.en_ambito({"matricula": "ZZ"}, {}, _m), True)
+
+print("\nPor centro: en cual de los centros pasa")
+pc = airbus["servicio"]["por_centro"]
+comprueba("un centro", len(pc), 1)
+comprueba("se llama como en VenCloud", pc[0]["centro"], "AIRBUS GETAFE")
+comprueba("con sus 100 visitas", pc[0]["visitas"], 100)
+comprueba("y una maquina", pc[0]["maquinas"], 1)
+comprueba("15 tareas de SAT", pc[0]["tareas_sat"], 15)
+comprueba("7 minutos de media", pc[0]["min_medio"], 7.0)
+comprueba("el interno ve los dos centros", len(interno["servicio"]["por_centro"]), 2)
+comprueba("ordenados por visitas", interno["servicio"]["por_centro"][0]["visitas"], 100)
+
+print("\nUna maquina reincidente dice de que centro es")
+rein = airbus["sat"]["reincidentes"]
+comprueba("A1 reincide", rein[0]["m"], "A1")
+comprueba("con 15 tareas", rein[0]["n"], 15)
+comprueba("y su centro delante", rein[0]["c"], "AIRBUS GETAFE")
 
 print("\nInventario y existencias: solo el ultimo cierre, nunca la suma")
 comprueba("se queda con septiembre", airbus["inventario"]["periodo_balance"], "2026-09")

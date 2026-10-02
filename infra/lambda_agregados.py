@@ -50,14 +50,31 @@ BUCKET = os.environ["BUCKET"]
 DIAS = int(os.environ.get("DIAS", "120"))
 CLAVE_PERFILES = os.environ.get("PERFILES", "config/perfiles.json")
 
-# Que informe alimenta que bloque. El orden importa poco; la lista, mucho:
-# anadir un informe aqui es lo unico que hace falta para que entre en la cabina.
+# Que informe alimenta que bloque, y EN QUE ORDEN SE LEE.
+#
+# Aqui el orden si importa, y por una razon que costo ver: solo tres de los ocho
+# informes traen columna `centro`. Los otros cinco traen `matricula`, y nada mas.
+# Como el ambito de un perfil de cliente se declara por nombre de centro
+# («AIRBUS»), las filas sin centro NO ENCAJABAN EN NINGUN AMBITO y se caian
+# enteras: el panel de AIRBUS salia con 0 EUR de recaudacion y 0 unidades
+# cargadas. Las cifras que si tenia eran buenas, asi que no parecia roto.
+#
+# La solucion es el mapa de matricula -> centro que se construye leyendo, y por
+# eso los tres informes CON centro van primero: cuando llega el primero sin
+# centro, el mapa ya conoce las maquinas. Todo lo que hacen los `come_*` son
+# cuentas y sumas, asi que reordenarlos no cambia ningun resultado —lo prueba
+# `test_agregados.py`.
+#
+# Anadir un informe aqui sigue siendo lo unico que hace falta para que entre en
+# la cabina; si no trae `centro`, va despues de los que si.
 FUENTES = [
+    # con columna `centro`: ademas de sumar, ensenan el mapa
     ("partes",      "crudo/visita_cabecera",      "visita_cabecera",      "come_partes"),
-    ("lineas",      "crudo/visita_reposiciones",  "visita_reposiciones",  "come_lineas"),
     ("mov_maquina", "crudo/stock_maquina",        "stock_maquina",        "come_mov_maquina"),
-    ("recaudacion", "crudo/recaudacion",          "recaudacion",          "come_recaudacion"),
     ("sat",         "crudo/sat_averias",          "sat_averias",          "come_sat"),
+    # sin columna `centro`: dependen del mapa para saber de quien son
+    ("lineas",      "crudo/visita_reposiciones",  "visita_reposiciones",  "come_lineas"),
+    ("recaudacion", "crudo/recaudacion",          "recaudacion",          "come_recaudacion"),
     ("sat_eventos", "crudo/sat_eventos",          "sat_eventos",          "come_sat_eventos"),
     ("jornadas",    "crudo/jornadas",             "jornadas",             "come_jornadas"),
     ("balance",     "crudo/stock_balance",        "stock_balance",        "come_balance"),
@@ -118,14 +135,67 @@ def escribe(clave, obj):
 # ----------------------------------------------------------------------
 # filtrado por ambito
 # ----------------------------------------------------------------------
-def en_ambito(fila, ambito):
+class MapaCentros:
+    """De que centro es cada maquina. Se aprende leyendo, no se descarga.
+
+    Cinco de los ocho informes no traen columna `centro` —recaudacion, lineas de
+    reposicion, eventos de SAT, jornadas y balance—, pero los cinco traen
+    `matricula`. Y tres informes si traen las dos cosas. Asi que el mapa sale
+    gratis de lo que ya se esta leyendo: ningun informe extra, ninguna consulta.
+
+    No se cachea entre ejecuciones a proposito: una maquina se mueve de centro, y
+    un mapa viejo le atribuiria la recaudacion al cliente equivocado. Vale lo que
+    diga la ventana que se esta agregando y nada mas.
+    """
+
+    def __init__(self):
+        self.por_matricula = {}
+        self.por_pdv = {}
+        self.aprendidas = 0
+
+    def aprende(self, filas):
+        """Se llama con las filas CRUDAS, antes de filtrar por ambito.
+
+        Antes de filtrar: si se llamara despues, un perfil solo aprenderia las
+        maquinas que ya sabe que son suyas, que es justo lo que no sirve.
+        """
+        for f in filas:
+            centro = R.v(f, "centro", "")
+            if not centro:
+                continue
+            m = R.v(f, "matricula", "")
+            if m and m not in self.por_matricula:
+                self.por_matricula[m] = centro
+                self.aprendidas += 1
+            pdv = R.v(f, "cod_pdv", "")
+            if pdv and pdv not in self.por_pdv:
+                self.por_pdv[pdv] = centro
+
+    def centro_de(self, fila):
+        """El centro de la fila: el suyo si lo trae, y si no el de su maquina."""
+        centro = R.v(fila, "centro", "")
+        if centro:
+            return str(centro)
+        m = R.v(fila, "matricula", "")
+        if m and m in self.por_matricula:
+            return str(self.por_matricula[m])
+        pdv = R.v(fila, "cod_pdv", "")
+        if pdv and pdv in self.por_pdv:
+            return str(self.por_pdv[pdv])
+        return ""
+
+
+def en_ambito(fila, ambito, mapa=None):
     """El ambito es aditivo: basta con encajar en uno de los tres.
 
     Un ambito vacio es "todo", y eso solo lo tienen los perfiles internos.
+
+    El `mapa` es lo que hace que una fila de recaudacion, que no sabe de que
+    centro es, acabe en el panel del cliente al que pertenece.
     """
     if not (ambito.get("clientes") or ambito.get("centros") or ambito.get("delegaciones")):
         return True
-    centro = str(R.v(fila, "centro", ""))
+    centro = mapa.centro_de(fila) if mapa is not None else str(R.v(fila, "centro", ""))
     deleg = str(R.v(fila, "delegacion", ""))
     for c in ambito.get("clientes", []):
         if c.upper() in centro.upper():
@@ -154,6 +224,12 @@ class Acumulador:
         self.centros = set()
         self.duraciones = []
         self.visitas_por_dia = defaultdict(int)
+        # Por centro. Lo primero que pregunta un cliente con nueve centros no es
+        # cuantas visitas hubo, sino en cual de los nueve. Se guardan cuentas y
+        # un conjunto de matriculas por centro, nunca filas: son miles de
+        # centros como mucho, no millones.
+        self.por_centro = defaultdict(lambda: {"visitas": 0, "maquinas": set(),
+                                               "minutos": 0.0, "tareas_sat": 0})
 
         # carga
         self.carga_valor = 0.0
@@ -181,6 +257,7 @@ class Acumulador:
         self.sat_preventivos = 0
         self.sat_fallos_tecnicos = 0
         self.sat_por_maquina = defaultdict(int)
+        self.sat_centro = {}
         # Una averia abierta un dia y cerrada otro tiene sus eventos en ficheros
         # distintos: hay que recordarla entre dias.
         self.sat_apertura = {}
@@ -208,6 +285,11 @@ class Acumulador:
             if m is not None:
                 self.duraciones.append(float(m))
             self.visitas_por_dia[str(R.v(p, "fecha_ini", ""))[:10]] += 1
+            c = self.por_centro[str(R.v(p, "centro", "(sin centro)"))]
+            c["visitas"] += 1
+            c["maquinas"].add(R.v(p, "matricula"))
+            if m is not None:
+                c["minutos"] += float(m)
 
     def come_lineas(self, filas):
         self.carga_valor += R.valor_cargado(filas)
@@ -249,7 +331,13 @@ class Acumulador:
         reales = R.tareas_de_maquina(filas)
         self.sat_tareas += len(reales)
         for t in reales:
-            self.sat_por_maquina[R.v(t, "matricula")] += 1
+            matricula = R.v(t, "matricula")
+            centro = str(R.v(t, "centro", "(sin centro)"))
+            self.sat_por_maquina[matricula] += 1
+            # De que centro es la maquina reincidente. Una matricula sola no le
+            # dice nada a nadie; con el centro delante se sabe a quien llamar.
+            self.sat_centro.setdefault(matricula, centro)
+            self.por_centro[centro]["tareas_sat"] += 1
             if R.es_preventivo(t):
                 self.sat_preventivos += 1
             elif R.es_averia_tecnica(t):
@@ -323,6 +411,15 @@ class Acumulador:
                 "duracion_min": R.resumen_tiempos(self.duraciones),
                 "visitas_por_dia": [{"f": f, "v": n}
                                     for f, n in sorted(self.visitas_por_dia.items()) if f],
+                "por_centro": sorted(
+                    ({"centro": c, "visitas": d["visitas"], "maquinas": len(d["maquinas"]),
+                      "min_medio": round(d["minutos"] / d["visitas"], 1) if d["visitas"] else 0,
+                      "tareas_sat": d["tareas_sat"]}
+                     for c, d in self.por_centro.items()),
+                    key=lambda x: -x["visitas"])[:60],
+                "_nota_centros": ("Visitas, maquinas y tareas de SAT por centro. El minuto "
+                                  "medio aqui es media, no mediana: por centro hay pocas "
+                                  "visitas y la mediana de treinta valores no dice mas."),
                 "carga": {
                     "valor": round(self.carga_valor, 2),
                     "unidades_total": self.carga_unidades,
@@ -358,7 +455,8 @@ class Acumulador:
                 "preventivos": self.sat_preventivos,
                 "horas_cierre": R.resumen_tiempos(self.horas_de_cierre()),
                 "reincidentes": sorted(
-                    [{"m": m, "n": n} for m, n in self.sat_por_maquina.items() if n >= 5],
+                    [{"m": m, "c": self.sat_centro.get(m, ""), "n": n}
+                     for m, n in self.sat_por_maquina.items() if n >= 5],
                     key=lambda x: -x["n"])[:25],
             },
             "jornadas": {
@@ -474,14 +572,19 @@ def lambda_handler(event, context):
     acumuladores = [Acumulador(p) for p in perfiles["perfiles"]]
 
     leidas = defaultdict(int)
+    mapa = MapaCentros()
     for nombre, destino, id_informe, metodo in FUENTES:
         for dia in dias:
             filas = lee_dia(destino, id_informe, dia)
             if not filas:
                 continue
             leidas[nombre] += len(filas)
+            # Primero aprender, luego repartir: el mapa se alimenta de las filas
+            # de todos, porque una maquina de AIRBUS se conoce igual leyendo el
+            # informe completo.
+            mapa.aprende(filas)
             for acu in acumuladores:
-                propias = [f for f in filas if en_ambito(f, acu.ambito)]
+                propias = [f for f in filas if en_ambito(f, acu.ambito, mapa)]
                 if propias:
                     getattr(acu, metodo)(propias)
             # El trozo se suelta aqui: en ningun momento hay mas de un informe
@@ -497,6 +600,7 @@ def lambda_handler(event, context):
         "ejecucion": datetime.datetime.utcnow().isoformat() + "Z",
         "dias": DIAS,
         "filas_leidas": dict(leidas),
+        "maquinas_con_centro": mapa.aprendidas,
         "ficheros": escritos,
     }
     escribe(f"registro/agregados/anio={hoy.year}/mes={hoy.month:02d}/{hoy.isoformat()}.json", resumen)

@@ -328,8 +328,23 @@ El segundo, **cambiando el correo por el tuyo** (en minúsculas, las dos veces):
 
 Las comillas escapadas del campo `dato` son a propósito: dentro va un texto que contiene JSON.
 
-**c)** Sube la página: `S3 → el bucket `digivend-web-…` → Upload` del contenido de `app/consola/`
-y `app/airbus/`.
+**c)** Sube las páginas: `S3 → el bucket `digivend-web-…` → Upload`. Son tres ficheros y cada uno
+va en su sitio, porque la ruta es la que decide qué página sale:
+
+| Fichero del repositorio | Dónde va en el bucket |
+|---|---|
+| `app/index.html` | en la raíz, `index.html` |
+| `app/panel/index.html` | dentro de una carpeta `panel/` |
+| `app/consola/index.html` | dentro de una carpeta `consola/` |
+
+En la consola de S3: `Upload → Add folder` sobre `app/` sube la estructura entera de una vez; si
+prefieres ir fichero a fichero, crea antes las dos carpetas con `Create folder`.
+
+**d)** Vuelve a subir `agregados.zip` a `digivend-agregados` y lánzalo una vez a mano. La versión
+que tienes desplegada deja el panel de cliente **sin recaudación y sin reposición**: cinco de los
+ocho informes no traen la columna `centro`, así que sus filas no encajaban en el ámbito de AIRBUS y
+se caían enteras. La nueva aprende de qué centro es cada máquina mientras lee, y de paso publica el
+desglose por centro que usa el panel. Tarda lo mismo que antes.
 
 ## Paso 14 · Entrar — 2 min
 
@@ -352,6 +367,8 @@ Un `CNAME` de `dashboard.digivend.es` al nombre que da la salida `DondeApuntaElD
 Cuando termines el paso 7, pásame el registro y **cierro el único hueco que queda** en todo el
 sistema: la forma exacta de la respuesta de `GetReportV2`.
 
-Y queda pendiente enchufar las dos páginas a la API: hoy el acceso de la consola es un prototipo
-que no valida contraseñas, y el orden de los paneles se guarda en el navegador en vez de en el
-servidor. El backend ya está; es trabajo mío, no tuyo.
+El acceso (`app/index.html`) y el panel de cliente (`app/panel/index.html`) ya van contra la API de
+verdad: la contraseña la valida Cognito desde dentro de AWS, el panel sale de `/api/panel` ya
+recortado por el perfil de la sesión, y el orden de los paneles se guarda en el servidor, así que
+el cliente lo encuentra igual desde otro ordenador. Queda la consola de administración, que todavía
+es el prototipo: ésa sí sigue siendo trabajo mío.

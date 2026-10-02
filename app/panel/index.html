@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel · digivend</title>
+<!-- Un solo origen. Esta pagina habla con /api/* del mismo dominio y con nadie
+     mas: hay redes de cliente que cortan las paginas que llaman fuera. La
+     cabecera de verdad la pone CloudFront; esta va por si se abre suelta. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M4 11V5h2v6zm3 0V7h2v4zm3 0V3h2v8z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --bien:#0ca30c; --aviso:#fab219; --grave:#ec835a; --critico:#d03b3b;
+  --rejilla:#e8e7e2; --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --rejilla:#2a2a27; --sombra:none;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --rejilla:#2a2a27; --sombra:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1240px;margin:0 auto;padding:18px 16px 72px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+.marca{display:flex;align-items:baseline;gap:10px;min-width:0}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px}
+.periodo{color:var(--tinta-2);font-size:13px;margin-top:2px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
+button.btn:hover{border-color:var(--tinta-3)}
+button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);color:#fff}
+.filtros{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 4px}
+.nota{
+  margin:14px 0 16px;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+.nota.mal{border-left-color:var(--critico)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:10px;margin:14px 0 18px}
+.kpi{background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:12px 14px;box-shadow:var(--sombra)}
+.kpi .et{font-size:12px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
+.kpi .vl{font-size:23px;font-weight:650;letter-spacing:-.02em;margin-top:3px;font-variant-numeric:tabular-nums}
+.kpi .nt{font-size:12px;color:var(--tinta-3);margin-top:2px}
+.rejilla{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.panel{
+  grid-column:span 6;background:var(--tarjeta);border:1px solid var(--borde);
+  border-radius:12px;padding:14px 16px 16px;box-shadow:var(--sombra);min-width:0
+}
+.panel[data-ancho="todo"]{grid-column:span 12}
+.panel.arrastrando{opacity:.4}
+.panel.destino{outline:2px dashed var(--s1);outline-offset:3px}
+.ph{display:flex;align-items:flex-start;gap:8px;margin-bottom:2px}
+.ph h2{font-size:15px;margin:0;font-weight:650;letter-spacing:-.01em;flex:1}
+.ph .sub{font-size:12.5px;color:var(--tinta-2);margin:2px 0 10px}
+.panel>p.sub{font-size:12.5px;color:var(--tinta-2);margin:2px 0 10px}
+.mover{display:flex;gap:2px;flex-shrink:0}
+.mover button{
+  font:inherit;font-size:12px;line-height:1;color:var(--tinta-2);background:transparent;
+  border:1px solid var(--borde);border-radius:6px;width:24px;height:22px;cursor:pointer;padding:0
+}
+.mover button:hover{color:var(--tinta);border-color:var(--tinta-3)}
+.asa{cursor:grab;color:var(--tinta-3);font-size:14px;letter-spacing:-2px;padding:0 2px;user-select:none}
+.asa:active{cursor:grabbing}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.gx,.gy{stroke:var(--rejilla);stroke-width:1}
+.ejet{fill:var(--tinta-3);font-size:11px}
+.vlab{fill:var(--tinta-2);font-size:11px;font-variant-numeric:tabular-nums}
+.leyenda{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--tinta-2);margin-bottom:8px}
+.leyenda i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.panel table{width:100%;border-collapse:collapse;font-size:13px}
+.tabla{overflow-x:auto}
+th{text-align:left;font-weight:600;color:var(--tinta-2);font-size:12px;text-transform:uppercase;letter-spacing:.03em;padding:5px 8px 5px 0;border-bottom:1px solid var(--borde)}
+td{padding:5px 8px 5px 0;border-bottom:1px solid var(--borde);font-variant-numeric:tabular-nums}
+td.n,th.n{text-align:right;padding-right:0}
+tr:last-child td{border-bottom:0}
+.mat{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:1px 7px;border-radius:999px;border:1px solid}
+.pill.b{color:var(--bien);border-color:var(--bien)}
+.pill.a{color:var(--grave);border-color:var(--grave)}
+.pill.c{color:var(--critico);border-color:var(--critico)}
+.verTabla{
+  font:inherit;font-size:12px;color:var(--tinta-2);background:transparent;border:0;
+  border-bottom:1px dotted var(--tinta-3);cursor:pointer;padding:0;margin-top:10px
+}
+#tt{
+  position:fixed;pointer-events:none;opacity:0;transition:opacity .08s;z-index:50;
+  background:var(--tinta);color:var(--fondo);font-size:12px;padding:5px 9px;border-radius:6px;
+  white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 2px 10px rgba(0,0,0,.25)
+}
+footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+@media (max-width:860px){ .panel{grid-column:span 12} }
+#cargando{padding:40px 0;color:var(--tinta-2)}
+</style>
+</head>
+<body>
+<div class="env">
+
+  <header class="top">
+    <div class="marca">
+      <b id="titular">Panel</b>
+      <span id="quien"></span>
+    </div>
+    <div class="acciones">
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn" id="bOrden" type="button" hidden>Restablecer orden</button>
+      <button class="btn" id="bSalir" type="button">Salir</button>
+    </div>
+  </header>
+  <div class="periodo" id="periodo"></div>
+
+  <div class="filtros" id="filtros" role="group" aria-label="Secciones" hidden></div>
+
+  <div id="cargando">Cargando…</div>
+  <div class="nota" id="aviso" hidden></div>
+  <div class="kpis" id="kpis" hidden></div>
+  <div class="rejilla" id="rejilla" hidden></div>
+
+  <footer id="pie" hidden></footer>
+</div>
+<div id="tt" role="status" aria-live="polite"></div>
+
+<script>
+/* ===================================================================
+   Panel de cliente · digivend.es
+
+   Lo que ve esta pagina ya viene recortado por la API: pide /api/panel y
+   dibuja lo que llega. No hay ningun parametro con el que pedir el panel de
+   otro perfil, porque el perfil sale de la fila de sesion del servidor.
+   Asi que esta pagina no es la que decide quien ve que: solo dibuja.
+
+   Y por lo mismo es GENERICA. AIRBUS no es una pagina: es un perfil. Cada
+   panel declara el bloque de datos que necesita y la sesion a la que pertenece,
+   y se dibuja si las dos cosas llegan. Un cliente con otras sesiones ve otros
+   paneles sin tocar una linea de aqui.
+   =================================================================== */
+const CLAVE_TEMA = "digivend.tema";
+
+const eur  = n => new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n||0);
+const eur2 = n => new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);
+const num  = n => new Intl.NumberFormat("es-ES").format(Math.round(n||0));
+const num1 = n => new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(n||0);
+const pct  = n => num1(n)+" %";
+/* En un movil no caben «492.154 €» cinco veces en un eje. Se acorta el eje,
+   nunca la cifra del dato: esa va entera en la etiqueta y en la tabla. */
+const eurK = n => Math.abs(n) >= 10000 ? num(n/1000)+" k€" : eur(n);
+const mesCorto = p => {
+  const d = new Date(String(p)+"-01T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(p)
+    : d.toLocaleDateString("es-ES",{month:"short"}) + (String(p).endsWith("-01") ? " "+String(p).slice(2,4) : "");
+};
+const esc  = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = s => document.querySelector(s);
+
+/* ---------- tema: lo unico que se guarda en el navegador ----------
+   Es una preferencia de ESTE aparato, no del usuario: en la pantalla del
+   almacen se quiere oscuro y en el portatil claro. El orden de los paneles, en
+   cambio, va al servidor, porque eso si viaja con la persona. */
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = $("#bTema");
+  const oscuro = () => document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const pinta = () => { b.textContent = oscuro() ? "Modo claro" : "Modo oscuro"; };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const n = oscuro() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+    pintaTodo();   /* los SVG llevan colores calculados: hay que redibujar */
+  });
+})();
+
+/* ---------- tooltip ---------- */
+const tt = $("#tt");
+function muestra(e, html){ tt.innerHTML = html; tt.style.opacity=1; mueve(e); }
+function mueve(e){
+  const r = tt.getBoundingClientRect();
+  let x = e.clientX + 14, y = e.clientY - r.height - 10;
+  if(x + r.width > innerWidth - 8) x = e.clientX - r.width - 14;
+  if(y < 8) y = e.clientY + 16;
+  tt.style.left = x+"px"; tt.style.top = y+"px";
+}
+function oculta(){ tt.style.opacity=0; }
+function conTooltip(el, html){
+  el.addEventListener("mouseenter", e=>muestra(e,html));
+  el.addEventListener("mousemove", mueve);
+  el.addEventListener("mouseleave", oculta);
+}
+
+/* ---------- graficos: SVG a mano, sin ninguna biblioteca ----------
+   No es purismo. Una biblioteca de graficos se sirve desde un CDN, y un CDN es
+   otro dominio: justo lo que no podemos tener. */
+const SVGNS="http://www.w3.org/2000/svg";
+function svg(w,h){ const s=document.createElementNS(SVGNS,"svg"); s.setAttribute("viewBox",`0 0 ${w} ${h}`); s.setAttribute("role","img"); return s; }
+function el(n,a={}){ const e=document.createElementNS(SVGNS,n); for(const k in a) e.setAttribute(k,a[k]); return e; }
+let SEMILLA = 0;   /* ids unicos para los <defs>, que son globales al documento */
+
+/* barras horizontales, una serie, con etiqueta directa en cada barra */
+function barrasH(datos,{etiqueta,valor,fmt=eur,color="var(--s1)",alto=22,anchoEt=150,W=640}){
+  const n=datos.length, H=Math.max(1,n)*alto+6, max=Math.max(...datos.map(valor),1);
+  const s=svg(W,H), zona=Math.max(40, W-anchoEt-78);
+  /* El texto de un SVG no se corta solo: si el nombre del centro no cabe en su
+     hueco, se mete por debajo de la barra. Se recorta aqui; el nombre entero
+     sigue en el tooltip y en la tabla. */
+  const maxCar = Math.max(6, Math.floor((anchoEt-10)/6.2));
+  const corta = t => t.length > maxCar ? t.slice(0, maxCar-1).trimEnd()+"…" : t;
+  datos.forEach((d,i)=>{
+    const y=i*alto+3, v=valor(d), w=Math.max(2, v/max*zona);
+    const t=el("text",{x:0,y:y+alto/2+4,class:"ejet"}); t.textContent=corta(String(etiqueta(d))); s.appendChild(t);
+    const r=el("rect",{x:anchoEt,y:y+3,width:w,height:alto-9,rx:4,fill:color});
+    s.appendChild(r);
+    const l=el("text",{x:anchoEt+w+7,y:y+alto/2+4,class:"vlab"}); l.textContent=fmt(v); s.appendChild(l);
+    conTooltip(r, `<b>${esc(etiqueta(d))}</b> · ${fmt(v)}`);
+  });
+  return s;
+}
+
+/* barras verticales, una serie */
+function barrasV(datos,{etiqueta,valor,fmt=eur,color="var(--s1)",W=640,H=190,sufijo=null}){
+  const n=Math.max(1,datos.length), m={t:20,r:4,b:28,l:4};
+  const s=svg(W,H), zw=W-m.l-m.r, zh=H-m.t-m.b, max=Math.max(...datos.map(valor),1);
+  const bw=Math.max(6, Math.min(64, zw/n-10));
+  datos.forEach((d,i)=>{
+    const v=valor(d), h=Math.max(2, v/max*zh);
+    const x=m.l+(zw/n)*i+(zw/n-bw)/2, y=m.t+zh-h;
+    const r=el("rect",{x,y,width:bw,height:h,rx:4,fill:color}); s.appendChild(r);
+    const t=el("text",{x:x+bw/2,y:H-9,class:"ejet","text-anchor":"middle"}); t.textContent=etiqueta(d); s.appendChild(t);
+    const l=el("text",{x:x+bw/2,y:y-6,class:"vlab","text-anchor":"middle"}); l.textContent=fmt(v); s.appendChild(l);
+    conTooltip(r, `<b>${esc(etiqueta(d))}</b> · ${fmt(v)}${sufijo?sufijo(d):""}`);
+  });
+  return s;
+}
+
+/* barras apiladas: dos series de la MISMA unidad, nunca de dos escalas.
+   Un hueco de 2 px entre tramos para que el ojo los separe sin una linea. */
+function barrasApiladas(datos,{etiqueta,series,fmt=eur,fmtEje=null,W=980,H=240,rayado=()=>false}){
+  const estrecho = W < 560;
+  const n=Math.max(1,datos.length), m={t:22,r:6,b:30,l:estrecho?46:62};
+  fmtEje = fmtEje || (estrecho ? eurK : fmt);
+  const s=svg(W,H), zw=W-m.l-m.r, zh=H-m.t-m.b;
+  const total = d => series.reduce((a,x)=>a+(+d[x.k]||0),0);
+  const max = Math.max(...datos.map(total),1);
+  const id = "ray"+(++SEMILLA);
+  const defs=el("defs");
+  const pat=el("pattern",{id,width:6,height:6,patternUnits:"userSpaceOnUse",patternTransform:"rotate(45)"});
+  pat.appendChild(el("rect",{width:6,height:6,fill:"var(--tarjeta)"}));
+  pat.appendChild(el("line",{x1:0,y1:0,x2:0,y2:6,stroke:"var(--tinta-3)","stroke-width":2}));
+  defs.appendChild(pat); s.appendChild(defs);
+  for(let k=0;k<=4;k++){
+    const v=max*k/4, y=m.t+zh-(v/max)*zh;
+    s.appendChild(el("line",{x1:m.l,x2:m.l+zw,y1:y,y2:y,class:"gy"}));
+    const t=el("text",{x:m.l-8,y:y+4,class:"ejet","text-anchor":"end"}); t.textContent=fmtEje(v); s.appendChild(t);
+  }
+  const bw=Math.max(8, Math.min(54, zw/n-12));
+  datos.forEach((d,i)=>{
+    const x=m.l+(zw/n)*i+(zw/n-bw)/2;
+    let abajo=m.t+zh;
+    series.forEach(se=>{
+      const v=+d[se.k]||0; if(v<=0) return;
+      const h=(v/max)*zh;
+      const alto=Math.max(1.5, h-2);              /* el hueco de 2 px */
+      const y=abajo-alto;
+      const r=el("rect",{x,y,width:bw,height:alto,rx:3,fill:se.color});
+      s.appendChild(r);
+      conTooltip(r, `<b>${esc(etiqueta(d))}</b> · ${esc(se.nombre)}: ${fmt(v)}`);
+      abajo -= h;
+    });
+    if(rayado(d)){
+      /* Mes sin cerrar: se marca con trama, no solo con color, para que se vea
+         igual en blanco y negro y para quien no distingue los tonos. */
+      const h=(total(d)/max)*zh;
+      s.appendChild(el("rect",{x,y:m.t+zh-h,width:bw,height:h,rx:3,fill:`url(#${id})`,opacity:.55}));
+    }
+    const t=el("text",{x:x+bw/2,y:H-10,class:"ejet","text-anchor":"middle"});
+    t.textContent=etiqueta(d); s.appendChild(t);
+    const l=el("text",{x:x+bw/2,y:m.t+zh-(total(d)/max)*zh-7,class:"vlab","text-anchor":"middle"});
+    l.textContent=estrecho ? eurK(total(d)) : fmt(total(d)); s.appendChild(l);
+  });
+  return s;
+}
+
+/* linea temporal con cruceta */
+function lineaTemporal(serie,{fmt=num,W=980,H=250}={}){
+  const m={t:14,r:12,b:28,l:56};
+  const s=svg(W,H), zw=W-m.l-m.r, zh=H-m.t-m.b;
+  const max=Math.max(...serie.map(d=>d.v),1);
+  const yv = v => m.t+zh - (v/max)*zh;
+  const px = i => m.l + (serie.length<2?zw/2:(i/(serie.length-1))*zw);
+  for(let k=0;k<=4;k++){
+    const v=max*k/4, y=yv(v);
+    s.appendChild(el("line",{x1:m.l,x2:m.l+zw,y1:y,y2:y,class:"gy"}));
+    const t=el("text",{x:m.l-8,y:y+4,class:"ejet","text-anchor":"end"}); t.textContent=fmt(v); s.appendChild(t);
+  }
+  const d1=serie.map((d,i)=>`${i?"L":"M"}${px(i).toFixed(1)},${yv(d.v).toFixed(1)}`).join(" ");
+  const id="grad"+(++SEMILLA);
+  const grad=el("linearGradient",{id,x1:0,y1:0,x2:0,y2:1});
+  grad.appendChild(el("stop",{offset:"0%","stop-color":"var(--s1)","stop-opacity":.18}));
+  grad.appendChild(el("stop",{offset:"100%","stop-color":"var(--s1)","stop-opacity":0}));
+  const defs=el("defs"); defs.appendChild(grad); s.appendChild(defs);
+  s.appendChild(el("path",{d:`${d1} L${px(serie.length-1)},${m.t+zh} L${m.l},${m.t+zh} Z`,fill:`url(#${id})`}));
+  s.appendChild(el("path",{d:d1,fill:"none",stroke:"var(--s1)","stroke-width":2,"stroke-linejoin":"round"}));
+  let mesPrev=null;
+  serie.forEach((d,i)=>{
+    const mes=String(d.f).slice(0,7);
+    if(mes!==mesPrev){
+      mesPrev=mes;
+      const t=el("text",{x:px(i),y:H-9,class:"ejet","text-anchor":"middle"});
+      t.textContent=new Date(d.f+"T00:00:00").toLocaleDateString("es-ES",{month:"short"});
+      s.appendChild(t);
+    }
+  });
+  const cl=el("line",{x1:0,x2:0,y1:m.t,y2:m.t+zh,stroke:"var(--borde-fuerte)","stroke-width":1,opacity:0});
+  const cp=el("circle",{r:4.5,fill:"var(--s1)",stroke:"var(--tarjeta)","stroke-width":2,opacity:0});
+  s.appendChild(cl); s.appendChild(cp);
+  const cap=el("rect",{x:m.l,y:m.t,width:zw,height:zh,fill:"transparent"});
+  s.appendChild(cap);
+  cap.addEventListener("mousemove", e=>{
+    const b=s.getBoundingClientRect(), xr=(e.clientX-b.left)/b.width*W;
+    let i=Math.round((xr-m.l)/zw*(serie.length-1)); i=Math.max(0,Math.min(serie.length-1,i));
+    const d=serie[i], x=px(i), y=yv(d.v);
+    cl.setAttribute("x1",x); cl.setAttribute("x2",x); cl.setAttribute("opacity",1);
+    cp.setAttribute("cx",x); cp.setAttribute("cy",y); cp.setAttribute("opacity",1);
+    const f=new Date(d.f+"T00:00:00").toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"short"});
+    muestra(e, `<b>${f}</b> · ${fmt(d.v)}`);
+  });
+  cap.addEventListener("mouseleave", ()=>{ cl.setAttribute("opacity",0); cp.setAttribute("opacity",0); oculta(); });
+  return s;
+}
+
+function tabla(cols, filas){
+  const caja=document.createElement("div"); caja.className="tabla";
+  const t=document.createElement("table");
+  t.innerHTML = "<thead><tr>"+cols.map(c=>`<th class="${c.n?"n":""}">${esc(c.t)}</th>`).join("")+"</tr></thead>"
+    + "<tbody>"+filas.map(f=>"<tr>"+f.map((c,i)=>`<td class="${cols[i].n?"n":""}${cols[i].mono?" mat":""}">${c}</td>`).join("")+"</tr>").join("")+"</tbody>";
+  caja.appendChild(t);
+  return caja;
+}
+function leyenda(series){
+  const d=document.createElement("div"); d.className="leyenda";
+  d.innerHTML = series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.nombre)}</span>`).join("");
+  return d;
+}
+/* Todo grafico lleva su tabla detras. No es un extra de accesibilidad: es la
+   unica forma de leer una cifra exacta, y la unica que funciona con un lector
+   de pantalla o impresa en blanco y negro. */
+function conTabla(cont, cols, filas){
+  const b=document.createElement("button"); b.type="button"; b.className="verTabla";
+  b.setAttribute("aria-expanded","false");
+  b.textContent="Ver la tabla";
+  const caja=tabla(cols,filas); caja.hidden=true;
+  b.addEventListener("click", ()=>{
+    caja.hidden=!caja.hidden;
+    b.setAttribute("aria-expanded", String(!caja.hidden));
+    b.textContent = caja.hidden ? "Ver la tabla" : "Ocultar la tabla";
+  });
+  cont.appendChild(b); cont.appendChild(caja);
+}
+function tiles(cont, items){
+  const g=document.createElement("div"); g.className="kpis"; g.style.margin="0";
+  g.innerHTML = items.map(([et,vl,nt,col]) =>
+    `<div class="kpi"><div class="et">${esc(et)}</div>
+     <div class="vl"${col?` style="color:${col}"`:""}>${vl}</div>
+     <div class="nt">${nt||""}</div></div>`).join("");
+  cont.appendChild(g);
+}
+
+/* ---------- derivados que no vienen del servidor ----------
+   Se calculan aqui porque son una lectura de lo que ya llego, no un dato nuevo:
+   el servidor no tiene que mandar nada mas para esto. */
+const DIAS_SEM = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+function patronSemanal(serie){
+  const acc = Array.from({length:7}, ()=>({n:0,v:0}));
+  serie.forEach(d=>{
+    const j = new Date(d.f+"T00:00:00").getDay();
+    if(Number.isNaN(j)) return;
+    acc[j].n++; acc[j].v += d.v;
+  });
+  return [1,2,3,4,5,6,0].map(i=>({
+    dia: DIAS_SEM[i].slice(0,3), largo: DIAS_SEM[i],
+    media: acc[i].n ? acc[i].v/acc[i].n : 0, n: acc[i].n,
+  })).filter(d=>d.n>0);
+}
+
+/* ---------- los paneles ----------
+   `bloque` es el bloque del panel que necesita y `sesion` la sesion del catalogo
+   a la que pertenece. Si la API no manda el bloque, o el perfil no tiene la
+   sesion, el panel no existe para este usuario: no se dibuja vacio ni se
+   dibuja con un cero que no significa cero. */
+function definePaneles(P, YO){
+  const S = P.servicio || null, D = P.dinero || null, T = P.sat || null;
+  const paneles = [];
+
+  if(S && Array.isArray(S.visitas_por_dia) && S.visitas_por_dia.length)
+    paneles.push({ id:"visitas_dia", sesion:"resumen", ancho:"todo",
+      titulo:"Visitas por día",
+      sub:`${num(S.visitas)} visitas de persona en ${P.periodo?P.periodo.dias:"—"} días. Pasa el ratón para ver cada jornada.`,
+      pinta:(c,W)=>{
+        c.appendChild(lineaTemporal(S.visitas_por_dia,{fmt:num,W}));
+        conTabla(c,[{t:"Día"},{t:"Visitas",n:true}],
+          S.visitas_por_dia.slice().reverse().map(d=>[esc(d.f), num(d.v)]));
+      }});
+
+  if(S && Array.isArray(S.por_centro) && S.por_centro.length)
+    paneles.push({ id:"centros", sesion:"resumen", ancho:S.por_centro.length>6?"todo":null,
+      titulo:"Visitas por centro",
+      sub:`${num(S.centros)} centros y ${num(S.maquinas)} máquinas atendidas en el periodo.`,
+      pinta:(c,W)=>{
+        c.appendChild(barrasH(S.por_centro,{etiqueta:d=>d.centro, valor:d=>d.visitas,
+          fmt:num, anchoEt:Math.min(230, Math.round(W*0.34)), W}));
+        conTabla(c,[{t:"Centro"},{t:"Visitas",n:true},{t:"Máquinas",n:true},
+                    {t:"Min./visita",n:true},{t:"Tareas SAT",n:true}],
+          S.por_centro.map(d=>[esc(d.centro), num(d.visitas), num(d.maquinas),
+                               num1(d.min_medio), num(d.tareas_sat)]));
+      }});
+
+  if(S && Array.isArray(S.visitas_por_dia) && S.visitas_por_dia.length > 7){
+    const sem = patronSemanal(S.visitas_por_dia);
+    if(sem.length) paneles.push({ id:"semana", sesion:"resumen",
+      titulo:"Patrón semanal",
+      sub:"Media de visitas por día de la semana. El fin de semana baja, así que comparar contra «ayer» da falsas alarmas.",
+      pinta:(c,W)=>{
+        c.appendChild(barrasV(sem,{etiqueta:d=>d.dia, valor:d=>d.media, fmt:num1, W,
+          sufijo:d=>` · ${d.n} día${d.n===1?"":"s"}`}));
+        conTabla(c,[{t:"Día"},{t:"Media",n:true},{t:"Días",n:true}],
+          sem.map(d=>[esc(d.largo), num1(d.media), num(d.n)]));
+      }});
+  }
+
+  if(S && S.duracion_min && S.duracion_min.n)
+    paneles.push({ id:"duracion", sesion:"resumen",
+      titulo:"Duración de la visita",
+      sub:"La mediana es la cifra que vale: los partes que se quedan abiertos tiran la media hacia arriba.",
+      pinta:c=>{
+        const d=S.duracion_min;
+        tiles(c, [
+          ["Mediana", num1(d.mediana)+" min", `${num(d.n)} visitas medidas`],
+          ["Media",   num1(d.media)+" min", "la arrastra un parte abierto"],
+          ["P90",     num1(d.p90)+" min", "nueve de cada diez, por debajo"],
+          ["Máximo",  num1(d.max)+" min", "casi siempre un parte sin cerrar"],
+        ]);
+        if(S.partes_totales > S.visitas){
+          const p=document.createElement("p"); p.className="sub"; p.style.margin="10px 0 0";
+          p.textContent = `De ${num(S.partes_totales)} partes, ${num(S.visitas)} son visitas de una persona. `
+            + "El resto son cierres automáticos: leen la máquina, pero nadie fue.";
+          c.appendChild(p);
+        }
+      }});
+
+  if(D && Array.isArray(D.periodos) && D.periodos.length){
+    const series=[{k:"efectivo",nombre:"Efectivo",color:"var(--s1)"},
+                  {k:"banco",nombre:"Tarjeta y banco",color:"var(--s2)"}];
+    paneles.push({ id:"recaudacion", sesion:"venta_consumo", ancho:"todo",
+      titulo:"Recaudación por mes",
+      sub:"Efectivo y pago bancario, en la misma unidad y en el mismo eje. Los meses con trama no están cerrados.",
+      pinta:(c,W)=>{
+        c.appendChild(leyenda(series.concat([{nombre:"Mes sin cerrar (trama)",color:"var(--tinta-3)"}])));
+        c.appendChild(barrasApiladas(D.periodos,{etiqueta:d=>mesCorto(d.periodo), series, fmt:eur, W,
+          rayado:d=>!!d.provisional}));
+        const prov = D.periodos.filter(d=>d.provisional);
+        if(prov.length){
+          const p=document.createElement("p"); p.className="sub"; p.style.margin="10px 0 0";
+          p.textContent = `${prov.map(d=>d.periodo).join(", ")} sin cerrar: falta el cobro por tarjeta, `
+            + "que se escribe al mes siguiente. No comparar con un mes cerrado.";
+          c.appendChild(p);
+        }
+        const rotas = D.periodos.filter(d=>d.filas_imposibles);
+        if(rotas.length){
+          const p=document.createElement("p"); p.className="sub"; p.style.margin="6px 0 0";
+          p.textContent = `Se han apartado ${rotas.reduce((a,d)=>a+d.filas_imposibles,0)} `
+            + `fila(s) con importes imposibles (${rotas.map(d=>d.periodo).join(", ")}): son contadores `
+            + "rotos, no recaudación. El mes es bueno sin ellas.";
+          c.appendChild(p);
+        }
+        conTabla(c,[{t:"Mes"},{t:"Registros",n:true},{t:"Efectivo",n:true},{t:"Banco",n:true},
+                    {t:"Total",n:true},{t:"Sin cerrar"}],
+          D.periodos.slice().reverse().map(d=>[esc(d.periodo), num(d.registros), eur2(d.efectivo),
+            eur2(d.banco), eur2(d.total), d.provisional?"sí":"—"]));
+      }});
+
+    const ciego = D.periodos.filter(d=>d.efectivo>0);
+    if(ciego.length) paneles.push({ id:"ciego", sesion:"venta_consumo",
+      titulo:"Efectivo sin telemetría",
+      sub:"Parte del efectivo que ninguna máquina ha contado: sólo se sabe lo que apareció en la bolsa.",
+      pinta:(c,W)=>{
+        c.appendChild(barrasV(ciego,{etiqueta:d=>mesCorto(d.periodo), valor:d=>d.pct_ciego,
+          fmt:pct, color:"var(--s2)", W, sufijo:d=>` · ${eur2(d.efectivo_sin_telemetria)}`}));
+        conTabla(c,[{t:"Mes"},{t:"Ciego",n:true},{t:"Importe",n:true}],
+          ciego.slice().reverse().map(d=>[esc(d.periodo), pct(d.pct_ciego), eur2(d.efectivo_sin_telemetria)]));
+      }});
+  }
+
+  if(S && S.carga && (S.carga.unidades_total||S.carga.valor))
+    paneles.push({ id:"carga", sesion:"venta_consumo",
+      titulo:"Reposición del periodo",
+      sub:"Lo que se ha cargado en las máquinas.",
+      pinta:c=>{
+        const g=S.carga, cons=Math.max(0,(g.unidades_total||0)-(g.unidades_vendibles||0));
+        tiles(c, [
+          ["Unidades", num(g.unidades_total), "cargadas en total"],
+          ["Vendibles", num(g.unidades_vendibles), `${pct(g.unidades_total?100*g.unidades_vendibles/g.unidades_total:0)} del total`],
+          ["Consumibles de café", num(cons), "azúcar, vasos y paletinas"],
+          ["Valor a coste", eur(g.valor), "precio de coste, no de venta"],
+        ]);
+        const p=document.createElement("p"); p.className="sub"; p.style.margin="10px 0 0";
+        p.textContent = "Dos de cada tres unidades son consumibles de café: cuentan en el trabajo de "
+          + "reposición, no en la venta.";
+        c.appendChild(p);
+      }});
+
+  if(S && S.merma){
+    const motivos=[["caducidad","Caducidad"],["rotura","Rotura"],["retirada","Retirada"]]
+      .map(([k,n])=>({k, nombre:n, ...(S.merma[k]||{lineas:0,unidades:0,euros:0})}))
+      .filter(d=>d.lineas||d.euros);
+    if(motivos.length) paneles.push({ id:"merma", sesion:"servicio",
+      titulo:"Merma por motivo",
+      sub:"Valorada a precio de coste.",
+      pinta:(c,W)=>{
+        c.appendChild(barrasH(motivos,{etiqueta:d=>d.nombre, valor:d=>d.euros, fmt:eur2,
+          color:"var(--s2)", anchoEt:110, W}));
+        conTabla(c,[{t:"Motivo"},{t:"Líneas",n:true},{t:"Unidades",n:true},{t:"Euros",n:true}],
+          motivos.map(d=>[esc(d.nombre), num(d.lineas), num1(d.unidades), eur2(d.euros)]));
+      }});
+
+    const art = S.merma.caducidad_por_articulo;
+    if(Array.isArray(art) && art.length) paneles.push({ id:"merma_art", sesion:"servicio", ancho:"todo",
+      titulo:"Caducidad por artículo",
+      sub:"El total en euros no se lee sin esto: un envase de café cuesta 23 € y un snack 0,63.",
+      pinta:(c,W)=>{
+        c.appendChild(barrasH(art.slice(0,12),{etiqueta:d=>d.articulo, valor:d=>d.euros, fmt:eur2,
+          color:"var(--s3)", anchoEt:Math.min(300, Math.round(W*0.42)), W}));
+        conTabla(c,[{t:"Artículo"},{t:"Líneas",n:true},{t:"Unidades",n:true},
+                    {t:"Euros",n:true},{t:"€/unidad",n:true}],
+          art.map(d=>[esc(d.articulo), num(d.lineas), num1(d.unidades), eur2(d.euros), eur2(d.eur_unidad)]));
+      }});
+  }
+
+  if(T)
+    paneles.push({ id:"sat", sesion:"disponibilidad", ancho:"todo",
+      titulo:"Disponibilidad y averías",
+      sub:"Tareas del servicio técnico sobre máquinas reales.",
+      pinta:c=>{
+        const h=T.horas_cierre||{};
+        tiles(c, [
+          ["Tareas", num(T.tareas), "sobre máquinas reales"],
+          ["Fallos técnicos", num(T.fallos_tecnicos), "contados por operación", T.fallos_tecnicos?"var(--grave)":""],
+          ["Preventivos", num(T.preventivos), "mantenimiento planificado"],
+          ["Cierre (mediana)", h.n?num1(h.mediana)+" h":"—", h.n?`${num(h.n)} averías cerradas`:"sin cierres medidos"],
+          ["Cierre (P90)", h.n?num1(h.p90)+" h":"—", "nueve de cada diez, por debajo"],
+        ]);
+        const p=document.createElement("p"); p.className="sub"; p.style.margin="10px 0 0";
+        p.textContent = "«Fallos técnicos» se cuenta por operación, no por categoría: contarlo por "
+          + "categoría se deja fuera las averías archivadas en atención al cliente y las infravalora.";
+        c.appendChild(p);
+      }});
+
+  if(T && Array.isArray(T.reincidentes) && T.reincidentes.length)
+    paneles.push({ id:"reincidentes", sesion:"disponibilidad", ancho:"todo",
+      titulo:"Máquinas reincidentes",
+      sub:"Las que acumulan cinco tareas o más. Más de diez apunta a sustitución, no a reparación.",
+      pinta:c=>{
+        c.appendChild(tabla(
+          [{t:"Máquina",mono:true},{t:"Centro"},{t:"Tareas",n:true},{t:""}],
+          T.reincidentes.map(d=>[esc(d.m), esc(d.c||"—"), num(d.n),
+            d.n>=10?`<span class="pill c">revisar</span>`:`<span class="pill a">vigilar</span>`])));
+      }});
+
+  return paneles;
+}
+
+/* ---------- montaje ---------- */
+let PANELES=[], PANEL=null, YO=null, ORDEN=[], FILTRO="todo";
+
+function visibles(){
+  const ses = new Set((YO&&YO.sesiones)||[]);
+  const dentro = PANELES.filter(p => !p.sesion || ses.has(p.sesion));
+  const filtrados = FILTRO==="todo" ? dentro : dentro.filter(p=>p.sesion===FILTRO);
+  if(!ORDEN.length) return filtrados;
+  const porId=new Map(filtrados.map(p=>[p.id,p]));
+  const out=[];
+  ORDEN.forEach(id=>{ if(porId.has(id)){ out.push(porId.get(id)); porId.delete(id); } });
+  return out.concat([...porId.values()]);   /* un panel nuevo va al final */
+}
+
+function pintaTodo(){
+  const r=$("#rejilla");
+  r.innerHTML="";
+  const lista=visibles();
+  if(!lista.length){
+    r.innerHTML = `<p class="sub" style="grid-column:span 12">No hay ningún panel en esta sección.</p>`;
+    return;
+  }
+  const puedeMover = !!(YO && YO.permisos && YO.permisos.reordenar) && FILTRO==="todo";
+  lista.forEach(p=>{
+    const card=document.createElement("section");
+    card.className="panel"; card.dataset.id=p.id;
+    if(p.ancho) card.dataset.ancho=p.ancho;
+    card.setAttribute("aria-label",p.titulo);
+    const h=document.createElement("div"); h.className="ph";
+    h.innerHTML = (puedeMover
+        ? `<span class="asa" draggable="true" title="Arrastra para mover" aria-hidden="true">⠿</span>` : "")
+      + `<h2>${esc(p.titulo)}</h2>`
+      + (puedeMover ? `<span class="mover">
+        <button type="button" data-d="-1" title="Subir" aria-label="Subir ${esc(p.titulo)}">↑</button>
+        <button type="button" data-d="1" title="Bajar" aria-label="Bajar ${esc(p.titulo)}">↓</button>
+      </span>` : "");
+    card.appendChild(h);
+    if(p.sub){ const s=document.createElement("p"); s.className="sub"; s.textContent=p.sub; card.appendChild(s); }
+    const cuerpo=document.createElement("div"); card.appendChild(cuerpo);
+    r.appendChild(card);
+    /* El ancho real manda: asi una unidad de SVG es un pixel y el texto no encoge. */
+    const W = Math.max(280, Math.round(cuerpo.clientWidth));
+    try{ p.pinta(cuerpo, W); }
+    catch(e){ cuerpo.innerHTML = `<p class="sub">Este panel no se ha podido dibujar.</p>`; }
+  });
+  if(puedeMover) conectaReordenacion();
+}
+
+function conectaReordenacion(){
+  const r=$("#rejilla");
+  let origen=null;
+  r.querySelectorAll(".asa").forEach(a=>{
+    const card=a.closest(".panel");
+    a.addEventListener("dragstart", e=>{
+      origen=card; card.classList.add("arrastrando");
+      e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain",card.dataset.id);
+    });
+    a.addEventListener("dragend", ()=>{
+      card.classList.remove("arrastrando");
+      r.querySelectorAll(".panel").forEach(p=>p.classList.remove("destino"));
+      origen=null; guardaOrden();
+    });
+  });
+  r.querySelectorAll(".panel").forEach(card=>{
+    card.addEventListener("dragover", e=>{
+      if(!origen || origen===card) return;
+      e.preventDefault(); card.classList.add("destino");
+    });
+    card.addEventListener("dragleave", ()=>card.classList.remove("destino"));
+    card.addEventListener("drop", e=>{
+      e.preventDefault(); card.classList.remove("destino");
+      if(!origen || origen===card) return;
+      const cards=[...r.querySelectorAll(".panel")];
+      const antes = cards.indexOf(origen) < cards.indexOf(card);
+      card.parentNode.insertBefore(origen, antes ? card.nextSibling : card);
+      guardaOrden();
+    });
+  });
+  r.querySelectorAll(".mover button").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const card=b.closest(".panel"), d=+b.dataset.d;
+      if(d<0 && card.previousElementSibling) card.parentNode.insertBefore(card, card.previousElementSibling);
+      if(d>0 && card.nextElementSibling) card.parentNode.insertBefore(card.nextElementSibling, card);
+      guardaOrden(); card.scrollIntoView({block:"nearest",behavior:"smooth"});
+    });
+  });
+}
+
+/* El orden se guarda en el SERVIDOR, no en este navegador: asi el cliente lo
+   encuentra igual desde su portatil y desde la pantalla de la sala. Se manda
+   con retardo para no escribir una fila por cada paso del arrastre. */
+let temporizador=null;
+function guardaOrden(){
+  ORDEN = [...document.querySelectorAll(".panel")].map(p=>p.dataset.id);
+  clearTimeout(temporizador);
+  temporizador = setTimeout(()=>{
+    fetch("/api/orden", {method:"PUT", credentials:"same-origin",
+      headers:{"content-type":"application/json"},
+      body: JSON.stringify({orden: ORDEN})}).catch(()=>{});
+  }, 600);
+}
+
+$("#bOrden").addEventListener("click", ()=>{ ORDEN=[]; guardaOrden(); pintaTodo(); });
+$("#bSalir").addEventListener("click", async ()=>{
+  try{ await fetch("/api/salir", {method:"POST", credentials:"same-origin"}); }catch(e){}
+  location.href = "/";
+});
+
+function pintaFiltros(){
+  const cont=$("#filtros");
+  const ses = (YO.sesiones||[]).filter(s => PANELES.some(p=>p.sesion===s));
+  if(ses.length < 2) return;                    /* con una sola, el filtro estorba */
+  const cat = YO.catalogo_sesiones || {};
+  const todos = [["todo","Todo"]].concat(ses.map(s=>[s, cat[s]||s]));
+  cont.innerHTML = todos.map(([id,n]) =>
+    `<button class="btn" type="button" data-f="${esc(id)}" aria-pressed="${id===FILTRO}">${esc(n)}</button>`).join("");
+  cont.hidden = false;
+  cont.querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{
+    FILTRO = b.dataset.f;
+    cont.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed", String(x.dataset.f===FILTRO)));
+    $("#bOrden").hidden = !(FILTRO==="todo" && YO.permisos && YO.permisos.reordenar);
+    pintaTodo();
+  }));
+}
+
+function pintaKpis(){
+  const S=PANEL.servicio, D=PANEL.dinero, T=PANEL.sat;
+  const k=[];
+  if(S) k.push(["Visitas", num(S.visitas), `${num(S.maquinas)} máquinas · ${num(S.centros)} centros`]);
+  if(S && S.duracion_min && S.duracion_min.n) k.push(["Duración mediana", num1(S.duracion_min.mediana)+" min", "por visita"]);
+  if(D && D.periodos && D.periodos.length){
+    const cerrados = D.periodos.filter(p=>!p.provisional);
+    const u = cerrados[cerrados.length-1];
+    if(u) k.push(["Recaudación " + u.periodo, eur(u.total), "último mes cerrado"]);
+  }
+  if(T) k.push(["Fallos técnicos", num(T.fallos_tecnicos), `${num(T.tareas)} tareas de SAT`]);
+  if(T && T.horas_cierre && T.horas_cierre.n) k.push(["Cierre mediano", num1(T.horas_cierre.mediana)+" h", "desde el aviso"]);
+  if(S && S.merma && S.merma.caducidad) k.push(["Merma por caducidad", eur(S.merma.caducidad.euros), `${num(S.merma.caducidad.lineas)} líneas`]);
+  const c=$("#kpis");
+  c.innerHTML = k.map(([et,vl,nt])=>`<div class="kpi"><div class="et">${esc(et)}</div>
+    <div class="vl">${vl}</div><div class="nt">${esc(nt)}</div></div>`).join("");
+  c.hidden = !k.length;
+}
+
+/* ---------- arranque ---------- */
+function fechaLarga(s){
+  try{ return new Date(s+"T00:00:00").toLocaleDateString("es-ES",{day:"numeric",month:"long",year:"numeric"}); }
+  catch(e){ return s; }
+}
+function avisa(texto, mal){
+  const a=$("#aviso"); a.textContent=texto; a.hidden=false;
+  a.classList.toggle("mal", !!mal);
+}
+
+(async function(){
+  let r;
+  try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(r.status === 401){ location.href = "/"; return; }
+  if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
+  YO = await r.json();
+
+  $("#titular").textContent = YO.perfil || "Panel";
+  $("#quien").textContent = (YO.nombre || YO.correo) + " · Serunion Vending";
+  document.title = (YO.perfil ? YO.perfil + " · " : "") + "Panel · digivend";
+
+  let rp;
+  try{ rp = await fetch("/api/panel", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(rp.status === 401){ location.href = "/"; return; }
+  if(!rp.ok){
+    $("#cargando").hidden = true;
+    let d={}; try{ d = await rp.json(); }catch(e){}
+    avisa(d.error || "El panel no está disponible ahora mismo.", true);
+    return;
+  }
+  PANEL = await rp.json();
+
+  if(PANEL.periodo)
+    $("#periodo").textContent =
+      `Del ${fechaLarga(PANEL.periodo.desde)} al ${fechaLarga(PANEL.periodo.hasta)} · ${PANEL.periodo.dias} días`;
+
+  try{
+    const ro = await fetch("/api/orden", {credentials:"same-origin"});
+    if(ro.ok){ const d = await ro.json(); if(Array.isArray(d.orden)) ORDEN = d.orden; }
+  }catch(e){}
+
+  PANELES = definePaneles(PANEL, YO);
+  pintaKpis();
+  pintaFiltros();
+  $("#bOrden").hidden = !(YO.permisos && YO.permisos.reordenar);
+  $("#cargando").hidden = true;
+  $("#rejilla").hidden = false;
+
+  const gen = PANEL.generado ? new Date(PANEL.generado) : null;
+  $("#pie").innerHTML = "Datos de VenCloud, servidos desde este mismo dominio: esta página no llama a "
+    + "ningún sitio externo."
+    + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "")
+    + " Donde no hay medición, la cifra no aparece en vez de estimarse.";
+  $("#pie").hidden = false;
+  pintaTodo();
+  addEventListener("resize", ()=>{ clearTimeout(window._rz); window._rz=setTimeout(pintaTodo,200); });
+})();
+</script>
+</body>
+</html>
