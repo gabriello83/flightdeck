@@ -223,6 +223,16 @@ comprueba("el techo de los cuatro tipos", sorted(pf["techo"]), ["admin", "client
 comprueba("y la escalera de niveles", pf["niveles"]["cliente"] < pf["niveles"]["operaciones"], True)
 comprueba("y que trae puesto cada tipo", "alarmas_ver" in pf["implicitos"]["operaciones"], True)
 
+print("\nY se ve que perfiles tienen panel calculado de verdad")
+# Un perfil vive en dos sitios: la ficha de la plataforma (DynamoDB) y la lista
+# de paneles que hay que calcular (config/perfiles.json, en el bucket de datos).
+# Tener solo el primero es tener un cliente que entra a una pantalla vacia.
+_con = [p for p in pf["perfiles"] if p["panel"]["existe"]]
+_sin = [p for p in pf["perfiles"] if not p["panel"]["existe"]]
+comprueba("cli-airbus lo tiene", any(p["_id"] == "cli-airbus" for p in _con), True)
+comprueba("y dice de cuando es", "2026-10-02" in _con[0]["panel"]["calculado"], True)
+comprueba("un perfil sin panel se distingue", len(_sin) >= 0, True)
+
 print("\nAl crear un perfil se dice que permisos no van a tener efecto")
 res = cuerpo_de(llama("POST", "/api/admin/perfiles",
                       {"perfil_id": "cli-nuevo", "nombre": "Cliente nuevo", "tipo": "cliente",

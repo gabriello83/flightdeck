@@ -321,6 +321,27 @@ def guarda_alarma(evento, usuario):
 # ----------------------------------------------------------------------
 # administracion
 # ----------------------------------------------------------------------
+def _hay_panel(perfil_id):
+    """Si el perfil tiene panel calculado, y de cuando es.
+
+    Un perfil vive en DOS sitios y es facil tener solo uno: la ficha de la
+    plataforma esta en DynamoDB —la que crea esta consola—, y la lista de
+    paneles que hay que CALCULAR esta en config/perfiles.json, en el bucket de
+    datos, que es lo que lee la Lambda de agregados. Dar de alta un cliente aqui
+    no hace que se le calcule el panel; sus usuarios entrarian a una pantalla
+    que dice que todavia no hay datos y nadie sabria por que.
+
+    Esto lo mira de frente: una cabecera por perfil, que son unos pocos.
+    """
+    if not perfil_id:
+        return {"existe": False}
+    try:
+        cab = s3.head_object(Bucket=BUCKET, Key=f"cabina/{perfil_id}/panel.json")
+        return {"existe": True, "calculado": cab["LastModified"].isoformat()}
+    except Exception:
+        return {"existe": False}
+
+
 def administra(evento, metodo, ruta, admin):
     resto = ruta[len("/api/admin/"):]
     d = cuerpo(evento)
@@ -383,7 +404,7 @@ def administra(evento, metodo, ruta, admin):
 
     if resto == "perfiles" and metodo == "GET":
         return r(200, {
-            "perfiles": lista("PERFIL#"),
+            "perfiles": [dict(p, panel=_hay_panel(p.get("_id", ""))) for p in lista("PERFIL#")],
             "catalogo_sesiones": {k: {"nombre": v[0], "minimo": v[1]} for k, v in A.SESIONES.items()},
             # El techo se envia para que el panel de admin pueda avisar de que
             # un permiso marcado no va a tener efecto en ese tipo de perfil.

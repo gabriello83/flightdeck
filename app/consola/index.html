@@ -68,6 +68,9 @@ table{width:100%;border-collapse:collapse;font-size:13.5px}
 th{text-align:left;font-weight:600;color:var(--tinta-2);font-size:12px;text-transform:uppercase;letter-spacing:.03em;padding:6px 10px 6px 0;border-bottom:1px solid var(--borde)}
 td{padding:7px 10px 7px 0;border-bottom:1px solid var(--borde);vertical-align:top}
 td.n,th.n{text-align:right;padding-right:0;font-variant-numeric:tabular-nums}
+/* El padding-right:0 es para la ultima columna; si la columna numerica lleva
+   otra detras, su cabecera se pega a la siguiente y se leen como una sola. */
+td.n:not(:last-child),th.n:not(:last-child){padding-right:18px}
 tr:last-child td{border-bottom:0}
 .pill{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:1px 8px;border-radius:999px;border:1px solid;white-space:nowrap}
 .pill.b{color:var(--bien);border-color:var(--bien)}
@@ -350,12 +353,21 @@ function vistaPerfiles(){
     if((amb.centros||[]).length) trozos.push("centros: " + amb.centros.length);
     if((amb.delegaciones||[]).length) trozos.push("delegaciones: " + amb.delegaciones.join(", "));
     const cuantos = USUARIOS.filter(u=>u.perfil_id===p._id).length;
+    /* Un perfil vive en DOS sitios, y tener sólo uno es el fallo silencioso que
+       más tiempo cuesta: la ficha de aquí (DynamoDB) y la lista de paneles que
+       hay que calcular (config/perfiles.json, en el bucket de datos). Sin el
+       segundo, sus usuarios entran a una pantalla que dice que no hay datos. */
+    const pan = p.panel || {};
+    const panel = pan.existe
+      ? `<span class="pill b">calculado</span><br><span class="cond">${esc(cuando(pan.calculado))}</span>`
+      : `<span class="pill c">sin panel</span>`;
     return `<tr>
       <td><b>${esc(p.nombre||p._id)}</b><br><span class="cond">${esc(p._id)}</span></td>
       <td data-et="Tipo">${esc(tipoLegible(p.tipo||"cliente"))}</td>
       <td data-et="Ámbito"><span class="cond">${esc(trozos.join(" · ") || "todo (interno)")}</span></td>
       <td data-et="Sesiones" class="n">${num((p.sesiones||[]).length)}</td>
       <td data-et="Usuarios" class="n">${num(cuantos)}</td>
+      <td data-et="Panel">${panel}</td>
       <td class="n">
         <button class="btn" data-ed="${esc(p._id)}">Editar</button>
         ${cuantos ? "" : `<button class="enlace" data-bo="${esc(p._id)}">Borrar</button>`}</td>
@@ -365,8 +377,14 @@ function vistaPerfiles(){
     <div class="cabsec"><h2>Perfiles</h2>
       <button class="btn fuerte" id="bNuevoPerfil" type="button">Nuevo perfil</button></div>
     <p class="sub">El perfil decide <b>qué datos</b> (el ámbito) y <b>qué pantallas</b> (las sesiones). Un perfil con usuarios no se puede borrar.</p>
+    ${PERFILES.some(p=>!(p.panel||{}).existe) ? `<div class="nota mal">
+      Hay perfiles <b>sin panel calculado</b>. Dar de alta un perfil aquí no hace que se le calcule:
+      la lista de paneles que hay que calcular vive en <span class="cond">config/perfiles.json</span>,
+      en el bucket de datos, que es lo que lee la Lambda de agregados. Añade ahí el mismo
+      identificador y lánzala una vez; hasta entonces, sus usuarios entran a una pantalla que dice
+      que todavía no hay datos.</div>` : ""}
     ${PERFILES.length ? `<div class="tabla"><table>
-      <thead><tr><th>Perfil</th><th>Tipo</th><th>Ámbito</th><th class="n">Sesiones</th><th class="n">Usuarios</th><th></th></tr></thead>
+      <thead><tr><th>Perfil</th><th>Tipo</th><th>Ámbito</th><th class="n">Sesiones</th><th class="n">Usuarios</th><th>Panel</th><th></th></tr></thead>
       <tbody>${filas}</tbody></table></div>` : `<p class="vacio">No hay ningún perfil.</p>`}
   </section>`;
 }
