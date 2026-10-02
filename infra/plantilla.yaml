@@ -245,7 +245,11 @@ Resources:
       Handler: index.lambda_handler
       Role: !GetAtt RolExtraccion.Arn
       Timeout: 900
-      MemorySize: 512
+      # 2 GB no es por capricho: un dia de stock_maquina son unos 40 MB de JSON,
+      # y entre el cuerpo descargado y su copia comprimida se juntan varios
+      # cientos de megas. Ademas Lambda da mas CPU con mas memoria, asi que la
+      # noche entera acaba antes y el coste sale igual.
+      MemorySize: 2048
       Environment:
         Variables:
           VENCLOUD_ENDPOINT: !Ref VenCloudEndpoint

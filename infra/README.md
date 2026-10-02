@@ -19,23 +19,40 @@ del proyecto se lanzan de una vez con `sh infra/pruebas.sh`.
 
 ---
 
-## Lo único que no está probado contra la API real
+## La llamada a VenCloud, resuelta
 
-**Nunca hemos hecho una llamada a VenCloud desde aquí**: el host está bloqueado por la política de
-red del entorno. Lo que no sabemos con certeza es **la forma exacta de la respuesta** de
-`GetReportV2`.
+Durante todo el proyecto esto fue el único hueco: el host está bloqueado desde mi entorno, así
+que nunca pude comprobar la forma real de `GetReportV2`. **Ya está cerrado**, con una sonda que
+probó quince formas de llamada en una sola ejecución (`{"sonda": true}` como evento de prueba).
 
-Por eso la extracción está escrita para que eso no pueda costar una noche de datos:
+```
+GET  .../VenCloudExternalApi.svc/GetReportV2/{token}/{empresa}/{informe}%7C{desde}%7C{hasta}/
+```
 
-1. **Primero guarda los bytes tal cual**, comprimidos, en `crudo/`. Pase lo que pase después, el
-   dato está.
-2. **Después intenta contar las filas** con un lector tolerante que reconoce las envolturas
-   habituales (`Rows`, `Data`, `Table`, `d`, lista pelada). Si no reconoce ninguna, **devuelve
-   `null` en vez de inventarse un número**.
-3. El registro de cada noche queda en `registro/extraccion/`, con bytes y filas por informe.
+Tres detalles, y cada uno costó una respuesta distinta del servidor:
 
-La primera carga se lanza **a mano**, se mira ese registro, y si el lector no reconoció la
-envoltura se ajusta una función de diez líneas. No hay nada más que adivinar.
+| detalle | cómo se supo |
+|---|---|
+| **GET**, no POST | con la barra final, un POST devuelve **405** — y un 405 no es «no existe», es «existe y el método no es ése». El `Allow` lo confirma: `GET` |
+| **barra final** | sin ella el servicio devuelve **307** redirigiendo a la misma URL con barra |
+| **fecha `aaaa-mm-dd`** | con `30/09/2026` devuelve **404** y con `2026-09-30`, 307. La barra de la fecha cae dentro de la *ruta*, e **IIS rechaza por defecto cualquier barra codificada ahí** — es su protección contra el doble escapado y no se puede sortear desde el cliente |
+
+El endpoint se normaliza al arrancar para quitarle la doble barra que arrastrábamos de las notas:
+dejarla costaba una redirección en cada una de las 74 llamadas de la noche, para acabar en la
+misma URL.
+
+Dos cosas más que dijo la sonda. El servicio **no publica contrato**: `?wsdl` falla porque la
+operación `GetReport` devuelve un `Message` en crudo, y no hay página de ayuda REST. Por eso no
+había nada que consultar y hubo que medirlo. Y una fecha con hora (`2026-09-30 00:00:00`) da
+**400**, lo que confirma de paso que el parámetro se valida de verdad y no se ignora.
+
+### Lo que sigue sin estar comprobado
+
+**Que el filtro de fechas acote lo que creemos.** Un día de `visita_cabecera` son 6,4 MB, que
+cuadran con unas 2.900 filas a 2,2 KB cada una; si ignorara la fecha serían nueve meses, es
+decir cerca de un giga. La magnitud dice que filtra, pero **no está medido contra un rango
+distinto**, y esa comprobación es la primera que hay que hacer con el registro de la primera
+carga delante: si un día y un mes entero pesan lo mismo, el filtro no está haciendo nada.
 
 ## Los números de informe · **los 30 rellenos**
 

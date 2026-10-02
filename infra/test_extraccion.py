@@ -220,6 +220,30 @@ comprueba("colapsa", L._endpoint("https://a.es/x//y/z.svc"), "https://a.es/x/y/z
 comprueba("no toca https://", L._endpoint("https://a.es/x"), "https://a.es/x")
 comprueba("y quita la barra final", L._endpoint("https://a.es/x/"), "https://a.es/x")
 
+print("\nContar filas sin parsear: un informe grande no cabe en memoria")
+import json as _json  # noqa: E402
+for obj, que in [
+    ([{"a": 1}, {"a": 2}, {"a": 3}], "tres filas"),
+    ([], "vacio"),
+    ([{"t": "llaves { } dentro de texto"}, {"t": "otra }"}], "llaves en una cadena"),
+    ([{"t": 'comilla " escapada y una llave {'}, {"t": "x"}], "comilla escapada"),
+    ([{"t": "barra final \\"}, {"t": "y"}], "barra invertida al final"),
+    ([{"a": {"b": [1, 2, {"c": 3}]}}], "anidamiento hondo"),
+]:
+    comprueba(que, L._contar_objetos(_json.dumps(obj).encode()), len(obj))
+
+grande = _json.dumps([{"parte_id": i, "centro": "AIRBUS GETAFE"} for i in range(20000)]).encode()
+comprueba("por encima del limite no parsea, cuenta", L.filas_de(grande), 20000)
+comprueba("y por debajo si parsea", L.filas_de(b'[{"a":1},{"a":2}]'), 2)
+comprueba("una respuesta que no es JSON devuelve None, no un numero inventado",
+          L.filas_de(b"<html>error</html>"), None)
+
+print("\nRecortar antes de limpiar: esto reventaba la sonda por memoria")
+# _limpio normalizaba el cuerpo ENTERO para quedarse con 400 caracteres:
+# texto.split() sobre 6,4 MB construye una lista de un millon de cadenas.
+enorme = b'[{"x":"' + b"a" * 6_000_000 + b'"}]'
+comprueba("devuelve 400 caracteres", len(L._limpio(enorme, 400)), 400)
+
 print("\nDe una pagina de error de WCF se lee el mensaje, no el CSS")
 pagina = (b"<html><head><style>BODY{color:#000;font-family:Verdana}</style></head>"
           b"<body><div id='content'><p class='heading1'>Servicio</p>"

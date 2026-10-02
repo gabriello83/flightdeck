@@ -226,13 +226,56 @@ def descargar(informe, filtros):
 # ----------------------------------------------------------------------
 # lectura tolerante de la respuesta
 # ----------------------------------------------------------------------
+LIMITE_PARSEO = int(os.environ.get("LIMITE_PARSEO", str(4 * 1024 * 1024)))
+
+
+def _contar_objetos(cuerpo):
+    """Cuenta los objetos de un array JSON recorriendo los bytes, sin parsear.
+
+    json.loads de un informe de 40 MB construye en memoria una estructura varias
+    veces mayor, y lo unico que queremos es un numero para el registro. Esto
+    recorre los bytes una vez y no guarda nada: respeta las cadenas y los
+    escapes, que es lo unico que puede confundir a un contador ingenuo.
+    """
+    n = profundidad = 0
+    en_cadena = escapado = False
+    for b in cuerpo:
+        if escapado:
+            escapado = False
+            continue
+        if en_cadena:
+            if b == 0x5C:      # \\
+                escapado = True
+            elif b == 0x22:    # "
+                en_cadena = False
+            continue
+        if b == 0x22:
+            en_cadena = True
+        elif b == 0x7B:        # {
+            if profundidad == 1:
+                n += 1
+            profundidad += 1
+        elif b == 0x5B:        # [
+            profundidad += 1
+        elif b in (0x7D, 0x5D):
+            profundidad -= 1
+    return n
+
+
 def filas_de(cuerpo):
     """Cuenta las filas sin saber de antemano la forma exacta de la respuesta.
 
     GetReportV2 devuelve JSON con forma variable segun el informe. Esto reconoce
     las formas habituales y, si no reconoce ninguna, devuelve None en vez de
     inventarse un numero: el dato crudo ya esta guardado y se mira a mano.
+
+    Por encima de unos megas no se parsea: se cuentan los objetos recorriendo
+    los bytes. Un informe grande parseado entero se lleva la memoria por
+    delante, y solo queriamos un numero.
     """
+    if len(cuerpo) > LIMITE_PARSEO:
+        inicio = cuerpo.lstrip()[:1]
+        return _contar_objetos(cuerpo) if inicio == b"[" else None
     try:
         d = json.loads(cuerpo)
     except Exception:
@@ -297,7 +340,11 @@ def _limpio(datos, limite=300):
     final: «Extremo no encontrado». Quedarse con los primeros 300 caracteres
     deja justo el CSS y esconde el mensaje, que es lo unico que importa.
     """
-    texto = datos.decode("utf-8", "replace") if datos else ""
+    # Recortar ANTES de limpiar. Esto reventó la sonda por falta de memoria:
+    # con un cuerpo de 6,4 MB, texto.split() construye una lista de un millon
+    # de cadenas —cientos de megas— y todo para quedarse con 400 caracteres.
+    datos = (datos or b"")[:limite * 40]
+    texto = datos.decode("utf-8", "replace")
     if "<" in texto[:200]:
         texto = re.sub(r"(?is)<(style|script|head)[^>]*>.*?</\1>", " ", texto)
         texto = re.sub(r"(?s)<[^>]+>", " ", texto)
