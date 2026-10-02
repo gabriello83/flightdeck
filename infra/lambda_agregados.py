@@ -163,6 +163,11 @@ class Acumulador:
         # merma
         self.merma = {m: {"lineas": 0, "unidades": 0.0, "euros": 0.0}
                       for m in ("caducidad", "rotura", "retirada")}
+        # Por articulo, porque el total en euros no se entiende sin esto: un
+        # envase de cafe cuesta 23 EUR y un snack 0,63. Treinta y cinco veces.
+        # Sin el desglose, un mes con cafe retirado parece un desastre y un mes
+        # sin el, un exito, cuando pueden ser las mismas lineas.
+        self.merma_articulo = defaultdict(lambda: {"lineas": 0, "unidades": 0.0, "euros": 0.0})
 
         # dinero, por periodo contable
         self.periodos = defaultdict(lambda: {"registros": 0, "efectivo": 0.0,
@@ -217,6 +222,14 @@ class Acumulador:
             acum["lineas"] += datos["lineas"]
             acum["unidades"] += datos["unidades"]
             acum["euros"] += datos["euros"]
+        for l in filas:
+            if R.v(l, "motivo") != "RC":          # solo caducidad
+                continue
+            a = self.merma_articulo[str(R.v(l, "articulo", "(sin nombre)"))[:70]]
+            unidades = abs(float(R.v(l, "cantidad")))
+            a["lineas"] += 1
+            a["unidades"] += unidades
+            a["euros"] += unidades * float(R.v(l, "puc"))
 
     # ---------------------------------------------------------------- dinero
     def come_recaudacion(self, filas):
@@ -316,10 +329,21 @@ class Acumulador:
                     "unidades_vendibles": self.carga_vendibles,
                     "_nota": "Dos de cada tres unidades son consumibles de cafe: azucar, vasos y paletinas.",
                 },
-                "merma": {m: {"lineas": d["lineas"],
-                              "unidades": d["unidades"],
-                              "euros": round(d["euros"], 2)}
-                          for m, d in self.merma.items()},
+                "merma": dict(
+                    {m: {"lineas": d["lineas"],
+                         "unidades": d["unidades"],
+                         "euros": round(d["euros"], 2)}
+                     for m, d in self.merma.items()},
+                    caducidad_por_articulo=sorted(
+                        ({"articulo": a, "lineas": d["lineas"], "unidades": d["unidades"],
+                          "euros": round(d["euros"], 2),
+                          "eur_unidad": round(d["euros"] / d["unidades"], 3) if d["unidades"] else 0}
+                         for a, d in self.merma_articulo.items()),
+                        key=lambda x: -x["euros"])[:25],
+                    _nota_articulos=("El total en euros no se lee sin esto: un envase de cafe "
+                                     "cuesta 23 EUR y un snack 0,63. Un mes con cafe retirado "
+                                     "parece un desastre con las mismas lineas que uno sin el."),
+                ),
             },
             "dinero": {"periodos": self._bloque_dinero(hoy)},
             "sat": {

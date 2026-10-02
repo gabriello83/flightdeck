@@ -58,14 +58,43 @@ elementos valorados al mes» sin ver lo que implicaba.
 Las dos cosas las destapó tener el dato puesto al lado de lo que ya sabíamos. Es exactamente para
 lo que sirve una cabina.
 
-## Lo que todavía no se puede usar
+## Los euros de merma: resuelto, y no era un fallo
 
-**Los euros de merma.** Las líneas cuadran —6.092 de caducidad en el periodo, ~1.600 al mes contra
-las 1.154 medidas en septiembre— pero la valoración sale a **3,38 € por unidad** cuando el cuaderno
-de septiembre daba 0,63. Siete veces más. Dos hipótesis: que `puc` sea precio por envase y no por
-unidad (es una trampa ya documentada para el café), o que en septiembre el campo estuviera vacío en
-los artículos que más caducan. **No distinguibles sin mirar el crudo.** Hasta entonces, las líneas
-de merma sirven; los euros, no.
+Me preocupaba que la caducidad del periodo saliera a 9,96 € por línea cuando el cuaderno de
+septiembre daba 2,06. Bajamos un día de crudo —`stock_maquina` del 15/08— y la duda se cierra:
 
-Y siguen abiertas de antes: el signo de `dif_inventario`, las 1.277 máquinas en más de una ruta
-activa, y los costes de los 59 artículos frescos de marca propia.
+| | € por línea de caducidad |
+|---|---:|
+| 15 de agosto, del crudo | 2,00 € |
+| septiembre, medido a mano | 2,06 € |
+| el periodo entero, en el panel | 9,96 € |
+
+**El método de valoración es correcto**: el día suelto y septiembre coinciden. Lo que cambia es
+**qué** se caduca. El `puc` de ese día tiene mediana 0,63 € y máximo 23,32:
+
+| puc | artículo |
+|---:|---|
+| 0,63 | un snack |
+| 16,87 | CAFÉ TORELLI PIACERE |
+| 22,18 | CAFÉ SALZILLO GRANO DESCAFEINADO |
+| 23,32 | CAFÉ SOLUBLE LIOFILIZADO DESCAFEINADO |
+
+**Un envase de café cuesta 35 veces lo que un snack.** Un mes en el que se retire café caducado
+parece un desastre con exactamente las mismas líneas que uno en el que no. Por eso el panel publica
+ahora `merma.caducidad_por_articulo`, con los 25 primeros por euros y su coste por unidad: el total
+en euros no se puede leer sin ese desglose.
+
+Y de paso, `puc` es igual a `precio_coste` en este informe (la razón es 1,00 en el p10 y en el p90),
+así que no hay ninguna duda de qué campo usar.
+
+### `dif_inventario` en la máquina: no se usa
+
+De las 9.314 filas del día, **ninguna** lleva la marca. Los 1.257 movimientos de almacén y 581 de
+vehículo que vimos en [32-diarios-de-stock.md](32-diarios-de-stock.md) son de C1 y C2: el descuadre
+se marca en los diarios de almacén y vehículo, no en el de máquina. La pregunta del signo sigue
+abierta, pero ya sabemos dónde no hay que buscarla.
+
+## Lo que sigue abierto
+
+Las 1.277 máquinas en más de una ruta activa, los costes de los 59 artículos frescos de marca
+propia, y el signo de `dif_inventario` en los diarios de almacén y vehículo.

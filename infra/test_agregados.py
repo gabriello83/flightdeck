@@ -69,7 +69,11 @@ pon("crudo/visita_reposiciones", "visita_reposiciones", AYER,
     + [{"tipo_linea": "CM", "cantidad": 100, "precio_coste": 0.004, "etiq_canal": "", "centro": "AIRBUS GETAFE"}] * 50)
 
 pon("crudo/stock_maquina", "stock_maquina", AYER,
-    [{"motivo": "RC", "cantidad": -2, "puc": 0.60, "centro": "AIRBUS GETAFE"}] * 10
+    [{"motivo": "RC", "cantidad": -2, "puc": 0.60, "articulo": "DONETTES CLASICO",
+      "centro": "AIRBUS GETAFE"}] * 10
+    # Un solo envase de cafe pesa mas en euros que diez lineas de snack.
+    + [{"motivo": "RC", "cantidad": -1, "puc": 23.32,
+        "articulo": "CAFE SOLUBLE LIOFILIZADO DESCAFEINADO", "centro": "AIRBUS GETAFE"}]
     + [{"motivo": "CM", "cantidad": 10, "puc": 0.60, "centro": "AIRBUS GETAFE"}] * 10)
 
 pon("crudo/recaudacion", "recaudacion", AYER,
@@ -150,8 +154,20 @@ comprueba("unidades totales", airbus["servicio"]["carga"]["unidades_total"], 550
 comprueba("unidades vendibles", airbus["servicio"]["carga"]["unidades_vendibles"], 500)
 
 print("\nLa merma se valora con puc")
-comprueba("10 lineas de caducidad", airbus["servicio"]["merma"]["caducidad"]["lineas"], 10)
-comprueba("12 EUR", airbus["servicio"]["merma"]["caducidad"]["euros"], 12.0)
+comprueba("11 lineas de caducidad", airbus["servicio"]["merma"]["caducidad"]["lineas"], 11)
+comprueba("12 EUR de snack mas 23,32 de cafe",
+          airbus["servicio"]["merma"]["caducidad"]["euros"], 35.32)
+
+print("\nY el desglose explica por que: un envase de cafe pesa mas que 10 de snack")
+art = airbus["servicio"]["merma"]["caducidad_por_articulo"]
+comprueba("dos articulos", len(art), 2)
+comprueba("el cafe manda en euros", art[0]["articulo"], "CAFE SOLUBLE LIOFILIZADO DESCAFEINADO")
+comprueba("con UNA sola linea", art[0]["lineas"], 1)
+comprueba("y 23,32 EUR", art[0]["euros"], 23.32)
+comprueba("mientras el snack lleva 10 lineas", art[1]["lineas"], 10)
+comprueba("y solo 12 EUR", art[1]["euros"], 12.0)
+comprueba("el euro por unidad lo deja claro", art[0]["eur_unidad"], 23.32)
+comprueba("contra el del snack", art[1]["eur_unidad"], 0.6)
 
 print("\nEl mes en curso sale marcado como provisional")
 actual = [p for p in airbus["dinero"]["periodos"] if p["periodo"] == f"{HOY.year}-{HOY.month:02d}"][0]
