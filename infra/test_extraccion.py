@@ -104,6 +104,22 @@ def guion(*casos):
 # ----------------------------------------------------------------------
 import datetime  # noqa: E402
 
+print("\nUna fecha con barras no arranca siquiera")
+# La plantilla pasaba FORMATO_FECHA=%d/%m/%Y como variable de entorno y pisaba
+# el valor del codigo: 66 descargas con 404 en la primera carga real. Ahora el
+# modulo se niega a cargar, que es un fallo de medio segundo y no de una noche.
+import importlib  # noqa: E402
+os.environ["FORMATO_FECHA"] = "%d/%m/%Y"
+try:
+    importlib.reload(L)
+    comprueba("deberia negarse a arrancar", True, False)
+except RuntimeError as e:
+    comprueba("se niega", "barra" in str(e), True)
+    comprueba("y dice cual poner", "%Y-%m-%d" in str(e), True)
+del os.environ["FORMATO_FECHA"]
+importlib.reload(L)
+L.ABRIDOR = _Abridor()
+
 print("\nLa URL es exactamente la que el servicio pidio")
 comprueba("fecha en ISO", L.FORMATO_FECHA, "%Y-%m-%d")
 comprueba("metodo GET", L.METODO, "GET")
@@ -233,10 +249,20 @@ for obj, que in [
     comprueba(que, L._contar_objetos(_json.dumps(obj).encode()), len(obj))
 
 grande = _json.dumps([{"parte_id": i, "centro": "AIRBUS GETAFE"} for i in range(20000)]).encode()
+L.LIMITE_PARSEO = 1000
 comprueba("por encima del limite no parsea, cuenta", L.filas_de(grande), 20000)
+L.LIMITE_PARSEO = 48 * 1024 * 1024
 comprueba("y por debajo si parsea", L.filas_de(b'[{"a":1},{"a":2}]'), 2)
 comprueba("una respuesta que no es JSON devuelve None, no un numero inventado",
           L.filas_de(b"<html>error</html>"), None)
+
+# m_carriles devolvio None en la primera carga: 6,3 MB que no empezaban por [.
+comprueba("un array envuelto tambien se cuenta",
+          L._contar_objetos(b'{"Rows":[{"a":1},{"a":2},{"a":3}]}'), 3)
+comprueba("y con BOM delante", L._contar_objetos('\ufeff[{"a":1},{"a":2}]'.encode()), 2)
+comprueba("filas_de lo intenta antes de rendirse",
+          L.filas_de('\ufeff[{"a":1},{"a":2}]'.encode()), 2)
+comprueba("sin ningun array, None", L._contar_objetos(b'{"a":1}'), None)
 
 print("\nRecortar antes de limpiar: esto reventaba la sonda por memoria")
 # _limpio normalizaba el cuerpo ENTERO para quedarse con 400 caracteres:

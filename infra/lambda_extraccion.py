@@ -16,7 +16,7 @@ Variables de entorno:
   VENCLOUD_EMPRESA   2311
   BUCKET             destino
   MANIFIESTO         (opcional) clave del manifiesto en el bucket; por defecto config/manifiesto.json
-  FORMATO_FECHA      (opcional) %d/%m/%Y
+  FORMATO_FECHA      (opcional) %Y-%m-%d. NO puede llevar barras: ver mas abajo
   VENTANA_DIAS       (opcional) dias hacia atras que se reprocesan; por defecto el del manifiesto
   SOLO               (opcional) lista de ids separados por coma, para una carga parcial
 """
@@ -71,6 +71,13 @@ CLAVE_MANIFIESTO = os.environ.get("MANIFIESTO", "config/manifiesto.json")
 # contra el doble escapado, y no se puede sortear desde el cliente. Con
 # 2026-09-30 la ruta encaja. Medido: dd/MM/yyyy daba 404 y la ISO, 307.
 FORMATO_FECHA = os.environ.get("FORMATO_FECHA", "%Y-%m-%d")
+if "/" in FORMATO_FECHA:
+    # Preferimos no arrancar a pasar la noche entera recogiendo 404.
+    raise RuntimeError(
+        f"FORMATO_FECHA={FORMATO_FECHA!r} lleva una barra. La fecha viaja dentro "
+        "de la RUTA de la URL, e IIS rechaza con 404 cualquier barra codificada "
+        "ahi. Usa %Y-%m-%d."
+    )
 # GET, no POST: con la barra final el servicio contesta 405 a un POST, que es su
 # forma de decir "la ruta es buena, el metodo no".
 METODO = os.environ.get("VENCLOUD_METODO", "GET")
@@ -226,18 +233,26 @@ def descargar(informe, filtros):
 # ----------------------------------------------------------------------
 # lectura tolerante de la respuesta
 # ----------------------------------------------------------------------
-LIMITE_PARSEO = int(os.environ.get("LIMITE_PARSEO", str(4 * 1024 * 1024)))
+# Por debajo de esto se parsea con json.loads, que va a velocidad de C. Por
+# encima se cuentan los bytes, que es un bucle de Python y tarda unos segundos
+# por cada diez megas. Con 2 GB de memoria, parsear 48 MB no es problema; lo
+# que no cabia era la lista de un millon de cadenas que hacia _limpio().
+LIMITE_PARSEO = int(os.environ.get("LIMITE_PARSEO", str(48 * 1024 * 1024)))
 
 
 def _contar_objetos(cuerpo):
-    """Cuenta los objetos de un array JSON recorriendo los bytes, sin parsear.
+    """Cuenta los objetos del primer array JSON, recorriendo los bytes.
 
-    json.loads de un informe de 40 MB construye en memoria una estructura varias
-    veces mayor, y lo unico que queremos es un numero para el registro. Esto
-    recorre los bytes una vez y no guarda nada: respeta las cadenas y los
-    escapes, que es lo unico que puede confundir a un contador ingenuo.
+    No supone que la respuesta sea un array pelado: busca el PRIMER corchete y
+    cuenta los objetos que cuelgan directamente de el, asi que vale igual para
+    `[{...},{...}]` y para `{"Rows":[{...},{...}]}`. m_carriles devolvio None
+    con la version anterior justamente por eso.
+
+    Respeta cadenas y escapes, que es lo unico que confunde a un contador
+    ingenuo: una llave dentro de un texto no abre nada.
     """
     n = profundidad = 0
+    nivel_array = None
     en_cadena = escapado = False
     for b in cuerpo:
         if escapado:
@@ -251,15 +266,17 @@ def _contar_objetos(cuerpo):
             continue
         if b == 0x22:
             en_cadena = True
-        elif b == 0x7B:        # {
-            if profundidad == 1:
-                n += 1
-            profundidad += 1
         elif b == 0x5B:        # [
+            if nivel_array is None:
+                nivel_array = profundidad + 1
+            profundidad += 1
+        elif b == 0x7B:        # {
+            if profundidad == nivel_array:
+                n += 1
             profundidad += 1
         elif b in (0x7D, 0x5D):
             profundidad -= 1
-    return n
+    return n if nivel_array is not None else None
 
 
 def filas_de(cuerpo):
@@ -274,12 +291,12 @@ def filas_de(cuerpo):
     delante, y solo queriamos un numero.
     """
     if len(cuerpo) > LIMITE_PARSEO:
-        inicio = cuerpo.lstrip()[:1]
-        return _contar_objetos(cuerpo) if inicio == b"[" else None
+        return _contar_objetos(cuerpo)
     try:
         d = json.loads(cuerpo)
     except Exception:
-        return None
+        # Puede traer BOM, o no ser JSON. Se intenta contar antes de rendirse.
+        return _contar_objetos(cuerpo)
     if isinstance(d, list):
         return len(d)
     if isinstance(d, dict):

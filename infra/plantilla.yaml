@@ -257,7 +257,10 @@ Resources:
           VENCLOUD_TOKEN_SECRETO: !Ref TokenVenCloud
           BUCKET: !Ref Bucket
           MANIFIESTO: config/manifiesto.json
-          FORMATO_FECHA: "%d/%m/%Y"
+          # ISO obligatorio. Una barra aqui viaja dentro de la RUTA de la URL,
+          # e IIS rechaza con 404 cualquier barra codificada en la ruta. Con
+          # %d/%m/%Y fallaron las 66 descargas incrementales de la primera carga.
+          FORMATO_FECHA: "%Y-%m-%d"
       Tags:
         - { Key: Proyecto, Value: !Ref Proyecto }
       Code:
