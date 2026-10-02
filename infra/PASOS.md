@@ -264,8 +264,12 @@ Cuando pase a `Issued`, copia el **ARN**.
 
 `CloudFormation → Create stack` → **`infra/plantilla-web.yaml`**. Vuelve a `eu-west-1`.
 
+**Stack name**: `digivend-web`. Son dos pilas separadas a propósito —`digivend-ingesta` y
+`digivend-web`—, y se puede borrar o rehacer la de la web entera sin tocar un byte de los datos.
+
 | parámetro | qué poner |
 |---|---|
+| `Prefijo` | **`digivend`, el mismo que la ingesta**. No lo cambies: es lo que hace que esta pila encuentre lo de la otra. Ninguno de los recursos de las dos se llama igual, así que no chocan |
 | `BucketDatos` | el `NombreBucket` del paso 2 |
 | `RemitenteAvisos` | una dirección verificada en SES, para las alarmas por correo |
 | `Dominio` y `CertificadoArn` | **déjalos vacíos de momento** |
