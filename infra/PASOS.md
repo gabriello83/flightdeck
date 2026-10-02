@@ -368,8 +368,20 @@ desglose por centro que usa el panel. Tarda lo mismo que antes.
 
 ## Paso 13 bis · Actualiza la pila web — 5 min
 
-**Si creaste la pila antes del 2 de octubre, este paso no es opcional.** La plantilla tenía dos
-fallos que sólo aparecen al entrar:
+**Si creaste la pila antes del 3 de octubre, este paso no es opcional.** La plantilla tenía tres
+fallos que sólo aparecen al usarla:
+
+0. **A los roles les faltaba `dynamodb:Scan`.** Es lo que usa `lista()`, y con ello la consola
+   entera: usuarios, perfiles y teléfonos contestaban 500 con un «Error interno» que no dice nada
+   de IAM. Al de alarmas le faltaba además `DeleteItem`, que es lo que saca de la cola lo ya
+   enviado. Y faltaba en la **frontera de permisos**, que es el techo: darlo sólo en el rol no
+   habría servido de nada, y es el fallo que más cuesta ver porque el rol «parece» correcto.
+
+   Ahora hay una prueba, `infra/test_permisos.py`, que lee la plantilla y el código y comprueba que
+   cada Lambda tenga permiso para cada llamada que hace —y que la frontera la deje pasar—. Falla
+   también si alguien añade una llamada nueva sin decir qué permiso necesita.
+
+Y los otros dos:
 
 1. **`/panel/` no existía.** CloudFront sólo sabe servir el index de la raíz. Una petición a
    `/panel/` le llega a S3 como la clave `panel/`, que no es ningún objeto, y S3 contesta 403 —no

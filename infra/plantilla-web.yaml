@@ -322,7 +322,8 @@ Resources:
           - Sid: NuestraTabla
             Effect: Allow
             Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem,
-                     dynamodb:DeleteItem, dynamodb:Query, dynamodb:BatchGetItem]
+                     dynamodb:DeleteItem, dynamodb:Query, dynamodb:Scan,
+                     dynamodb:BatchGetItem]
             Resource: !GetAtt Tabla.Arn
           - Sid: SoloLosPanelesDelBucketDeDatos
             Effect: Allow
@@ -365,8 +366,12 @@ Resources:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
+                # Scan es lo que usa `lista()`: la tabla es de cientos de filas,
+                # no de millones, y una consulta por prefijo de clave no existe
+                # sin un indice que aqui no compensa. Sin esto, la consola entera
+                # —usuarios, perfiles, telefonos— contesta 500.
                 Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem,
-                         dynamodb:DeleteItem, dynamodb:Query]
+                         dynamodb:DeleteItem, dynamodb:Query, dynamodb:Scan]
                 Resource: !GetAtt Tabla.Arn
               - Effect: Allow
                 Action: [s3:GetObject]
@@ -439,7 +444,10 @@ Resources:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
-                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:Query]
+                # Scan para recorrer las alarmas y la cola; DeleteItem para
+                # sacar de la cola lo que ya se ha enviado.
+                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem,
+                         dynamodb:DeleteItem, dynamodb:Query, dynamodb:Scan]
                 Resource: !GetAtt Tabla.Arn
               - Effect: Allow
                 Action: [s3:GetObject]
