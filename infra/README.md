@@ -1,5 +1,9 @@
 # La ingesta: Lambda y S3
 
+> **Está en producción desde el 02/10/2026.** 120 días de dato, carga nocturna de 90 segundos,
+> agregados de 84. Y comprobado: la cabina reproduce al céntimo las cifras que sacamos a mano
+> durante la campaña. Ver [docs/42](../docs/42-la-cabina-en-produccion.md).
+
 Lo que convierte el prototipo en un sistema vivo. Cinco ficheros:
 
 | fichero | qué es |
