@@ -28,6 +28,7 @@ import secrets
 import boto3
 
 import autorizacion as A
+import catalogo as CAT
 from comun import (abre_sesion, borra, cierra_sesion, config, cookie_sesion,
                    cuerpo, escribe, lee, lista, panel_de, quien_es, r, s3, BUCKET)
 
@@ -112,6 +113,7 @@ def encamina(evento, metodo, ruta):
             "nombre": usuario.get("nombre", ""),
             "tipo": perfil.get("tipo", "cliente"),
             "perfil": perfil.get("nombre") or perfil.get("perfil_id", ""),
+            "perfil_id": perfil.get("perfil_id", ""),
             "sesiones": A.sesiones_de(perfil.get("tipo", "cliente"), perfil.get("sesiones", [])),
             "catalogo_sesiones": {k: v[0] for k, v in A.SESIONES.items()},
             "permisos": permisos,
@@ -141,6 +143,13 @@ def encamina(evento, metodo, ruta):
                 raise ValueError("Orden no valido.")
             escribe(clave, {"orden": [str(x)[:40] for x in orden]}, "ORDEN")
             return r(200, {"ok": True})
+
+    # El catalogo lo sirve la API para que el formulario del navegador no lleve
+    # una copia que se quede vieja en cuanto alguien anada una fuente.
+    if ruta == "/api/catalogo-alarmas" and metodo == "GET":
+        if not permisos.get("alarmas_ver"):
+            raise PermissionError("Este perfil no ve las alarmas.")
+        return r(200, {"catalogo": CAT.para_el_navegador()})
 
     if ruta == "/api/alarmas":
         if metodo == "GET":

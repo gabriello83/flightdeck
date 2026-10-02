@@ -151,6 +151,8 @@ comprueba("y la ruta lo rechaza",
 comprueba("administrar tampoco",
           llama("GET", "/api/admin/usuarios", cookie=COOKIE_ANA)["statusCode"], 403)
 comprueba("ni las alarmas", llama("GET", "/api/alarmas", cookie=COOKIE_ANA)["statusCode"], 403)
+comprueba("ni el catalogo de alarmas",
+          llama("GET", "/api/catalogo-alarmas", cookie=COOKIE_ANA)["statusCode"], 403)
 comprueba("el umbral llega", yo["umbral"], 350)
 comprueba("y el asistente esta habilitado", yo["asistente"]["habilitado"], True)
 
@@ -241,6 +243,15 @@ comprueba("con prefijo si",
                 {"empleado_id": "12", "nombre": "Luis", "telefono": "+34600000000",
                  "oficio": "reponedor"}, cookie=COOKIE_JEFE)["statusCode"], 200)
 comprueba("y se listan", len(cuerpo_de(llama("GET", "/api/admin/telefonos", cookie=COOKIE_JEFE))["telefonos"]), 1)
+
+print("\nEl catalogo de alarmas lo sirve la API, no lo copia el navegador")
+cat = cuerpo_de(llama("GET", "/api/catalogo-alarmas", cookie=COOKIE_JEFE))["catalogo"]
+comprueba("el admin si", len(cat) > 10, True)
+comprueba("cada entrada trae fuente y campo", all(x["fuente"] and x["campo"] for x in cat), True)
+comprueba("y dice cuales se pueden evaluar hoy", any(x["evaluable"] for x in cat), True)
+comprueba("y cuales todavia no", any(not x["evaluable"] for x in cat), True)
+import catalogo as _cat
+comprueba("es la misma lista que evalua la Lambda de alarmas", len(cat), len(_cat.CATALOGO))
 
 print("\nUna ruta que no existe")
 comprueba("404", llama("GET", "/api/loquesea", cookie=COOKIE_JEFE)["statusCode"], 404)

@@ -335,10 +335,14 @@ va en su sitio, porque la ruta es la que decide qué página sale:
 |---|---|
 | `app/index.html` | en la raíz, `index.html` |
 | `app/panel/index.html` | dentro de una carpeta `panel/` |
+| `app/avisos/index.html` | dentro de una carpeta `avisos/` |
 | `app/consola/index.html` | dentro de una carpeta `consola/` |
 
 En la consola de S3: `Upload → Add folder` sobre `app/` sube la estructura entera de una vez; si
 prefieres ir fichero a fichero, crea antes las dos carpetas con `Create folder`.
+
+Vuelve a subir también `api.zip` y `alarmas.zip`: el catálogo de alarmas se ha movido a un módulo
+que usan los dos, y la API gana la ruta que se lo sirve al navegador.
 
 **d)** Vuelve a subir `agregados.zip` a `digivend-agregados` y lánzalo una vez a mano. La versión
 que tienes desplegada deja el panel de cliente **sin recaudación y sin reposición**: cinco de los
@@ -367,8 +371,8 @@ Un `CNAME` de `dashboard.digivend.es` al nombre que da la salida `DondeApuntaElD
 Cuando termines el paso 7, pásame el registro y **cierro el único hueco que queda** en todo el
 sistema: la forma exacta de la respuesta de `GetReportV2`.
 
-El acceso (`app/index.html`) y el panel de cliente (`app/panel/index.html`) ya van contra la API de
-verdad: la contraseña la valida Cognito desde dentro de AWS, el panel sale de `/api/panel` ya
+El acceso (`app/index.html`), el panel de cliente (`app/panel/index.html`) y los avisos
+(`app/avisos/index.html`) ya van contra la API de verdad: la contraseña la valida Cognito desde dentro de AWS, el panel sale de `/api/panel` ya
 recortado por el perfil de la sesión, y el orden de los paneles se guarda en el servidor, así que
 el cliente lo encuentra igual desde otro ordenador. Queda la consola de administración, que todavía
 es el prototipo: ésa sí sigue siendo trabajo mío.

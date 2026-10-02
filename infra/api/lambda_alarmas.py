@@ -33,30 +33,7 @@ SECRETO_WA = os.environ.get("SECRETO_WHATSAPP", "")
 HORAS_REPETICION = int(os.environ.get("HORAS_REPETICION", "24"))
 
 
-# ----------------------------------------------------------------------
-# catalogo cerrado de fuentes
-# ----------------------------------------------------------------------
-# fuente.campo -> (ruta dentro del panel, etiqueta, unidad)
-# ruta None = todavia no esta en los agregados. No se evalua, se avisa.
-CATALOGO = {
-    "jornadas.temperatura_inicio": ("jornadas.temperatura_fuera", "Jornadas fuera de temperatura", "jornadas"),
-    "jornadas.km":                 ("jornadas.km_total", "Kilometros del periodo", "km"),
-    "jornadas.duracion":           ("jornadas.km.mediana", "Duracion mediana de jornada", "h"),
-    "visitas.duracion_min":        ("servicio.duracion_min.mediana", "Duracion mediana de visita", "min"),
-    "visitas.dias_sin_inventario": ("inventario.cumplimiento.pct_en_norma", "Inventario en norma", "%"),
-    "visitas.dias_sin_visita":     (None, "Dias sin visita por maquina", "d"),
-    "recaudacion.efectivo_ciego_mes": ("dinero.periodos.-1.efectivo_sin_telemetria", "Efectivo sin telemetria", "EUR"),
-    "recaudacion.efectivo_sin_lectura": ("dinero.periodos.-1.pct_ciego", "Porcentaje ciego", "%"),
-    "recaudacion.dias_sin_contar": (None, "Dias desde la recogida sin contar", "d"),
-    "stock.caducidad_mes":         ("servicio.merma.caducidad.euros", "Caducidad del periodo", "EUR"),
-    "stock.articulos_sin_coste":   (None, "Articulos cargados sin coste", ""),
-    "stock.cambio_tubos":          (None, "Cambio parado en tubos", "EUR"),
-    "sat.incidencias_30d":         ("sat.averias_tecnicas", "Averias tecnicas del periodo", ""),
-    "sat.horas_abierta":           ("sat.horas_cierre.mediana", "Horas medianas hasta el cierre", "h"),
-    "sat.devoluciones_30d":        (None, "Devoluciones en 30 dias", ""),
-    "telemetria.horas_sin_venta":  (None, "Horas sin venta", "h"),
-    "telemetria.venta_mes":        (None, "Venta mensual", "EUR"),
-}
+from catalogo import CATALOGO
 
 
 def valor_en(panel, ruta):

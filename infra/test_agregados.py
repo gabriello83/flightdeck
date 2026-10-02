@@ -232,6 +232,35 @@ comprueba("y la de otro cliente, no",
 comprueba("un ambito vacio sigue cogiendolo todo",
           L.en_ambito({"matricula": "ZZ"}, {}, _m), True)
 
+print("\nLa mudanza de VenCloud: el cliente de verdad en vez del nombre del centro")
+# Hasta octubre de 2026 todos los centros colgaban del cliente «Serunion» y el
+# cliente real solo estaba en el nombre del centro. VenCloud los reasigna. Lo
+# que sigue prueba que el ambito acierta ANTES, DURANTE y DESPUES, sin que haya
+# que cambiar nada un dia concreto.
+AMB = {"clientes": ["AIRBUS"]}
+_m2 = L.MapaCentros()
+# ANTES: cliente SERUNION para todos, el nombre del centro es lo unico que distingue
+_m2.aprende([{"matricula": "A9", "centro": "AIRBUS GETAFE", "cliente": "SERUNION"},
+             {"matricula": "C9", "centro": "CONSUM MURCIA", "cliente": "SERUNION"}])
+comprueba("antes: entra por el nombre del centro",
+          L.en_ambito({"matricula": "A9"}, AMB, _m2), True)
+comprueba("antes: y Consum sigue fuera",
+          L.en_ambito({"matricula": "C9"}, AMB, _m2), False)
+# DESPUES: el centro ya no lleva el nombre del cliente delante, pero el campo si
+_m3 = L.MapaCentros()
+_m3.aprende([{"matricula": "A9", "centro": "GETAFE", "cliente": "AIRBUS OPERATIONS SL"},
+             {"matricula": "C9", "centro": "MURCIA", "cliente": "CONSUM COOP V"}])
+comprueba("despues: entra por el campo cliente",
+          L.en_ambito({"matricula": "A9"}, AMB, _m3), True)
+comprueba("despues: y Consum sigue fuera",
+          L.en_ambito({"matricula": "C9"}, AMB, _m3), False)
+comprueba("una fila que ya trae el cliente no necesita mapa",
+          L.en_ambito({"cliente": "AIRBUS OPERATIONS SL"}, AMB, _m3), True)
+comprueba("la lista de clientes vistos delata si la mudanza ha entrado",
+          sorted(_m3.clientes), ["AIRBUS OPERATIONS SL", "CONSUM COOP V"])
+comprueba("mientras no ha entrado, sale un solo nombre",
+          sorted(_m2.clientes), ["SERUNION"])
+
 print("\nPor centro: en cual de los centros pasa")
 pc = airbus["servicio"]["por_centro"]
 comprueba("un centro", len(pc), 1)

@@ -115,3 +115,45 @@ Las de siempre, y una nueva:
 - La consola de administración (`app/consola/`) sigue siendo el prototipo: no valida contraseñas
   contra Cognito.
 - El asistente y las alarmas, que tienen API y pruebas pero no pantalla.
+
+---
+
+# El asistente y los avisos
+
+## El asistente va dentro del panel, no en una página aparte
+
+Un asistente al que hay que ir es un asistente que no se usa: la pregunta surge **mirando una
+cifra**, y si para preguntarla hay que salir de la pantalla donde está la cifra, no se pregunta. Va
+en un cajón lateral, sobre el panel, y el botón sólo aparece si `/api/yo` dice que está habilitado
+para este usuario — los tres interruptores en serie (plataforma, perfil, usuario) los resuelve el
+servidor.
+
+La página **no le manda el panel**. Le manda la pregunta y los últimos turnos; el panel lo pone la
+Lambda, que ya sabe de qué perfil es la sesión y le entrega exactamente el mismo recorte que recibió
+este navegador. Si el dato no está en el panel de este usuario, el asistente tampoco lo tiene.
+
+Las preguntas sugeridas salen de los bloques que han llegado, no de una lista fija: a un perfil sin
+recaudación no se le ofrece preguntar por la recaudación.
+
+Lo que vuelve se enseña como texto plano con saltos de línea. No hay intérprete de Markdown porque
+no hay forma de traer uno sin llamar a un dominio externo, y escribir uno a mano para poner tres
+negritas no vale lo que cuesta.
+
+## Avisos y alarmas: `/avisos/`
+
+Dos permisos, y se nota: `alarmas_ver` entra en la página, `alarmas_crear` es lo que enseña el botón
+de «Nueva alarma» y los de editar y borrar. Quien sólo ve, sólo ve. El servidor lo vuelve a
+comprobar en cada ruta: lo de la página es comodidad, no seguridad.
+
+**El catálogo de lo que se puede vigilar no está escrito en la página.** Estaba dentro de la Lambda
+de alarmas; se ha movido a `infra/api/catalogo.py`, que usan las dos: la que evalúa y la API, que lo
+sirve en `/api/catalogo-alarmas`. Así el día que se añada una fuente aparece sola en el formulario,
+en vez de quedarse una lista vieja en el navegador que nadie recuerda actualizar.
+
+Y el catálogo dice **cuáles se pueden evaluar hoy**. Seis de las diecisiete apuntan a cifras que los
+agregados todavía no calculan. Una alarma sobre una de ellas se puede crear —queda escrita y
+esperando—, pero el formulario lo advierte antes y la lista la marca «sin datos aún» después. Lo
+contrario sería dejar que alguien crea que una máquina está vigilada cuando no lo está.
+
+En el móvil las tablas pasan a ser fichas: cinco columnas en 390 px no se leen, y los botones se
+quedaban fuera de la pantalla.

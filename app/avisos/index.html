@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Avisos · digivend</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M8 3a3 3 0 0 0-3 3v2.5L4 10v1h8v-1l-1-1.5V6a3 3 0 0 0-3-3zm0 10a1.5 1.5 0 0 0 1.5-1.5h-3A1.5 1.5 0 0 0 8 13z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --bien:#0ca30c; --aviso:#fab219; --grave:#ec835a; --critico:#d03b3b;
+  --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --sombra:none;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --sombra:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1000px;margin:0 auto;padding:18px 16px 72px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px;margin-left:8px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
+button.btn:hover{border-color:var(--tinta-3)}
+button.btn.fuerte{background:var(--s1);border-color:var(--s1);color:#fff;font-weight:600}
+button.btn[disabled]{opacity:.55;cursor:progress}
+.nota{
+  margin:16px 0;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+.nota.mal{border-left-color:var(--critico);color:var(--critico)}
+section.caja{
+  background:var(--tarjeta);border:1px solid var(--borde);border-radius:12px;
+  padding:14px 16px 16px;box-shadow:var(--sombra);margin-top:16px
+}
+section.caja h2{font-size:15px;margin:0 0 2px;font-weight:650;letter-spacing:-.01em}
+section.caja .sub{font-size:12.5px;color:var(--tinta-2);margin:2px 0 12px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+.tabla{overflow-x:auto}
+th{text-align:left;font-weight:600;color:var(--tinta-2);font-size:12px;text-transform:uppercase;letter-spacing:.03em;padding:6px 10px 6px 0;border-bottom:1px solid var(--borde)}
+td{padding:7px 10px 7px 0;border-bottom:1px solid var(--borde);vertical-align:top}
+td.n,th.n{text-align:right;padding-right:0;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:1px 8px;border-radius:999px;border:1px solid;white-space:nowrap}
+.pill.b{color:var(--bien);border-color:var(--bien)}
+.pill.a{color:var(--grave);border-color:var(--grave)}
+.pill.c{color:var(--critico);border-color:var(--critico)}
+.pill.g{color:var(--tinta-3);border-color:var(--borde-fuerte)}
+.cond{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:var(--tinta-2)}
+.vacio{color:var(--tinta-3);font-size:13.5px;padding:8px 0}
+.enlace{font:inherit;font-size:12.5px;color:var(--critico);background:transparent;border:0;border-bottom:1px dotted;cursor:pointer;padding:0}
+/* formulario */
+dialog{
+  border:1px solid var(--borde);border-radius:14px;background:var(--tarjeta);color:var(--tinta);
+  padding:0;width:min(560px,calc(100% - 24px));box-shadow:0 10px 40px rgba(0,0,0,.25)
+}
+dialog::backdrop{background:rgba(0,0,0,.35)}
+dialog h2{font-size:16px;margin:0;padding:16px 18px 2px}
+dialog .sub{font-size:12.5px;color:var(--tinta-2);margin:0;padding:0 18px 12px}
+dialog .cuerpo{padding:0 18px 4px;max-height:70dvh;overflow-y:auto}
+dialog footer{display:flex;gap:8px;justify-content:flex-end;padding:14px 18px;border-top:1px solid var(--borde);margin-top:12px}
+label{display:block;font-size:13px;font-weight:500;margin:0 0 5px}
+.campo{margin-bottom:14px}
+.fila{display:flex;gap:10px;flex-wrap:wrap}
+.fila>.campo{flex:1;min-width:130px}
+input,select,textarea{
+  width:100%;padding:8px 10px;font:inherit;font-size:14px;color:var(--tinta);
+  background:var(--fondo);border:1px solid var(--borde-fuerte);border-radius:8px
+}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--s1);outline-offset:1px;border-color:var(--s1)}
+.marcas{display:flex;gap:14px;flex-wrap:wrap;font-size:13.5px;color:var(--tinta-2)}
+.marcas label{display:flex;align-items:center;gap:6px;font-weight:400;margin:0}
+.marcas input{width:auto}
+.pista{font-size:12px;color:var(--tinta-3);margin:4px 0 0}
+.pista.mal{color:var(--grave)}
+/* En un movil una tabla de cinco columnas no se lee: se queda en una banda
+   estrecha con scroll propio y los botones fuera de la pantalla. Debajo de
+   640 px cada fila pasa a ser una ficha, con la etiqueta de la columna delante
+   del dato para que no haya que adivinar que es cada cosa. */
+@media (max-width:640px){
+  .tabla table, .tabla tbody, .tabla tr, .tabla td{display:block;width:100%}
+  .tabla thead{display:none}
+  .tabla tr{border-bottom:1px solid var(--borde);padding:10px 0}
+  .tabla tr:last-child{border-bottom:0}
+  .tabla td{border:0;padding:3px 0}
+  .tabla td.n{text-align:left;padding-top:8px}
+  .tabla td[data-et]:not(:empty)::before{content:attr(data-et) " · ";color:var(--tinta-3);font-size:12px}
+}
+footer.pie{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+#cargando{padding:40px 0;color:var(--tinta-2)}
+</style>
+</head>
+<body>
+<div class="env">
+  <header class="top">
+    <div class="marca"><b>Avisos y alarmas</b><span id="quien"></span></div>
+    <div class="acciones">
+      <button class="btn" id="bPanel" type="button">Volver al panel</button>
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn fuerte" id="bNueva" type="button" hidden>Nueva alarma</button>
+    </div>
+  </header>
+
+  <div id="cargando">Cargando…</div>
+  <div class="nota mal" id="error" hidden></div>
+  <div id="todo" hidden>
+    <section class="caja">
+      <h2>Alarmas</h2>
+      <p class="sub" id="subAlarmas"></p>
+      <div id="listaAlarmas"></div>
+    </section>
+
+    <section class="caja">
+      <h2>Lo que ha pasado</h2>
+      <p class="sub">Los últimos avisos enviados y los que no se pudieron enviar. Se evalúan cada hora.</p>
+      <div id="listaAvisos"></div>
+    </section>
+  </div>
+
+  <footer class="pie">Todo se sirve desde este dominio. Esta página no llama a ningún sitio externo.</footer>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog" id="form">
+    <h2 id="dlgTitulo">Nueva alarma</h2>
+    <p class="sub">Se evalúa cada hora sobre el panel del perfil. Si la fuente todavía no se calcula, la alarma queda escrita y esperando.</p>
+    <div class="cuerpo">
+      <div class="campo">
+        <label for="nombre">Nombre</label>
+        <input id="nombre" required maxlength="120" placeholder="Caducidad por encima de 500 €">
+      </div>
+      <div class="campo">
+        <label for="fuente">Qué se vigila</label>
+        <select id="fuente" required></select>
+        <p class="pista" id="pistaFuente"></p>
+      </div>
+      <div class="fila">
+        <div class="campo">
+          <label for="comparacion">Salta cuando</label>
+          <select id="comparacion">
+            <option value="&gt;">es mayor que</option>
+            <option value="&gt;=">es mayor o igual que</option>
+            <option value="&lt;">es menor que</option>
+            <option value="&lt;=">es menor o igual que</option>
+            <option value="=">es igual a</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="umbral">Umbral</label>
+          <input id="umbral" type="number" step="any" required inputmode="decimal">
+          <p class="pista" id="pistaUnidad"></p>
+        </div>
+      </div>
+      <div class="campo">
+        <label for="perfil">Perfil al que mira</label>
+        <select id="perfil"></select>
+      </div>
+      <div class="campo">
+        <label>Por dónde avisa</label>
+        <div class="marcas">
+          <label><input type="checkbox" id="canalCorreo" checked> Correo</label>
+          <label><input type="checkbox" id="canalWhatsapp"> WhatsApp</label>
+        </div>
+      </div>
+      <div class="campo">
+        <label for="destinos">A quién</label>
+        <textarea id="destinos" rows="2" placeholder="correo@serunion.es, +34600000000"></textarea>
+        <p class="pista">Separados por comas. Los teléfonos, con prefijo internacional.</p>
+      </div>
+      <div class="fila">
+        <div class="campo">
+          <label for="silDesde">Silencio desde</label>
+          <input id="silDesde" type="number" min="0" max="23" value="22">
+        </div>
+        <div class="campo">
+          <label for="silHasta">hasta</label>
+          <input id="silHasta" type="number" min="0" max="23" value="7">
+        </div>
+      </div>
+      <p class="pista" style="margin:-8px 0 14px">Entre esas horas no se envía nada; el aviso espera a
+        la mañana siguiente. Pon la misma hora dos veces para avisar a cualquier hora.</p>
+      <div class="campo">
+        <div class="marcas"><label><input type="checkbox" id="activa" checked> Activa</label></div>
+      </div>
+      <p class="nota mal" id="errForm" hidden></p>
+    </div>
+    <footer>
+      <button class="btn" type="button" id="bCancelar">Cancelar</button>
+      <button class="btn fuerte" type="submit" id="bGuardar">Guardar</button>
+    </footer>
+  </form>
+</dialog>
+
+<script>
+/* ===================================================================
+   Avisos y alarmas · digivend.es
+
+   Dos permisos distintos, y se nota: `alarmas_ver` entra aquí, `alarmas_crear`
+   es lo que enseña el botón de «Nueva alarma». Quien sólo ve, sólo ve. El
+   servidor lo vuelve a comprobar en cada ruta: esto es comodidad, no seguridad.
+
+   El catálogo de lo que se puede vigilar NO está escrito aquí. Lo sirve
+   /api/catalogo-alarmas desde el mismo módulo que usa la Lambda que evalúa, así
+   que el día que se añada una fuente aparece sola en este formulario.
+   =================================================================== */
+const CLAVE_TEMA = "digivend.tema";
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num = n => new Intl.NumberFormat("es-ES",{maximumFractionDigits:2}).format(n||0);
+
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = $("#bTema");
+  const oscuro = () => document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const pinta = () => { b.textContent = oscuro() ? "Modo claro" : "Modo oscuro"; };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const n = oscuro() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+  });
+})();
+$("#bPanel").addEventListener("click", ()=>{ location.href = "/panel/"; });
+
+let YO=null, CATALOGO=[], ALARMAS=[], AVISOS=[], PERFILES=[], editando=null;
+
+function cuando(iso){
+  if(!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? String(iso)
+    : d.toLocaleString("es-ES",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+}
+function delCatalogo(clave){ return CATALOGO.find(c=>c.clave===clave) || null; }
+
+/* ---------- las alarmas ---------- */
+function pintaAlarmas(){
+  const c = $("#listaAlarmas");
+  const puedeCrear = !!(YO.permisos && YO.permisos.alarmas_crear);
+  $("#subAlarmas").textContent = ALARMAS.length
+    ? `${ALARMAS.length} alarma${ALARMAS.length===1?"":"s"} · se evalúan cada hora, y una que ya ha avisado no repite hasta pasadas unas horas.`
+    : "Todavía no hay ninguna alarma.";
+  if(!ALARMAS.length){
+    c.innerHTML = `<p class="vacio">${puedeCrear
+      ? "Crea la primera con «Nueva alarma»."
+      : "Nadie ha creado ninguna todavía."}</p>`;
+    return;
+  }
+  const filas = ALARMAS.map(a=>{
+    const e = delCatalogo(`${a.fuente}.${a.campo}`);
+    /* Lo honesto es decirlo aquí: una alarma sobre una fuente que todavía no se
+       calcula está escrita, pero no vigila nada. */
+    const estado = !a.activa ? `<span class="pill g">parada</span>`
+      : !e ? `<span class="pill c">fuente desconocida</span>`
+      : !e.evaluable ? `<span class="pill a">sin datos aún</span>`
+      : `<span class="pill b">activa</span>`;
+    const canal = (a.canal||[]).join(" y ") || "—";
+    return `<tr>
+      <td><b>${esc(a.nombre)}</b><br><span class="cond">${esc(e ? e.etiqueta : a.fuente+"."+a.campo)} ${esc(a.comparacion)} ${num(a.umbral)}${e&&e.unidad?" "+esc(e.unidad):""}</span></td>
+      <td data-et="Perfil">${esc(a.perfil||"interno")}</td>
+      <td data-et="Avisa a">${esc(canal)}<br><span class="cond">${esc((a.destinos||[]).join(", ")||"sin destinos")}</span></td>
+      <td data-et="Estado">${estado}</td>
+      <td class="n">${puedeCrear
+        ? `<button class="btn" data-ed="${esc(a._id)}">Editar</button>
+           <button class="enlace" data-bo="${esc(a._id)}">Borrar</button>` : ""}</td>
+    </tr>`;
+  }).join("");
+  c.innerHTML = `<div class="tabla"><table>
+    <thead><tr><th>Alarma</th><th>Perfil</th><th>Avisa a</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${filas}</tbody></table></div>`;
+  c.querySelectorAll("[data-ed]").forEach(b=>b.addEventListener("click", ()=>abre(b.dataset.ed)));
+  c.querySelectorAll("[data-bo]").forEach(b=>b.addEventListener("click", ()=>borra(b.dataset.bo)));
+}
+
+function pintaAvisos(){
+  const c = $("#listaAvisos");
+  if(!AVISOS.length){
+    c.innerHTML = `<p class="vacio">No hay ningún aviso todavía. Es la buena noticia.</p>`;
+    return;
+  }
+  /* Se ordena aqui por fecha, de lo mas reciente a lo mas antiguo: el escaneo de
+     la tabla no garantiza ningun orden, y una lista de avisos desordenada no se
+     lee. */
+  const filas = AVISOS.slice()
+    .sort((x,y)=>String(y.cuando||"").localeCompare(String(x.cuando||"")))
+    .map(a=>`<tr>
+      <td data-et="Cuándo">${esc(cuando(a.cuando))}</td>
+      <td><b>${esc(a.titulo)}</b><br><span class="cond">${esc(a.texto||"")}</span></td>
+      <td data-et="Para">${esc(a.para||"—")}</td>
+    </tr>`).join("");
+  c.innerHTML = `<div class="tabla"><table>
+    <thead><tr><th>Cuándo</th><th>Qué</th><th>Para</th></tr></thead>
+    <tbody>${filas}</tbody></table></div>`;
+}
+
+/* ---------- el formulario ---------- */
+function opcionesFuente(){
+  const s = $("#fuente");
+  s.innerHTML = CATALOGO.map(c =>
+    `<option value="${esc(c.clave)}">${esc(c.etiqueta)}${c.evaluable?"":" — sin datos aún"}</option>`).join("");
+  s.addEventListener("change", pistaDeFuente);
+}
+function pistaDeFuente(){
+  const e = delCatalogo($("#fuente").value);
+  $("#pistaUnidad").textContent = e && e.unidad ? "En " + e.unidad : "";
+  const p = $("#pistaFuente");
+  if(e && !e.evaluable){
+    p.textContent = "Esta fuente todavía no se calcula en los agregados: la alarma se guarda, pero no "
+      + "vigilará nada hasta que se calcule. Lo verás en su estado.";
+    p.className = "pista mal";
+  }else{ p.textContent = ""; p.className = "pista"; }
+}
+function opcionesPerfil(){
+  $("#perfil").innerHTML = (PERFILES.length ? PERFILES : [{perfil_id:"interno", nombre:"Serunion"}])
+    .map(p=>{ const id = p._id || p.perfil_id || p.id;
+              return `<option value="${esc(id)}">${esc(p.nombre||id)}</option>`; }).join("");
+}
+function abre(id){
+  editando = id ? ALARMAS.find(a=>a._id===id) : null;
+  const a = editando || {};
+  $("#dlgTitulo").textContent = editando ? "Editar alarma" : "Nueva alarma";
+  $("#nombre").value = a.nombre || "";
+  $("#fuente").value = a.fuente ? `${a.fuente}.${a.campo}` : ($("#fuente").options[0]||{}).value || "";
+  $("#comparacion").value = a.comparacion || ">";
+  $("#umbral").value = a.umbral != null ? a.umbral : "";
+  $("#perfil").value = a.perfil || "interno";
+  $("#canalCorreo").checked = (a.canal || ["correo"]).includes("correo");
+  $("#canalWhatsapp").checked = (a.canal || []).includes("whatsapp");
+  $("#destinos").value = (a.destinos || []).join(", ");
+  $("#silDesde").value = (a.silencio && a.silencio.desde != null) ? a.silencio.desde : 22;
+  $("#silHasta").value = (a.silencio && a.silencio.hasta != null) ? a.silencio.hasta : 7;
+  $("#activa").checked = a.activa !== false;
+  $("#errForm").hidden = true;
+  pistaDeFuente();
+  $("#dlg").showModal();
+  $("#nombre").focus();
+}
+$("#bNueva").addEventListener("click", ()=>abre(null));
+$("#bCancelar").addEventListener("click", ()=>$("#dlg").close());
+
+$("#form").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const clave = $("#fuente").value, corte = clave.indexOf(".");
+  const canal = [];
+  if($("#canalCorreo").checked) canal.push("correo");
+  if($("#canalWhatsapp").checked) canal.push("whatsapp");
+  const destinos = $("#destinos").value.split(",").map(x=>x.trim()).filter(Boolean);
+  if(!canal.length) return falla("Elige al menos un canal.");
+  if(!destinos.length) return falla("Pon al menos un destinatario.");
+  const cuerpo = {
+    id: editando ? editando._id : undefined,
+    nombre: $("#nombre").value.trim(),
+    fuente: clave.slice(0, corte), campo: clave.slice(corte+1),
+    comparacion: $("#comparacion").value,
+    umbral: Number($("#umbral").value),
+    canal, destinos,
+    silencio: {desde: Number($("#silDesde").value), hasta: Number($("#silHasta").value)},
+    perfil: $("#perfil").value,
+    activa: $("#activa").checked,
+  };
+  $("#bGuardar").disabled = true;
+  try{
+    const r = await fetch("/api/alarmas", {method:"POST", credentials:"same-origin",
+      headers:{"content-type":"application/json"}, body: JSON.stringify(cuerpo)});
+    if(!r.ok){ let d={}; try{ d = await r.json(); }catch(x){} return falla(d.error||"No se ha podido guardar."); }
+    $("#dlg").close();
+    await carga();
+  }catch(x){ falla("No hay conexión con el servidor."); }
+  finally{ $("#bGuardar").disabled = false; }
+});
+function falla(t){ const e=$("#errForm"); e.textContent=t; e.hidden=false; }
+
+async function borra(id){
+  const a = ALARMAS.find(x=>x._id===id);
+  if(!confirm(`¿Borrar «${a ? a.nombre : id}»? No se puede deshacer.`)) return;
+  try{
+    const r = await fetch("/api/alarmas/"+encodeURIComponent(id), {method:"DELETE", credentials:"same-origin"});
+    if(!r.ok) throw new Error();
+    await carga();
+  }catch(e){ avisa("No se ha podido borrar."); }
+}
+function avisa(t){ const e=$("#error"); e.textContent=t; e.hidden=false; }
+
+/* ---------- arranque ---------- */
+async function carga(){
+  const r = await fetch("/api/alarmas", {credentials:"same-origin"});
+  if(r.status === 401){ location.href = "/"; return; }
+  if(r.status === 403){
+    $("#cargando").hidden = true;
+    avisa("Este perfil no ve las alarmas.");
+    return;
+  }
+  if(!r.ok){ $("#cargando").hidden = true; avisa("No se han podido leer las alarmas."); return; }
+  const d = await r.json();
+  ALARMAS = d.alarmas || []; AVISOS = d.avisos || [];
+  pintaAlarmas(); pintaAvisos();
+  $("#cargando").hidden = true;
+  $("#todo").hidden = false;
+}
+
+(async function(){
+  let r;
+  try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(r.status === 401){ location.href = "/"; return; }
+  if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
+  YO = await r.json();
+  $("#quien").textContent = `${YO.nombre || YO.correo} · ${YO.perfil || ""}`;
+
+  if(YO.permisos && YO.permisos.alarmas_crear){
+    $("#bNueva").hidden = false;
+    try{
+      const rc = await fetch("/api/catalogo-alarmas", {credentials:"same-origin"});
+      if(rc.ok) CATALOGO = (await rc.json()).catalogo || [];
+    }catch(e){}
+    opcionesFuente();
+    /* La lista de perfiles sólo la tiene el administrador. Quien no sea admin
+       crea la alarma sobre el suyo, que es el único panel que puede mirar. */
+    if(YO.tipo === "admin"){
+      try{
+        const rp = await fetch("/api/admin/perfiles", {credentials:"same-origin"});
+        if(rp.ok) PERFILES = (await rp.json()).perfiles || [];
+      }catch(e){}
+    }
+    if(!PERFILES.length) PERFILES = [{perfil_id: YO.perfil_id || "interno", nombre: YO.perfil || "Serunion"}];
+    opcionesPerfil();
+  }else{
+    /* Sin permiso de crear, el catálogo también hace falta: es lo que traduce
+       «stock.caducidad_mes» a «Caducidad del periodo» en la lista. */
+    try{
+      const rc = await fetch("/api/catalogo-alarmas", {credentials:"same-origin"});
+      if(rc.ok) CATALOGO = (await rc.json()).catalogo || [];
+    }catch(e){}
+  }
+  await carga();
+})();
+</script>
+</body>
+</html>

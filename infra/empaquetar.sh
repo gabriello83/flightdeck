@@ -24,8 +24,8 @@ rm "$TEMP/index.py"
 (cd infra && zip -q "$SALIDA/agregados.zip" lambda_agregados.py reglas.py)
 
 # --- plataforma web --------------------------------------------------------
-(cd infra/api && zip -q "$SALIDA/api.zip" comun.py autorizacion.py lambda_api.py)
-(cd infra/api && zip -q "$SALIDA/alarmas.zip" comun.py autorizacion.py lambda_alarmas.py)
+(cd infra/api && zip -q "$SALIDA/api.zip" comun.py autorizacion.py catalogo.py lambda_api.py)
+(cd infra/api && zip -q "$SALIDA/alarmas.zip" comun.py autorizacion.py catalogo.py lambda_alarmas.py)
 
 echo "Listos en $SALIDA:"
 ls -la "$SALIDA"

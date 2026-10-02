@@ -61,6 +61,8 @@ select
   pdv.codigo                 as cod_pdv,
   cen.numcentro              as num_centro,
   cen.denomina               as centro,
+  cli.codigo                 as cod_cliente,
+  cli.nombre                 as cliente,
   del.nombre                 as delegacion,
   ru.codigo                  as cod_ruta,
   ru.denomina                as ruta,
@@ -114,6 +116,7 @@ from vending.partesvisita p
 left join recursos.maquinas m           on m.id   = p.maquinaid
 left join vending.pdvs pdv              on pdv.id = p.pdvid
 left join comercial.clientescentros cen on cen.id = p.clientecentroid
+left join comercial.clientes cli        on cli.id = cen.clienteid
 left join general.delegaciones del      on del.id = p.delegacionid
 left join vending.rutas ru              on ru.id  = p.rutaid
 left join recursos.empleados emp        on emp.id = p.empleadoid
@@ -1071,12 +1074,15 @@ select
   pdv.codigo  as cod_pdv,
   m.codigo    as matricula,
   cen.numcentro as num_centro,
-  cen.denomina  as centro
+  cen.denomina  as centro,
+  cli.codigo    as cod_cliente,
+  cli.nombre    as cliente
 from vending.rutasdetalle d
 join vending.rutas r                    on r.id   = d.rutaid
 left join vending.pdvs pdv              on pdv.id = d.pdvid
 left join recursos.maquinas m           on m.id   = pdv.maquinaid
 left join comercial.clientescentros cen on cen.id = pdv.clientecentroid
+left join comercial.clientes cli        on cli.id = cen.clienteid
 left join general.delegaciones del      on del.id = r.delegacionid
 order by del.nombre, r.codigo, d.norden
 ```
@@ -1214,6 +1220,8 @@ select
   pdv.codigo    as cod_pdv,
   cen.numcentro as num_centro,
   cen.denomina  as centro,
+  cli.codigo    as cod_cliente,
+  cli.nombre    as cliente,
   emp.nombre    as tecnico_asignado,
   del.nombre    as delegacion
 from sat.tareatecnica t

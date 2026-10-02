@@ -136,7 +136,7 @@ def escribe(clave, obj):
 # filtrado por ambito
 # ----------------------------------------------------------------------
 class MapaCentros:
-    """De que centro es cada maquina. Se aprende leyendo, no se descarga.
+    """De que centro —y de que cliente— es cada maquina. Se aprende leyendo.
 
     Cinco de los ocho informes no traen columna `centro` —recaudacion, lineas de
     reposicion, eventos de SAT, jornadas y balance—, pero los cinco traen
@@ -152,6 +152,7 @@ class MapaCentros:
         self.por_matricula = {}
         self.por_pdv = {}
         self.aprendidas = 0
+        self.clientes = set()
 
     def aprende(self, filas):
         """Se llama con las filas CRUDAS, antes de filtrar por ambito.
@@ -160,29 +161,36 @@ class MapaCentros:
         maquinas que ya sabe que son suyas, que es justo lo que no sirve.
         """
         for f in filas:
-            centro = R.v(f, "centro", "")
-            if not centro:
+            centro = str(R.v(f, "centro", ""))
+            cliente = str(R.v(f, "cliente", ""))
+            if not centro and not cliente:
                 continue
+            if cliente:
+                self.clientes.add(cliente)
+            par = (centro, cliente)
             m = R.v(f, "matricula", "")
             if m and m not in self.por_matricula:
-                self.por_matricula[m] = centro
+                self.por_matricula[m] = par
                 self.aprendidas += 1
             pdv = R.v(f, "cod_pdv", "")
             if pdv and pdv not in self.por_pdv:
-                self.por_pdv[pdv] = centro
+                self.por_pdv[pdv] = par
+
+    def de_quien_es(self, fila):
+        """(centro, cliente) de la fila: lo suyo si lo trae, y si no, el de su maquina."""
+        centro = str(R.v(fila, "centro", ""))
+        cliente = str(R.v(fila, "cliente", ""))
+        if centro and cliente:
+            return centro, cliente
+        for clave, tabla in ((R.v(fila, "matricula", ""), self.por_matricula),
+                             (R.v(fila, "cod_pdv", ""), self.por_pdv)):
+            if clave and clave in tabla:
+                c, cl = tabla[clave]
+                return centro or c, cliente or cl
+        return centro, cliente
 
     def centro_de(self, fila):
-        """El centro de la fila: el suyo si lo trae, y si no el de su maquina."""
-        centro = R.v(fila, "centro", "")
-        if centro:
-            return str(centro)
-        m = R.v(fila, "matricula", "")
-        if m and m in self.por_matricula:
-            return str(self.por_matricula[m])
-        pdv = R.v(fila, "cod_pdv", "")
-        if pdv and pdv in self.por_pdv:
-            return str(self.por_pdv[pdv])
-        return ""
+        return self.de_quien_es(fila)[0]
 
 
 def en_ambito(fila, ambito, mapa=None):
@@ -192,13 +200,28 @@ def en_ambito(fila, ambito, mapa=None):
 
     El `mapa` es lo que hace que una fila de recaudacion, que no sabe de que
     centro es, acabe en el panel del cliente al que pertenece.
+
+    POR QUE EL NOMBRE DEL CLIENTE SE BUSCA EN DOS SITIOS. La jerarquia de
+    VenCloud es cliente -> centro -> pdv -> maquina, pero hasta octubre de 2026
+    TODOS los centros colgaban del cliente «Serunion»: el cliente de verdad solo
+    estaba en el NOMBRE del centro («AIRBUS GETAFE»). VenCloud los reasigna a su
+    cliente real, y entonces el campo `cliente` pasa a ser el bueno —y el nombre
+    del centro puede dejar de llevarlo delante.
+
+    Asi que se mira en los dos: el campo cuando existe, y el nombre del centro
+    como antes. Durante la mudanza las dos cosas valen, y despues sobra la
+    segunda sin que haya que cambiar nada el dia exacto. Un ambito por centro o
+    por delegacion no se entera de nada de esto.
     """
     if not (ambito.get("clientes") or ambito.get("centros") or ambito.get("delegaciones")):
         return True
-    centro = mapa.centro_de(fila) if mapa is not None else str(R.v(fila, "centro", ""))
+    if mapa is not None:
+        centro, cliente = mapa.de_quien_es(fila)
+    else:
+        centro, cliente = str(R.v(fila, "centro", "")), str(R.v(fila, "cliente", ""))
     deleg = str(R.v(fila, "delegacion", ""))
     for c in ambito.get("clientes", []):
-        if c.upper() in centro.upper():
+        if c.upper() in centro.upper() or c.upper() in cliente.upper():
             return True
     return centro in ambito.get("centros", []) or deleg in ambito.get("delegaciones", [])
 
@@ -601,6 +624,10 @@ def lambda_handler(event, context):
         "dias": DIAS,
         "filas_leidas": dict(leidas),
         "maquinas_con_centro": mapa.aprendidas,
+        # Si esto trae un solo nombre, VenCloud todavia cuelga todos los centros
+        # de «Serunion» y el ambito se esta resolviendo por el nombre del centro.
+        # Cuando la reasignacion entre, aqui apareceran los clientes de verdad.
+        "clientes_vistos": sorted(mapa.clientes)[:50],
         "ficheros": escritos,
     }
     escribe(f"registro/agregados/anio={hoy.year}/mes={hoy.month:02d}/{hoy.isoformat()}.json", resumen)
