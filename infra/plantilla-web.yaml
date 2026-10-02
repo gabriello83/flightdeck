@@ -138,6 +138,36 @@ Resources:
           Items:
             - { Header: Permissions-Policy, Value: "geolocation=(), camera=(), microphone=()", Override: true }
 
+  # Sin esto, /panel/ no existe. CloudFront solo sabe servir el index de la RAIZ
+  # (DefaultRootObject); una peticion a /panel/ le llega a S3 como la clave
+  # «panel/», que no es ningun objeto, y S3 contesta 403 —no 404, porque con
+  # acceso por OAC no hay permiso de listar—. El resultado era que /panel/,
+  # /avisos/ y /consola/ devolvian la pagina de acceso, que al ver que ya hay
+  # sesion vuelve a mandar a /panel/: un bucle de redirecciones.
+  #
+  # Se arregla en el borde, antes de ir a S3, y SOLO en el comportamiento de las
+  # paginas: a /api/* no se le toca la ruta.
+  Rutas:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub "${Prefijo}-rutas"
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Anade index.html a las rutas de carpeta.
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var peticion = event.request;
+          var ruta = peticion.uri;
+          if (ruta.endsWith("/")) {
+            peticion.uri = ruta + "index.html";
+          } else if (ruta.lastIndexOf(".") < ruta.lastIndexOf("/")) {
+            // Sin extension: es una carpeta escrita sin la barra final.
+            peticion.uri = ruta + "/index.html";
+          }
+          return peticion;
+        }
+
   Distribucion:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -172,6 +202,9 @@ Resources:
           # CachingOptimized, politica gestionada por AWS.
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
           ResponseHeadersPolicyId: !Ref Cabeceras
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt Rutas.FunctionARN
         CacheBehaviors:
           # Esto es lo que hace que no haya ninguna llamada a otro dominio:
           # /api/* sale del MISMO origen que la pagina.
@@ -185,9 +218,15 @@ Resources:
             CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
             OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
             ResponseHeadersPolicyId: !Ref Cabeceras
-        CustomErrorResponses:
-          - { ErrorCode: 403, ResponseCode: 200, ResponsePagePath: /index.html, ErrorCachingMinTTL: 0 }
-          - { ErrorCode: 404, ResponseCode: 200, ResponsePagePath: /index.html, ErrorCachingMinTTL: 0 }
+        # AQUI NO VA UNA PAGINA DE ERROR PERSONALIZADA. Las de CloudFront no son
+        # por comportamiento: son de TODA la distribucion, incluida /api/*. Un
+        # 403 de la API («este perfil no ve las alarmas») se convertiria en la
+        # pagina de acceso con un 200, y el navegador recibiria HTML donde
+        # espera JSON. Se pierde el motivo del error y se gana uno peor.
+        #
+        # El precio es que una direccion mal escrita ensena el XML de S3 en vez
+        # de una pagina bonita. Es mejor trato: las cuatro rutas de verdad las
+        # resuelve la funcion de arriba, y lo demas son erratas.
       Tags:
         - { Key: Proyecto, Value: !Ref Proyecto }
 

@@ -292,14 +292,16 @@ sáltate este paso y vuelve luego.
 ## Paso 12 · El código de las tres Lambdas — 10 min
 
 ```bash
-cd infra/api
-zip api.zip comun.py autorizacion.py lambda_api.py
-zip alarmas.zip comun.py autorizacion.py lambda_alarmas.py
+sh infra/empaquetar.sh          # deja api.zip, alarmas.zip, agregados.zip y extraccion.zip en paquetes/
 
+# El del asistente lleva el SDK de Anthropic y va aparte:
 mkdir -p paquete && pip install anthropic -t paquete/
-cp comun.py autorizacion.py lambda_asistente.py paquete/
-cd paquete && zip -r ../asistente.zip . && cd ..
+cp infra/api/comun.py infra/api/autorizacion.py infra/api/lambda_asistente.py paquete/
+(cd paquete && zip -r ../paquetes/asistente.zip .)
 ```
+
+Hazlos con el script y no a mano: `api.zip` y `alarmas.zip` llevan además `catalogo.py`, y si falta,
+la función no arranca —el error es un `ImportError` en el arranque, que no dice gran cosa.
 
 Sube cada zip a su función: `api.zip` → `digivend-api`, `alarmas.zip` → `digivend-alarmas`,
 `asistente.zip` → `digivend-asistente`.
@@ -332,7 +334,7 @@ El segundo, **cambiando el correo por el tuyo** (en minúsculas, las dos veces):
 
 Las comillas escapadas del campo `dato` son a propósito: dentro va un texto que contiene JSON.
 
-**c)** Sube las páginas: `S3 → el bucket `digivend-web-…` → Upload`. Son tres ficheros y cada uno
+**c)** Sube las páginas: `S3 → el bucket `digivend-web-…` → Upload`. Son cuatro ficheros y cada uno
 va en su sitio, porque la ruta es la que decide qué página sale:
 
 | Fichero del repositorio | Dónde va en el bucket |
@@ -343,7 +345,7 @@ va en su sitio, porque la ruta es la que decide qué página sale:
 | `app/consola/index.html` | dentro de una carpeta `consola/` |
 
 En la consola de S3: `Upload → Add folder` sobre `app/` sube la estructura entera de una vez; si
-prefieres ir fichero a fichero, crea antes las dos carpetas con `Create folder`.
+prefieres ir fichero a fichero, crea antes las tres carpetas con `Create folder`.
 
 Vuelve a subir también `api.zip` y `alarmas.zip`: el catálogo de alarmas se ha movido a un módulo
 que usan los dos, y la API gana la ruta que se lo sirve al navegador.
@@ -354,10 +356,34 @@ ocho informes no traen la columna `centro`, así que sus filas no encajaban en e
 se caían enteras. La nueva aprende de qué centro es cada máquina mientras lee, y de paso publica el
 desglose por centro que usa el panel. Tarda lo mismo que antes.
 
+## Paso 13 bis · Actualiza la pila web — 5 min
+
+**Si creaste la pila antes del 2 de octubre, este paso no es opcional.** La plantilla tenía dos
+fallos que sólo aparecen al entrar:
+
+1. **`/panel/` no existía.** CloudFront sólo sabe servir el index de la raíz. Una petición a
+   `/panel/` le llega a S3 como la clave `panel/`, que no es ningún objeto, y S3 contesta 403 —no
+   404, porque con acceso por OAC no hay permiso de listar—. Con la página de error que había,
+   `/panel/` devolvía la pantalla de acceso, que al ver que ya hay sesión volvía a mandar a
+   `/panel/`: un bucle de redirecciones del que no se sale.
+2. **La página de error se comía los errores de la API.** Las páginas de error de CloudFront no son
+   por comportamiento: son de toda la distribución, `/api/*` incluido. Un 403 de la API («este
+   perfil no ve las alarmas») salía como la pantalla de acceso con un 200, y el navegador recibía
+   HTML donde esperaba JSON.
+
+Ahora hay una función de borde que convierte `/panel/` en `/panel/index.html` antes de ir a S3, y
+no hay páginas de error de distribución.
+
+`CloudFormation → digivend-web → Update stack → Replace current template` → sube
+`infra/plantilla-web.yaml` → los parámetros se quedan como están → marca la casilla de IAM.
+
+Tarda unos minutos porque toca CloudFront. Cuando acabe, `CloudFront → la distribución →
+Invalidations → Create invalidation → /*`, para que no te sirva lo viejo de la caché.
+
 ## Paso 14 · Entrar — 2 min
 
-Abre la `UrlProvisional` del paso 10. Entra con tu correo y la contraseña del paso 13a. Te pedirá
-cambiarla: es de un solo uso.
+Abre la `UrlProvisional` del paso 10 (`CloudFormation → digivend-web → Outputs`). Entra con tu
+correo y la contraseña del paso 13a. Te pedirá cambiarla: es de un solo uso.
 
 Desde dentro ya puedes crear el perfil de AIRBUS y sus usuarios sin volver a tocar la consola de
 AWS.
