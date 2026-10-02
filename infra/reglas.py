@@ -137,6 +137,13 @@ def efectivo_en_cajon(filas_monbil):
                      for f in filas_monbil if float(v(f, "valor")) in MONEDAS), 2)
 
 
+# Una recaudacion de una maquina son 8,80 EUR de media (428.003 EUR en 48.443
+# filas, agosto). Cien mil euros en UNA fila no es un mes bueno: es un contador
+# roto. Junio del 2026 traia una fila de -7.521 millones que se llevaba por
+# delante el mes entero y dejaba el porcentaje ciego en -0,0.
+LIMITE_FILA_RECAUDACION = 100_000.0
+
+
 def recaudacion_del_periodo(filas, anio, mes):
     """prefacrecauda se agrupa por anho/mes, nunca por `fecha`.
 
@@ -144,21 +151,35 @@ def recaudacion_del_periodo(filas, anio, mes):
     que 52.161 son del periodo de julio. Y el cobro por tarjeta de un mes entero
     se escribe de golpe al mes siguiente, asi que el mes en curso se ve un 55 %
     mas pequeno de lo que es.
+
+    Las filas imposibles se APARTAN Y SE CUENTAN, nunca se tiran en silencio:
+    quien lea el panel tiene que poder ver que ese mes llevaba basura dentro. Es
+    el mismo criterio que con las denominaciones que no son monedas.
     """
     f = [x for x in filas if int(v(x, "anho")) == anio and int(v(x, "mes")) == mes]
-    ef = round(sum(float(v(x, "imp_recaudado")) for x in f), 2)
-    bk = round(sum(float(v(x, "imp_pago_bancario")) for x in f), 2)
-    ciego = round(sum(float(v(x, "imp_recaudado")) for x in f
+    buenas = [x for x in f if abs(float(v(x, "imp_recaudado"))) <= LIMITE_FILA_RECAUDACION
+              and abs(float(v(x, "imp_pago_bancario"))) <= LIMITE_FILA_RECAUDACION]
+    descartadas = len(f) - len(buenas)
+    ef = round(sum(float(v(x, "imp_recaudado")) for x in buenas), 2)
+    bk = round(sum(float(v(x, "imp_pago_bancario")) for x in buenas), 2)
+    ciego = round(sum(float(v(x, "imp_recaudado")) for x in buenas
                       if int(v(x, "tipo_telemetria")) == 0), 2)
-    return {
+    out = {
         "periodo": f"{anio}-{mes:02d}",
-        "registros": len(f),
+        "registros": len(buenas),
         "efectivo": ef,
         "banco": bk,
         "total": round(ef + bk, 2),
         "efectivo_sin_telemetria": ciego,
-        "pct_ciego": round(100 * ciego / ef, 1) if ef else 0.0,
+        "pct_ciego": round(100 * ciego / ef, 1) if ef > 0 else 0.0,
     }
+    if descartadas:
+        out["filas_imposibles"] = descartadas
+        out["_nota_imposibles"] = (
+            f"{descartadas} fila(s) con importes por encima de "
+            f"{LIMITE_FILA_RECAUDACION:,.0f} EUR apartadas: son contadores rotos, "
+            "no recaudacion. Mirarlas en el crudo antes de dar el mes por bueno.")
+    return out
 
 
 def es_acto_de_recaudar(fila):

@@ -97,6 +97,22 @@ comprueba("porcentaje ciego", r["pct_ciego"], 13.0)
 comprueba("critcalculo 1 no es recaudar", R.es_acto_de_recaudar({"criterio_calculo": 1}), False)
 comprueba("critcalculo 3 si", R.es_acto_de_recaudar({"criterio_calculo": 3}), True)
 
+print("\nUna fila corrupta no se lleva por delante el mes")
+# Junio del 2026: una fila de -7.521 millones de euros dejaba el mes en
+# -7.521.032.071 y el porcentaje ciego en -0,0.
+rec_rota = ([{"anho": 2026, "mes": 6, "imp_recaudado": 10, "imp_pago_bancario": 2,
+              "tipo_telemetria": 40, "criterio_calculo": 3}] * 100
+            + [{"anho": 2026, "mes": 6, "imp_recaudado": -7_521_760_075.56,
+                "imp_pago_bancario": 0, "tipo_telemetria": 40, "criterio_calculo": 3}])
+r = R.recaudacion_del_periodo(rec_rota, 2026, 6)
+comprueba("el efectivo es el de las 100 filas buenas", r["efectivo"], 1000.0)
+comprueba("la corrupta no cuenta como registro", r["registros"], 100)
+comprueba("y se dice cuantas se han apartado", r["filas_imposibles"], 1)
+comprueba("con el motivo", "contadores rotos" in r["_nota_imposibles"], True)
+comprueba("el porcentaje ciego vuelve a tener sentido", r["pct_ciego"], 0.0)
+comprueba("un mes limpio no trae la marca",
+          "filas_imposibles" in R.recaudacion_del_periodo(rec_rota[:100], 2026, 6), False)
+
 print("\nEl mes en curso es provisional hasta el cierre del siguiente")
 comprueba("septiembre visto en octubre", R.mes_provisional(2026, 9, datetime.date(2026, 10, 15)), True)
 comprueba("agosto visto en octubre", R.mes_provisional(2026, 8, datetime.date(2026, 10, 15)), False)

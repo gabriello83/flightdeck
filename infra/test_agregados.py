@@ -76,7 +76,12 @@ pon("crudo/recaudacion", "recaudacion", AYER,
     [{"anho": HOY.year, "mes": HOY.month, "imp_recaudado": 100, "imp_pago_bancario": 0,
       "tipo_telemetria": 40, "criterio_calculo": 3, "centro": "AIRBUS GETAFE"}] * 3
     + [{"anho": 2026, "mes": 1, "imp_recaudado": 100, "imp_pago_bancario": 120,
-        "tipo_telemetria": 0, "criterio_calculo": 3, "centro": "AIRBUS GETAFE"}] * 2)
+        "tipo_telemetria": 0, "criterio_calculo": 3, "centro": "AIRBUS GETAFE"}] * 2
+    # La fila rota de junio, como la de verdad
+    + [{"anho": 2026, "mes": 6, "imp_recaudado": -7_521_760_075.56, "imp_pago_bancario": 0,
+        "tipo_telemetria": 40, "criterio_calculo": 3, "centro": "AIRBUS GETAFE"}]
+    + [{"anho": 2026, "mes": 6, "imp_recaudado": 50, "imp_pago_bancario": 10,
+        "tipo_telemetria": 40, "criterio_calculo": 3, "centro": "AIRBUS GETAFE"}] * 4)
 
 pon("crudo/sat_averias", "sat_averias", AYER,
     [{"matricula": "00SE0000", "categoria": "ATENCION AL CLIENTE", "tipo_tarea": "A", "centro": "AIRBUS GETAFE"}] * 40
@@ -152,7 +157,13 @@ print("\nEl mes en curso sale marcado como provisional")
 actual = [p for p in airbus["dinero"]["periodos"] if p["periodo"] == f"{HOY.year}-{HOY.month:02d}"][0]
 comprueba("provisional", actual["provisional"], True)
 comprueba("lleva su aviso", "tarjeta" in actual.get("_nota", ""), True)
+junio = [p for p in airbus["dinero"]["periodos"] if p["periodo"] == "2026-06"][0]
+comprueba("junio sobrevive a la fila rota", junio["efectivo"], 200.0)
+comprueba("y dice que aparto una", junio["filas_imposibles"], 1)
+comprueba("sin dejar el porcentaje en negativo", junio["pct_ciego"], 0.0)
+
 enero = [p for p in airbus["dinero"]["periodos"] if p["periodo"] == "2026-01"][0]
+comprueba("un mes limpio no lleva la marca", "filas_imposibles" in enero, False)
 comprueba("enero ya esta cerrado", enero["provisional"], False)
 comprueba("efectivo ciego de enero", enero["efectivo_sin_telemetria"], 200.0)
 comprueba("100 % ciego", enero["pct_ciego"], 100.0)

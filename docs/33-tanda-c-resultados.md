@@ -16,8 +16,33 @@ eslabones a la vez**, y es el cierre mensual de existencias:
 | **V** · vehículo | 893 | **569.796,62 €** |
 | **TOTAL** | 31.538 | **8.291.837,77 €** |
 
-**Ocho millones y cuarto de euros de existencias**, de los cuales 2,6 M están dentro de las
-máquinas y medio millón viajando en furgonetas. Es una cifra que no teníamos y que sale de un solo
+> ### CORRECCIÓN · 02/10/2026
+>
+> **Los 8,29 M € son nueve meses de cierres sumados, no las existencias.** El balance es un
+> **cierre mensual**: el parque entero se vuelve a valorar cada mes, y la extracción de C9 traía
+> nueve meses y medio de cierres. Sumarlos cuenta cada almacén y cada máquina diez veces.
+>
+> Se delata en esta misma tabla: 30.493 elementos de tipo M, cuando el parque son **3.161
+> máquinas**. Son 3.176 al mes repetidos 9,6 veces — y dos párrafos más abajo yo mismo escribí
+> «~3.300 elementos valorados al mes» sin ver lo que implicaba.
+>
+> La cifra real, medida sobre el cierre de agosto de 2026 por la cabina ya en producción:
+>
+> | | existencias |
+> |---|---:|
+> | **A** · almacén | 547.534,12 € |
+> | **M** · máquina | 303.106,04 € |
+> | **V** · vehículo | 62.283,71 € |
+> | **TOTAL** | **912.923,87 €** |
+>
+> **Novecientos trece mil euros, no ocho millones y cuarto.** Un noveno de lo que publiqué.
+>
+> La tabla de abajo sigue siendo correcta como recuento de lo que devuelve el informe en nueve
+> meses; lo que no vale es leerla como una foto de existencias. `lambda_agregados` se queda ya
+> con el último cierre y publica de qué periodo es, para que esto no pueda repetirse.
+
+El informe da las existencias de los tres eslabones, de las cuales unos 300.000 € están dentro de
+las máquinas y 62.000 viajando en furgonetas. Es una cifra que no teníamos y que sale de un solo
 informe.
 
 140 resúmenes en nueve meses, ~3.300 elementos valorados al mes. O sea que **el parque entero se
@@ -117,7 +142,7 @@ manos sin que nadie firme la recepción.** Lo que más se retorna son, otra vez,
 | C6 · recogidas | **muerto** | tabla vacía |
 | C7 · plan de carga | **abandonado** | 1 ruta de 58 |
 | C8 · retornos | **vivo a medias** | se abre, nunca se cierra |
-| C9 · balance de stock | **vivo, y clave** | **8,29 M € de existencias** |
+| C9 · balance de stock | **vivo, y clave** | **913 k € de existencias** (ver corrección) |
 | C10 · detalle | **vivo** | producto a producto |
 
 Y con esto quedan cubiertas las cuatro áreas que pediste: control de almacenes, inventario de

@@ -166,7 +166,8 @@ class Acumulador:
 
         # dinero, por periodo contable
         self.periodos = defaultdict(lambda: {"registros": 0, "efectivo": 0.0,
-                                             "banco": 0.0, "ciego": 0.0})
+                                             "banco": 0.0, "ciego": 0.0,
+                                             "imposibles": 0})
 
         # SAT
         self.sat_leidas = 0
@@ -227,6 +228,7 @@ class Acumulador:
             acum["efectivo"] += r["efectivo"]
             acum["banco"] += r["banco"]
             acum["ciego"] += r["efectivo_sin_telemetria"]
+            acum["imposibles"] += r.get("filas_imposibles", 0)
 
     # ---------------------------------------------------------------- SAT
     def come_sat(self, filas):
@@ -388,9 +390,15 @@ class Acumulador:
                 "banco": bk,
                 "total": round(ef + bk, 2),
                 "efectivo_sin_telemetria": ciego,
-                "pct_ciego": round(100 * ciego / ef, 1) if ef else 0.0,
+                "pct_ciego": round(100 * ciego / ef, 1) if ef > 0 else 0.0,
                 "provisional": R.mes_provisional(anio, mes, hoy),
             }
+            if a["imposibles"]:
+                fila["filas_imposibles"] = a["imposibles"]
+                fila["_nota_imposibles"] = (
+                    f"{a['imposibles']} fila(s) con importes imposibles apartadas: son "
+                    "contadores rotos, no recaudacion. El mes es bueno sin ellas, pero "
+                    "conviene mirarlas en el crudo.")
             if fila["provisional"]:
                 fila["_nota"] = ("Mes sin cerrar: le falta el cobro por tarjeta, que se escribe "
                                  "al mes siguiente y es el 55 % de la facturacion. No comparar "
