@@ -194,6 +194,106 @@ comprueba("sin registro, lo dice", "retraso_dias" in L.estado_de_la_carga(HOY - 
 print("\nUn informe que falta no rompe la carga")
 comprueba("sin stock_vehiculo, sigue habiendo panel", "servicio" in airbus, True)
 
+# ----------------------------------------------------------------------
+print("\nSumar por trozos da lo mismo que sumar de golpe")
+# Es LA propiedad en la que se apoya el rediseno: si trocear cambiara el
+# resultado, el ahorro de memoria no valdria nada.
+import random  # noqa: E402
+
+random.seed(7)
+PARTES = []
+for i in range(3000):
+    sistema = i % 3 != 0
+    PARTES.append({
+        "empleadoid": 0 if sistema else 7,
+        "empleado": "SYSTEM" if sistema else "Ana",
+        "tipo_parte": 2 if sistema else 0,
+        "centro": "AIRBUS GETAFE",
+        "matricula": f"M{i % 40:03d}",
+        "minutos": 0 if sistema else random.choice([3, 5, 7, 9, 12, 45, 387]),
+        "fecha_ini": f"2026-09-{(i % 28) + 1:02d}T08:00:00",
+    })
+LINEAS = [{"tipo_linea": random.choice(["CM", "CM", "RC", "RM"]),
+           "cantidad": random.randint(1, 40),
+           "precio_coste": round(random.uniform(0.2, 2.5), 3),
+           "etiq_canal": random.choice(["", "11", "V58", "A12"]),
+           "centro": "AIRBUS GETAFE"} for _ in range(5000)]
+MOV = [{"motivo": random.choice(["RC", "RR", "RM", "CM"]),
+        "cantidad": -random.randint(1, 5),
+        "puc": round(random.uniform(0.1, 1.5), 3),
+        "centro": "AIRBUS GETAFE"} for _ in range(4000)]
+
+
+def panel_de(trozos_partes, trozos_lineas, trozos_mov):
+    acu = L.Acumulador({"id": "x", "ambito": {}})
+    for c in trozos_partes:
+        acu.come_partes(c)
+    for c in trozos_lineas:
+        acu.come_lineas(c)
+    for c in trozos_mov:
+        acu.come_mov_maquina(c)
+    return acu.panel(HOY, {})
+
+
+def trocea(lista, n):
+    tam = (len(lista) + n - 1) // n
+    return [lista[i:i + tam] for i in range(0, len(lista), tam)]
+
+
+entero = panel_de([PARTES], [LINEAS], [MOV])
+troceado = panel_de(trocea(PARTES, 17), trocea(LINEAS, 23), trocea(MOV, 11))
+
+for campo in ("visitas", "partes_totales", "maquinas", "centros"):
+    comprueba(f"{campo} igual", troceado["servicio"][campo], entero["servicio"][campo])
+comprueba("coste de servicio igual",
+          troceado["servicio"]["coste_servicio"]["coste"], entero["servicio"]["coste_servicio"]["coste"])
+comprueba("mediana de duracion igual",
+          troceado["servicio"]["duracion_min"]["mediana"], entero["servicio"]["duracion_min"]["mediana"])
+comprueba("visitas por dia iguales",
+          troceado["servicio"]["visitas_por_dia"], entero["servicio"]["visitas_por_dia"])
+comprueba("unidades cargadas iguales",
+          troceado["servicio"]["carga"]["unidades_total"], entero["servicio"]["carga"]["unidades_total"])
+comprueba("unidades vendibles iguales",
+          troceado["servicio"]["carga"]["unidades_vendibles"], entero["servicio"]["carga"]["unidades_vendibles"])
+# El valor cargado se redondea en cada trozo, asi que puede bailar centimos:
+# se compara con tolerancia, que es lo honesto, en vez de fingir que es exacto.
+dif = abs(troceado["servicio"]["carga"]["valor"] - entero["servicio"]["carga"]["valor"])
+comprueba(f"valor cargado igual al centimo (dif {dif:.4f})", dif < 0.05, True)
+for motivo in ("caducidad", "rotura", "retirada"):
+    comprueba(f"merma {motivo}: lineas",
+              troceado["servicio"]["merma"][motivo]["lineas"], entero["servicio"]["merma"][motivo]["lineas"])
+    d = abs(troceado["servicio"]["merma"][motivo]["euros"] - entero["servicio"]["merma"][motivo]["euros"])
+    comprueba(f"merma {motivo}: euros al centimo", d < 0.05, True)
+
+# ----------------------------------------------------------------------
+print("\nEl acumulador no guarda las filas: por eso cabe la historia")
+import sys  # noqa: E402
+
+
+def hondo(o, vistos=None):
+    vistos = vistos if vistos is not None else set()
+    if id(o) in vistos:
+        return 0
+    vistos.add(id(o))
+    t = sys.getsizeof(o)
+    if isinstance(o, dict):
+        t += sum(hondo(k, vistos) + hondo(v, vistos) for k, v in o.items())
+    elif isinstance(o, (list, tuple, set)):
+        t += sum(hondo(x, vistos) for x in o)
+    return t
+
+
+acu = L.Acumulador({"id": "x", "ambito": {}})
+for _ in range(20):          # 60.000 partes, como dos semanas de verdad
+    acu.come_partes(PARTES)
+crudo_en_memoria = hondo(PARTES) * 20
+acumulado = hondo(acu.__dict__)
+print(f"        60.000 filas ocupan {crudo_en_memoria/1e6:.1f} MB; "
+      f"el acumulador, {acumulado/1e6:.2f} MB")
+comprueba("suma las 20.000 visitas", acu.visitas, 20000)
+comprueba("y ocupa menos de la vigesima parte de las filas",
+          acumulado < crudo_en_memoria / 20, True)
+
 print()
 if fallos:
     print(f"{len(fallos)} PRUEBAS FALLIDAS: {', '.join(fallos)}")
