@@ -204,6 +204,13 @@ comprueba("una clave inicial corta falla",
 comprueba("no puede borrarse a si mismo",
           llama("DELETE", "/api/admin/usuarios/jefe@serunion.es", cookie=COOKIE_JEFE)["statusCode"], 400)
 
+print("\nLa consola recibe lo que necesita para no repetir las reglas")
+pf = cuerpo_de(llama("GET", "/api/admin/perfiles", cookie=COOKIE_JEFE))
+comprueba("las 16 sesiones con su tipo minimo", len(pf["catalogo_sesiones"]), 16)
+comprueba("el techo de los cuatro tipos", sorted(pf["techo"]), ["admin", "cliente", "direccion", "operaciones"])
+comprueba("y la escalera de niveles", pf["niveles"]["cliente"] < pf["niveles"]["operaciones"], True)
+comprueba("y que trae puesto cada tipo", "alarmas_ver" in pf["implicitos"]["operaciones"], True)
+
 print("\nAl crear un perfil se dice que permisos no van a tener efecto")
 res = cuerpo_de(llama("POST", "/api/admin/perfiles",
                       {"perfil_id": "cli-nuevo", "nombre": "Cliente nuevo", "tipo": "cliente",

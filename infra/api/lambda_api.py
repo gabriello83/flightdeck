@@ -380,6 +380,11 @@ def administra(evento, metodo, ruta, admin):
             # El techo se envia para que el panel de admin pueda avisar de que
             # un permiso marcado no va a tener efecto en ese tipo de perfil.
             "techo": {k: sorted(v) for k, v in A.TECHO.items()},
+            # Y el orden de los tipos, para que la consola sepa que una sesion
+            # de «operaciones» no se le puede dar a un perfil de cliente sin
+            # tener que llevar esa escalera escrita por su cuenta.
+            "niveles": A.NIVEL,
+            "implicitos": {k: sorted(v) for k, v in A.IMPLICITOS.items()},
         })
 
     if resto == "perfiles" and metodo == "POST":

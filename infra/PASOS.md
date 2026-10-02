@@ -375,8 +375,9 @@ Un `CNAME` de `dashboard.digivend.es` al nombre que da la salida `DondeApuntaElD
 Cuando termines el paso 7, pásame el registro y **cierro el único hueco que queda** en todo el
 sistema: la forma exacta de la respuesta de `GetReportV2`.
 
-El acceso (`app/index.html`), el panel de cliente (`app/panel/index.html`) y los avisos
-(`app/avisos/index.html`) ya van contra la API de verdad: la contraseña la valida Cognito desde dentro de AWS, el panel sale de `/api/panel` ya
+Las cuatro páginas —el acceso (`app/index.html`), el panel (`app/panel/index.html`), los avisos
+(`app/avisos/index.html`) y la consola (`app/consola/index.html`)— ya van contra la API de verdad: la contraseña la valida Cognito desde dentro de AWS, el panel sale de `/api/panel` ya
 recortado por el perfil de la sesión, y el orden de los paneles se guarda en el servidor, así que
-el cliente lo encuentra igual desde otro ordenador. Queda la consola de administración, que todavía
-es el prototipo: ésa sí sigue siendo trabajo mío.
+el cliente lo encuentra igual desde otro ordenador. Y la consola de administración ya no es el
+prototipo: da de alta en Cognito, guarda en DynamoDB y no lleva copiada ni una regla de permisos,
+porque se las pide a la API.

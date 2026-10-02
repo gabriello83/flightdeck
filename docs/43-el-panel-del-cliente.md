@@ -157,3 +157,34 @@ contrario sería dejar que alguien crea que una máquina está vigilada cuando n
 
 En el móvil las tablas pasan a ser fichas: cinco columnas en 390 px no se leen, y los botones se
 quedaban fuera de la pantalla.
+
+---
+
+# La consola de administración
+
+Era el único trozo que seguía siendo el prototipo: no validaba contraseñas y guardaba la
+configuración en el navegador. Ahora va contra `/api/admin/*`, y lo que decide quién entra no es la
+página — a quien no es administrador las rutas le contestan 403.
+
+**Lo que no lleva escrito es lo importante.** La consola no tiene copiadas las reglas del modelo de
+permisos: el techo de cada tipo, el tipo mínimo de cada sesión y lo que cada tipo trae de serie los
+manda la API desde el mismo `autorizacion.py` que luego los aplica (`niveles` e `implicitos` se
+añadieron a `GET /api/admin/perfiles` para esto).
+
+Una copia en el navegador se quedaría vieja el día que cambiara esa pieza, y el síntoma sería el
+peor posible: un administrador marcando una casilla que no hace nada y creyendo que ha concedido
+algo. Con esto, al cambiar el tipo de un perfil las sesiones y los permisos fuera de su techo se
+tachan en el momento, con el motivo al lado, y salen deshabilitados.
+
+Seis secciones: usuarios, perfiles, plataforma, teléfonos, carga y cola de acciones. Las alarmas no
+se duplican aquí: viven en `/avisos/`, que es donde las usa quien las usa, y la consola enlaza allí.
+
+Dos cosas de la sección de carga valen por sí solas:
+
+- **Un informe a cero se marca en rojo.** Es la única señal que hay cuando algo cambia en VenCloud:
+  el informe se descarga igual, sin error, pero vacío. Si no se ve aquí, no se ve en ninguna parte,
+  y los paneles siguen enseñando la cifra de la víspera como si tal cosa. Con la mudanza de clientes
+  de este fin de semana (docs/44), es la pantalla que hay que mirar el lunes.
+- **La cola dice que la incidencia no se ha dado de alta.** Es una escritura en el ERP y todavía no
+  está enchufada: la petición se queda a la vista, con quién la pidió. Lo contrario sería que
+  alguien creyera haber abierto un parte que no existe.
