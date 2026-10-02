@@ -344,8 +344,18 @@ va en su sitio, porque la ruta es la que decide qué página sale:
 | `app/avisos/index.html` | dentro de una carpeta `avisos/` |
 | `app/consola/index.html` | dentro de una carpeta `consola/` |
 
-En la consola de S3: `Upload → Add folder` sobre `app/` sube la estructura entera de una vez; si
-prefieres ir fichero a fichero, crea antes las tres carpetas con `Create folder`.
+**OJO con cómo se suben**, que es donde se falla. `Add folder` sobre `app/` **no** vale: S3 usa el
+nombre de la carpeta como prefijo y las claves quedan `app/index.html`, que no es donde CloudFront
+las busca. El resultado es un `AccessDenied` de S3 en la raíz, sin nada en CloudWatch, porque la
+petición no llega a ninguna Lambda.
+
+La forma correcta, en `Upload`:
+
+1. `Add files` → **sólo** `index.html`.
+2. `Add folder` → `panel`. Otra vez `Add folder` → `avisos`. Y otra → `consola`.
+
+Es decir: `Add folder` sobre **cada subcarpeta**, nunca sobre la que las contiene. En la raíz del
+bucket tiene que quedar `index.html`, `avisos/`, `consola/` y `panel/`, y nada más.
 
 Vuelve a subir también `api.zip` y `alarmas.zip`: el catálogo de alarmas se ha movido a un módulo
 que usan los dos, y la API gana la ruta que se lo sirve al navegador.
