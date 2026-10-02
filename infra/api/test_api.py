@@ -118,6 +118,18 @@ cambio = llama("POST", "/api/acceso/nueva-clave",
 comprueba("con una buena, entra", cambio["statusCode"], 200)
 comprueba("y ya trae cookie", bool(cookie_de(cambio)), True)
 
+print("\nY tampoco entra cambiando la clave: la ficha se mira antes de gastarla")
+# Una cuenta que existe en Cognito con clave de un solo uso y NO tiene ficha.
+falsos.USUARIOS_COG["fantasma@serunion.es"] = {"clave": "ClaveTemporal1", "temporal": True}
+_sin = llama("POST", "/api/acceso", {"correo": "fantasma@serunion.es", "clave": "ClaveTemporal1"})
+comprueba("primero le pide cambiar la clave", cuerpo_de(_sin).get("cambio_requerido"), True)
+if cuerpo_de(_sin).get("cambio_requerido"):
+    _cam = llama("POST", "/api/acceso/nueva-clave",
+                 {"correo": "fantasma@serunion.es", "reto": cuerpo_de(_sin)["reto"],
+                  "clave": "ClaveNuevaLarga1"})
+    comprueba("403, no una cookie", _cam["statusCode"], 403)
+    comprueba("y no abre sesion", cookie_de(_cam), None)
+
 print("\nUna cuenta de Cognito sin ficha no entra")
 falsos.USUARIOS_COG["huerfano@x.com"] = {"clave": "ClaveLarga123", "temporal": False}
 comprueba("403, no 200",

@@ -248,6 +248,14 @@ def nueva_clave(evento):
                          "con mayuscula, minuscula y numero.") from None
     except Exception:
         raise ValueError("No se ha podido cambiar la contrasena. Vuelve a entrar.") from None
+    # La misma comprobacion que en /api/acceso, y por lo mismo: una cuenta de
+    # Cognito sin ficha no es un usuario de la plataforma. Sin esto, quien
+    # llegara aqui sin ficha se gastaba su clave de un solo uso, recibia una
+    # cookie buena y luego se encontraba un 401 en todas las pantallas, sin
+    # entender por que. Ahora lo lee antes de gastar nada.
+    if not lee(f"USUARIO#{correo}"):
+        return r(403, {"error": "La cuenta no esta configurada. Avisa al administrador."})
+
     _limpia_fallos(correo)
     return r(200, {"ok": True}, [cookie_sesion(abre_sesion(correo))])
 
