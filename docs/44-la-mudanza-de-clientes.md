@@ -193,3 +193,37 @@ Para saber qué números poner, el resumen de agregados trae `coge_centros` por 
 ```
 
 Se copian los `num` a `ambito.centros` y el perfil deja de depender de cómo se llame nada.
+
+## Los diez números de AIRBUS
+
+El resumen del 4 de octubre los dio, y `perfiles.json` ya va con ellos:
+
+| número | centro |
+|---|---|
+| 500088 | AIRBUS GETAFE |
+| 500089 | AIRBUS ILLESCAS |
+| 500090 | AIRBUS ALBACETE |
+| 500091 | AIRBUS TABLADA |
+| 500092 | AIRBUS SAN PABLO SUR |
+| 500093 | AIRBUS SAN PABLO NORTE |
+| 500094 | AIRBUS ITC |
+| 500095 | AIRBUS CBC |
+| 500096 | AIRBUS PUERTO REAL |
+| 500244 | AIRBUS ALBACETE (PARQUE CIENTÍFICO Y TECNOLÓGICO - UNIV. ALBACETE) |
+
+Y `clientes_de_verdad` dijo lo que faltaba por confirmar: **`SERUNION, SA`**. Los centros de AIRBUS
+no se han reasignado todavía; de ahí que ninguno de los 173 clientes lleve «AIRBUS» en el nombre.
+
+El ámbito queda con **las dos cosas**: los diez números por delante y `"AIRBUS"` detrás. No es
+indecisión. El ámbito es aditivo, así que una no estorba a la otra, y cubren huecos distintos:
+
+- El **número** aguanta un renombrado, que es lo que acaba de pasar.
+- El **nombre** cubre una máquina que todavía no se haya visto con número en ningún informe —de los
+  ocho que se leen, sólo tres traen `num_centro`; el resto se resuelven por el mapa, y el mapa sólo
+  sabe el número de las máquinas que han aparecido en alguno de esos tres—.
+
+Hay una prueba que lee el `perfiles.json` de verdad y comprueba las dos vías contra los datos tal y
+como los devolvió VenCloud ese día, renombrado incluido. Si alguien cambia un número, salta.
+
+Cuando AIRBUS tenga su propio cliente en VenCloud, se pone su **código** en `clientes` y se puede
+quitar la lista de centros entera.

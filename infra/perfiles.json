@@ -1,5 +1,6 @@
 {
   "_comentario": "Un panel por perfil. El ambito se aplica AQUI, al escribir: cada panel sale con los centros de su perfil y ningun otro, asi que la web no puede servir de mas aunque quisiera. Los perfiles de la plataforma (usuarios, permisos, sesiones) viven en DynamoDB; esto es solo la lista de paneles que hay que calcular.",
+  "_ambito": "Se puede declarar por NUMERO de centro, por nombre exacto de centro, por CODIGO de cliente o por un trozo del nombre del cliente o del centro. Es aditivo: basta con encajar en uno. Los NUMEROS son lo que no se mueve, asi que son la via buena; los nombres se dejan como red, porque un centro que todavia no se ha visto con numero en ningun informe solo se puede coger por el nombre.",
   "perfiles": [
     {
       "id": "interno",
@@ -14,10 +15,34 @@
         "clientes": [
           "AIRBUS"
         ],
-        "centros": [],
+        "centros": [
+          "500088",
+          "500089",
+          "500090",
+          "500091",
+          "500092",
+          "500093",
+          "500094",
+          "500095",
+          "500096",
+          "500244"
+        ],
         "delegaciones": []
       },
-      "_nota": "Por nombre, mientras no se sepan los numeros. El ambito admite el NUMERO de centro y el CODIGO de cliente, que es lo que no se mueve: el 4 de octubre de 2026 «AIRBUS SAN PABLO» se partio en NORTE y SUR. En cuanto los agregados digan los numeros (resumen -> perfiles -> coge_centros), ponerlos aqui en vez del nombre."
+      "_nota": "Los diez numeros son los que devolvio el resumen de agregados del 4 de octubre de 2026 (perfiles -> coge_centros). Van por delante del nombre porque los numeros no se mueven: ese mismo dia «AIRBUS SAN PABLO» se partio en NORTE y SUR, y aparecieron CBC e ITC. El nombre se queda como red, para una maquina que todavia no se haya visto con numero en ningun informe.",
+      "_cliente": "A 4 de octubre de 2026 estos centros SIGUEN colgando del cliente «SERUNION, SA» en VenCloud. Cuando AIRBUS pase a tener su cliente propio, basta con poner aqui su codigo en «clientes» y se podra quitar la lista de centros.",
+      "_centros": {
+        "500088": "AIRBUS GETAFE",
+        "500089": "AIRBUS ILLESCAS",
+        "500090": "AIRBUS ALBACETE",
+        "500091": "AIRBUS TABLADA",
+        "500092": "AIRBUS SAN PABLO SUR",
+        "500093": "AIRBUS SAN PABLO NORTE",
+        "500094": "AIRBUS ITC",
+        "500095": "AIRBUS CBC",
+        "500096": "AIRBUS PUERTO REAL",
+        "500244": "AIRBUS ALBACETE (PARQUE CIENTIFICO Y TECNOLOGICO - UNIV. ALBACETE)"
+      }
     }
   ]
 }

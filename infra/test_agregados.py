@@ -317,6 +317,35 @@ comprueba("y el codigo de cliente tambien vale como ambito",
 comprueba("un codigo que no es el suyo, no",
           L.en_ambito({"matricula": "P1"}, {"clientes": ["S9"]}, _m5), False)
 
+print("\nEl perfiles.json de verdad coge lo que tiene que coger")
+# Con los datos como los devolvio VenCloud el 4 de octubre de 2026, y con el
+# fichero tal cual se despliega: si alguien le cambia un numero, esto lo dice.
+import json as _json  # noqa: E402
+_amb = [x for x in _json.load(open(AQUI + "/perfiles.json"))["perfiles"]
+        if x["id"] == "cli-airbus"][0]["ambito"]
+_m6 = L.MapaCentros()
+_m6.aprende([
+    {"matricula": "MG", "num_centro": "500088", "centro": "AIRBUS GETAFE",
+     "cliente": "SERUNION, SA", "cod_cliente": "S1"},
+    {"matricula": "MN", "num_centro": "500093", "centro": "AIRBUS SAN PABLO NORTE",
+     "cliente": "SERUNION, SA", "cod_cliente": "S1"},
+    {"matricula": "MX", "num_centro": "2277", "centro": "SULO IBERICA SA",
+     "cliente": "SULO IBERICA SA", "cod_cliente": "S9"},
+])
+comprueba("coge Getafe", L.en_ambito({"matricula": "MG"}, _amb, _m6), True)
+comprueba("coge San Pablo Norte, que es de despues de la mudanza",
+          L.en_ambito({"matricula": "MN"}, _amb, _m6), True)
+comprueba("y no coge lo que no es suyo", L.en_ambito({"matricula": "MX"}, _amb, _m6), False)
+comprueba("una fila de recaudacion entra por su matricula",
+          L.en_ambito({"matricula": "MG", "anho": 2026, "mes": 9}, _amb, _m6), True)
+# Lo que da sentido a haber puesto numeros: que un renombrado no se lo lleve.
+_m7 = L.MapaCentros()
+_m7.aprende([{"matricula": "MG", "num_centro": "500088",
+              "centro": "AIRBUS GETAFE (EDIFICIO NUEVO)", "cliente": "SERUNION, SA"}])
+comprueba("y si manana renombran el centro, el numero aguanta",
+          L.en_ambito({"matricula": "MG"}, _amb, _m7), True)
+comprueba("los diez centros siguen declarados", len(_amb["centros"]), 10)
+
 print("\nPor centro: en cual de los centros pasa")
 pc = airbus["servicio"]["por_centro"]
 comprueba("un centro", len(pc), 1)
