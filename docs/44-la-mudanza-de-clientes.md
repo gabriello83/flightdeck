@@ -96,3 +96,33 @@ el histórico anterior a la mudanza seguirá llevando los nombres viejos. Las ci
 —el ámbito las sigue cogiendo por el nombre del centro—, pero `por_centro` enseñará el centro viejo
 y el nuevo como dos. Si pasa, se arregla con una tabla de equivalencias en `perfiles.json`; hasta
 saber si pasa, no merece la pena escribirla.
+
+---
+
+# Entró el 4 de octubre
+
+`clientes_vistos` pasó de un solo nombre a los clientes de verdad —Consum, Danone, Almirall, AENA,
+Banco de España…— y el mapa situó las **3.168 máquinas** del parque. El campo `cliente` ya manda.
+
+Y con él llegó la pregunta que importaba: **AIRBUS no aparecía entre los primeros cincuenta**, que
+es hasta donde llegaba la lista. Eso no quiere decir que su panel se haya roto —el ámbito sigue
+entrando por el nombre del centro, y los centros se siguen llamando «AIRBUS GETAFE»—, pero sí que
+el resumen no servía para responderla.
+
+Ahora el resumen de cada ejecución trae, por perfil:
+
+```json
+"perfiles": [
+  {"id": "cli-airbus", "filas": 48123, "centros": 9,
+   "declara": ["AIRBUS"], "coincide": ["AIRBUS GETAFE", "AIRBUS ILLESCAS", ...]}
+]
+```
+
+- **`filas`** es lo primero que hay que mirar. Un perfil a cero no es un mes flojo: es un ámbito que
+  ha dejado de encajar. Además se escribe un `AVISO` en el registro, que es lo que ve una alarma.
+- **`coincide`** distingue las dos formas de quedarse a cero, que piden arreglos distintos: que el
+  nombre ya no exista en VenCloud —y haya que cambiarlo en `perfiles.json`—, o que exista y el
+  fallo esté en otra parte.
+
+`clientes` deja de ser una lista cortada por la mitad y pasa a ser `{"total": N, "muestra": [...20]}`:
+el total es el dato, y veinte nombres bastan para reconocer que son los de verdad.

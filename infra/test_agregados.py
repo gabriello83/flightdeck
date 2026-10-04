@@ -58,10 +58,13 @@ def pon(destino, id_informe, dia, filas):
 # ---------------------------------------------------------------- datos
 pon("crudo/visita_cabecera", "visita_cabecera", AYER,
     [{"empleadoid": 0, "empleado": "SYSTEM", "tipo_parte": 2, "centro": "AIRBUS GETAFE",
+      "cliente": "AIRBUS OPERATIONS SL",
       "matricula": "A1", "minutos": 0, "fecha_ini": str(AYER)}] * 200
     + [{"empleadoid": 7, "empleado": "Ana", "tipo_parte": 0, "centro": "AIRBUS GETAFE",
+        "cliente": "AIRBUS OPERATIONS SL",
         "matricula": "A1", "minutos": 7, "fecha_ini": str(AYER)}] * 100
     + [{"empleadoid": 7, "empleado": "Ana", "tipo_parte": 0, "centro": "CONSUM MURCIA",
+        "cliente": "CONSUM S COOP V",
         "matricula": "C1", "minutos": 400, "fecha_ini": str(AYER)}] * 10)
 
 # OJO: los informes de aqui abajo van SIN columna `centro`, porque el de verdad
@@ -260,6 +263,28 @@ comprueba("la lista de clientes vistos delata si la mudanza ha entrado",
           sorted(_m3.clientes), ["AIRBUS OPERATIONS SL", "CONSUM COOP V"])
 comprueba("mientras no ha entrado, sale un solo nombre",
           sorted(_m2.clientes), ["SERUNION"])
+
+print("\nEl resumen delata un perfil que se ha quedado sin filas")
+# Es la forma de enterarse ANTES de que llame el cliente. Un ambito que deja de
+# encajar —porque en VenCloud le cambiaron el nombre— no da ningun error: da un
+# panel vacio, que parece un mes flojo.
+porp = {p["id"]: p for p in res["perfiles"]}
+comprueba("AIRBUS trae filas", porp["cli-airbus"]["filas"] > 0, True)
+comprueba("y dice que declara AIRBUS", porp["cli-airbus"]["declara"], ["AIRBUS"])
+comprueba("y con que encaja de verdad",
+          any("AIRBUS" in c for c in porp["cli-airbus"]["coincide"]), True)
+comprueba("el interno coge todo", porp["interno"]["filas"] > porp["cli-airbus"]["filas"], True)
+comprueba("se cuentan los clientes leidos", res["clientes"]["total"], 2)
+comprueba("y salen con su nombre de verdad",
+          res["clientes"]["muestra"], ["AIRBUS OPERATIONS SL", "CONSUM S COOP V"])
+
+# Y un perfil cuyo nombre ya no existe: cero filas y ninguna coincidencia.
+ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
+    {"id": "cli-fantasma", "ambito": {"clientes": ["EMPRESA QUE YA NO SE LLAMA ASI"]}},
+]}).encode()
+_r2 = L.lambda_handler({}, None)
+comprueba("un perfil que ya no encaja sale a cero", _r2["perfiles"][0]["filas"], 0)
+comprueba("y dice que no coincide con nada", _r2["perfiles"][0]["coincide"], [])
 
 print("\nPor centro: en cual de los centros pasa")
 pc = airbus["servicio"]["por_centro"]

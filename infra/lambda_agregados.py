@@ -239,6 +239,10 @@ class Acumulador:
     def __init__(self, perfil):
         self.perfil = perfil
         self.ambito = perfil.get("ambito", {})
+        # Cuantas filas le han tocado. Es la cifra que delata un panel vacio
+        # antes de que lo vea el cliente: un perfil a cero no es un mes flojo,
+        # es un ambito que ha dejado de encajar.
+        self.filas_en_ambito = 0
 
         # servicio
         self.partes_totales = 0
@@ -587,6 +591,25 @@ def estado_de_la_carga(hoy):
 # ----------------------------------------------------------------------
 # ejecucion
 # ----------------------------------------------------------------------
+def _coincidencias(declarados, mapa):
+    """Que clientes y centros de verdad encajan con lo que declara un perfil.
+
+    Sirve para distinguir las dos formas de quedarse a cero, que piden arreglos
+    distintos: que el nombre ya no exista en VenCloud —y haya que cambiarlo en
+    perfiles.json—, o que exista y el fallo este en otra parte.
+    """
+    out = set()
+    for d in declarados:
+        aguja = str(d).upper()
+        for c in mapa.clientes:
+            if aguja in c.upper():
+                out.add(c)
+        for centro, _ in mapa.por_matricula.values():
+            if aguja in centro.upper():
+                out.add(centro)
+    return out
+
+
 def lambda_handler(event, context):
     hoy = datetime.date.today()
     dias = [hoy - datetime.timedelta(days=d) for d in range(1, DIAS + 1)]
@@ -608,6 +631,7 @@ def lambda_handler(event, context):
             mapa.aprende(filas)
             for acu in acumuladores:
                 propias = [f for f in filas if en_ambito(f, acu.ambito, mapa)]
+                acu.filas_en_ambito += len(propias)
                 if propias:
                     getattr(acu, metodo)(propias)
             # El trozo se suelta aqui: en ningun momento hay mas de un informe
@@ -624,12 +648,30 @@ def lambda_handler(event, context):
         "dias": DIAS,
         "filas_leidas": dict(leidas),
         "maquinas_con_centro": mapa.aprendidas,
-        # Si esto trae un solo nombre, VenCloud todavia cuelga todos los centros
-        # de «Serunion» y el ambito se esta resolviendo por el nombre del centro.
-        # Cuando la reasignacion entre, aqui apareceran los clientes de verdad.
-        "clientes_vistos": sorted(mapa.clientes)[:50],
+        # Un solo cliente significa que VenCloud todavia cuelga todos los centros
+        # de «Serunion» y que el ambito se resuelve por el nombre del centro.
+        # Varios, que la reasignacion ya entro y el campo `cliente` manda.
+        "clientes": {"total": len(mapa.clientes), "muestra": sorted(mapa.clientes)[:20]},
+        # LO PRIMERO QUE HAY QUE MIRAR. Un perfil a cero filas no es un mes
+        # flojo: es un ambito que ha dejado de encajar, y si no se dice aqui se
+        # descubre cuando llama el cliente. `coincide` dice si lo que el perfil
+        # declara aparece en algun nombre de cliente o de centro de los leidos:
+        # un ambito que no coincide con nada es casi siempre un nombre que
+        # cambio en VenCloud.
+        "perfiles": [
+            {"id": acu.perfil.get("id"),
+             "filas": acu.filas_en_ambito,
+             "centros": len(acu.centros),
+             "declara": acu.ambito.get("clientes", []),
+             "coincide": sorted(_coincidencias(acu.ambito.get("clientes", []), mapa))[:10]}
+            for acu in acumuladores
+        ],
         "ficheros": escritos,
     }
+    for p_ in resumen["perfiles"]:
+        if p_["filas"] == 0 and p_["declara"]:
+            print(f"AVISO: el perfil {p_['id']} se ha quedado SIN NINGUNA FILA. "
+                  f"Declara {p_['declara']} y no encaja con ningun cliente ni centro leido.")
     escribe(f"registro/agregados/anio={hoy.year}/mes={hoy.month:02d}/{hoy.isoformat()}.json", resumen)
     print(json.dumps(resumen, ensure_ascii=False))
     return resumen
