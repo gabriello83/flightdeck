@@ -57,14 +57,14 @@ def pon(destino, id_informe, dia, filas):
 
 # ---------------------------------------------------------------- datos
 pon("crudo/visita_cabecera", "visita_cabecera", AYER,
-    [{"empleadoid": 0, "empleado": "SYSTEM", "tipo_parte": 2, "centro": "AIRBUS GETAFE",
-      "cliente": "AIRBUS OPERATIONS SL",
+    [{"empleadoid": 0, "empleado": "SYSTEM", "tipo_parte": 2, "centro": "AIRBUS GETAFE", "num_centro": "1001",
+      "cliente": "AIRBUS OPERATIONS SL", "cod_cliente": "C7",
       "matricula": "A1", "minutos": 0, "fecha_ini": str(AYER)}] * 200
-    + [{"empleadoid": 7, "empleado": "Ana", "tipo_parte": 0, "centro": "AIRBUS GETAFE",
-        "cliente": "AIRBUS OPERATIONS SL",
+    + [{"empleadoid": 7, "empleado": "Ana", "tipo_parte": 0, "centro": "AIRBUS GETAFE", "num_centro": "1001",
+        "cliente": "AIRBUS OPERATIONS SL", "cod_cliente": "C7",
         "matricula": "A1", "minutos": 7, "fecha_ini": str(AYER)}] * 100
-    + [{"empleadoid": 7, "empleado": "Ana", "tipo_parte": 0, "centro": "CONSUM MURCIA",
-        "cliente": "CONSUM S COOP V",
+    + [{"empleadoid": 7, "empleado": "Ana", "tipo_parte": 0, "centro": "CONSUM MURCIA", "num_centro": "2002",
+        "cliente": "CONSUM S COOP V", "cod_cliente": "C9",
         "matricula": "C1", "minutos": 400, "fecha_ini": str(AYER)}] * 10)
 
 # OJO: los informes de aqui abajo van SIN columna `centro`, porque el de verdad
@@ -271,8 +271,10 @@ print("\nEl resumen delata un perfil que se ha quedado sin filas")
 porp = {p["id"]: p for p in res["perfiles"]}
 comprueba("AIRBUS trae filas", porp["cli-airbus"]["filas"] > 0, True)
 comprueba("y dice que declara AIRBUS", porp["cli-airbus"]["declara"], ["AIRBUS"])
-comprueba("y con que encaja de verdad",
-          any("AIRBUS" in c for c in porp["cli-airbus"]["coincide"]), True)
+comprueba("y que centros coge, con su numero delante",
+          [c["nombre"] for c in porp["cli-airbus"]["coge_centros"]], ["AIRBUS GETAFE"])
+comprueba("el numero es el que hay que copiar a perfiles.json",
+          porp["cli-airbus"]["coge_centros"][0]["num"], "1001")
 comprueba("el interno coge todo", porp["interno"]["filas"] > porp["cli-airbus"]["filas"], True)
 # Y bajo que cliente de VenCloud cuelgan de verdad esos centros, que puede no
 # parecerse a lo que el perfil declara.
@@ -288,7 +290,32 @@ ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
 ]}).encode()
 _r2 = L.lambda_handler({}, None)
 comprueba("un perfil que ya no encaja sale a cero", _r2["perfiles"][0]["filas"], 0)
-comprueba("y dice que no coincide con nada", _r2["perfiles"][0]["coincide"], [])
+comprueba("y dice que no coge ningun centro", _r2["perfiles"][0]["coge_centros"], [])
+
+print("\nEl numero de centro aguanta un renombrado; el nombre, no")
+# Es lo que paso el 4 de octubre de 2026: «AIRBUS SAN PABLO» se partio en NORTE
+# y SUR. Un ambito escrito con numeros no se habria enterado.
+_m4 = L.MapaCentros()
+_m4.aprende([{"matricula": "P1", "num_centro": "3003", "centro": "AIRBUS SAN PABLO",
+              "cliente": "SERUNION", "cod_cliente": "S1"}])
+_por_nombre = {"centros": ["AIRBUS SAN PABLO"]}
+_por_numero = {"centros": ["3003"]}
+comprueba("antes del renombrado, el nombre vale",
+          L.en_ambito({"matricula": "P1"}, _por_nombre, _m4), True)
+comprueba("y el numero tambien",
+          L.en_ambito({"matricula": "P1"}, _por_numero, _m4), True)
+# Lo renombran: misma maquina, mismo numero de centro, nombre nuevo.
+_m5 = L.MapaCentros()
+_m5.aprende([{"matricula": "P1", "num_centro": "3003", "centro": "AIRBUS SAN PABLO NORTE",
+              "cliente": "SERUNION", "cod_cliente": "S1"}])
+comprueba("despues del renombrado, el nombre exacto ya no encaja",
+          L.en_ambito({"matricula": "P1"}, _por_nombre, _m5), False)
+comprueba("pero el numero sigue encajando",
+          L.en_ambito({"matricula": "P1"}, _por_numero, _m5), True)
+comprueba("y el codigo de cliente tambien vale como ambito",
+          L.en_ambito({"matricula": "P1"}, {"clientes": ["S1"]}, _m5), True)
+comprueba("un codigo que no es el suyo, no",
+          L.en_ambito({"matricula": "P1"}, {"clientes": ["S9"]}, _m5), False)
 
 print("\nPor centro: en cual de los centros pasa")
 pc = airbus["servicio"]["por_centro"]

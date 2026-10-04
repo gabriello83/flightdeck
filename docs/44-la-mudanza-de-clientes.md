@@ -161,3 +161,35 @@ No se pierde ni un dato —el ámbito los coge todos—, pero en «visitas por c
 puede salir dos veces mientras queden días anteriores a la mudanza dentro de la ventana de 120
 días. Se arreglará solo a finales de enero, cuando la ventana deje atrás el 4 de octubre. Si antes
 de eso molesta, la salida es una tabla de equivalencias en `perfiles.json`.
+
+## El número, que es lo que no se mueve
+
+Gabriele lo dijo en una frase que vale más que todo lo anterior: **cada centro tiene su número y
+cada cliente el suyo.** Y en VenCloud, a 4 de octubre, los centros de AIRBUS **siguen colgando del
+cliente Serunion** — por eso ninguno de los 173 clientes lleva «AIRBUS» en el nombre.
+
+Eso deja el ámbito de AIRBUS viviendo del nombre del centro, que es justo lo que acaba de moverse.
+
+Así que `en_ambito` admite ahora las cuatro cosas:
+
+| en `perfiles.json` | encaja con |
+|---|---|
+| `"centros": ["1001"]` | el **número** de centro — no se mueve |
+| `"centros": ["AIRBUS GETAFE"]` | el nombre exacto del centro |
+| `"clientes": ["C7"]` | el **código** de cliente — no se mueve |
+| `"clientes": ["AIRBUS"]` | un trozo del nombre del cliente **o del centro** |
+
+Lo escrito con números se prefiere siempre. Lo escrito con nombres se deja porque funciona y porque
+no todos los perfiles van a reescribirse a la vez, no porque sea igual de bueno. Hay una prueba que
+renombra un centro y comprueba que el número sigue encajando y el nombre ya no.
+
+Para saber qué números poner, el resumen de agregados trae `coge_centros` por perfil:
+
+```json
+"coge_centros": [
+  {"num": "1001", "nombre": "AIRBUS GETAFE"},
+  {"num": "1002", "nombre": "AIRBUS ILLESCAS"}
+]
+```
+
+Se copian los `num` a `ambito.centros` y el perfil deja de depender de cómo se llame nada.

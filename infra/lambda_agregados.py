@@ -135,6 +135,38 @@ def escribe(clave, obj):
 # ----------------------------------------------------------------------
 # filtrado por ambito
 # ----------------------------------------------------------------------
+class DeQuien:
+    """A quien pertenece una fila: centro y cliente, por nombre y por numero.
+
+    Los cuatro, porque los cuatro se usan para cosas distintas: los NOMBRES son
+    lo que se lee en un panel, y los NUMEROS son lo que no se mueve. Un centro
+    se renombra —«AIRBUS SAN PABLO» se partio en NORTE y SUR el 4 de octubre de
+    2026—, y un ambito escrito con nombres se entera; uno escrito con numeros,
+    no.
+    """
+
+    __slots__ = ("centro", "cliente", "num_centro", "cod_cliente")
+
+    def __init__(self, centro="", cliente="", num_centro="", cod_cliente=""):
+        self.centro, self.cliente = centro, cliente
+        self.num_centro, self.cod_cliente = num_centro, cod_cliente
+
+    def completo(self):
+        return bool(self.centro and self.cliente and self.num_centro and self.cod_cliente)
+
+    def completado_con(self, otro):
+        """Lo que la fila no diga, lo pone el mapa. Lo que diga, manda."""
+        return DeQuien(self.centro or otro.centro,
+                       self.cliente or otro.cliente,
+                       self.num_centro or otro.num_centro,
+                       self.cod_cliente or otro.cod_cliente)
+
+
+def _quien(fila):
+    return DeQuien(str(R.v(fila, "centro", "")), str(R.v(fila, "cliente", "")),
+                   str(R.v(fila, "num_centro", "")), str(R.v(fila, "cod_cliente", "")))
+
+
 class MapaCentros:
     """De que centro —y de que cliente— es cada maquina. Se aprende leyendo.
 
@@ -153,6 +185,7 @@ class MapaCentros:
         self.por_pdv = {}
         self.aprendidas = 0
         self.clientes = set()
+        self.centros = {}       # num_centro -> nombre, para poder listarlos
 
     def aprende(self, filas):
         """Se llama con las filas CRUDAS, antes de filtrar por ambito.
@@ -161,36 +194,34 @@ class MapaCentros:
         maquinas que ya sabe que son suyas, que es justo lo que no sirve.
         """
         for f in filas:
-            centro = str(R.v(f, "centro", ""))
-            cliente = str(R.v(f, "cliente", ""))
-            if not centro and not cliente:
+            quien = _quien(f)
+            if not quien.centro and not quien.cliente and not quien.num_centro:
                 continue
-            if cliente:
-                self.clientes.add(cliente)
-            par = (centro, cliente)
+            if quien.cliente:
+                self.clientes.add(quien.cliente)
+            if quien.num_centro:
+                self.centros.setdefault(quien.num_centro, quien.centro)
             m = R.v(f, "matricula", "")
             if m and m not in self.por_matricula:
-                self.por_matricula[m] = par
+                self.por_matricula[m] = quien
                 self.aprendidas += 1
             pdv = R.v(f, "cod_pdv", "")
             if pdv and pdv not in self.por_pdv:
-                self.por_pdv[pdv] = par
+                self.por_pdv[pdv] = quien
 
     def de_quien_es(self, fila):
-        """(centro, cliente) de la fila: lo suyo si lo trae, y si no, el de su maquina."""
-        centro = str(R.v(fila, "centro", ""))
-        cliente = str(R.v(fila, "cliente", ""))
-        if centro and cliente:
-            return centro, cliente
+        """De quien es la fila: lo que traiga ella, y lo que falte, de su maquina."""
+        quien = _quien(fila)
+        if quien.completo():
+            return quien
         for clave, tabla in ((R.v(fila, "matricula", ""), self.por_matricula),
                              (R.v(fila, "cod_pdv", ""), self.por_pdv)):
             if clave and clave in tabla:
-                c, cl = tabla[clave]
-                return centro or c, cliente or cl
-        return centro, cliente
+                return quien.completado_con(tabla[clave])
+        return quien
 
     def centro_de(self, fila):
-        return self.de_quien_es(fila)[0]
+        return self.de_quien_es(fila).centro
 
 
 def en_ambito(fila, ambito, mapa=None):
@@ -201,29 +232,40 @@ def en_ambito(fila, ambito, mapa=None):
     El `mapa` es lo que hace que una fila de recaudacion, que no sabe de que
     centro es, acabe en el panel del cliente al que pertenece.
 
-    POR QUE EL NOMBRE DEL CLIENTE SE BUSCA EN DOS SITIOS. La jerarquia de
-    VenCloud es cliente -> centro -> pdv -> maquina, pero hasta octubre de 2026
-    TODOS los centros colgaban del cliente «Serunion»: el cliente de verdad solo
-    estaba en el NOMBRE del centro («AIRBUS GETAFE»). VenCloud los reasigna a su
-    cliente real, y entonces el campo `cliente` pasa a ser el bueno —y el nombre
-    del centro puede dejar de llevarlo delante.
+    SE ADMITE EL NUMERO Y EL NOMBRE, Y ESA ES LA PIEZA QUE IMPORTA. En VenCloud
+    cada centro tiene su numero y cada cliente el suyo, y los numeros no se
+    mueven: los nombres si. El 4 de octubre de 2026 «AIRBUS SAN PABLO» se partio
+    en NORTE y SUR, y aparecieron CBC e ITC. Un ambito escrito con numeros no se
+    habria enterado; uno escrito con nombres depende de que nadie los toque.
 
-    Asi que se mira en los dos: el campo cuando existe, y el nombre del centro
-    como antes. Durante la mudanza las dos cosas valen, y despues sobra la
-    segunda sin que haya que cambiar nada el dia exacto. Un ambito por centro o
-    por delegacion no se entera de nada de esto.
+    Asi que `centros` admite el numero de centro o su nombre exacto, y
+    `clientes` admite el codigo de cliente o un trozo de su nombre —o del nombre
+    del centro, que es donde estaba el cliente de verdad antes de la mudanza, y
+    donde sigue estando mientras VenCloud no reasigne ese centro—.
+
+    Lo escrito con numeros se prefiere siempre. Lo escrito con nombres se deja
+    porque funciona y porque no todos los perfiles van a reescribirse a la vez,
+    no porque sea igual de bueno.
     """
     if not (ambito.get("clientes") or ambito.get("centros") or ambito.get("delegaciones")):
         return True
-    if mapa is not None:
-        centro, cliente = mapa.de_quien_es(fila)
-    else:
-        centro, cliente = str(R.v(fila, "centro", "")), str(R.v(fila, "cliente", ""))
+    q = mapa.de_quien_es(fila) if mapa is not None else _quien(fila)
     deleg = str(R.v(fila, "delegacion", ""))
+
     for c in ambito.get("clientes", []):
-        if c.upper() in centro.upper() or c.upper() in cliente.upper():
+        c = str(c)
+        if q.cod_cliente and c == q.cod_cliente:
             return True
-    return centro in ambito.get("centros", []) or deleg in ambito.get("delegaciones", [])
+        aguja = c.upper()
+        if aguja and (aguja in q.centro.upper() or aguja in q.cliente.upper()):
+            return True
+
+    for c in ambito.get("centros", []):
+        c = str(c)
+        if (q.num_centro and c == q.num_centro) or (q.centro and c == q.centro):
+            return True
+
+    return deleg in [str(d) for d in ambito.get("delegaciones", [])]
 
 
 # ----------------------------------------------------------------------
@@ -591,41 +633,36 @@ def estado_de_la_carga(hoy):
 # ----------------------------------------------------------------------
 # ejecucion
 # ----------------------------------------------------------------------
-def clientes_del_ambito(ambito, mapa):
-    """Los clientes de VERDAD a los que pertenece lo que coge este perfil.
+def lo_que_coge(ambito, mapa):
+    """Que centros y que clientes de VERDAD coge este ambito.
 
-    Un perfil declara «AIRBUS» y encaja por el nombre del centro; esto dice bajo
-    que cliente cuelgan esos centros en VenCloud, que es otra cosa y puede no
-    parecerse. Importa porque mientras el ambito viva del nombre del centro,
-    depende de que nadie renombre un centro; con el nombre del cliente de verdad
-    en perfiles.json, deja de depender.
+    Se saca del mapa —miles de maquinas— y no de las filas —millones—. Sirve
+    para dos cosas que, sin esto, solo se descubren cuando llama el cliente:
 
-    Sale del mapa, que son miles de maquinas, no de las filas, que son millones.
+      · Un perfil que se ha quedado a cero: si no coge NINGUN centro, el nombre
+        que declara ya no existe en VenCloud y hay que cambiarlo.
+      · Un perfil que funciona pero es fragil: si coge centros y el cliente de
+        esos centros no se parece a lo que declara, el ambito esta viviendo del
+        nombre del centro, y un renombrado se lo lleva por delante. Con los
+        numeros de centro en `perfiles.json`, deja de depender de eso.
     """
-    out = set()
-    for centro, cliente in mapa.por_matricula.values():
-        if cliente and en_ambito({"centro": centro, "cliente": cliente}, ambito, None):
-            out.add(cliente)
-    return out
-
-
-def _coincidencias(declarados, mapa):
-    """Que clientes y centros de verdad encajan con lo que declara un perfil.
-
-    Sirve para distinguir las dos formas de quedarse a cero, que piden arreglos
-    distintos: que el nombre ya no exista en VenCloud —y haya que cambiarlo en
-    perfiles.json—, o que exista y el fallo este en otra parte.
-    """
-    out = set()
-    for d in declarados:
-        aguja = str(d).upper()
-        for c in mapa.clientes:
-            if aguja in c.upper():
-                out.add(c)
-        for centro, _ in mapa.por_matricula.values():
-            if aguja in centro.upper():
-                out.add(centro)
-    return out
+    # Un mismo centro llega con numero desde unos informes y sin el desde otros
+    # —el diario de maquina, por ejemplo, trae el nombre y nada mas—. Sin esto
+    # saldria dos veces, una con numero y otra sin el.
+    num_por_nombre = {nombre: num for num, nombre in mapa.centros.items() if nombre}
+    centros, clientes = {}, set()
+    for q in mapa.por_matricula.values():
+        if not en_ambito({"centro": q.centro, "cliente": q.cliente,
+                          "num_centro": q.num_centro, "cod_cliente": q.cod_cliente},
+                         ambito, None):
+            continue
+        clave = q.num_centro or num_por_nombre.get(q.centro, q.centro)
+        if clave:
+            # El nombre que se queda es el que venga con numero, si alguno lo trae.
+            centros[clave] = q.centro or centros.get(clave, "")
+        if q.cliente:
+            clientes.add(q.cliente)
+    return centros, clientes
 
 
 def lambda_handler(event, context):
@@ -661,6 +698,7 @@ def lambda_handler(event, context):
                 for acu in acumuladores]
 
     escribe("cabina/_estado/carga.json", estado_de_la_carga(hoy))
+    _cogidos = {acu.perfil.get("id"): lo_que_coge(acu.ambito, mapa) for acu in acumuladores}
     resumen = {
         "ejecucion": datetime.datetime.utcnow().isoformat() + "Z",
         "dias": DIAS,
@@ -681,11 +719,15 @@ def lambda_handler(event, context):
              "filas": acu.filas_en_ambito,
              "centros": len(acu.centros),
              "declara": acu.ambito.get("clientes", []),
-             "coincide": sorted(_coincidencias(acu.ambito.get("clientes", []), mapa))[:10],
-             # Bajo que cliente de VenCloud cuelgan de verdad esos centros. Si
-             # no se parece a lo que el perfil declara, el ambito esta viviendo
-             # del nombre del centro y conviene poner aqui el de verdad.
-             "clientes_de_verdad": sorted(clientes_del_ambito(acu.ambito, mapa))[:10]}
+             # Lo que coge de verdad, con el numero delante: es lo que hay que
+             # copiar a `ambito.centros` en perfiles.json para que un renombrado
+             # deje de importar.
+             "coge_centros": [{"num": k, "nombre": v}
+                              for k, v in sorted(_cogidos[acu.perfil.get("id")][0].items())][:25],
+             # Y bajo que cliente cuelgan esos centros en VenCloud. Si no se
+             # parece a lo que el perfil declara, el ambito esta viviendo del
+             # nombre del centro.
+             "clientes_de_verdad": sorted(_cogidos[acu.perfil.get("id")][1])[:10]}
             for acu in acumuladores
         ],
         "ficheros": escritos,

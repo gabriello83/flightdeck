@@ -17,7 +17,7 @@
         "centros": [],
         "delegaciones": []
       },
-      "_nota": "Por nombre de cliente: coge los nueve centros de AIRBUS sin listarlos."
+      "_nota": "Por nombre, mientras no se sepan los numeros. El ambito admite el NUMERO de centro y el CODIGO de cliente, que es lo que no se mueve: el 4 de octubre de 2026 «AIRBUS SAN PABLO» se partio en NORTE y SUR. En cuanto los agregados digan los numeros (resumen -> perfiles -> coge_centros), ponerlos aqui en vez del nombre."
     }
   ]
 }
