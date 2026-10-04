@@ -126,3 +126,38 @@ Ahora el resumen de cada ejecución trae, por perfil:
 
 `clientes` deja de ser una lista cortada por la mitad y pasa a ser `{"total": N, "muestra": [...20]}`:
 el total es el dato, y veinte nombres bastan para reconocer que son los de verdad.
+
+## Lo que dijo la primera ejecución con el campo puesto
+
+| perfil | filas | centros |
+|---|---|---|
+| `interno` | 3.383.019 | 430 |
+| `cli-airbus` | 965.564 | 10 |
+
+173 clientes distintos en el parque. El panel de AIRBUS no se vació: el ámbito siguió entrando por
+el nombre del centro, como estaba previsto.
+
+Pero el mismo resumen dejó ver dos cosas que no se habrían visto de otra forma.
+
+### AIRBUS no es un cliente que se llame AIRBUS
+
+En `coincide` salieron diez nombres, y los diez son **centros**. Ninguno de los 173 clientes lleva
+«AIRBUS» en el nombre. Es decir: el perfil está funcionando **sólo por el nombre del centro**, y eso
+depende de que nadie los renombre —que es justo lo que acaba de pasar, ver abajo—.
+
+Por eso el resumen trae ahora `clientes_de_verdad`: bajo qué cliente de VenCloud cuelgan de verdad
+los centros que el perfil coge. Con ese nombre en `perfiles.json`, el ámbito deja de depender de
+cómo se llame un centro.
+
+### La mudanza vino con renombrado
+
+Los centros de AIRBUS pasaron de nueve a diez, y no porque haya uno nuevo:
+
+- `AIRBUS SAN PABLO` se partió en `AIRBUS SAN PABLO NORTE` y `AIRBUS SAN PABLO SUR`.
+- Aparecieron `AIRBUS CBC` y `AIRBUS ITC`.
+- `AIRBUS ALBACETE` convive con `AIRBUS ALBACETE (PARQUE CIENTIFICO Y TECNOLÓGICO - UNIV. ALBACETE)`.
+
+No se pierde ni un dato —el ámbito los coge todos—, pero en «visitas por centro» el mismo sitio
+puede salir dos veces mientras queden días anteriores a la mudanza dentro de la ventana de 120
+días. Se arreglará solo a finales de enero, cuando la ventana deje atrás el 4 de octubre. Si antes
+de eso molesta, la salida es una tabla de equivalencias en `perfiles.json`.

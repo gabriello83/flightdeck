@@ -274,6 +274,10 @@ comprueba("y dice que declara AIRBUS", porp["cli-airbus"]["declara"], ["AIRBUS"]
 comprueba("y con que encaja de verdad",
           any("AIRBUS" in c for c in porp["cli-airbus"]["coincide"]), True)
 comprueba("el interno coge todo", porp["interno"]["filas"] > porp["cli-airbus"]["filas"], True)
+# Y bajo que cliente de VenCloud cuelgan de verdad esos centros, que puede no
+# parecerse a lo que el perfil declara.
+comprueba("dice el cliente de verdad de los centros de AIRBUS",
+          porp["cli-airbus"]["clientes_de_verdad"], ["AIRBUS OPERATIONS SL"])
 comprueba("se cuentan los clientes leidos", res["clientes"]["total"], 2)
 comprueba("y salen con su nombre de verdad",
           res["clientes"]["muestra"], ["AIRBUS OPERATIONS SL", "CONSUM S COOP V"])

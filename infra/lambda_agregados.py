@@ -591,6 +591,24 @@ def estado_de_la_carga(hoy):
 # ----------------------------------------------------------------------
 # ejecucion
 # ----------------------------------------------------------------------
+def clientes_del_ambito(ambito, mapa):
+    """Los clientes de VERDAD a los que pertenece lo que coge este perfil.
+
+    Un perfil declara «AIRBUS» y encaja por el nombre del centro; esto dice bajo
+    que cliente cuelgan esos centros en VenCloud, que es otra cosa y puede no
+    parecerse. Importa porque mientras el ambito viva del nombre del centro,
+    depende de que nadie renombre un centro; con el nombre del cliente de verdad
+    en perfiles.json, deja de depender.
+
+    Sale del mapa, que son miles de maquinas, no de las filas, que son millones.
+    """
+    out = set()
+    for centro, cliente in mapa.por_matricula.values():
+        if cliente and en_ambito({"centro": centro, "cliente": cliente}, ambito, None):
+            out.add(cliente)
+    return out
+
+
 def _coincidencias(declarados, mapa):
     """Que clientes y centros de verdad encajan con lo que declara un perfil.
 
@@ -663,7 +681,11 @@ def lambda_handler(event, context):
              "filas": acu.filas_en_ambito,
              "centros": len(acu.centros),
              "declara": acu.ambito.get("clientes", []),
-             "coincide": sorted(_coincidencias(acu.ambito.get("clientes", []), mapa))[:10]}
+             "coincide": sorted(_coincidencias(acu.ambito.get("clientes", []), mapa))[:10],
+             # Bajo que cliente de VenCloud cuelgan de verdad esos centros. Si
+             # no se parece a lo que el perfil declara, el ambito esta viviendo
+             # del nombre del centro y conviene poner aqui el de verdad.
+             "clientes_de_verdad": sorted(clientes_del_ambito(acu.ambito, mapa))[:10]}
             for acu in acumuladores
         ],
         "ficheros": escritos,
