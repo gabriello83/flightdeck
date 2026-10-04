@@ -291,6 +291,12 @@ sáltate este paso y vuelve luego.
 
 ## Paso 12 · El código de las tres Lambdas — 10 min
 
+**No hace falta construirlos.** Están en el repositorio, en `paquetes/`, y se descargan uno a uno
+con el botón *Download raw file* de GitHub. Una prueba (`infra/test_paquetes.py`) impide que se
+queden viejos: compara el contenido de cada zip con los ficheros de los que sale.
+
+Si prefieres construirlos tú:
+
 ```bash
 sh infra/empaquetar.sh          # deja api.zip, alarmas.zip, agregados.zip y extraccion.zip en paquetes/
 
