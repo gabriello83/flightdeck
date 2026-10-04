@@ -194,8 +194,8 @@ print("\nEl administrador")
 COOKIE_JEFE = cookie_de(llama("POST", "/api/acceso",
                               {"correo": "jefe@serunion.es", "clave": "OtraClaveLarga1"}))
 comprueba("ve los usuarios", llama("GET", "/api/admin/usuarios", cookie=COOKIE_JEFE)["statusCode"], 200)
-comprueba("ve las 16 sesiones",
-          len(cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_JEFE))["sesiones"]), 16)
+comprueba("ve las 17 sesiones",
+          len(cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_JEFE))["sesiones"]), 17)
 
 alta = llama("POST", "/api/admin/usuarios",
              {"correo": "Pepe@Airbus.com", "nombre": "Pepe", "perfil_id": "cli-airbus",
@@ -218,7 +218,7 @@ comprueba("no puede borrarse a si mismo",
 
 print("\nLa consola recibe lo que necesita para no repetir las reglas")
 pf = cuerpo_de(llama("GET", "/api/admin/perfiles", cookie=COOKIE_JEFE))
-comprueba("las 16 sesiones con su tipo minimo", len(pf["catalogo_sesiones"]), 16)
+comprueba("las 17 sesiones con su tipo minimo", len(pf["catalogo_sesiones"]), 17)
 comprueba("el techo de los cuatro tipos", sorted(pf["techo"]), ["admin", "cliente", "direccion", "operaciones"])
 comprueba("y la escalera de niveles", pf["niveles"]["cliente"] < pf["niveles"]["operaciones"], True)
 comprueba("y que trae puesto cada tipo", "alarmas_ver" in pf["implicitos"]["operaciones"], True)

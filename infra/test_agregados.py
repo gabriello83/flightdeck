@@ -131,6 +131,41 @@ pon("crudo/stock_balance", "stock_balance", AYER,
     + [{"anho": 2026, "mes": 8, "tipo_elemento": "A", "valor_total": 123456,
         "fecha_ult_inventario": str(HOY), "matricula": "A1"}])
 
+# El censo de la instalacion: un maestro, con una pega de cada clase.
+ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"] = gzip.compress(json.dumps([
+    # bien puesta: tarifa, planograma y telemetria con su dispositivo
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P1", "matricula": "A1", "estado_pdv": 1, "tarifa_vending_pdv": 9,
+     "canales_con_articulo": 12, "telemetria": 40, "dispositivo_telemetria": "NY-001",
+     "delegacion": "Madrid", "ubicacion": "Hall"},
+    # sin tarifa de ninguna clase
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P2", "matricula": "A2", "estado_pdv": 1, "canales_con_articulo": 8,
+     "telemetria": 0, "delegacion": "Madrid", "ubicacion": "Taller"},
+    # con telemetria y sin dispositivo: vende y la venta no llega
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P3", "matricula": "A3", "estado_pdv": 1, "tarifa_vending_pdv": 9,
+     "canales_con_articulo": 6, "telemetria": 40, "dispositivo_telemetria": "",
+     "delegacion": "Madrid", "ubicacion": "Cantina"},
+    # sin planograma: ni un canal con articulo
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P4", "matricula": "A4", "estado_pdv": 1, "tarifa_vending_cliente": 3,
+     "canales_con_articulo": 0, "telemetria": 0, "delegacion": "Madrid"},
+    # punto de venta dado de baja: NO es una incidencia
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P5", "matricula": "", "estado_pdv": 9, "baja_pdv": "2026-01-15",
+     "canales_con_articulo": 0, "telemetria": 0},
+    # centro dado de alta y sin nada puesto
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1009", "centro": "AIRBUS NUEVO",
+     "cod_pdv": "", "matricula": ""},
+    # cliente nuevo sin un solo centro
+    {"cod_cliente": "C8", "cliente": "CLIENTE RECIEN FIRMADO", "num_centro": "", "centro": ""},
+    # y uno de Consum, que a AIRBUS no le toca
+    {"cod_cliente": "C9", "cliente": "CONSUM S COOP V", "num_centro": "2002", "centro": "CONSUM MURCIA",
+     "cod_pdv": "Q1", "matricula": "C1", "estado_pdv": 1, "canales_con_articulo": 0,
+     "telemetria": 40, "dispositivo_telemetria": ""},
+]).encode())
+
 ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
     {"id": "interno", "ambito": {}},
     {"id": "cli-airbus", "ambito": {"clientes": ["AIRBUS"], "centros": [], "delegaciones": []}},
@@ -280,9 +315,9 @@ comprueba("el interno coge todo", porp["interno"]["filas"] > porp["cli-airbus"][
 # parecerse a lo que el perfil declara.
 comprueba("dice el cliente de verdad de los centros de AIRBUS",
           porp["cli-airbus"]["clientes_de_verdad"], ["AIRBUS OPERATIONS SL"])
-comprueba("se cuentan los clientes leidos", res["clientes"]["total"], 2)
-comprueba("y salen con su nombre de verdad",
-          res["clientes"]["muestra"], ["AIRBUS OPERATIONS SL", "CONSUM S COOP V"])
+comprueba("se cuentan los clientes leidos", res["clientes"]["total"], 3)
+comprueba("y salen con su nombre de verdad", res["clientes"]["muestra"],
+          ["AIRBUS OPERATIONS SL", "CLIENTE RECIEN FIRMADO", "CONSUM S COOP V"])
 
 # Y un perfil cuyo nombre ya no existe: cero filas y ninguna coincidencia.
 ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
@@ -316,6 +351,51 @@ comprueba("y el codigo de cliente tambien vale como ambito",
           L.en_ambito({"matricula": "P1"}, {"clientes": ["S1"]}, _m5), True)
 comprueba("un codigo que no es el suyo, no",
           L.en_ambito({"matricula": "P1"}, {"clientes": ["S9"]}, _m5), False)
+
+print("\nInstalaciones: el censo y lo que esta puesto a medias")
+inst = airbus["instalaciones"]
+comprueba("cuenta los clientes del ambito", inst["censo"]["clientes"], 1)
+comprueba("y sus centros", inst["censo"]["centros"], 2)
+comprueba("y sus puntos de venta", inst["censo"]["pdvs"], 5)
+inc = inst["incidencias"]
+comprueba("una sin tarifa", inc["sin_tarifa"]["n"], 1)
+comprueba("y dice cual", inc["sin_tarifa"]["casos"][0]["pdv"], "P2")
+comprueba("una sin planograma", inc["sin_planograma"]["n"], 1)
+comprueba("una con telemetria y sin dispositivo", inc["telemetria_sin_dato"]["n"], 1)
+comprueba("y dice cual", inc["telemetria_sin_dato"]["casos"][0]["m"], "A3")
+comprueba("un centro sin puntos de venta", inc["centro_sin_pdv"]["n"], 1)
+comprueba("el punto de venta de baja NO es una incidencia",
+          any(c["pdv"] == "P5" for i in inc.values() for c in i["casos"]), False)
+comprueba("la de Consum no se cuela", "Q1" not in str(inc), True)
+comprueba("el catalogo explica cada una", len(inst["catalogo"]), 6)
+comprueba("y dice por que importa",
+          "efectivo ciego" in inst["catalogo"]["telemetria_sin_dato"]["porque"], True)
+# El cliente sin centros es del interno: AIRBUS no lo ve, y es correcto.
+comprueba("el interno si ve el cliente sin centros",
+          interno["instalaciones"]["incidencias"]["cliente_sin_centros"]["n"], 1)
+
+print("\nLa primera vez no se inventa ninguna alta")
+comprueba("nuevos vacio", inst["nuevos"], {})
+comprueba("y lo dice", "primera vez" in inst["_nota_nuevos"], True)
+
+print("\nY a la siguiente, lo que haya aparecido sale como alta")
+_censo = json.loads(gzip.decompress(ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"]))
+_censo.append({"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001",
+               "centro": "AIRBUS GETAFE", "cod_pdv": "P9", "matricula": "A9",
+               "estado_pdv": 1, "tarifa_vending_pdv": 9, "canales_con_articulo": 4,
+               "telemetria": 40, "dispositivo_telemetria": "NY-009"})
+ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"] = gzip.compress(json.dumps(_censo).encode())
+# La prueba del perfil fantasma dejo otro perfiles.json puesto: se devuelve el
+# bueno, o esta ejecucion no calcularia el panel de AIRBUS.
+ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
+    {"id": "interno", "ambito": {}},
+    {"id": "cli-airbus", "ambito": {"clientes": ["AIRBUS"], "centros": [], "delegaciones": []}},
+]}).encode()
+L.lambda_handler({}, None)
+_inst2 = json.loads(ALMACEN["cabina/cli-airbus/panel.json"])["instalaciones"]
+comprueba("sale el punto de venta nuevo", _inst2["nuevos"]["pdvs"], ["P9"])
+comprueba("y su maquina", _inst2["nuevos"]["maquinas"], ["A9"])
+comprueba("y nada mas", _inst2["nuevos"]["clientes"], [])
 
 print("\nEl perfiles.json de verdad coge lo que tiene que coger")
 # Con los datos como los devolvio VenCloud el 4 de octubre de 2026, y con el

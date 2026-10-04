@@ -44,6 +44,7 @@ SESIONES = {
     "avisos":           ("Avisos y acciones",              "operaciones", ("alarmas",)),
     "rentabilidad":     ("Rentabilidad",                   "direccion",   ("servicio", "dinero", "sat")),
     "cumplimiento":     ("Cumplimiento",                   "direccion",   ("inventario", "dinero")),
+    "instalaciones":    ("Instalaciones y altas",          "operaciones", ("instalaciones",)),
     "usuarios":         ("Usuarios y permisos",            "admin",       ()),
     "catalogo":         ("Catalogo de informes",           "admin",       ()),
     "telefonos":        ("Telefonos y mensajes",           "admin",       ()),

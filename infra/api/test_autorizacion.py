@@ -78,7 +78,7 @@ comprueba("orden del catalogo, no del alta", sc[0], "resumen")
 comprueba("operaciones si llega a rutas", "rutas" in A.sesiones_de("operaciones", OPERACIONES["sesiones"]), True)
 comprueba("pero no a rentabilidad", "rentabilidad" in A.sesiones_de("operaciones", OPERACIONES["sesiones"]), False)
 comprueba("direccion si", "rentabilidad" in A.sesiones_de("direccion", DIRECCION["sesiones"]), True)
-comprueba("el admin ve las 16", len(A.sesiones_de("admin", [])), 16)
+comprueba("el admin ve las 17", len(A.sesiones_de("admin", [])), 17)
 
 # ----------------------------------------------------------------------
 print("\nEl asistente necesita los tres interruptores")

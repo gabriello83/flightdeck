@@ -468,8 +468,78 @@ function patronSemanal(serie){
    sesion, el panel no existe para este usuario: no se dibuja vacio ni se
    dibuja con un cero que no significa cero. */
 function definePaneles(P, YO){
-  const S = P.servicio || null, D = P.dinero || null, T = P.sat || null;
+  const S = P.servicio || null, D = P.dinero || null, T = P.sat || null, I = P.instalaciones || null;
   const paneles = [];
+
+  /* Instalaciones va primero a proposito: una maquina sin tarifa lleva sin
+     facturar desde que se puso, y cuanto mas abajo este, mas tarda alguien en
+     verla. El resto del panel cuenta lo que paso; esto cuenta lo que hay que
+     arreglar hoy. */
+  if(I && I.censo)
+    paneles.push({ id:"censo", sesion:"instalaciones", ancho:"todo",
+      titulo:"Lo que hay instalado",
+      sub:"El censo de hoy, de arriba abajo.",
+      pinta:c=>{
+        const n = I.nuevos || {};
+        const alta = k => (n[k]||[]).length ? `+${num(n[k].length)} nuevos` : "sin altas nuevas";
+        tiles(c, [
+          ["Clientes",          num(I.censo.clientes), alta("clientes")],
+          ["Centros",           num(I.censo.centros),  alta("centros")],
+          ["Puntos de venta",   num(I.censo.pdvs),     alta("pdvs")],
+          ["Máquinas",          num(I.censo.maquinas), alta("maquinas")],
+        ]);
+        const hayAltas = Object.values(n).some(v => (v||[]).length);
+        if(hayAltas){
+          const d=document.createElement("div"); d.style.marginTop="12px";
+          conTabla(d, [{t:"Qué"},{t:"Nuevos desde la última noche"}],
+            Object.entries(n).filter(([,v])=>(v||[]).length)
+              .map(([k,v])=>[esc(k), `<span class="cond">${esc(v.join(", "))}</span>`]));
+          c.appendChild(d);
+        }else{
+          const p=document.createElement("p"); p.className="sub"; p.style.margin="10px 0 0";
+          p.textContent = I._nota_nuevos || "";
+          c.appendChild(p);
+        }
+      }});
+
+  if(I && I.incidencias && Object.keys(I.incidencias).length){
+    const cat = I.catalogo || {};
+    const filas = Object.entries(I.incidencias)
+      .map(([k,v])=>({k, n:v.n, casos:v.casos||[],
+                      titulo:(cat[k]||{}).titulo || k, porque:(cat[k]||{}).porque || ""}))
+      .filter(x=>x.n > 0)
+      .sort((a,b)=>b.n - a.n);
+    const total = filas.reduce((a,x)=>a+x.n, 0);
+
+    if(filas.length) paneles.push({ id:"incidencias", sesion:"instalaciones", ancho:"todo",
+      titulo:"Instalaciones a medias",
+      sub:`${num(total)} cosas puestas y sin terminar de configurar. No es historia: es trabajo pendiente.`,
+      pinta:(c,W)=>{
+        c.appendChild(barrasH(filas,{etiqueta:d=>d.titulo, valor:d=>d.n, fmt:num,
+          color:"var(--s2)", anchoEt:Math.min(260, Math.round(W*0.36)), W}));
+        /* Cada clase con su por qué: sin eso es una lista de tecnicismos. */
+        const dl=document.createElement("div"); dl.style.marginTop="12px";
+        dl.innerHTML = filas.map(x=>`<p class="sub" style="margin:0 0 6px">
+          <b>${esc(x.titulo)}</b> · ${num(x.n)} — ${esc(x.porque)}</p>`).join("");
+        c.appendChild(dl);
+        if(I._nota_tarifa){
+          const p=document.createElement("p"); p.className="sub"; p.style.margin="10px 0 0";
+          p.textContent = I._nota_tarifa; c.appendChild(p);
+        }
+      }});
+
+    /* Una tabla por clase: lo que se mira es «cuáles», no «cuántas». */
+    filas.forEach(x => paneles.push({ id:"inc_"+x.k, sesion:"instalaciones", ancho:"todo",
+      titulo:x.titulo,
+      sub:`${num(x.n)}${x.casos.length < x.n ? `, las ${num(x.casos.length)} primeras` : ""}. ${x.porque}`,
+      pinta:c=>{
+        c.appendChild(tabla(
+          [{t:"Cliente"},{t:"Centro"},{t:"Punto de venta"},{t:"Máquina",mono:true},{t:"Delegación"}],
+          x.casos.map(d=>[esc(d.cliente||"—"), esc(d.centro||"—"),
+                          esc(d.ubicacion ? `${d.pdv} · ${d.ubicacion}` : (d.pdv||"—")),
+                          esc(d.m||"—"), esc(d.delegacion||"—")])));
+      }}));
+  }
 
   if(S && Array.isArray(S.visitas_por_dia) && S.visitas_por_dia.length)
     paneles.push({ id:"visitas_dia", sesion:"resumen", ancho:"todo",

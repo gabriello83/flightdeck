@@ -49,6 +49,10 @@ s3 = boto3.client("s3")
 BUCKET = os.environ["BUCKET"]
 DIAS = int(os.environ.get("DIAS", "120"))
 CLAVE_PERFILES = os.environ.get("PERFILES", "config/perfiles.json")
+# El censo de la instalacion: un maestro, no una ventana de dias.
+CLAVE_CENSO = os.environ.get("CENSO", "maestros/instalaciones/m_instalaciones.json.gz")
+# Donde se guarda el censo de la ultima ejecucion, para saber que es nuevo.
+CLAVE_CENSO_ANTERIOR = "cabina/_censo/anterior.json"
 
 # Que informe alimenta que bloque, y EN QUE ORDEN SE LEE.
 #
@@ -342,6 +346,11 @@ class Acumulador:
         # el final, asi que se guardan por periodo. Son 3.500 filas al mes.
         self.balance = defaultdict(list)
 
+        # instalaciones: el censo de lo que esta puesto y lo que esta puesto a
+        # medias. No es una ventana de dias: es la foto de hoy.
+        self.censo = {"clientes": set(), "centros": set(), "pdvs": set(), "maquinas": set()}
+        self.incidencias = defaultdict(list)
+
     # ---------------------------------------------------------------- servicio
     def come_partes(self, filas):
         self.partes_totales += len(filas)
@@ -439,6 +448,38 @@ class Acumulador:
             if R.v(j, "maplatitudini", 0):
                 self.con_gps += 1
 
+    def come_instalaciones(self, filas):
+        """El censo de hoy, con sus pegas. Una fila por cliente/centro/pdv/maquina.
+
+        No se guarda la fila: se guardan los identificadores —para saber que hay
+        y que es nuevo— y, de lo que tiene alguna pega, lo justo para ponerlo en
+        una tabla y poder ir a arreglarlo.
+        """
+        for f in filas:
+            cliente = str(R.v(f, "cod_cliente", ""))
+            centro = str(R.v(f, "num_centro", ""))
+            pdv = str(R.v(f, "cod_pdv", ""))
+            maquina = str(R.v(f, "matricula", ""))
+            if cliente:
+                self.censo["clientes"].add(cliente)
+            if centro:
+                self.censo["centros"].add(centro)
+            if pdv:
+                self.censo["pdvs"].add(pdv)
+            if maquina:
+                self.censo["maquinas"].add(maquina)
+            for cual in R.incidencias_de(f):
+                self.incidencias[cual].append({
+                    "cliente": str(R.v(f, "cliente", ""))[:60],
+                    "centro": str(R.v(f, "centro", ""))[:60],
+                    "num_centro": centro,
+                    "pdv": pdv,
+                    "ubicacion": str(R.v(f, "ubicacion", ""))[:60],
+                    "m": maquina,
+                    "delegacion": str(R.v(f, "delegacion", ""))[:40],
+                    "alta": str(R.v(f, "alta_pdv", ""))[:10],
+                })
+
     def come_balance(self, filas):
         for b in filas:
             periodo = (int(R.v(b, "anho", 0) or 0), int(R.v(b, "mes", 0) or 0))
@@ -459,7 +500,7 @@ class Acumulador:
             horas.append((b - a).total_seconds() / 3600)
         return horas
 
-    def panel(self, hoy, periodo):
+    def panel(self, hoy, periodo, nuevos=None):
         balance, periodo_balance = self._ultimo_balance()
         maquinas_balance = [b for b in balance if R.v(b, "tipo_elemento") == "M"]
         return {
@@ -538,6 +579,7 @@ class Acumulador:
                 "gps": {"con": self.con_gps,
                         "pct": round(100 * self.con_gps / self.jornadas, 1) if self.jornadas else 0},
             },
+            "instalaciones": self.bloque_instalaciones(nuevos),
             "inventario": {
                 "periodo_balance": periodo_balance,
                 "_nota_balance": ("El balance es un cierre mensual. Esto es la ultima foto, "
@@ -552,6 +594,32 @@ class Acumulador:
                     for t in ("A", "M", "V")
                 },
             },
+        }
+
+    def bloque_instalaciones(self, nuevos=None):
+        """Lo que esta puesto, lo que acaba de ponerse y lo que esta a medias.
+
+        `nuevos` lo pone el handler: sale de comparar el censo de hoy con el que
+        se guardo la ultima vez, y por eso no puede salir de aqui.
+        """
+        nuevos = nuevos or {}
+        return {
+            "censo": {k: len(v_) for k, v_ in self.censo.items()},
+            "nuevos": nuevos,
+            "_nota_nuevos": ("«Nuevo» es lo que no estaba en el censo de la ejecucion anterior. "
+                             "La primera vez no hay con que comparar, asi que sale vacio: no "
+                             "quiere decir que no haya altas."),
+            "catalogo": {k: {"titulo": t, "porque": p}
+                         for k, (t, p) in R.CATALOGO_INCIDENCIAS.items()},
+            "incidencias": {
+                cual: {"n": len(filas), "casos": sorted(
+                    filas, key=lambda x: (x["cliente"], x["centro"], x["pdv"]))[:100]}
+                for cual, filas in sorted(self.incidencias.items())
+            },
+            "_nota_tarifa": ("«Sin tarifa» mira la del punto de venta y la del cliente. Faltan las "
+                             "tarifas de PRODUCTOS del cliente y del centro, que el informe 10 de "
+                             "VenCloud si tiene: lo que marca, lo esta de verdad, pero puede haber "
+                             "mas."),
         }
 
     def _ultimo_balance(self):
@@ -665,6 +733,35 @@ def lo_que_coge(ambito, mapa):
     return centros, clientes
 
 
+def altas_desde_el_censo_anterior(acumuladores):
+    """Que hay hoy que no estuviera la ultima vez, y deja escrito el de hoy.
+
+    VenCloud no dice cuando se dio de alta un cliente ni un centro, y el maestro
+    se sobrescribe cada noche: no hay historia que mirar. Asi que la historia se
+    la guarda esta Lambda, que es la unica que necesita saberlo.
+
+    La PRIMERA vez no hay con que comparar y no sale ninguna alta. Es lo
+    correcto: lo contrario seria dar de alta hoy las 3.168 maquinas del parque y
+    que nadie volviera a mirar este panel.
+    """
+    anterior = _json_de(CLAVE_CENSO_ANTERIOR) or {}
+    nuevos, ahora = {}, {}
+    for acu in acumuladores:
+        pid = acu.perfil["id"]
+        ahora[pid] = {k: sorted(v_) for k, v_ in acu.censo.items()}
+        antes = anterior.get(pid)
+        if antes is None:          # primera vez: no se inventa ninguna alta
+            nuevos[pid] = {}
+            continue
+        nuevos[pid] = {k: sorted(set(ahora[pid][k]) - set(antes.get(k, [])))[:200]
+                       for k in acu.censo}
+    # Solo se guarda si hay censo: una noche sin maestro no debe borrar la
+    # memoria y hacer que manana parezca que todo es nuevo.
+    if any(any(v_.values()) for v_ in ahora.values()):
+        escribe(CLAVE_CENSO_ANTERIOR, {"generado": datetime.date.today().isoformat(), **ahora})
+    return nuevos
+
+
 def lambda_handler(event, context):
     hoy = datetime.date.today()
     dias = [hoy - datetime.timedelta(days=d) for d in range(1, DIAS + 1)]
@@ -674,6 +771,18 @@ def lambda_handler(event, context):
 
     leidas = defaultdict(int)
     mapa = MapaCentros()
+
+    # El censo va PRIMERO, y no solo porque sea un maestro: trae cliente, centro,
+    # pdv y matricula de TODO el parque, asi que el mapa arranca completo en vez
+    # de ir aprendiendo maquina a maquina segun aparecen en la ventana. Una
+    # maquina que no ha tenido ni una visita en 120 dias tambien queda situada.
+    censo = _filas(_json_de(CLAVE_CENSO))
+    if censo:
+        leidas["instalaciones"] = len(censo)
+        mapa.aprende(censo)
+        for acu in acumuladores:
+            acu.come_instalaciones([f for f in censo if en_ambito(f, acu.ambito, mapa)])
+    del censo
     for nombre, destino, id_informe, metodo in FUENTES:
         for dia in dias:
             filas = lee_dia(destino, id_informe, dia)
@@ -694,7 +803,9 @@ def lambda_handler(event, context):
             del filas
 
     periodo = {"desde": dias[-1].isoformat(), "hasta": dias[0].isoformat(), "dias": DIAS}
-    escritos = [escribe(f"cabina/{acu.perfil['id']}/panel.json", acu.panel(hoy, periodo))
+    nuevos = altas_desde_el_censo_anterior(acumuladores)
+    escritos = [escribe(f"cabina/{acu.perfil['id']}/panel.json",
+                        acu.panel(hoy, periodo, nuevos.get(acu.perfil["id"], {})))
                 for acu in acumuladores]
 
     escribe("cabina/_estado/carga.json", estado_de_la_carga(hoy))

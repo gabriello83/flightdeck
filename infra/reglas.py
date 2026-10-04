@@ -353,3 +353,104 @@ def cumplimiento_inventario(maquinas, hoy, dias_norma=90):
         "nunca": nunca,
         "pct_en_norma": round(100 * en_norma / total, 1) if total else 0.0,
     }
+
+
+# ----------------------------------------------------------------------
+# instalaciones: lo que esta puesto, y lo que esta puesto a medias
+# ----------------------------------------------------------------------
+# Un punto de venta de baja no es una incidencia: es una baja. Y uno que todavia
+# no se ha instalado tampoco. Solo cuenta lo que esta vivo.
+ESTADOS_PDV_VIVO = (0, 1)
+
+# El sistema de telemetria. 0 es «ninguno»; 40 es NAYAX, que es el que tenemos.
+SIN_TELEMETRIA = 0
+
+
+def pdv_vivo(fila):
+    """Un punto de venta sin fecha de baja y en estado de alta."""
+    if fecha_valida(v(fila, "baja_pdv", "")):
+        return False
+    estado = v(fila, "estado_pdv", None)
+    return estado is None or int(estado) in ESTADOS_PDV_VIVO
+
+
+def instalado(fila):
+    """Hay maquina puesta en el punto de venta."""
+    return bool(v(fila, "matricula", "")) and bool(v(fila, "cod_pdv", ""))
+
+
+def sin_tarifa(fila):
+    """Ni el punto de venta ni el cliente tienen tarifa de vending.
+
+    Una maquina vendiendo sin tarifa configurada es dinero mal facturado o
+    directamente perdido. Faltan las tarifas de PRODUCTOS del cliente y del
+    centro —el informe 10 de VenCloud las tiene y aqui no estan sus columnas—,
+    asi que esto es un minimo: lo que marque, lo esta de verdad.
+    """
+    return not (v(fila, "tarifa_vending_pdv", 0) or v(fila, "tarifa_vending_cliente", 0))
+
+
+def sin_planograma(fila):
+    """Marcada como sin planograma, o sin un solo canal con articulo.
+
+    Las dos cosas, porque son dos fallos distintos: la bandera es una decision
+    («esta maquina no lleva planograma») y los canales son el hecho. Sin
+    planograma no se puede distinguir «no habia demanda» de «estaba vacia».
+    """
+    if int(v(fila, "sin_planograma", 0) or 0):
+        return True
+    return int(v(fila, "canales_con_articulo", 0) or 0) == 0
+
+
+def telemetria_sin_dato(fila):
+    """Tiene sistema de telemetria y no tiene dispositivo que lo mande.
+
+    Es la peor de las tres porque no se nota: la maquina vende, el parte se
+    cierra, y la venta por tarjeta no llega nunca. Se ve en el efectivo ciego
+    tres meses despues.
+    """
+    if int(v(fila, "telemetria", 0) or 0) == SIN_TELEMETRIA:
+        return False
+    return not str(v(fila, "dispositivo_telemetria", "")).strip()
+
+
+def incidencias_de(fila):
+    """Las pegas de configuracion de una fila del censo, por su nombre."""
+    out = []
+    if not v(fila, "num_centro", "") and not v(fila, "centro", ""):
+        return ["cliente_sin_centros"]
+    if not v(fila, "cod_pdv", ""):
+        return ["centro_sin_pdv"]
+    if not pdv_vivo(fila):
+        return []
+    if not instalado(fila):
+        return ["pdv_sin_maquina"]
+    if sin_tarifa(fila):
+        out.append("sin_tarifa")
+    if sin_planograma(fila):
+        out.append("sin_planograma")
+    if telemetria_sin_dato(fila):
+        out.append("telemetria_sin_dato")
+    return out
+
+
+# El titulo de cada incidencia y por que importa. Viaja al panel para que la
+# pantalla no tenga que llevar una copia que se quede vieja.
+# Estos textos los lee una persona en la pantalla, asi que van acentuados: es lo
+# unico de este fichero que no es codigo.
+CATALOGO_INCIDENCIAS = {
+    "cliente_sin_centros":  ("Cliente sin centros",
+                             "Dado de alta y sin un solo centro colgando."),
+    "centro_sin_pdv":       ("Centro sin puntos de venta",
+                             "El centro existe y no tiene nada instalado."),
+    "pdv_sin_maquina":      ("Punto de venta sin máquina",
+                             "Hay sitio dado de alta y no hay máquina puesta."),
+    "sin_tarifa":           ("Sin tarifa",
+                             "Vende sin precio configurado: dinero mal facturado o perdido."),
+    "sin_planograma":       ("Sin planograma",
+                             "No se puede saber qué debería haber en cada canal, así que tampoco "
+                             "si estaba vacía o es que no había demanda."),
+    "telemetria_sin_dato":  ("Telemetría sin dato electrónico",
+                             "Tiene sistema de telemetría y no tiene dispositivo: la venta por "
+                             "tarjeta no llega, y se descubre en el efectivo ciego meses después."),
+}

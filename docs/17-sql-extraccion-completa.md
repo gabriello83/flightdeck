@@ -1370,6 +1370,85 @@ Está medido y detallado en [41-catalogo-sat.md](41-catalogo-sat.md), con la cor
 Los cinco volcados de maestro ya están escritos en `docs/08-sql-relleno.md`, bloque 5: artículos,
 máquinas, puntos de venta y planograma de canales. Faltan tres, que van aquí.
 
+## M5 · EXT_INSTALACIONES  *(sin parámetros)*
+
+El censo de la instalación, de arriba abajo: **cliente → centro → PDV → máquina**, con las banderas
+de configuración que hacen falta para saber si algo está puesto pero mal puesto.
+
+Arranca de `comercial.clientes` y baja con `left join`, no al revés. Así un cliente sin centros, o
+un centro sin puntos de venta, **sale igual** con el resto en blanco: es justo la clase de alta a
+medias que hay que ver.
+
+```sql
+select
+  cli.codigo                     as cod_cliente,
+  cli.nombre                     as cliente,
+  cli.tarifavendingid            as tarifa_vending_cliente,
+  cen.numcentro                  as num_centro,
+  cen.denomina                   as centro,
+  del.nombre                     as delegacion,
+  pdv.codigo                     as cod_pdv,
+  pdv.ubicacion                  as ubicacion,
+  pdv.clase                      as clase_pdv,
+  pdv.estado                     as estado_pdv,
+  cast(pdv.fechaalta as text)    as alta_pdv,
+  cast(pdv.fechabaja as text)    as baja_pdv,
+  pdv.tarifavendingid            as tarifa_vending_pdv,
+  pdv.telemetriadispositivo      as dispositivo_telemetria,
+  m.codigo                       as matricula,
+  m.estado                       as estado_maquina,
+  m.tipoconectividad             as conectividad,
+  m.tipotelemetria               as telemetria,
+  m.sinplanograma                as sin_planograma,
+  cast(m.fechaultcambioplanograma as text) as ult_cambio_plano,
+  coalesce(can.canales, 0)       as canales_con_articulo
+from comercial.clientes cli
+left join comercial.clientescentros cen on cen.clienteid = cli.id
+left join vending.pdvs pdv              on pdv.clientecentroid = cen.id
+left join recursos.maquinas m           on m.id = pdv.maquinaid
+left join general.delegaciones del      on del.id = pdv.delegacionid
+left join (
+  select c.maquinaid as maquinaid, count(*) as canales
+  from recursos.maquinascanales c
+  where c.articuloid is not null
+  group by c.maquinaid
+) can on can.maquinaid = m.id
+order by cli.codigo, cen.numcentro, pdv.codigo
+```
+
+**Lo que mide cada bandera**, y por qué está:
+
+| columna | la incidencia que destapa |
+|---|---|
+| `tarifa_vending_cliente`, `tarifa_vending_pdv` | una máquina vendiendo **sin tarifa** es dinero mal facturado o perdido |
+| `sin_planograma`, `canales_con_articulo` | sin planograma no se puede distinguir «no había demanda» de «estaba vacío» |
+| `telemetria`, `dispositivo_telemetria` | una máquina con telemetría y **sin dispositivo** no manda su venta: el dato electrónico no existe |
+| `estado_pdv`, `baja_pdv` | para no dar por incidencia lo que está de baja a propósito |
+
+`telemetria` es el sistema: **40 es NAYAX**, 0 sin telemetría. `conectividad`: 0 sin conectividad,
+2 telemetría, 100 contadores manuales. Están en `docs/04`, informe 56.
+
+**Falta una bandera**: la tarifa de productos del **cliente** y del **centro**. El informe 10 de
+VenCloud las enseña, así que las columnas existen, pero su nombre no está escrito en ninguna parte
+de esta documentación y **no se inventa**. Se cierra con `EXT_SONDA_COLUMNAS`, aquí debajo.
+
+## M6 · EXT_SONDA_COLUMNAS  *(sin parámetros)*
+
+No es un informe de datos: es la pregunta «¿cómo se llaman de verdad estas columnas?». Se lanza una
+vez, se lee la respuesta y se añade lo que falte a `EXT_INSTALACIONES`.
+
+```sql
+select
+  c.table_schema as esquema,
+  c.table_name   as tabla,
+  c.column_name  as columna,
+  c.data_type    as tipo
+from information_schema.columns c
+where (c.table_schema = 'comercial' and c.table_name in ('clientes', 'clientescentros'))
+   or (c.table_schema = 'vending'   and c.table_name = 'pdvs')
+order by c.table_schema, c.table_name, c.ordinal_position
+```
+
 ## M1 · EXT_MAESTRO_CARRILES  *(sin parámetros)*
 
 El planograma de las máquinas calientes, que es la mitad que faltaba.
