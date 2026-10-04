@@ -1230,6 +1230,7 @@ left join configuracion.satoperacionescategorias cat on cat.id = op.satoperacion
 left join recursos.maquinas m           on m.id   = t.maquinaid
 left join vending.pdvs pdv              on pdv.id = t.pdvid
 left join comercial.clientescentros cen on cen.id = t.clientecentroid
+left join comercial.clientes cli        on cli.id = cen.clienteid
 left join recursos.empleados emp        on emp.id = t.empasignadoid
 left join general.delegaciones del      on del.id = t.delegacionid
 where t.fecha >= '{0}' and t.fecha <= '{1} 23:59:59'
