@@ -1370,7 +1370,7 @@ Está medido y detallado en [41-catalogo-sat.md](41-catalogo-sat.md), con la cor
 Los cinco volcados de maestro ya están escritos en `docs/08-sql-relleno.md`, bloque 5: artículos,
 máquinas, puntos de venta y planograma de canales. Faltan tres, que van aquí.
 
-## M5 · EXT_INSTALACIONES  *(sin parámetros)*
+## M5 · EXT_INSTALACIONES  *(sin parámetros)*  ·  **informe 173**
 
 El censo de la instalación, de arriba abajo: **cliente → centro → PDV → máquina**, con las banderas
 de configuración que hacen falta para saber si algo está puesto pero mal puesto.
@@ -1383,9 +1383,18 @@ medias que hay que ver.
 select
   cli.codigo                     as cod_cliente,
   cli.nombre                     as cliente,
+  cli.activo                     as cliente_activo,
+  cast(cli.fechaalta as text)    as alta_cliente,
+  cast(cli.fechabaja as text)    as baja_cliente,
   cli.tarifavendingid            as tarifa_vending_cliente,
+  cli.tarifaocsid                as tarifa_ocs_cliente,
   cen.numcentro                  as num_centro,
   cen.denomina                   as centro,
+  cen.activo                     as centro_activo,
+  cast(cen.fechaalta as text)    as alta_centro,
+  cast(cen.fechabaja as text)    as baja_centro,
+  cen.tarifavendingid            as tarifa_vending_centro,
+  cen.tarifaocsid                as tarifa_ocs_centro,
   del.nombre                     as delegacion,
   pdv.codigo                     as cod_pdv,
   pdv.ubicacion                  as ubicacion,
@@ -1394,11 +1403,11 @@ select
   cast(pdv.fechaalta as text)    as alta_pdv,
   cast(pdv.fechabaja as text)    as baja_pdv,
   pdv.tarifavendingid            as tarifa_vending_pdv,
-  pdv.telemetriadispositivo      as dispositivo_telemetria,
   m.codigo                       as matricula,
   m.estado                       as estado_maquina,
   m.tipoconectividad             as conectividad,
   m.tipotelemetria               as telemetria,
+  m.telemetriadispositivo        as dispositivo_telemetria,
   m.sinplanograma                as sin_planograma,
   cast(m.fechaultcambioplanograma as text) as ult_cambio_plano,
   coalesce(can.canales, 0)       as canales_con_articulo
@@ -1420,19 +1429,27 @@ order by cli.codigo, cen.numcentro, pdv.codigo
 
 | columna | la incidencia que destapa |
 |---|---|
-| `tarifa_vending_cliente`, `tarifa_vending_pdv` | una máquina vendiendo **sin tarifa** es dinero mal facturado o perdido |
+| `tarifa_vending_*`, `tarifa_ocs_*` | una máquina vendiendo **sin tarifa** es dinero mal facturado o perdido. Las tarifas cuelgan de tres sitios —punto de venta, centro y cliente— y basta con una |
 | `sin_planograma`, `canales_con_articulo` | sin planograma no se puede distinguir «no había demanda» de «estaba vacío» |
 | `telemetria`, `dispositivo_telemetria` | una máquina con telemetría y **sin dispositivo** no manda su venta: el dato electrónico no existe |
-| `estado_pdv`, `baja_pdv` | para no dar por incidencia lo que está de baja a propósito |
+| `activo`, `baja_*`, `estado_pdv` | para no dar por incidencia lo que está de baja a propósito |
+| `alta_cliente`, `alta_centro`, `alta_pdv` | las altas de verdad, con su fecha, sin tener que adivinarlas comparando censos |
 
 `telemetria` es el sistema: **40 es NAYAX**, 0 sin telemetría. `conectividad`: 0 sin conectividad,
 2 telemetría, 100 contadores manuales. Están en `docs/04`, informe 56.
 
-**Falta una bandera**: la tarifa de productos del **cliente** y del **centro**. El informe 10 de
-VenCloud las enseña, así que las columnas existen, pero su nombre no está escrito en ninguna parte
-de esta documentación y **no se inventa**. Se cierra con `EXT_SONDA_COLUMNAS`, aquí debajo.
+### Dos columnas que no están donde decía la documentación
 
-## M6 · EXT_SONDA_COLUMNAS  *(sin parámetros)*
+`docs/04` afirmaba que el identificador del dispositivo de telemetría era **`pdvs.telemetriadispositivo`**.
+No existe: la sonda M6 lista las 77 columnas de `vending.pdvs` y no está. Vive en
+**`recursos.maquinas`**, como dicen `docs/08` y `docs/10`. La primera versión de este informe fue
+con la columna mal y VenCloud la rechazó.
+
+Y la «tarifa de productos» del informe 10 de VenCloud se llama **`tarifaocsid`** (OCS, el servicio
+de café de oficina), y está tanto en `comercial.clientes` como en `comercial.clientescentros`. No
+hay ningún `tarifaproductosid`, que es lo que habría salido de adivinar.
+
+## M6 · EXT_SONDA_COLUMNAS  *(sin parámetros)*  ·  **informe 174**
 
 No es un informe de datos: es la pregunta «¿cómo se llaman de verdad estas columnas?». Se lanza una
 vez, se lee la respuesta y se añade lo que falte a `EXT_INSTALACIONES`.

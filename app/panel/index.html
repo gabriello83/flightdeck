@@ -502,6 +502,22 @@ function definePaneles(P, YO){
         }
       }});
 
+  /* Las altas con su fecha de verdad, que VenCloud sí guarda. Es distinto de
+     «nuevos»: esto se lee, aquello se ve aparecer. */
+  if(I && I.altas_recientes){
+    const COMO = {clientes:"Cliente", centros:"Centro", pdvs:"Punto de venta"};
+    const altas = Object.entries(I.altas_recientes)
+      .flatMap(([que, lista]) => (lista||[]).map(d => ({...d, que: COMO[que] || que})));
+    if(altas.length) paneles.push({ id:"altas", sesion:"instalaciones", ancho:"todo",
+      titulo:"Altas recientes",
+      sub:`${num(altas.length)} dadas de alta en VenCloud en el último mes. Son las que conviene mirar en el resto de este panel.`,
+      pinta:c=>{
+        altas.sort((a,b)=>String(b.cuando).localeCompare(String(a.cuando)));
+        c.appendChild(tabla([{t:"Cuándo"},{t:"Qué"},{t:"Código",mono:true},{t:"Nombre"}],
+          altas.map(d=>[esc(d.cuando), esc(d.que), esc(d.id), esc(d.nombre||"—")])));
+      }});
+  }
+
   if(I && I.incidencias && Object.keys(I.incidencias).length){
     const cat = I.catalogo || {};
     const filas = Object.entries(I.incidencias)

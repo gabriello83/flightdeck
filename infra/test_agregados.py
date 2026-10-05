@@ -135,7 +135,7 @@ pon("crudo/stock_balance", "stock_balance", AYER,
 ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"] = gzip.compress(json.dumps([
     # bien puesta: tarifa, planograma y telemetria con su dispositivo
     {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
-     "cod_pdv": "P1", "matricula": "A1", "estado_pdv": 1, "tarifa_vending_pdv": 9,
+     "cod_pdv": "P1", "matricula": "A1", "estado_pdv": 1, "tarifa_vending_pdv": 9, "cliente_activo": 1, "centro_activo": 1,
      "canales_con_articulo": 12, "telemetria": 40, "dispositivo_telemetria": "NY-001",
      "delegacion": "Madrid", "ubicacion": "Hall"},
     # sin tarifa de ninguna clase
@@ -149,8 +149,18 @@ ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"] = gzip.compress(json.d
      "delegacion": "Madrid", "ubicacion": "Cantina"},
     # sin planograma: ni un canal con articulo
     {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
-     "cod_pdv": "P4", "matricula": "A4", "estado_pdv": 1, "tarifa_vending_cliente": 3,
+     "cod_pdv": "P4", "matricula": "A4", "estado_pdv": 1, "tarifa_ocs_centro": 3,
      "canales_con_articulo": 0, "telemetria": 0, "delegacion": "Madrid"},
+    # Dado de alta la semana pasada: sale como alta reciente, con su fecha.
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P6", "matricula": "A6", "estado_pdv": 1, "tarifa_vending_pdv": 9,
+     "canales_con_articulo": 10, "telemetria": 0, "ubicacion": "Nave 4",
+     "alta_pdv": (HOY - datetime.timedelta(days=6)).isoformat()},
+    # Un cliente dado de baja: no sale por ninguna parte, ni sus pegas.
+    {"cod_cliente": "C0", "cliente": "CLIENTE QUE SE FUE", "cliente_activo": 0,
+     "num_centro": "9999", "centro": "VIEJO", "cod_pdv": "Z1", "matricula": "Z1",
+     "estado_pdv": 1, "canales_con_articulo": 0, "telemetria": 40,
+     "dispositivo_telemetria": ""},
     # punto de venta dado de baja: NO es una incidencia
     {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
      "cod_pdv": "P5", "matricula": "", "estado_pdv": 9, "baja_pdv": "2026-01-15",
@@ -315,9 +325,10 @@ comprueba("el interno coge todo", porp["interno"]["filas"] > porp["cli-airbus"][
 # parecerse a lo que el perfil declara.
 comprueba("dice el cliente de verdad de los centros de AIRBUS",
           porp["cli-airbus"]["clientes_de_verdad"], ["AIRBUS OPERATIONS SL"])
-comprueba("se cuentan los clientes leidos", res["clientes"]["total"], 3)
+comprueba("se cuentan los clientes leidos", res["clientes"]["total"], 4)
 comprueba("y salen con su nombre de verdad", res["clientes"]["muestra"],
-          ["AIRBUS OPERATIONS SL", "CLIENTE RECIEN FIRMADO", "CONSUM S COOP V"])
+          ["AIRBUS OPERATIONS SL", "CLIENTE QUE SE FUE", "CLIENTE RECIEN FIRMADO",
+           "CONSUM S COOP V"])
 
 # Y un perfil cuyo nombre ya no existe: cero filas y ninguna coincidencia.
 ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
@@ -356,7 +367,7 @@ print("\nInstalaciones: el censo y lo que esta puesto a medias")
 inst = airbus["instalaciones"]
 comprueba("cuenta los clientes del ambito", inst["censo"]["clientes"], 1)
 comprueba("y sus centros", inst["censo"]["centros"], 2)
-comprueba("y sus puntos de venta", inst["censo"]["pdvs"], 5)
+comprueba("y sus puntos de venta", inst["censo"]["pdvs"], 6)
 inc = inst["incidencias"]
 comprueba("una sin tarifa", inc["sin_tarifa"]["n"], 1)
 comprueba("y dice cual", inc["sin_tarifa"]["casos"][0]["pdv"], "P2")
@@ -373,6 +384,17 @@ comprueba("y dice por que importa",
 # El cliente sin centros es del interno: AIRBUS no lo ve, y es correcto.
 comprueba("el interno si ve el cliente sin centros",
           interno["instalaciones"]["incidencias"]["cliente_sin_centros"]["n"], 1)
+comprueba("un cliente dado de baja no da ni una incidencia",
+          "CLIENTE QUE SE FUE" not in str(interno["instalaciones"]["incidencias"]), True)
+
+print("\nLas altas se leen de VenCloud, no se adivinan")
+alt = inst["altas_recientes"]
+comprueba("un punto de venta de alta esta semana", len(alt["pdvs"]), 1)
+comprueba("con su codigo", alt["pdvs"][0]["id"], "P6")
+comprueba("y su fecha de verdad", alt["pdvs"][0]["cuando"],
+          (HOY - datetime.timedelta(days=6)).isoformat())
+comprueba("y su ubicacion, que es lo que se lee", alt["pdvs"][0]["nombre"], "Nave 4")
+comprueba("lo de hace anos no sale", len(alt["clientes"]), 0)
 
 print("\nLa primera vez no se inventa ninguna alta")
 comprueba("nuevos vacio", inst["nuevos"], {})

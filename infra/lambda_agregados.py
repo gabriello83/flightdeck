@@ -282,9 +282,10 @@ class Acumulador:
     ambito, y suma. Nada guarda las filas.
     """
 
-    def __init__(self, perfil):
+    def __init__(self, perfil, hoy=None):
         self.perfil = perfil
         self.ambito = perfil.get("ambito", {})
+        self.hoy = hoy or datetime.date.today()
         # Cuantas filas le han tocado. Es la cifra que delata un panel vacio
         # antes de que lo vea el cliente: un perfil a cero no es un mes flojo,
         # es un ambito que ha dejado de encajar.
@@ -350,6 +351,9 @@ class Acumulador:
         # medias. No es una ventana de dias: es la foto de hoy.
         self.censo = {"clientes": set(), "centros": set(), "pdvs": set(), "maquinas": set()}
         self.incidencias = defaultdict(list)
+        # Altas con su fecha de verdad, leida de VenCloud. La maquina no tiene
+        # fecha de instalacion, asi que esa se ve apareciendo (ver `nuevos`).
+        self.altas = {"clientes": {}, "centros": {}, "pdvs": {}}
 
     # ---------------------------------------------------------------- servicio
     def come_partes(self, filas):
@@ -468,6 +472,13 @@ class Acumulador:
                 self.censo["pdvs"].add(pdv)
             if maquina:
                 self.censo["maquinas"].add(maquina)
+            for que, cuando in R.altas_de(f, self.hoy).items():
+                nombre = {"clientes": str(R.v(f, "cliente", "")) or cliente,
+                          "centros": str(R.v(f, "centro", "")) or centro,
+                          "pdvs": str(R.v(f, "ubicacion", "")) or pdv}[que]
+                clave = {"clientes": cliente, "centros": centro, "pdvs": pdv}[que]
+                if clave:
+                    self.altas[que][clave] = {"cuando": cuando, "nombre": nombre[:60]}
             for cual in R.incidencias_de(f):
                 self.incidencias[cual].append({
                     "cliente": str(R.v(f, "cliente", ""))[:60],
@@ -605,6 +616,14 @@ class Acumulador:
         nuevos = nuevos or {}
         return {
             "censo": {k: len(v_) for k, v_ in self.censo.items()},
+            "altas_recientes": {
+                que: sorted(({"id": k, **d} for k, d in dic.items()),
+                            key=lambda x: x["cuando"], reverse=True)[:100]
+                for que, dic in self.altas.items()
+            },
+            "_nota_altas": (f"Dadas de alta en VenCloud en los ultimos {R.DIAS_ALTA_RECIENTE} dias, "
+                            "con su fecha de verdad. La maquina no tiene fecha de instalacion, "
+                            "asi que esa solo sale en «nuevos»."),
             "nuevos": nuevos,
             "_nota_nuevos": ("«Nuevo» es lo que no estaba en el censo de la ejecucion anterior. "
                              "La primera vez no hay con que comparar, asi que sale vacio: no "
@@ -767,7 +786,7 @@ def lambda_handler(event, context):
     dias = [hoy - datetime.timedelta(days=d) for d in range(1, DIAS + 1)]
 
     perfiles = _json_de(CLAVE_PERFILES) or {"perfiles": [{"id": "interno", "ambito": {}}]}
-    acumuladores = [Acumulador(p) for p in perfiles["perfiles"]]
+    acumuladores = [Acumulador(p, hoy) for p in perfiles["perfiles"]]
 
     leidas = defaultdict(int)
     mapa = MapaCentros()

@@ -365,10 +365,38 @@ ESTADOS_PDV_VIVO = (0, 1)
 # El sistema de telemetria. 0 es «ninguno»; 40 es NAYAX, que es el que tenemos.
 SIN_TELEMETRIA = 0
 
+# Cuantos dias se considera «alta reciente». Un mes da tiempo a que alguien mire
+# el panel el lunes siguiente y todavia lo vea.
+DIAS_ALTA_RECIENTE = 30
+
+# Las cinco tarifas que valen. Cuelgan de tres sitios —punto de venta, centro y
+# cliente— y en dos sabores: vending y OCS (el cafe de oficina). Basta con UNA:
+# asi lo hace el informe 10 de VenCloud, que es el que lleva anos usandose.
+CAMPOS_TARIFA = ("tarifa_vending_pdv", "tarifa_vending_centro", "tarifa_vending_cliente",
+                 "tarifa_ocs_centro", "tarifa_ocs_cliente")
+
+
+def _vivo(fila, campo_baja, campo_activo=None):
+    if fecha_valida(v(fila, campo_baja, "")):
+        return False
+    if campo_activo is not None:
+        activo = v(fila, campo_activo, None)
+        if activo is not None and not int(activo):
+            return False
+    return True
+
+
+def cliente_vivo(fila):
+    return _vivo(fila, "baja_cliente", "cliente_activo")
+
+
+def centro_vivo(fila):
+    return _vivo(fila, "baja_centro", "centro_activo")
+
 
 def pdv_vivo(fila):
     """Un punto de venta sin fecha de baja y en estado de alta."""
-    if fecha_valida(v(fila, "baja_pdv", "")):
+    if not _vivo(fila, "baja_pdv"):
         return False
     estado = v(fila, "estado_pdv", None)
     return estado is None or int(estado) in ESTADOS_PDV_VIVO
@@ -380,14 +408,12 @@ def instalado(fila):
 
 
 def sin_tarifa(fila):
-    """Ni el punto de venta ni el cliente tienen tarifa de vending.
+    """Ninguno de los tres niveles tiene tarifa, ni de vending ni de OCS.
 
     Una maquina vendiendo sin tarifa configurada es dinero mal facturado o
-    directamente perdido. Faltan las tarifas de PRODUCTOS del cliente y del
-    centro —el informe 10 de VenCloud las tiene y aqui no estan sus columnas—,
-    asi que esto es un minimo: lo que marque, lo esta de verdad.
+    directamente perdido.
     """
-    return not (v(fila, "tarifa_vending_pdv", 0) or v(fila, "tarifa_vending_cliente", 0))
+    return not any(v(fila, campo, 0) for campo in CAMPOS_TARIFA)
 
 
 def sin_planograma(fila):
@@ -415,22 +441,54 @@ def telemetria_sin_dato(fila):
 
 
 def incidencias_de(fila):
-    """Las pegas de configuracion de una fila del censo, por su nombre."""
-    out = []
+    """Las pegas de configuracion de una fila del censo, por su nombre.
+
+    Se para en la primera que corta: un cliente sin centros no tiene sentido que
+    salga ademas como «sin tarifa», porque no hay donde ponerla.
+    """
+    if not cliente_vivo(fila):
+        return []
     if not v(fila, "num_centro", "") and not v(fila, "centro", ""):
         return ["cliente_sin_centros"]
+    if not centro_vivo(fila):
+        return []
     if not v(fila, "cod_pdv", ""):
         return ["centro_sin_pdv"]
     if not pdv_vivo(fila):
         return []
     if not instalado(fila):
         return ["pdv_sin_maquina"]
+    out = []
     if sin_tarifa(fila):
         out.append("sin_tarifa")
     if sin_planograma(fila):
         out.append("sin_planograma")
     if telemetria_sin_dato(fila):
         out.append("telemetria_sin_dato")
+    return out
+
+
+def altas_de(fila, hoy, dias=DIAS_ALTA_RECIENTE):
+    """Que se ha dado de alta hace poco en esta fila, con su fecha de verdad.
+
+    VenCloud si guarda la fecha de alta del cliente, del centro y del punto de
+    venta, asi que esto no hay que adivinarlo comparando censos: se lee. La
+    maquina no tiene fecha de instalacion —`fechacompra` es otra cosa—, y esa si
+    hay que verla aparecer.
+    """
+    import datetime
+    out = {}
+    for que, campo in (("clientes", "alta_cliente"), ("centros", "alta_centro"),
+                       ("pdvs", "alta_pdv")):
+        f = v(fila, campo, "")
+        if not fecha_valida(f):
+            continue
+        try:
+            d = (hoy - datetime.date.fromisoformat(str(f)[:10])).days
+        except ValueError:
+            continue
+        if 0 <= d <= dias:
+            out[que] = str(f)[:10]
     return out
 
 
@@ -446,7 +504,8 @@ CATALOGO_INCIDENCIAS = {
     "pdv_sin_maquina":      ("Punto de venta sin máquina",
                              "Hay sitio dado de alta y no hay máquina puesta."),
     "sin_tarifa":           ("Sin tarifa",
-                             "Vende sin precio configurado: dinero mal facturado o perdido."),
+                             "Vende sin precio configurado —ni en el punto de venta, ni en el "
+                             "centro, ni en el cliente—: dinero mal facturado o perdido."),
     "sin_planograma":       ("Sin planograma",
                              "No se puede saber qué debería haber en cada canal, así que tampoco "
                              "si estaba vacía o es que no había demanda."),

@@ -53,7 +53,7 @@ parezca que todo es nuevo.
 
 ## De dónde salen los datos
 
-Un informe nuevo, `EXT_INSTALACIONES` (`docs/17`, M5). Arranca de `comercial.clientes` y baja con
+Un informe nuevo, `EXT_INSTALACIONES` (`docs/17`, M5, informe **173**). Arranca de `comercial.clientes` y baja con
 `left join` hasta la máquina, no al revés: así un cliente sin centros, o un centro sin puntos de
 venta, **sale igual** con el resto en blanco.
 
@@ -62,15 +62,26 @@ es la **primera fuente del mapa de centros**, así que el mapa arranca con todo 
 vez de ir aprendiéndolo máquina a máquina según aparecen en la ventana. Una máquina que no ha tenido
 ni una visita en 120 días también queda situada.
 
-## Lo que falta
+## Lo que la sonda cerró, y lo que destapó
 
-**La tarifa de productos del cliente y del centro.** El informe 10 de VenCloud las enseña, así que
-las columnas existen, pero su nombre no está escrito en ninguna parte de esta documentación y no se
-inventa — es exactamente el error que se cometió con el `join` de `EXT_SAT_AVERIAS`.
+`EXT_SONDA_COLUMNAS` (`docs/17`, M6, informe 174) no es un informe de datos: es la pregunta «¿cómo
+se llaman de verdad estas columnas?». Devolvió las 98 de `comercial.clientes`, las 81 de
+`comercial.clientescentros` y las 77 de `vending.pdvs`, y con ellas se cerraron dos cosas y se
+destapó una tercera.
 
-Mientras tanto, «sin tarifa» mira la del punto de venta y la del cliente: **lo que marca, lo está de
-verdad, pero puede haber más**. El panel lo dice en su propia nota, en vez de dar una cifra que
-parece completa y no lo es.
+**La tarifa de productos se llama `tarifaocsid`** —OCS, el servicio de café de oficina—, y está
+tanto en el cliente como en el centro. Adivinando se habría escrito `tarifaproductosid`, que no
+existe. Así que «sin tarifa» mira ahora los **cinco** sitios de los que puede colgar: vending en
+punto de venta, centro y cliente, y OCS en centro y cliente. Basta con uno, que es como lo hace el
+informe 10 de VenCloud.
 
-Se cierra con `EXT_SONDA_COLUMNAS` (`docs/17`, M6), que no es un informe de datos sino la pregunta
-«¿cómo se llaman de verdad estas columnas?».
+**Las altas tienen fecha.** `fechaalta` está en los tres niveles, así que las altas no hay que
+adivinarlas comparando censos: se leen. El panel da «Altas recientes» con la fecha de verdad desde
+la primera ejecución, y «nuevos desde anoche» sigue existiendo para lo que no tiene fecha —una
+máquina, cuyo `fechacompra` es otra cosa—.
+
+**Y `telemetriadispositivo` no está donde decía la documentación.** `docs/04` afirmaba que era
+`pdvs.telemetriadispositivo`; la sonda lista las 77 columnas de `vending.pdvs` y no está. Vive en
+`recursos.maquinas`, como dicen `docs/08` y `docs/10`. La primera versión del informe fue con la
+columna mal y VenCloud la rechazó: un dato publicado en nuestra propia documentación, equivocado, y
+copiado sin comprobar.
