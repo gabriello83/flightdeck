@@ -174,6 +174,13 @@ ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"] = gzip.compress(json.d
     {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
      "cod_pdv": "P8", "matricula": "", "estado_pdv": 0, "ubicacion": "Nave 5",
      "alta_pdv": (HOY - datetime.timedelta(days=40)).isoformat()},
+    # un centro entero con puntos de venta y ni una maquina: AIRBUS PUERTO REAL
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1010",
+     "centro": "AIRBUS PUERTO REAL", "cod_pdv": "R1", "matricula": "", "estado_pdv": 0,
+     "alta_pdv": "1900-01-01", "delegacion": "Cadiz"},
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1010",
+     "centro": "AIRBUS PUERTO REAL", "cod_pdv": "R2", "matricula": "", "estado_pdv": 0,
+     "alta_pdv": "1900-01-01", "delegacion": "Cadiz"},
     # y la fila centinela de VenCloud, que no es un cliente
     {"cod_cliente": "0", "cliente": "Ventas Contado", "num_centro": "-1", "centro": "Ventas Contado",
      "cod_pdv": "-99", "matricula": "", "estado_pdv": 0},
@@ -380,8 +387,8 @@ comprueba("un codigo que no es el suyo, no",
 print("\nInstalaciones: el censo y lo que esta puesto a medias")
 inst = airbus["instalaciones"]
 comprueba("cuenta los clientes del ambito", inst["censo"]["clientes"], 1)
-comprueba("y sus centros", inst["censo"]["centros"], 2)
-comprueba("y sus puntos de venta", inst["censo"]["pdvs"], 8)
+comprueba("y sus centros", inst["censo"]["centros"], 3)
+comprueba("y sus puntos de venta", inst["censo"]["pdvs"], 10)
 inc = inst["incidencias"]
 comprueba("una sin tarifa", inc["sin_tarifa"]["n"], 1)
 comprueba("y dice cual", inc["sin_tarifa"]["casos"][0]["pdv"], "P2")
@@ -390,6 +397,12 @@ comprueba("una con telemetria y sin dispositivo", inc["telemetria_sin_dato"]["n"
 comprueba("y dice cual", inc["telemetria_sin_dato"]["casos"][0]["m"], "A3")
 comprueba("un centro sin puntos de venta", inc["centro_sin_pdv"]["n"], 1)
 comprueba("una instalacion pendiente", inc["instalacion_pendiente"]["n"], 1)
+# Un centro entero vacio no se ve en ninguna fila sola: hay que recorrerlo.
+# Es lo que le paso a AIRBUS PUERTO REAL, con 22 puntos de venta y 0 maquinas.
+comprueba("y un centro sin una sola maquina", inc["centro_sin_maquinas"]["n"], 1)
+comprueba("con su numero", inc["centro_sin_maquinas"]["casos"][0]["num_centro"], "1010")
+comprueba("y cuantos puntos de venta tiene",
+          inc["centro_sin_maquinas"]["casos"][0]["pdv"], "2 puntos de venta")
 comprueba("y es la de hace un mes", inc["instalacion_pendiente"]["casos"][0]["pdv"], "P8")
 comprueba("el sitio de siempre sin maquina NO es una incidencia",
           any(c["pdv"] == "P7" for i in inc.values() for c in i["casos"]), False)
@@ -397,7 +410,7 @@ comprueba("ni la fila centinela de VenCloud", "Ventas Contado" not in str(inc), 
 comprueba("el punto de venta de baja NO es una incidencia",
           any(c["pdv"] == "P5" for i in inc.values() for c in i["casos"]), False)
 comprueba("la de Consum no se cuela", "Q1" not in str(inc), True)
-comprueba("el catalogo explica cada una", len(inst["catalogo"]), 6)
+comprueba("el catalogo explica cada una", len(inst["catalogo"]), 7)
 comprueba("y dice por que importa",
           "efectivo ciego" in inst["catalogo"]["telemetria_sin_dato"]["porque"], True)
 # El cliente sin centros es del interno: AIRBUS no lo ve, y es correcto.

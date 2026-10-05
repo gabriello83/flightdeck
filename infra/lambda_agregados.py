@@ -357,6 +357,11 @@ class Acumulador:
         # medias. No es una ventana de dias: es la foto de hoy.
         self.censo = {"clientes": set(), "centros": set(), "pdvs": set(), "maquinas": set()}
         self.incidencias = defaultdict(list)
+        # Por centro, para la pega que no se ve en una sola fila: un centro con
+        # puntos de venta y ni una maquina. Hay que recorrerlo entero para
+        # saberlo, asi que se cuenta aqui y se decide al final.
+        self.centros_inst = defaultdict(
+            lambda: {"pdvs": 0, "maquinas": 0, "cliente": "", "centro": "", "delegacion": ""})
         # Altas con su fecha de verdad, leida de VenCloud. La maquina no tiene
         # fecha de instalacion, asi que esa se ve apareciendo (ver `nuevos`).
         self.altas = {"clientes": {}, "centros": {}, "pdvs": {}}
@@ -478,6 +483,14 @@ class Acumulador:
                 self.censo["pdvs"].add(pdv)
             if maquina:
                 self.censo["maquinas"].add(maquina)
+            if (centro and pdv and not R.es_centinela(f)
+                    and R.cliente_vivo(f) and R.centro_vivo(f) and R.pdv_vivo(f)):
+                d = self.centros_inst[centro]
+                d["pdvs"] += 1
+                d["maquinas"] += 1 if maquina else 0
+                d["cliente"] = str(R.v(f, "cliente", ""))[:60]
+                d["centro"] = str(R.v(f, "centro", ""))[:60]
+                d["delegacion"] = str(R.v(f, "delegacion", ""))[:40]
             for que, cuando in R.altas_de(f, self.hoy).items():
                 nombre = {"clientes": str(R.v(f, "cliente", "")) or cliente,
                           "centros": str(R.v(f, "centro", "")) or centro,
@@ -620,6 +633,17 @@ class Acumulador:
         se guardo la ultima vez, y por eso no puede salir de aqui.
         """
         nuevos = nuevos or {}
+        # La pega que no cabe en una fila: el centro entero vacio.
+        vacios = sorted(((num, d) for num, d in self.centros_inst.items()
+                         if d["pdvs"] and not d["maquinas"]),
+                        key=lambda x: -x[1]["pdvs"])
+        incidencias = dict(self.incidencias)
+        if vacios:
+            incidencias["centro_sin_maquinas"] = [
+                {"cliente": d["cliente"], "centro": d["centro"], "num_centro": num,
+                 "pdv": f"{d['pdvs']} puntos de venta", "ubicacion": "", "m": "",
+                 "delegacion": d["delegacion"], "alta": "", "peso": d["pdvs"]}
+                for num, d in vacios]
         return {
             "censo": {k: len(v_) for k, v_ in self.censo.items()},
             "altas_recientes": {
@@ -637,9 +661,13 @@ class Acumulador:
             "catalogo": {k: {"titulo": t, "porque": p}
                          for k, (t, p) in R.CATALOGO_INCIDENCIAS.items()},
             "incidencias": {
+                # Lo gordo primero donde el tamano es la gravedad —un centro con 22
+                # puntos de venta vacios no es lo mismo que uno con uno—, y por
+                # cliente y centro donde todas las lineas pesan igual.
                 cual: {"n": len(filas), "casos": sorted(
-                    filas, key=lambda x: (x["cliente"], x["centro"], x["pdv"]))[:100]}
-                for cual, filas in sorted(self.incidencias.items())
+                    filas, key=lambda x: (-x.get("peso", 0), x["cliente"],
+                                          x["centro"], x["pdv"]))[:100]}
+                for cual, filas in sorted(incidencias.items())
             },
             "_nota_tarifa": ("«Sin tarifa» mira la del punto de venta y la del cliente. Faltan las "
                              "tarifas de PRODUCTOS del cliente y del centro, que el informe 10 de "

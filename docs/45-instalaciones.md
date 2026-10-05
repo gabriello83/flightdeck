@@ -20,6 +20,7 @@ error**, y por eso hay que ir a buscarlos.
 |---|---|
 | **Cliente sin centros** | dado de alta y sin un solo centro colgando |
 | **Centro sin puntos de venta** | el centro existe y no tiene nada instalado |
+| **Centro sin una sola máquina** | tiene puntos de venta dados de alta y ni una máquina puesta en ninguno |
 | **Instalación pendiente** | punto de venta dado de alta hace menos de tres meses y todavía sin máquina |
 | **Sin tarifa** | vende sin precio configurado: dinero mal facturado o perdido |
 | **Sin planograma** | no se puede saber qué debería haber en cada canal, así que tampoco si estaba vacía o es que no había demanda |
@@ -50,6 +51,24 @@ meses y todavía vacío» — hoy, **dos casos**, los dos de AIRBUS.
 `-1` y punto de venta `-99`, igual que trae la matrícula `00SE0000` que no es una máquina. Ni da
 incidencias ni cuenta en el censo ni entra en el mapa de centros.
 
+## La pega que no cabe en una fila
+
+Casi todas las incidencias se ven mirando una fila. Una no: **un centro con puntos de venta y ni una
+sola máquina**. Hay que recorrerlo entero para saberlo, así que se cuenta por centro mientras se lee
+y se decide al final.
+
+Apareció por sí sola. Al enchufar el censo, `AIRBUS PUERTO REAL` desapareció de los diez centros que
+el ámbito de AIRBUS reconocía, y quedaron nueve. No era un fallo: **el centro tiene 22 puntos de
+venta y cero máquinas**, así que ninguna matrícula apunta a él. Lo mismo le pasa a `AIRBUS ITC`, que
+además está duplicado —500094 con 10 máquinas y 500121 con uno vacío—.
+
+Son **30 centros en todo el parque**, y los tres mayores son ERNST & YOUNG (28 puntos de venta),
+AIRBUS PUERTO REAL (22) y HOSPITAL SAN JUAN DE DIOS BORMUJOS (22). O se retiraron todas las máquinas
+y nadie cerró el centro, o la instalación nunca llegó. En los dos casos hay algo que hacer.
+
+En esta lista lo gordo va primero: un centro con 22 puntos de venta vacíos no es lo mismo que uno
+con uno.
+
 ## Lo que sale hoy, con el censo real
 
 5.331 filas · 369 clientes · 889 centros · 5.209 puntos de venta · 3.203 máquinas.
@@ -61,6 +80,7 @@ incidencias ni cuenta en el censo ni entra en el mapa de centros.
 | **71** | Centro sin puntos de venta |
 | **9** | Cliente sin centros |
 | **2** | Telemetría sin dato electrónico |
+| **30** | Centro sin una sola máquina |
 | **2** | Instalación pendiente |
 
 Y 24 altas en el último mes: 13 puntos de venta, 9 centros y 2 clientes.

@@ -546,6 +546,9 @@ CATALOGO_INCIDENCIAS = {
                              "Dado de alta y sin un solo centro colgando."),
     "centro_sin_pdv":       ("Centro sin puntos de venta",
                              "El centro existe y no tiene nada instalado."),
+    "centro_sin_maquinas":  ("Centro sin una sola máquina",
+                             "Tiene puntos de venta dados de alta y ni una máquina puesta en "
+                             "ninguno. O se retiraron todas, o la instalación nunca llegó."),
     "instalacion_pendiente": ("Instalación pendiente",
                              "Punto de venta dado de alta hace menos de tres meses y todavía sin "
                              "máquina puesta."),
