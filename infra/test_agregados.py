@@ -165,6 +165,18 @@ ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"] = gzip.compress(json.d
     {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
      "cod_pdv": "P5", "matricula": "", "estado_pdv": 9, "baja_pdv": "2026-01-15",
      "canales_con_articulo": 0, "telemetria": 0},
+    # sitio de siempre y sin maquina: TAMPOCO. Son 1.946 en el parque real y
+    # llenarian el panel de casos que nadie va a tocar.
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P7", "matricula": "", "estado_pdv": 0, "alta_pdv": "1900-01-01"},
+    # pero uno dado de alta hace un mes y todavia vacio, SI: eso es una
+    # instalacion que no ha llegado.
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P8", "matricula": "", "estado_pdv": 0, "ubicacion": "Nave 5",
+     "alta_pdv": (HOY - datetime.timedelta(days=40)).isoformat()},
+    # y la fila centinela de VenCloud, que no es un cliente
+    {"cod_cliente": "0", "cliente": "Ventas Contado", "num_centro": "-1", "centro": "Ventas Contado",
+     "cod_pdv": "-99", "matricula": "", "estado_pdv": 0},
     # centro dado de alta y sin nada puesto
     {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1009", "centro": "AIRBUS NUEVO",
      "cod_pdv": "", "matricula": ""},
@@ -329,6 +341,8 @@ comprueba("se cuentan los clientes leidos", res["clientes"]["total"], 4)
 comprueba("y salen con su nombre de verdad", res["clientes"]["muestra"],
           ["AIRBUS OPERATIONS SL", "CLIENTE QUE SE FUE", "CLIENTE RECIEN FIRMADO",
            "CONSUM S COOP V"])
+comprueba("la fila centinela de VenCloud no cuenta como cliente",
+          "Ventas Contado" not in str(res["clientes"]["muestra"]), True)
 
 # Y un perfil cuyo nombre ya no existe: cero filas y ninguna coincidencia.
 ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
@@ -367,7 +381,7 @@ print("\nInstalaciones: el censo y lo que esta puesto a medias")
 inst = airbus["instalaciones"]
 comprueba("cuenta los clientes del ambito", inst["censo"]["clientes"], 1)
 comprueba("y sus centros", inst["censo"]["centros"], 2)
-comprueba("y sus puntos de venta", inst["censo"]["pdvs"], 6)
+comprueba("y sus puntos de venta", inst["censo"]["pdvs"], 8)
 inc = inst["incidencias"]
 comprueba("una sin tarifa", inc["sin_tarifa"]["n"], 1)
 comprueba("y dice cual", inc["sin_tarifa"]["casos"][0]["pdv"], "P2")
@@ -375,6 +389,11 @@ comprueba("una sin planograma", inc["sin_planograma"]["n"], 1)
 comprueba("una con telemetria y sin dispositivo", inc["telemetria_sin_dato"]["n"], 1)
 comprueba("y dice cual", inc["telemetria_sin_dato"]["casos"][0]["m"], "A3")
 comprueba("un centro sin puntos de venta", inc["centro_sin_pdv"]["n"], 1)
+comprueba("una instalacion pendiente", inc["instalacion_pendiente"]["n"], 1)
+comprueba("y es la de hace un mes", inc["instalacion_pendiente"]["casos"][0]["pdv"], "P8")
+comprueba("el sitio de siempre sin maquina NO es una incidencia",
+          any(c["pdv"] == "P7" for i in inc.values() for c in i["casos"]), False)
+comprueba("ni la fila centinela de VenCloud", "Ventas Contado" not in str(inc), True)
 comprueba("el punto de venta de baja NO es una incidencia",
           any(c["pdv"] == "P5" for i in inc.values() for c in i["casos"]), False)
 comprueba("la de Consum no se cuela", "Q1" not in str(inc), True)

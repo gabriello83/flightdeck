@@ -358,9 +358,26 @@ def cumplimiento_inventario(maquinas, hoy, dias_norma=90):
 # ----------------------------------------------------------------------
 # instalaciones: lo que esta puesto, y lo que esta puesto a medias
 # ----------------------------------------------------------------------
-# Un punto de venta de baja no es una incidencia: es una baja. Y uno que todavia
-# no se ha instalado tampoco. Solo cuenta lo que esta vivo.
-ESTADOS_PDV_VIVO = (0, 1)
+# `estado_pdv` NO es un estado de alta o baja: es «tiene maquina puesta». Medido
+# sobre el censo del 5 de octubre de 2026: de 3.200 con estado 1, las 3.200
+# tienen maquina; de 2.005 con estado 0, ninguna. El 9 es el unico que significa
+# baja, y esa fila ademas traia su fecha. Asi que lo que marca una baja es la
+# fecha, y el estado solo sirve para no contar dos veces.
+ESTADO_PDV_BAJA = 9
+
+# Cuantos dias se considera «alta reciente». Un mes da tiempo a que alguien mire
+# el panel el lunes siguiente y todavia lo vea.
+DIAS_ALTA_RECIENTE = 30
+
+# Y cuanto se le da a un punto de venta nuevo para que le pongan la maquina.
+# Esto es mas largo a proposito: entre que se firma y se instala pasan semanas,
+# y lo que interesa es la lista de lo que lleva demasiado esperando.
+#
+# POR QUE NO VALE «sin maquina» a secas: de los 2.006 puntos de venta sin
+# maquina del censo real, 1.946 tienen `alta_pdv` a 1900-01-01 —el centinela de
+# «nunca»— y solo 60 tienen fecha de verdad. Marcarlos todos habria llenado el
+# panel de dos mil casos que nadie va a tocar, y entonces no lo abre nadie.
+DIAS_INSTALACION_PENDIENTE = 90
 
 # El sistema de telemetria. 0 es «ninguno»; 40 es NAYAX, que es el que tenemos.
 SIN_TELEMETRIA = 0
@@ -395,11 +412,31 @@ def centro_vivo(fila):
 
 
 def pdv_vivo(fila):
-    """Un punto de venta sin fecha de baja y en estado de alta."""
+    """Un punto de venta sin fecha de baja."""
     if not _vivo(fila, "baja_pdv"):
         return False
     estado = v(fila, "estado_pdv", None)
-    return estado is None or int(estado) in ESTADOS_PDV_VIVO
+    return estado is None or int(estado) != ESTADO_PDV_BAJA
+
+
+def dias_desde(fila, campo, hoy):
+    """Dias desde una fecha del censo, o None si no la hay o es el centinela."""
+    import datetime
+    f = v(fila, campo, "")
+    if not fecha_valida(f):
+        return None
+    try:
+        return (hoy - datetime.date.fromisoformat(str(f)[:10])).days
+    except ValueError:
+        return None
+
+
+def instalacion_pendiente(fila, hoy, dias=DIAS_INSTALACION_PENDIENTE):
+    """Punto de venta dado de alta de verdad hace poco y todavia sin maquina."""
+    if instalado(fila):
+        return False
+    d = dias_desde(fila, "alta_pdv", hoy)
+    return d is not None and 0 <= d <= dias
 
 
 def instalado(fila):
@@ -440,13 +477,24 @@ def telemetria_sin_dato(fila):
     return not str(v(fila, "dispositivo_telemetria", "")).strip()
 
 
-def incidencias_de(fila):
+# La fila centinela de VenCloud: el cliente 0 «Ventas Contado», con centro -1 y
+# punto de venta -99. No es un cliente, igual que 00SE0000 no es una maquina.
+CENTINELAS = {"cod_cliente": "0", "num_centro": "-1", "cod_pdv": "-99"}
+
+
+def es_centinela(fila):
+    return any(str(v(fila, campo, "")) == valor for campo, valor in CENTINELAS.items())
+
+
+def incidencias_de(fila, hoy=None):
     """Las pegas de configuracion de una fila del censo, por su nombre.
 
     Se para en la primera que corta: un cliente sin centros no tiene sentido que
     salga ademas como «sin tarifa», porque no hay donde ponerla.
     """
-    if not cliente_vivo(fila):
+    import datetime
+    hoy = hoy or datetime.date.today()
+    if es_centinela(fila) or not cliente_vivo(fila):
         return []
     if not v(fila, "num_centro", "") and not v(fila, "centro", ""):
         return ["cliente_sin_centros"]
@@ -457,7 +505,9 @@ def incidencias_de(fila):
     if not pdv_vivo(fila):
         return []
     if not instalado(fila):
-        return ["pdv_sin_maquina"]
+        # Sin maquina solo es una incidencia si el sitio es nuevo. Los 1.946 que
+        # llevan ahi desde siempre son huecos del parque, no trabajo pendiente.
+        return ["instalacion_pendiente"] if instalacion_pendiente(fila, hoy) else []
     out = []
     if sin_tarifa(fila):
         out.append("sin_tarifa")
@@ -476,19 +526,14 @@ def altas_de(fila, hoy, dias=DIAS_ALTA_RECIENTE):
     maquina no tiene fecha de instalacion —`fechacompra` es otra cosa—, y esa si
     hay que verla aparecer.
     """
-    import datetime
+    if es_centinela(fila):
+        return {}
     out = {}
     for que, campo in (("clientes", "alta_cliente"), ("centros", "alta_centro"),
                        ("pdvs", "alta_pdv")):
-        f = v(fila, campo, "")
-        if not fecha_valida(f):
-            continue
-        try:
-            d = (hoy - datetime.date.fromisoformat(str(f)[:10])).days
-        except ValueError:
-            continue
-        if 0 <= d <= dias:
-            out[que] = str(f)[:10]
+        d = dias_desde(fila, campo, hoy)
+        if d is not None and 0 <= d <= dias:
+            out[que] = str(v(fila, campo, ""))[:10]
     return out
 
 
@@ -501,8 +546,9 @@ CATALOGO_INCIDENCIAS = {
                              "Dado de alta y sin un solo centro colgando."),
     "centro_sin_pdv":       ("Centro sin puntos de venta",
                              "El centro existe y no tiene nada instalado."),
-    "pdv_sin_maquina":      ("Punto de venta sin máquina",
-                             "Hay sitio dado de alta y no hay máquina puesta."),
+    "instalacion_pendiente": ("Instalación pendiente",
+                             "Punto de venta dado de alta hace menos de tres meses y todavía sin "
+                             "máquina puesta."),
     "sin_tarifa":           ("Sin tarifa",
                              "Vende sin precio configurado —ni en el punto de venta, ni en el "
                              "centro, ni en el cliente—: dinero mal facturado o perdido."),

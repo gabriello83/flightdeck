@@ -20,7 +20,7 @@ error**, y por eso hay que ir a buscarlos.
 |---|---|
 | **Cliente sin centros** | dado de alta y sin un solo centro colgando |
 | **Centro sin puntos de venta** | el centro existe y no tiene nada instalado |
-| **Punto de venta sin máquina** | hay sitio dado de alta y no hay máquina puesta |
+| **Instalación pendiente** | punto de venta dado de alta hace menos de tres meses y todavía sin máquina |
 | **Sin tarifa** | vende sin precio configurado: dinero mal facturado o perdido |
 | **Sin planograma** | no se puede saber qué debería haber en cada canal, así que tampoco si estaba vacía o es que no había demanda |
 | **Telemetría sin dato electrónico** | tiene sistema de telemetría y no tiene dispositivo: la venta por tarjeta no llega |
@@ -31,11 +31,48 @@ incidencia es tocar `reglas.py` y nada más.
 Y el panel no da sólo el número: da **la lista**, con cliente, centro, punto de venta, máquina y
 delegación. Un contador sin la lista no se puede accionar.
 
-## Lo que no se cuenta como incidencia
+## Lo que no se cuenta como incidencia, y por qué
 
-Un punto de venta **de baja** no es una incidencia: es una baja. Se mira `baja_pdv` y `estado_pdv`,
-y lo que está muerto no sale. Sin eso el panel nacería con cientos de casos falsos y nadie volvería
-a abrirlo.
+Esto es la mitad del trabajo. Un panel que marca dos mil casos que nadie va a tocar no se abre dos
+veces, así que cada exclusión está medida sobre el censo real del 5 de octubre de 2026.
+
+**`estado_pdv` no es un estado de alta o baja: es «tiene máquina puesta».** Lo dice el dato sin
+ambigüedad: de los 3.200 con estado 1, los 3.200 tienen máquina; de los 2.005 con estado 0,
+**ninguno**. El 9 es el único que significa baja, y esa fila además traía su fecha. Así que lo que
+marca una baja es la fecha, no el estado — la primera versión suponía lo contrario.
+
+**Un punto de venta sin máquina sólo es una incidencia si es nuevo.** Hay 2.006 sin máquina, y
+**1.946 tienen `alta_pdv` a 1900-01-01**, el centinela de «nunca»: son huecos del parque, no trabajo
+pendiente. Sólo 60 tienen fecha de verdad. Así que la incidencia es «dado de alta hace menos de tres
+meses y todavía vacío» — hoy, **dos casos**, los dos de AIRBUS.
+
+**La fila centinela no es un cliente.** VenCloud trae el cliente `0` «Ventas Contado», con centro
+`-1` y punto de venta `-99`, igual que trae la matrícula `00SE0000` que no es una máquina. Ni da
+incidencias ni cuenta en el censo ni entra en el mapa de centros.
+
+## Lo que sale hoy, con el censo real
+
+5.331 filas · 369 clientes · 889 centros · 5.209 puntos de venta · 3.203 máquinas.
+
+| | |
+|---:|---|
+| **431** | Sin tarifa |
+| **307** | Sin planograma |
+| **71** | Centro sin puntos de venta |
+| **9** | Cliente sin centros |
+| **2** | Telemetría sin dato electrónico |
+| **2** | Instalación pendiente |
+
+Y 24 altas en el último mes: 13 puntos de venta, 9 centros y 2 clientes.
+
+Las dos primeras cuadran con lo que midió el informe 10 de VenCloud en su día (402 sin tarifa, 314
+sin planograma) sobre un parque algo distinto, que es lo que se esperaba de una regla escrita a
+partir de él.
+
+Las dos de telemetría son pocas **y es una buena noticia**, no un fallo de la regla: casi todas las
+máquinas con NAYAX tienen su dispositivo. El 63,8 % de `telemetriadispositivo` relleno que cita
+`docs/09` está medido sobre las 4.498 máquinas **del parque entero**, y 1.295 de ellas están en
+taller o almacén, sin punto de venta: ésas no tienen por qué tener dispositivo.
 
 ## Qué es «nuevo»
 

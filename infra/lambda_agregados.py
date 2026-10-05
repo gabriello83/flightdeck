@@ -198,6 +198,12 @@ class MapaCentros:
         maquinas que ya sabe que son suyas, que es justo lo que no sirve.
         """
         for f in filas:
+            # La fila centinela de VenCloud —cliente 0 «Ventas Contado», centro
+            # -1, punto de venta -99— no es un cliente, igual que 00SE0000 no es
+            # una maquina. Si entrara en el mapa saldria en la lista de clientes
+            # del parque y podria atribuir filas a un centro que no existe.
+            if R.es_centinela(f):
+                continue
             quien = _quien(f)
             if not quien.centro and not quien.cliente and not quien.num_centro:
                 continue
@@ -479,7 +485,7 @@ class Acumulador:
                 clave = {"clientes": cliente, "centros": centro, "pdvs": pdv}[que]
                 if clave:
                     self.altas[que][clave] = {"cuando": cuando, "nombre": nombre[:60]}
-            for cual in R.incidencias_de(f):
+            for cual in R.incidencias_de(f, self.hoy):
                 self.incidencias[cual].append({
                     "cliente": str(R.v(f, "cliente", ""))[:60],
                     "centro": str(R.v(f, "centro", ""))[:60],
