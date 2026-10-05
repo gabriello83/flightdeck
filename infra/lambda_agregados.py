@@ -74,8 +74,8 @@ CLAVE_CENSO_ANTERIOR = "cabina/_censo/anterior.json"
 # la cabina; si no trae `centro`, va despues de los que si.
 #
 # La quinta columna es lo que hace con esas filas el cuadro de mando de los
-# perfiles que lo tienen (cuadro.py). Las dos fuentes de venta solo las usa el
-# cuadro: si ningun perfil lo tiene, ni se leen.
+# perfiles de cliente (cuadro.py). Las dos fuentes de venta solo las usa el
+# cuadro: si ningun perfil lo calcula, ni se leen.
 FUENTES = [
     # con columna `centro`: ademas de sumar, ensenan el mapa
     ("partes",      "crudo/visita_cabecera",      "visita_cabecera",      "come_partes",      "come_partes"),
@@ -243,6 +243,11 @@ class MapaCentros:
         return self.de_quien_es(fila).centro
 
 
+def tiene_ambito(ambito):
+    """Un perfil con ambito es un perfil de cliente; sin ambito, el interno."""
+    return bool(ambito.get("clientes") or ambito.get("centros") or ambito.get("delegaciones"))
+
+
 def en_ambito(fila, ambito, mapa=None):
     """El ambito es aditivo: basta con encajar en uno de los tres.
 
@@ -266,7 +271,7 @@ def en_ambito(fila, ambito, mapa=None):
     porque funciona y porque no todos los perfiles van a reescribirse a la vez,
     no porque sea igual de bueno.
     """
-    if not (ambito.get("clientes") or ambito.get("centros") or ambito.get("delegaciones")):
+    if not tiene_ambito(ambito):
         return True
     q = mapa.de_quien_es(fila) if mapa is not None else _quien(fila)
     deleg = str(R.v(fila, "delegacion", ""))
@@ -301,8 +306,12 @@ class Acumulador:
         self.perfil = perfil
         self.ambito = perfil.get("ambito", {})
         self.hoy = hoy or datetime.date.today()
-        # El cuadro de mando de David, solo para los perfiles que lo piden.
-        self.cuadro = Cuadro() if perfil.get("cuadro") else None
+        # El cuadro de mando de David se calcula para TODO perfil de cliente
+        # (con ambito), y quien lo ve lo decide la sesion «cuadro», que se marca
+        # en la consola al editar el perfil: asi activarlo no pide tocar este
+        # fichero. El interno (ambito vacio, todo el parque) no lo calcula: no lo
+        # necesita y su venta no cabria. `"cuadro": false` lo apaga a mano.
+        self.cuadro = Cuadro() if perfil.get("cuadro", tiene_ambito(self.ambito)) else None
         # Cuantas filas le han tocado. Es la cifra que delata un panel vacio
         # antes de que lo vea el cliente: un perfil a cero no es un mes flojo,
         # es un ambito que ha dejado de encajar.
@@ -908,7 +917,6 @@ def lambda_handler(event, context):
     for acu in acumuladores:
         if acu.cuadro:
             cuadros[acu.perfil["id"]] = escribe_cuadro(acu, periodo)
-            escritos.append(f"cabina/{acu.perfil['id']}/cuadro/indice.json")
 
     escribe("cabina/_estado/carga.json", estado_de_la_carga(hoy))
     _cogidos = {acu.perfil.get("id"): lo_que_coge(acu.ambito, mapa) for acu in acumuladores}

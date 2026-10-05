@@ -11,8 +11,6 @@
     {
       "id": "cli-airbus",
       "nombre": "AIRBUS",
-      "cuadro": true,
-      "_cuadro": "Calcula el cuadro de mando de David (cabina/cli-airbus/cuadro/, docs/46): venta por dia, maquina y articulo, visitas e incidencias. Solo lo calculan los perfiles que lo llevan.",
       "ambito": {
         "clientes": [
           "AIRBUS"

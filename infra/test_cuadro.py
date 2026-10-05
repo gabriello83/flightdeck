@@ -54,7 +54,7 @@ HOY = datetime.date.today()
 AYER = HOY - datetime.timedelta(days=1)
 ANTEAYER = HOY - datetime.timedelta(days=2)
 PERIODO = {"desde": (HOY - datetime.timedelta(days=3)).isoformat(), "hasta": AYER.isoformat(), "dias": 3}
-PERFIL = {"id": "cli-x", "nombre": "AIRBUS", "cuadro": True, "ambito": {"centros": ["500092"]}}
+PERFIL = {"id": "cli-x", "nombre": "AIRBUS", "ambito": {"centros": ["500092"]}}
 
 
 def censo(matricula, ubicacion="Comedor", **extra):
@@ -163,7 +163,7 @@ comprueba("y ningun dia partido entre dos trozos",
           sum(len({f[0] for f in G[k]["filas"]}) for k in partes), 10)
 
 # ----------------------------------------------------------------------
-print("\nLa Lambda: solo escribe cuadro quien lo pide")
+print("\nLa Lambda: el cuadro es de los perfiles de cliente, sin tocar perfiles.json")
 
 
 def pon(destino, id_informe, dia, filas):
@@ -205,17 +205,24 @@ comprueba("el interno no tiene cuadro",
 comprueba("el resumen dice que fuente uso", res["cuadros"]["cli-x"]["fuente"], "visita_ventas")
 comprueba("el panel sigue saliendo igual", json.loads(ALMACEN["cabina/cli-x/panel.json"])["perfil"], "cli-x")
 
-print("\nSin ningun perfil con cuadro, las fuentes de venta ni se leen")
+print("\nSe puede apagar a mano con «cuadro»: false")
+ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
+    {"id": "interno", "ambito": {}}, dict(PERFIL, id="cli-y", cuadro=False)]}).encode()
+L.lambda_handler({}, None)
+comprueba("cli-y no tiene cuadro", [k for k in ALMACEN if k.startswith("cabina/cli-y/cuadro/")], [])
+
+print("\nSin ningun perfil de cliente, las fuentes de venta ni se leen")
 ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [{"id": "interno", "ambito": {}}]}).encode()
 LEIDAS.clear()
 L.lambda_handler({}, None)
 comprueba("no se lee visita_ventas", [k for k in LEIDAS if "visita_ventas" in k], [])
 comprueba("ni la telemetria", [k for k in LEIDAS if "telemetria_ventas" in k], [])
 
-print("\nEl perfiles.json de verdad le da el cuadro a AIRBUS, y solo a AIRBUS")
+print("\nEl perfiles.json de verdad: AIRBUS lo calcula sin ninguna marca, el interno no")
 _p = {x["id"]: x for x in json.load(open(AQUI + "/perfiles.json"))["perfiles"]}
-comprueba("AIRBUS lo tiene", _p["cli-airbus"].get("cuadro"), True)
-comprueba("el interno no", bool(_p["interno"].get("cuadro")), False)
+comprueba("AIRBUS lo calcula", L.Acumulador(_p["cli-airbus"]).cuadro is not None, True)
+comprueba("el interno no", L.Acumulador(_p["interno"]).cuadro is None, True)
+comprueba("y no hace falta ninguna marca en el fichero", "cuadro" in _p["cli-airbus"], False)
 
 print()
 if fallos:

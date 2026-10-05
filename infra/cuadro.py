@@ -14,8 +14,9 @@ dias. Meterlo en panel.json lo pondria en el contexto del asistente y rozaria
 el limite de 6 MB de respuesta de una Lambda. Va en su carpeta,
 `cabina/<perfil>/cuadro/`, y troceado por mes.
 
-Solo lo calculan los perfiles con `"cuadro": true` en perfiles.json: el
-interno tiene todo el parque y no lo necesita.
+Lo calculan todos los perfiles de cliente (los que tienen ambito); quien lo
+VE lo decide la sesion «cuadro», que se marca en la consola al editar el
+perfil. El interno tiene todo el parque y no lo calcula.
 
 DE DONDE SALE CADA HOJA DE DAVID
 

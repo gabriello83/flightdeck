@@ -75,9 +75,15 @@ VenCloud exporta esa hoja**: con eso se escribe el informe.
 
 ## Cómo se calcula y cómo se sirve
 
-`infra/cuadro.py` es un acumulador más de la Lambda de agregados, pero **sólo para los perfiles
-con `"cuadro": true`** en `perfiles.json` (hoy, AIRBUS). Si ninguno lo lleva, las dos fuentes de
-venta ni se leen.
+`infra/cuadro.py` es un acumulador más de la Lambda de agregados, y se calcula para **todo perfil
+de cliente** de `perfiles.json` (los que tienen ámbito). Quién lo **ve** lo decide una casilla: la
+sesión «Cuadro de mando», que se marca en la consola al editar el perfil. Así activarlo para un
+cliente es cosa de la consola, sin tocar ningún fichero. El interno (ámbito vacío, todo el parque)
+no lo calcula; `"cuadro": false` en un perfil lo apaga a mano.
+
+Lo que la consola no puede hacer sola es dar de alta un cliente **nuevo**: la Lambda calcula los
+perfiles que están en `perfiles.json`, como ya pasaba con el panel. Para AIRBUS no hace falta: ya
+está.
 
 No va en `panel.json`. El cuadro filtra por día, máquina y artículo en el navegador, así que
 necesita la venta a ese grano: unas 230.000 combinaciones en 120 días con la venta parcial, y del
@@ -114,23 +120,21 @@ Ficheros en `paquetes/` y la página en `app/cuadro/`. En orden:
    `cuadro.py`.
 2. **Lambda de la API.** `Lambda → digivend-api → Code → Upload from → .zip file` → `api.zip` →
    **Save**.
-3. **Los perfiles.** `S3 → digivend-vending-… → config/ → Upload → Add files` →
-   `perfiles.json` → **Upload**. Sin esto la Lambda no calcula ningún cuadro y no da error.
-4. **La web.** `S3 → digivend-web-…`:
+3. **La web.** `S3 → digivend-web-…`:
    - en la raíz, `index.html` (el acceso, que ahora manda al cuadro a quien lo tiene);
    - en `panel/`, `index.html` (el botón «Cuadro de mando»);
    - **Create folder** `cuadro` y dentro `index.html`.
 
    Tras subir, mira que el nombre sea `index.html` y no `index (1).html`: el navegador renombra
    las descargas repetidas y CloudFront no sirve otro nombre.
-5. **CloudFront.** `CloudFront → la distribución → Invalidations → Create invalidation` →
+4. **CloudFront.** `CloudFront → la distribución → Invalidations → Create invalidation` →
    `/index.html`, `/panel/*`, `/cuadro/*` → **Create invalidation**.
-6. **Los agregados, a mano.** `Lambda → digivend-agregados → Test → {}` → **Test**. En el
+5. **Los agregados, a mano.** `Lambda → digivend-agregados → Test → {}` → **Test**. En el
    resultado, `cuadros.cli-airbus` debe decir `fuente: visita_ventas` y unas 365 máquinas con
    venta de 563; en S3, `cabina/cli-airbus/cuadro/indice.json` y cinco `ventas-2026-MM.json`.
-7. **La sesión.** `dashboard.digivend.es/consola/ → Perfiles → AIRBUS → Editar` → marca
-   **Cuadro de mando** → **Guardar**.
-8. **Entrar como AIRBUS.** Debe abrir `/cuadro/` con el aviso amarillo de venta parcial.
+6. **Activarlo en el perfil.** `dashboard.digivend.es/consola/ → Perfiles → AIRBUS → Editar` → marca
+   **Cuadro de mando** → **Guardar**. Es la única llave: quitarla lo esconde en el acto.
+7. **Entrar como AIRBUS.** Debe abrir `/cuadro/` con el aviso amarillo de venta parcial.
 
 ## Lo que falta
 

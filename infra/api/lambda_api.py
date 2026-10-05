@@ -218,8 +218,8 @@ def cuadro(perfil_id, trozo=None):
         indice = s3.get_object(Bucket=BUCKET, Key=base + "indice.json")["Body"].read()
     except Exception:
         return r(503, {"error": "El cuadro de mando todavia no se ha calculado.",
-                       "_nota": "Lo escriben los agregados (4:45) para los perfiles con "
-                                "«cuadro» en config/perfiles.json."})
+                       "_nota": "Lo escriben los agregados (4:45) para cada perfil de "
+                                "cliente de config/perfiles.json."})
     cuerpo = indice
     if trozo is not None:
         # Solo un trozo que el indice cite: asi no hay forma de componer otra
