@@ -1,0 +1,1503 @@
+<!doctype html>
+<html lang="es"><head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Cuadro de mando · digivend</title>
+  <meta name="description" content="Cuadro de mando del servicio de vending: ventas, visitas e incidencias por centro, máquina y fecha.">
+  <meta name="robots" content="noindex">
+  <style>
+    :root {
+      --airbus: #00205b;
+      --airbus-deep: #00143d;
+      --airbus-mid: #004a80;
+      --highlight: #36a9e1;
+      --highlight-dark: #0a7db4;
+      --ice: #eef7fb;
+      --mist: #f5f8fb;
+      --ink: #10233f;
+      --muted: #63758d;
+      --line: #dce5ed;
+      --white: #ffffff;
+      --good: #13866f;
+      --warn: #d18400;
+      --bad: #c7454f;
+      --shadow: 0 14px 36px rgba(0, 32, 91, 0.08);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--mist);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible, [tabindex="0"]:focus-visible {
+      outline: 3px solid rgba(54, 169, 225, .34);
+      outline-offset: 2px;
+    }
+    .shell { max-width: 1540px; margin: 0 auto; padding: 0 24px 42px; }
+
+    .topbar {
+      position: relative;
+      overflow: hidden;
+      color: var(--white);
+      background: linear-gradient(180deg, var(--airbus) 0%, var(--airbus-deep) 100%);
+      min-height: 176px;
+      padding: 16px 0 50px;
+    }
+    .topbar::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+      background-size: 46px 46px;
+      mask-image: linear-gradient(to bottom, black, transparent 90%);
+    }
+    .topbar-inner {
+      position: relative;
+      z-index: 1;
+      max-width: 1540px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    .brand-row, .headline-row, .data-actions, .filter-head, .panel-head, .legend, .source-line {
+      display: flex;
+      align-items: center;
+    }
+    .brand-row { justify-content: space-between; gap: 18px; }
+    .brand {
+      display: flex;
+      align-items: center;
+      min-height: 36px;
+    }
+    .airbus-logo {
+      display: block;
+      width: 96px;
+      height: auto;
+      padding: 6px 8px;
+      border-radius: 4px;
+      background: #fff;
+      box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    }
+    .privacy-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255,255,255,.24);
+      border-radius: 999px;
+      background: rgba(255,255,255,.08);
+      color: #e6f6ff;
+      font-size: 11px;
+    }
+    .privacy-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--highlight); box-shadow: 0 0 0 4px rgba(54,169,225,.15); }
+    .headline-row { justify-content: space-between; gap: 24px; margin-top: 18px; }
+    .headline-brand { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+    .headline-brand .eyebrow { margin: 0; text-align: left; line-height: 1.4; }
+    .serunion-logo { display: block; width: auto; height: clamp(24px, 2.7vw, 38px); max-width: 100%; object-fit: contain; object-position: left center; }
+    .eyebrow { margin: 0 0 5px; color: #9edcf8; font-size: 10px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { margin: 0; max-width: 840px; font-size: clamp(27px, 3.2vw, 42px); line-height: 1.03; letter-spacing: -.035em; font-weight: 600; }
+    .subtitle { max-width: 760px; margin: 14px 0 0; color: #d8e7f4; font-size: 15px; }
+    .period-stamp { min-width: 205px; padding: 9px 12px; border-left: 2px solid var(--highlight); border-radius: 0 8px 8px 0; background: rgba(255,255,255,.075); }
+    .period-stamp span { display: block; color: #a9c3d8; font-size: 9px; text-transform: uppercase; letter-spacing: .12em; }
+    .period-stamp strong { display: block; margin-top: 2px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+
+    .data-dock {
+      position: relative;
+      z-index: 2;
+      margin-top: -30px;
+      display: grid;
+      grid-template-columns: minmax(340px, 1.25fr) minmax(420px, 1fr);
+      gap: 16px;
+    }
+    .drop-zone, .source-card, .filters, .panel, .kpi {
+      border: 1px solid var(--line);
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+    .drop-zone {
+      min-height: 104px;
+      border: 1.5px dashed #9cb4c8;
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: .18s ease;
+      cursor: pointer;
+    }
+    .drop-zone:hover, .drop-zone.dragging { border-color: var(--highlight); background: #f2fbff; transform: translateY(-1px); }
+    .upload-icon { flex: 0 0 52px; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 14px; color: var(--airbus); background: var(--ice); }
+    .upload-icon svg { width: 25px; height: 25px; }
+    .drop-zone h2 { margin: 0; font-size: 16px; }
+    .drop-zone p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+    .drop-zone input { display: none; }
+    .source-card { border-radius: var(--radius); padding: 18px 20px; }
+    .source-line { justify-content: space-between; gap: 12px; }
+    .source-card h2 { margin: 0; font-size: 15px; }
+    .source-card p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .data-actions { gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .btn {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 12px;
+      background: var(--white);
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 12px;
+      transition: .15s ease;
+    }
+    .btn:hover { border-color: #a8bdce; background: var(--ice); }
+    .btn.primary { border-color: var(--airbus); color: var(--white); background: var(--airbus); }
+    .btn.primary:hover { background: var(--airbus-mid); }
+    .file-list { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 14px; }
+    .file-chip { padding: 5px 8px; border-radius: 999px; background: var(--ice); color: var(--airbus); font-size: 11px; white-space: nowrap; }
+    .data-dock.upload-collapsed { grid-template-columns: 1fr; }
+    .data-dock.upload-collapsed .drop-zone, .data-dock.upload-collapsed .file-list { display: none; }
+    .data-dock.upload-collapsed .source-card { padding: 12px 16px; }
+    .data-dock.upload-collapsed .source-card p { margin-top: 2px; }
+    .upload-toggle { color: var(--airbus); background: var(--ice); }
+
+    .filters { margin-top: 18px; padding: 16px 18px; border-radius: var(--radius); box-shadow: 0 8px 26px rgba(0,32,91,.05); }
+    .filter-head { justify-content: space-between; gap: 14px; margin-bottom: 13px; }
+    .filter-head strong { font-size: 13px; }
+    .filter-grid { display: grid; grid-template-columns: .8fr .8fr 1.05fr 1.35fr 1.65fr 1.2fr auto; gap: 10px; align-items: end; }
+    .field { min-width: 0; }
+    .field label, .field-label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+    .field input, .field select {
+      width: 100%;
+      min-height: 39px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 8px 10px;
+      color: var(--ink);
+      background: #fff;
+    }
+    .filter-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; min-height: 26px; }
+    .multi-select { position: relative; }
+    .multi-select summary { min-height: 39px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: white; cursor: pointer; font-size: 12px; }
+    .multi-select summary span { display: inline-block; max-width: calc(100% - 22px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+    .multi-select[open] { z-index: 6; }
+    .multi-popup { position: absolute; top: calc(100% + 5px); left: 0; width: max(100%, 280px); max-width: min(400px, 85vw); padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: white; box-shadow: var(--shadow); }
+    #articleFilter .multi-popup { left: auto; right: 0; }
+    .multi-actions { display: flex; justify-content: space-between; align-items: center; margin: 7px 0; color: var(--muted); font-size: 10px; }
+    .multi-actions button { border: 0; padding: 4px; background: none; color: var(--airbus); cursor: pointer; font-size: 11px; }
+    .multi-options { max-height: 240px; overflow-y: auto; }
+    .field label.multi-option { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 8px 4px; color: var(--ink); font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0; cursor: pointer; }
+    .field label.multi-option:hover { background: var(--ice); }
+    .field label.multi-option[hidden] { display: none; }
+    .field .multi-option input { flex: 0 0 15px; width: 15px; height: 15px; min-height: 0; padding: 0; margin: 2px 0 0; accent-color: var(--airbus); }
+    .multi-select summary:focus-visible { outline: 3px solid rgba(54,169,225,.34); outline-offset: 2px; }
+    .active-chip { border: 1px solid #b6dff1; border-radius: 999px; padding: 5px 9px; color: var(--airbus); background: #effaff; cursor: pointer; font-size: 11px; }
+    .active-chip::after { content: " ×"; color: var(--highlight-dark); font-weight: 700; }
+
+    .kpi-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+    .kpi { position: relative; min-height: 134px; padding: 15px 16px; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,32,91,.045); overflow: hidden; }
+    .kpi::after { content: ""; position: absolute; top: 0; right: 0; width: 42px; height: 4px; background: var(--highlight); }
+    .kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .kpi-label { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+    .kpi-icon { flex: 0 0 36px; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; color: var(--airbus); background: #e8f7ff; }
+    .kpi-icon svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .kpi-icon.units { color: #6547b8; background: #f0ecff; }
+    .kpi-icon.visits { color: #087f75; background: #e4f7f3; }
+    .kpi-icon.incidents { color: #bd4d3f; background: #fff0ed; }
+    .kpi-icon.machines { color: #96660e; background: #fff5d8; }
+    .kpi-icon.coverage { color: #277a4f; background: #e8f7ee; }
+    .kpi-value { display: block; margin-top: 9px; color: var(--airbus); font-size: clamp(23px, 2vw, 31px); line-height: 1; letter-spacing: -.035em; }
+    .kpi-note { display: block; margin-top: 9px; color: var(--muted); font-size: 11px; }
+
+    .dashboard-grid { display: grid; grid-template-columns: 1.65fr 1fr; gap: 16px; margin-top: 16px; }
+    .dashboard-grid.equal { grid-template-columns: 1fr 1fr; }
+    .dashboard-grid.triple { grid-template-columns: 1.15fr 1fr .86fr; }
+    .dashboard-grid.machine-audit { grid-template-columns: 1.6fr 1fr .95fr; }
+    .panel { min-width: 0; border-radius: var(--radius); padding: 18px; box-shadow: 0 8px 26px rgba(0,32,91,.045); }
+    .panel-head { justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+    .panel-title { margin: 0; font-size: 15px; }
+    .panel-subtitle { margin: 3px 0 0; color: var(--muted); font-size: 11px; }
+    .legend { gap: 12px; color: var(--muted); font-size: 10px; flex-wrap: wrap; }
+    .legend[hidden] { display: none; }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .legend i { width: 9px; height: 9px; border-radius: 2px; background: var(--highlight); }
+    .legend .visits i { height: 3px; background: var(--airbus-mid); }
+    .legend .issues i { border-radius: 50%; background: var(--bad); }
+    .trend-tools { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+    .trend-toggle { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--mist); }
+    .trend-toggle button { min-width: 48px; border: 0; border-radius: 6px; padding: 6px 9px; color: var(--muted); background: transparent; cursor: pointer; font-size: 10px; font-weight: 700; }
+    .trend-toggle button:hover { color: var(--airbus); }
+    .trend-toggle button.active { color: var(--white); background: var(--airbus); box-shadow: 0 2px 8px rgba(0,32,91,.16); }
+    .chart-empty { min-height: 240px; display: grid; place-items: center; color: var(--muted); text-align: center; }
+
+    .trend-wrap { width: 100%; min-height: 290px; overflow-x: auto; }
+    .trend-svg { width: 100%; min-width: 690px; height: 290px; display: block; }
+    .trend-period { cursor: pointer; }
+    .trend-period:hover .period-hover, .trend-period.selected .period-hover { fill: rgba(54,169,225,.10); }
+    .axis-text { fill: #75869a; font-size: 10px; }
+    .grid-line { stroke: #e8eef3; stroke-width: 1; }
+    .revenue-bar { fill: var(--highlight); opacity: .72; }
+    .visit-line { fill: none; stroke: var(--airbus-mid); stroke-width: 2.2; }
+    .visit-dot { fill: var(--white); stroke: var(--airbus-mid); stroke-width: 1.6; }
+    .issue-dot { fill: var(--bad); stroke: var(--white); stroke-width: 1.4; }
+
+    .map-wrap { position: relative; min-height: 286px; border-radius: 12px; overflow: hidden; background: linear-gradient(180deg, #f5fbfe, #e7f4fa); }
+    .map-svg { width: 100%; height: 286px; display: block; }
+    .map-land { fill: #fff; stroke: #b8d5e2; stroke-width: 2; }
+    .map-outline { fill: none; stroke: #c2dbe6; stroke-width: 1.2; stroke-dasharray: 4 6; }
+    .map-inset { fill: rgba(255,255,255,.62); stroke: #c2dbe6; stroke-width: 1; stroke-dasharray: 3 5; }
+    .map-label { fill: #88a4b5; font-size: 9px; font-weight: 700; letter-spacing: .08em; }
+    .map-pin { cursor: pointer; }
+    .map-pin circle { fill: var(--highlight); stroke: var(--airbus); stroke-width: 3; transition: .15s ease; }
+    .map-pin:hover circle, .map-pin.selected circle { r: 10; fill: var(--white); }
+    .map-pin text { fill: var(--airbus); font-size: 10px; font-weight: 700; paint-order: stroke; stroke: white; stroke-width: 3px; stroke-linejoin: round; }
+    .map-summary { position: absolute; left: 14px; bottom: 12px; max-width: calc(100% - 28px); padding: 8px 10px; border-radius: 9px; background: rgba(255,255,255,.92); color: var(--muted); font-size: 10px; box-shadow: 0 5px 20px rgba(0,32,91,.08); }
+
+    .table-wrap { max-height: 432px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; min-width: 690px; }
+    th { position: sticky; top: 0; z-index: 1; padding: 10px 11px; color: var(--airbus); background: #eef6fa; border-bottom: 1px solid var(--line); text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .055em; }
+    th.sortable { position: sticky; padding-right: 20px; cursor: pointer; user-select: none; }
+    th.sortable::after { content: "↕"; position: absolute; right: 7px; color: #89a0af; font-size: 11px; }
+    th.sortable[aria-sort="ascending"]::after { content: "↑"; color: var(--airbus); }
+    th.sortable[aria-sort="descending"]::after { content: "↓"; color: var(--airbus); }
+    th.sortable:focus-visible { outline: 2px solid var(--highlight); outline-offset: -3px; }
+    td { padding: 10px 11px; border-bottom: 1px solid #edf1f4; font-size: 11px; vertical-align: top; }
+    tbody tr { cursor: pointer; }
+    tbody tr:hover { background: #f4fbfe; }
+    tbody tr.selected { background: #e9f7fd; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .compact-table { overflow-x: hidden; overflow-y: auto; }
+    .compact-table table { min-width: 0; table-layout: fixed; }
+    .compact-table th, .compact-table td { padding-left: 7px; padding-right: 7px; overflow: hidden; text-overflow: ellipsis; }
+    .compact-table th { white-space: normal; line-height: 1.2; }
+    .compact-table .truncate { max-width: none; }
+    .compact-table td:first-child { font-weight: 700; }
+    .detail-table th, .detail-table td { padding: 9px 6px; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; text-overflow: clip; }
+    .detail-table thead tr { height: 44px; }
+    .detail-table tbody tr { height: 40px; }
+    .detail-table .truncate { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+    .detail-table .status { display: inline-block; max-width: 100%; padding: 3px 5px; white-space: normal; overflow-wrap: anywhere; }
+    .audit-table { max-height: 428px; }
+    .audit-table th { height: 44px; overflow-wrap: anywhere; }
+    .audit-table td { height: 38px; padding-top: 8px; padding-bottom: 8px; }
+    .audit-table td.num { white-space: nowrap; }
+    .audit-empty { min-height: 96px; padding: 18px; display: grid; place-items: center; color: var(--muted); text-align: center; font-size: 12px; }
+    .status { display: inline-flex; padding: 3px 7px; border-radius: 999px; font-size: 10px; background: #e8f7f3; color: var(--good); }
+    .status.pending { background: #fff4dc; color: #9a6400; }
+    .truncate { display: block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .insights { margin-top: 16px; padding: 22px; color: var(--white); border-radius: var(--radius); background: linear-gradient(180deg, var(--airbus) 0%, var(--airbus-deep) 100%); box-shadow: var(--shadow); }
+    .insights-head { display: flex; justify-content: space-between; align-items: end; gap: 18px; }
+    .insights h2 { margin: 0; font-size: 19px; }
+    .insights p { margin: 5px 0 0; color: #c7d9e8; font-size: 12px; }
+    .insight-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .insight { min-height: 135px; padding: 15px; border: 1px solid rgba(255,255,255,.15); border-radius: 12px; background: rgba(255,255,255,.07); }
+    .insight-tag { color: #9edcf8; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+    .insight strong { display: block; margin-top: 9px; font-size: 15px; font-weight: 600; }
+    .insight span { display: block; margin-top: 8px; color: #c7d9e8; font-size: 11px; }
+
+    .footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px 2px 0; color: var(--muted); font-size: 10px; }
+
+    .toast { position: fixed; right: 20px; bottom: 20px; z-index: 10; max-width: 360px; padding: 12px 15px; color: white; border-radius: 10px; background: var(--airbus); box-shadow: 0 14px 40px rgba(0,0,0,.18); opacity: 0; transform: translateY(12px); pointer-events: none; transition: .2s ease; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .loading { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; background: rgba(0,20,61,.78); color: white; }
+    .loading.show { display: grid; }
+    .loading-card { width: min(420px, calc(100vw - 36px)); padding: 26px; border-radius: 16px; background: var(--airbus); text-align: center; box-shadow: 0 20px 80px rgba(0,0,0,.3); }
+    .spinner { width: 34px; height: 34px; margin: 0 auto 14px; border: 3px solid rgba(255,255,255,.25); border-top-color: white; border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 1180px) {
+      .filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+      .dashboard-grid.triple { grid-template-columns: 1fr 1fr; }
+      .dashboard-grid.triple > :last-child { grid-column: 1 / -1; }
+      .dashboard-grid.machine-audit { grid-template-columns: 1fr 1fr; }
+      .dashboard-grid.machine-audit > :first-child { grid-column: 1 / -1; }
+      .insight-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 1100px) {
+      .dashboard-grid.machine-details { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 820px) {
+      .shell, .topbar-inner { padding-left: 14px; padding-right: 14px; }
+      .topbar { padding-top: 14px; }
+      .headline-row { align-items: flex-start; flex-direction: column; margin-top: 16px; }
+      .period-stamp { min-width: 0; }
+      .data-dock, .dashboard-grid, .dashboard-grid.equal, .dashboard-grid.triple { grid-template-columns: 1fr; }
+      .dashboard-grid.triple > :last-child { grid-column: auto; }
+      .dashboard-grid.machine-audit { grid-template-columns: 1fr; }
+      .dashboard-grid.machine-audit > :first-child { grid-column: auto; }
+      .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      #articleFilter .multi-popup { left: 0; right: auto; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .source-line { align-items: flex-start; flex-direction: column; }
+      .insights-head { align-items: flex-start; flex-direction: column; }
+    }
+    @media (max-width: 520px) {
+      .brand-row { align-items: flex-start; }
+      .privacy-pill { max-width: 155px; border-radius: 12px; }
+      .drop-zone { align-items: flex-start; }
+      .upload-icon { width: 44px; height: 44px; flex-basis: 44px; }
+      .filter-grid, .kpi-grid, .insight-grid { grid-template-columns: 1fr; }
+      .footer { flex-direction: column; }
+      .panel { padding: 14px; }
+    }
+    .session-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .session-who { color: #e6f6ff; font-size: 12px; margin-right: 4px; }
+    .session-bar .btn { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.28); color: #fff; }
+    .session-bar .btn:hover { background: rgba(255,255,255,.16); }
+    .data-notice { margin-top: 12px; padding: 10px 14px; border-radius: 12px; border: 1px solid #f0c36d; background: #fff8e6; color: #6b4a00; font-size: 12px; line-height: 1.5; }
+    .data-notice[hidden] { display: none; }
+    .data-notice strong { color: #4d3500; }
+    .boot { max-width: 640px; margin: 48px auto; padding: 24px; text-align: center; color: var(--muted); }
+    .boot.error { color: var(--bad); }
+    @media print {
+      .data-dock, .filters, .btn, .toast, .loading { display: none !important; }
+      .topbar { min-height: auto; padding-bottom: 28px; }
+      .shell { max-width: none; padding: 0 8px; }
+      .panel, .kpi { box-shadow: none; break-inside: avoid; }
+      .table-wrap { max-height: none; overflow: visible; }
+      .insights { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand-row">
+        <div class="brand" id="brandLogo" aria-label="AIRBUS" hidden><img class="airbus-logo" alt="AIRBUS" src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWw6c3BhY2U9InByZXNlcnZlIiB2ZXJzaW9uPSIxLjEiIHdpZHRoPSIzOTguOTcxIiBoZWlnaHQ9IjczLjg4NSIgdmlld0JveD0iMCAwIDM5OC45NzEgNzMuODg1Ij4KICA8cGF0aCBmaWxsPSIjMDAyMDViIiBkPSJtMTIwLjE1IDEuNTExN3Y3MC44NjFoMTcuMjU4di01NS41NDdoMTkuNTIxYzcuMjI3IDAgOS44MTQ1IDQuMTAwNyA5LjgxNDUgOC44NDU3IDAgNC44NTQtMi42OTY4IDguODQzOC05LjkyMzggOC44NDM4aC0xNi43MTdsMjMuNzI5IDM3Ljg1N2gxOS42MzFzLTE2LjE3OS0yNS40NTMtMTYuMDctMjUuNDUzYzEwLjAzMi0yLjM3MiAxNi41MDItOS4zODM3IDE2LjUwMi0yMS42OCAwLTEzLjQ4Mi04Ljg0NDMtMjMuNzI5LTI3LjA3Mi0yMy43Mjl6bS0yOC45MDYtNy4xODhlLTRoMTcuMjU4djcwLjg2NGgtMTcuMjU4em0tNDQuMTE0IDQ0LjExNGgtMTQuNTIzbDEwLjc0Ny0yMS43ODdoMC4yMTdsMjQuMTYgNDguNTM2aDE5Ljg0NmwtMzYuMTMzLTcwLjg2M2gtMTUuMzE1bC0zNi4xMzMgNzAuODYzaDE5LjQxNGw1Ljg1My0xMS44NjRoMjkuMDkzem0xNDQuOTYtNDQuMTEzdjcwLjg2MWg0MS45NjFjMTQuNjY4IDAgMjQuMjY4LTcuODczNyAyNC4yNjgtMTkuODQ2LTFlLTMgLTguMzA0LTQuNjM3Ni0xNC41NTktMTEuNDM0LTE2LjkzMiA1LjUwMi0zLjAyMSA4LjQxNDEtNy44NzUyIDguNDE0MS0xNC45OTQgMC0xMS40MzMtOC41MjIyLTE5LjA5LTIyLjg2Ny0xOS4wOXptMTcuMjYgMTQuOTkyaDIzLjA4MmMzLjQ1MiAwIDYuMTQ4NCAyLjY5NTkgNi4xNDg0IDYuMjU1OSAwIDMuNTYtMi42OTY4IDYuMjU1OS02LjI1NzggNi4yNTU5aC0yMi45NzN6bTAgMjYuNjM5aDIzLjUxNGM0LjIwNyAwIDcuNDQzNCAzLjAyMTEgNy40NDM0IDcuMTE5MSAxZS0zIDQuMjA2LTMuMjM2NCA3LjMzNC03LjQ0MzQgNy4zMzRoLTIzLjUxNHptMTAzLjQ0LTIuMDQ3NmMwIDEwLjc1Ni00Ljk2MiAxNi43MTgtMTQuNzc2IDE2LjcxOC05LjcwNyAwLTE0LjY2OS01Ljk2Mi0xNC42NjktMTYuNzE4di0zOS41ODRoLTE3LjY4OHYzOC4yOWMwIDIxLjg5NiAxMS41NDEgMzQuMDg0IDMyLjM1NyAzNC4wODRzMzIuNDY1LTEyLjE4OCAzMi40NjUtMzQuMDg0di0zOC4yOWgtMTcuNjg5em01NS4wMDktNDEuMDk1Yy0xOC4yMjkgMC0yOC40NzcgOS4wNjExLTI4LjQ3NyAyMS4yNDggMCAxMy4xMTQgNy42NTMzIDE4LjQ0MiAyNS4yMzggMjIuMjE5IDEzLjY5IDMuMDE4IDE2LjYwOSA0LjkwMTMgMTYuNjA5IDguNzM2MyAwIDQuMTY2LTMuNzc0OCA2LjA0MS0xMS4yMTcgNi4wNDEtMTAuNzg2IDAtMjAuNTQ2LTIuNjE5My0yOC4zNjUtNi45MDIzbC01LjI4NTIgMTUuMWM4LjUyMSA0LjUzIDIxLjI0NyA3LjQ0MzQgMzQuMDgyIDcuNDQzNCAxNy45MDUgMCAyOC41ODItOC4zMDY3IDI4LjU4Mi0yMi4yMjEgMmUtMyAtMTEuMTYzLTcuMjIwNi0xOC4zMzQtMjIuNDM0LTIyLjAwMi0xNi4zODMtMy45ODktMTkuOTUxLTQuMzY5Ni0xOS45NTEtOS4wNjA1IDAtMy42MjkgNC4wOTctNS4zOTQ1IDExLTUuMzk0NSA5LjE2OCAwIDE4LjkzMSAyLjMwMTggMjQuNDg0IDUuNzE4OGw1LjUtMTQuNDUzYy03LjExOC0zLjc3NS0xNy41OC02LjQ3MjctMjkuNzY4LTYuNDcyN3oiLz4KPC9zdmc+Cg=="></div>
+        <div class="session-bar"><span class="session-who" id="sessionWho"></span><button type="button" class="btn" id="panelBtn">Panel de servicio</button><button type="button" class="btn" id="logoutBtn">Salir</button></div>
+      </div>
+      <div class="headline-row">
+        <div class="headline-brand">
+          <h1 class="eyebrow">Cuadro de Mando Analítico</h1>
+          <img class="serunion-logo" src="data:image/png;base64,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" alt="Serunion Vending" width="786" height="110">
+        </div>
+        <div class="period-stamp"><span>Periodo activo</span><strong id="periodStamp">—</strong></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="data-dock upload-collapsed" id="dataDock" aria-label="Estado de los datos">
+      <div class="source-card">
+        <div class="source-line">
+          <div><h2 id="dataStatusTitle">Cargando datos…</h2><p id="dataStatusText">Datos de VenCloud, servidos desde este mismo dominio.</p></div>
+          <div class="data-actions">
+            <button type="button" class="btn" id="printBtn">Imprimir</button>
+            <button type="button" class="btn primary" id="exportExcelBtn" hidden>Exportar Excel</button>
+          </div>
+        </div>
+        <div class="data-notice" id="salesNotice" role="note" hidden></div>
+      </div>
+    </section>
+
+    <section class="filters" aria-label="Filtros del dashboard">
+      <div class="filter-head"><strong>Filtros cruzados</strong><button type="button" class="btn" id="resetFilters">Limpiar selección</button></div>
+      <div class="filter-grid">
+        <div class="field"><label for="dateFrom">Desde</label><input type="date" id="dateFrom"></div>
+        <div class="field"><label for="dateTo">Hasta</label><input type="date" id="dateTo"></div>
+        <div class="field"><span class="field-label" id="centerFilterLabel">Centro</span><details id="centerFilter" class="multi-select"><summary aria-labelledby="centerFilterLabel centerFilterText"><span id="centerFilterText">Todos los centros</span></summary><div class="multi-popup"></div></details></div>
+        <div class="field"><span class="field-label" id="locationFilterLabel">Ubicación</span><details id="locationFilter" class="multi-select"><summary aria-labelledby="locationFilterLabel locationFilterText"><span id="locationFilterText">Todas las ubicaciones</span></summary><div class="multi-popup"></div></details></div>
+        <div class="field"><span class="field-label" id="machineFilterLabel">Máquina / PDV</span><details id="machineFilter" class="multi-select"><summary aria-labelledby="machineFilterLabel machineFilterText"><span id="machineFilterText">Todas las máquinas</span></summary><div class="multi-popup"></div></details></div>
+        <div class="field"><span class="field-label" id="articleFilterLabel">Artículo</span><details id="articleFilter" class="multi-select"><summary aria-labelledby="articleFilterLabel articleFilterText"><span id="articleFilterText">Todos los artículos</span></summary><div class="multi-popup"></div></details></div>
+        <button type="button" class="btn primary" id="applyFilters">Aplicar</button>
+      </div>
+      <div class="filter-chips" id="filterChips" aria-live="polite"></div>
+    </section>
+
+    <section class="kpi-grid" id="kpiGrid" aria-label="Indicadores clave"></section>
+
+    <section class="dashboard-grid">
+      <article class="panel">
+        <div class="panel-head">
+          <div><h2 class="panel-title" id="trendTitle">Evolución diaria</h2><p class="panel-subtitle" id="trendSubtitle">Importe, visitas e incidencias · pulsa un día para filtrar</p></div>
+          <div class="trend-tools">
+            <div class="trend-toggle" role="group" aria-label="Métrica y agrupación temporal del gráfico"><button type="button" class="active" data-trend-mode="day" aria-pressed="true">Importe/día</button><button type="button" data-trend-mode="month" aria-pressed="false">Importe/mes</button><button type="button" data-trend-mode="units-day" aria-pressed="false">Unidades/día</button><button type="button" data-trend-mode="units-month" aria-pressed="false">Unidades/mes</button></div>
+            <div class="legend" id="trendLegend"><span><i></i><span id="trendMetricLabel">Importe €</span></span><span class="visits"><i></i> Visitas</span><span class="issues"><i></i> Incidencias</span></div>
+          </div>
+        </div>
+        <div class="trend-wrap" id="trendChart"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><h2 class="panel-title">Mapa de centros</h2><p class="panel-subtitle">Actividad geográfica del conjunto filtrado</p></div></div>
+        <div class="map-wrap" id="mapChart"></div>
+      </article>
+    </section>
+
+    <section class="dashboard-grid triple">
+      <article class="panel">
+        <div class="panel-head"><div><h2 class="panel-title">Visitas realizadas por máquina</h2><p class="panel-subtitle">Días laborables del periodo ÷ visitas · lunes a viernes, sin festivos</p></div></div>
+        <div class="table-wrap compact-table" id="visitTable"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><h2 class="panel-title">Mix de artículos</h2><p class="panel-subtitle">Todos los artículos · ordenados por unidades vendidas</p></div></div>
+        <div class="table-wrap compact-table" id="productTable"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><h2 class="panel-title">Incidencias por operación</h2><p class="panel-subtitle">Todas las operaciones · ordenadas por número de incidencias</p></div></div>
+        <div class="table-wrap compact-table" id="operationTable"></div>
+      </article>
+    </section>
+
+    <section class="dashboard-grid equal machine-details">
+      <article class="panel">
+        <div class="panel-head"><div><h2 class="panel-title">Rendimiento por máquina</h2><p class="panel-subtitle">Cabecera fija y desplazamiento para consultar el resto</p></div></div>
+        <div class="table-wrap compact-table detail-table" id="machineTable"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><h2 class="panel-title">Detalle de incidencias</h2><p class="panel-subtitle">Ordenadas de más reciente a más antigua</p></div></div>
+        <div class="table-wrap compact-table detail-table" id="issueTable"></div>
+      </article>
+    </section>
+
+    <section class="dashboard-grid machine-audit" aria-label="Máquinas sin venta y rendimiento mensual">
+      <article class="panel">
+        <div class="panel-head"><div><h2 class="panel-title" id="noSalesTitle">Máquinas sin venta</h2><p class="panel-subtitle" id="noSalesSubtitle">Sin registros de venta en el periodo filtrado</p></div></div>
+        <div class="table-wrap compact-table audit-table" id="noSalesTable"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><h2 class="panel-title">Máquinas con venta inferior a 350 €/mes</h2><p class="panel-subtitle" id="lowSalesSubtitle">Con venta registrada · importe del periodo ÷ meses</p></div></div>
+        <div class="table-wrap compact-table audit-table" id="lowSalesTable"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><h2 class="panel-title">Máquinas por centro</h2><p class="panel-subtitle" id="centerMachinesSubtitle">Máquinas totales y sin venta · según filtros</p></div></div>
+        <div class="table-wrap compact-table audit-table" id="centerMachinesTable"></div>
+      </article>
+    </section>
+
+    <section class="dashboard-grid equal operational-history" aria-label="Detalle cronológico de visitas e incidencias">
+      <article class="panel">
+        <div class="panel-head"><div><h2 class="panel-title">Listado de visitas</h2><p class="panel-subtitle">Fecha, centro, máquina y ubicación · de más reciente a más antigua</p></div></div>
+        <div class="table-wrap compact-table audit-table" id="visitLogTable"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><h2 class="panel-title">Mantenimientos preventivos</h2><p class="panel-subtitle" id="preventiveSubtitle">Fecha, centro, máquina, ubicación, técnico y estado</p></div></div>
+        <div class="table-wrap compact-table audit-table" id="preventiveTable"><div class="audit-empty">Sin datos de mantenimiento preventivo.</div></div>
+      </article>
+    </section>
+
+    <section class="insights">
+      <div class="insight-grid" id="insightGrid"></div>
+    </section>
+
+    <footer class="footer"><span id="footerCoverage">—</span></footer>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="loading" id="loading"><div class="loading-card"><div class="spinner"></div><strong id="loadingText">Procesando Excel…</strong><p>Todo ocurre en este navegador.</p></div></div>
+
+  <script>
+
+    const $ = (selector) => document.querySelector(selector);
+    const fmtCurrency = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtInteger = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 });
+    const fmtDecimal = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const fmtDate = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    const fmtShortDate = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' });
+    const fmtTableDate = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const fmtMonth = new Intl.DateTimeFormat('es-ES', { month: 'short', year: 'numeric' });
+    let model = null;
+    let state = { from: '', to: '', centers: [], locations: [], machines: [], articles: [], operation: '', day: '', month: '' };
+    let trendMode = 'day';
+    let toastTimer;
+    // Lo que dice el servidor de la venta. Si no es telemetria, la venta es
+    // parcial y una maquina sin venta puede ser una maquina sin DATO de venta.
+    let salesSource = { fuente: null, _nota: '' };
+    const salesPartial = () => salesSource.fuente !== 'telemetria';
+    const noSalesWord = () => salesPartial() ? 'sin dato de venta' : 'sin venta';
+
+    function normalizeText(value) {
+      return String(value ?? '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ');
+    }
+    function normalizeHeader(value) { return normalizeText(value).replace(/[^A-Z0-9]/g, ''); }
+    function isExcludedIncidentOperation(value) {
+      const operation = normalizeText(value);
+      return operation.startsWith('Z.') || [
+        'PRODUCTO CADUCADO', 'CALIDAD NO CONFORME', 'INSTALAR CABLE DEX', 'ERROR DEX'
+      ].some(term => operation.includes(term));
+    }
+    function centerKey(value) { return normalizeText(value).replace(/^AIRBUS\s+/, ''); }
+    function machineKey(value) { return normalizeText(value).replace(/[^A-Z0-9]/g, ''); }
+    function centerLabel(value) {
+      const text = String(value ?? '').trim();
+      return text || 'CENTRO SIN IDENTIFICAR';
+    }
+    function isoDate(value) {
+      if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+      if (typeof value === 'number' && value > 20000 && value < 80000) return new Date(Math.round((value - 25569) * 86400 * 1000)).toISOString().slice(0, 10);
+      const text = String(value ?? '').trim();
+      let match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+      match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (match) return `${match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;
+      const parsed = new Date(text);
+      return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
+    }
+    function dateTime(value) {
+      if (value instanceof Date) return value;
+      const text = String(value ?? '').trim();
+      const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+      if (match) return new Date(+match[3], +match[2]-1, +match[1], +(match[4]||0), +(match[5]||0));
+      const parsed = new Date(text);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    function timeValue(value) {
+      if (value instanceof Date && !Number.isNaN(value.getTime())) return `${String(value.getUTCHours()).padStart(2,'0')}:${String(value.getUTCMinutes()).padStart(2,'0')}`;
+      if (typeof value === 'number' && value > 20000 && value < 80000) {
+        const minutes = Math.round((value - Math.floor(value)) * 1440) % 1440;
+        return `${String(Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;
+      }
+      const match = String(value ?? '').trim().match(/(?:T|\s)(\d{1,2}):(\d{2})/);
+      return match ? `${match[1].padStart(2,'0')}:${match[2]}` : '';
+    }
+    function formatTableDate(value) {
+      const date=isoDate(value);
+      return date?fmtTableDate.format(new Date(`${date}T12:00:00`)):'—';
+    }
+    function formatIncidentCloseDate(value) {
+      const raw=String(value??'').trim();
+      const date=isoDate(value);
+      return raw.match(/^01\/01\/1900(?:\s|$)/)||value===0||value===1||date==='1900-01-01'?'—':formatTableDate(value);
+    }
+    function safeNumber(value) {
+      if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+      const text = String(value ?? '').trim().replace(/\s/g, '');
+      const normalized = text.includes(',') && text.includes('.')
+        ? text.replace(/\./g, '').replace(',', '.')
+        : text.includes(',') ? text.replace(',', '.') : text;
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char]));
+    }
+    function showToast(message) {
+      const toast = $('#toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+    }
+    function setLoading(show, text = 'Cargando datos…') {
+      $('#loadingText').textContent = text;
+      $('#loading').classList.toggle('show', show);
+    }
+
+    // El mismo modelo que montaba buildModel con los Excel de David, pero desde
+    // el cuadro del servidor: las maquinas y los articulos llegan una vez y las
+    // filas los citan por posicion. Las operaciones que David deja fuera de las
+    // incidencias (isExcludedIncidentOperation) se siguen dejando fuera.
+    function modelFromCuadro(indice, trozos) {
+      const output = { sales: [], visits: [], incidents: [], preventives: [], files: [], centerLabels: new Map(), locations: new Map(), unrecognized: [] };
+      const centros = (indice.centros || []).map(nombre => centerKey(nombre));
+      (indice.centros || []).forEach((nombre, i) => { if (centros[i]) output.centerLabels.set(centros[i], centerLabel(nombre)); });
+      const maquinas = (indice.maquinas || []).map(([matricula, c, ubicacion, pdv, enCenso]) => {
+        const item = { center: centros[c] || 'SIN CENTRO', machine: machineKey(matricula), location: String(ubicacion || '').trim(), pdv: pdv || '', enCenso: !!enCenso };
+        if (item.location) output.locations.set(`${item.center}|${item.machine}`, item.location);
+        return item;
+      });
+      const articulos = indice.articulos || [];
+      for (const trozo of trozos) {
+        const mes = trozo.mes;
+        for (const [dia, m, a, qty, amount] of trozo.filas || []) {
+          const maq = maquinas[m];
+          if (!maq) continue;
+          output.sales.push({ center: maq.center, machine: maq.machine, date: `${mes}-${String(dia).padStart(2, '0')}`, article: articulos[a] || 'Sin artículo', qty, amount });
+        }
+      }
+      for (const [cuando, m] of indice.visitas || []) {
+        const maq = maquinas[m];
+        if (!maq) continue;
+        output.visits.push({ center: maq.center, machine: maq.machine, date: cuando.slice(0, 10), time: cuando.slice(11, 16), location: maq.location, visitId: '', pdv: maq.pdv, route: '', employee: '', vehicle: '', client: '' });
+      }
+      for (const [alta, fin, m, numero, categoria, operacion, estado] of indice.incidencias || []) {
+        const maq = maquinas[m];
+        if (!maq || isExcludedIncidentOperation(operacion)) continue;
+        output.incidents.push({ center: maq.center, machine: maq.machine, date: alta, received: alta, number: numero, location: maq.location, category: categoria || 'Sin categoría', operation: operacion, status: estado || 'Sin estado', closed: fin || '', technician: '' });
+      }
+      const payload = { machineCensus: maquinas.filter(item => item.enCenso).map(item => ({ center: item.center, machine: item.machine, location: item.location, centerLabel: output.centerLabels.get(item.center) || item.center })) };
+      const suppliedCensus=(payload.machineCensus||[]).filter(item=>item.center&&item.machine);
+      output.machineCensus=suppliedCensus.length?suppliedCensus:[...new Map(output.sales.map(row=>[machineIdentity(row),{center:row.center,machine:row.machine,location:output.locations.get(machineIdentity(row))||'',centerLabel:output.centerLabels.get(row.center)||row.center}])).values()];
+      const allRows = [...output.sales, ...output.visits, ...output.incidents, ...output.preventives];
+      const allDates = allRows.map(row => row.date).filter(Boolean).sort();
+      const salesDates = output.sales.map(row=>row.date).filter(Boolean).sort();
+      output.minDate = allDates[0] || '';
+      output.maxDate = allDates.at(-1) || '';
+      output.defaultFrom = salesDates[0] || output.minDate;
+      output.defaultTo = salesDates.at(-1) || output.maxDate;
+      output.centers = [...new Set([...allRows.map(row => row.center),...output.machineCensus.map(row=>row.center)])].sort();
+      output.machines = [...new Set(output.machineCensus.map(row => row.machine))].sort();
+      output.articles = [...new Set(output.sales.map(row => row.article))].sort((a,b) => a.localeCompare(b,'es'));
+      output.machineEntries = [...new Map(output.machineCensus.map(row=>[machineIdentity(row),{center:row.center,machine:row.machine}])).entries()]
+        .map(([value,row])=>{
+          const location=output.locations.get(value)||'Ubicación no informada';
+          return {value,center:row.center,location,locationValue:locationKey(row.center,location),label:`${row.machine} · ${output.centerLabels.get(row.center)||row.center} · ${location}`};
+        })
+        .sort((a,b)=>a.label.localeCompare(b.label,'es',{numeric:true}));
+      output.locationEntries=[...new Map(output.machineEntries.map(item=>[item.locationValue,{
+        value:item.locationValue,center:item.center,location:item.location,label:`${item.location} · ${output.centerLabels.get(item.center)||item.center}`
+      }])).values()].sort((a,b)=>a.label.localeCompare(b.label,'es',{numeric:true}));
+      return output;
+    }
+
+    function machineIdentity(row) { return `${row.center}|${row.machine}`; }
+    function locationKey(center,location) { return `${center}|${normalizeText(location)||'UBICACION NO INFORMADA'}`; }
+    function rowLocation(row) { return String(row.location||model.locations.get(machineIdentity(row))||'Ubicación no informada').trim()||'Ubicación no informada'; }
+    function locationIdentity(row) { return locationKey(row.center,rowLocation(row)); }
+    function toggleSelection(key,value) {
+      state[key]=state[key].includes(value)?state[key].filter(item=>item!==value):[...state[key],value];
+    }
+    function matchesCommon(row) {
+      if (state.from && row.date < state.from) return false;
+      if (state.to && row.date > state.to) return false;
+      if (state.day && row.date !== state.day) return false;
+      if (state.month && !row.date.startsWith(state.month)) return false;
+      if (state.centers.length && !state.centers.includes(row.center)) return false;
+      if (state.locations.length && !state.locations.includes(locationIdentity(row))) return false;
+      if (state.machines.length && !state.machines.includes(machineIdentity(row))) return false;
+      return true;
+    }
+    function filteredData() {
+      const baseSales=model.sales.filter(matchesCommon), baseVisits=model.visits.filter(matchesCommon), baseIncidents=model.incidents.filter(matchesCommon), basePreventives=model.preventives.filter(matchesCommon);
+      let allowedMachines=null;
+      const intersectMachines = candidates => {
+        allowedMachines=allowedMachines===null?candidates:new Set([...allowedMachines].filter(key=>candidates.has(key)));
+      };
+      if(state.articles.length) intersectMachines(unique(baseSales.filter(row=>state.articles.includes(row.article)),machineIdentity));
+      if(state.operation) intersectMachines(unique(baseIncidents.filter(row=>String(row.operation||'Sin operación')===state.operation),row=>`${row.center}|${row.machine}`));
+      const allowed = row => allowedMachines===null || allowedMachines.has(`${row.center}|${row.machine}`);
+      return {
+        sales: baseSales.filter(row=>allowed(row) && (!state.articles.length || state.articles.includes(row.article))),
+        visits: baseVisits.filter(allowed),
+        incidents: baseIncidents.filter(row=>allowed(row) && (!state.operation || String(row.operation||'Sin operación')===state.operation)),
+        preventives: basePreventives.filter(allowed)
+      };
+    }
+    function sum(rows, key) { return rows.reduce((total, row) => total + (+row[key] || 0), 0); }
+    function unique(rows, projector) { return new Set(rows.map(projector)); }
+    function group(rows, keyFn, valueFn = () => 1) {
+      const result = new Map();
+      for (const row of rows) {
+        const key = keyFn(row);
+        result.set(key, (result.get(key) || 0) + valueFn(row));
+      }
+      return result;
+    }
+    function sortedEntries(map) { return [...map.entries()].sort((a,b) => b[1] - a[1]); }
+    function percent(value, total) { return total ? value / total * 100 : 0; }
+    function salesMachinePopulation(data) {
+      const population=new Map();
+      for(const row of model.machineCensus||model.sales) {
+        if(state.centers.length&&!state.centers.includes(row.center)) continue;
+        if(state.locations.length&&!state.locations.includes(locationIdentity(row))) continue;
+        if(state.machines.length&&!state.machines.includes(machineIdentity(row))) continue;
+        const key=machineIdentity(row);
+        if(!population.has(key)) population.set(key,{center:row.center,machine:row.machine});
+      }
+      if(state.articles.length||state.operation) {
+        const visible=unique([...data.sales,...data.visits,...data.incidents,...data.preventives],machineIdentity);
+        for(const key of population.keys()) if(!visible.has(key)) population.delete(key);
+      }
+      return population;
+    }
+    function formatPeriod(from, to) {
+      if (!from || !to) return 'Sin fechas';
+      const start = fmtShortDate.format(new Date(`${from}T12:00:00`));
+      const end = fmtDate.format(new Date(`${to}T12:00:00`));
+      return from === to ? end : `${start} — ${end}`;
+    }
+    function formatNumericDate(value) {
+      const match=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return match ? `${match[3]}/${match[2]}/${match[1]}` : 'Sin fecha';
+    }
+    function formatActivePeriod(from,to) {
+      if(!from||!to) return 'Sin fechas';
+      return from===to ? formatNumericDate(from) : `${formatNumericDate(from)} - ${formatNumericDate(to)}`;
+    }
+    function dateRange(from, to) {
+      if (!from || !to || from > to) return [];
+      const dates = [], cursor = new Date(`${from}T12:00:00`), end = new Date(`${to}T12:00:00`);
+      while (cursor <= end) {
+        dates.push(`${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}-${String(cursor.getDate()).padStart(2,'0')}`);
+        cursor.setDate(cursor.getDate()+1);
+      }
+      return dates;
+    }
+    function monthBounds(month) {
+      const [year,number]=String(month).split('-').map(Number);
+      if(!year||!number) return ['', ''];
+      const lastDay=new Date(Date.UTC(year,number,0)).getUTCDate();
+      return [`${year}-${String(number).padStart(2,'0')}-01`,`${year}-${String(number).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`];
+    }
+    function monthRange(from,to) {
+      if(!from||!to||from>to) return [];
+      const periods=[], cursor=new Date(`${from.slice(0,7)}-01T12:00:00`), end=to.slice(0,7);
+      while(`${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}`<=end) {
+        periods.push(`${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}`);
+        cursor.setMonth(cursor.getMonth()+1);
+      }
+      return periods;
+    }
+    function activeDateBounds() {
+      const selectedMonth=state.month?monthBounds(state.month):null;
+      const monthFrom=selectedMonth?(state.from&&state.from>selectedMonth[0]?state.from:selectedMonth[0]):'';
+      const monthTo=selectedMonth?(state.to&&state.to<selectedMonth[1]?state.to:selectedMonth[1]):'';
+      return [state.day||monthFrom||state.from||model.minDate,state.day||monthTo||state.to||model.maxDate];
+    }
+    function activePeriodMonths() {
+      const [from,to]=activeDateBounds();
+      return monthRange(from,to).length||1;
+    }
+    function businessDaysInPeriod(from,to) {
+      if(!from||!to||from>to) return 0;
+      const cursor=new Date(`${from}T12:00:00`), end=new Date(`${to}T12:00:00`);
+      let count=0;
+      while(cursor<=end) {
+        const day=cursor.getDay();
+        if(day!==0&&day!==6) count++;
+        cursor.setDate(cursor.getDate()+1);
+      }
+      return count;
+    }
+    function businessDaysBetween(from, to) {
+      if (!from || !to || from >= to) return 0;
+      const cursor = new Date(`${from}T12:00:00`), end = new Date(`${to}T12:00:00`);
+      let count = 0;
+      cursor.setDate(cursor.getDate()+1);
+      while (cursor <= end) {
+        const day = cursor.getDay();
+        if (day !== 0 && day !== 6) count++;
+        cursor.setDate(cursor.getDate()+1);
+      }
+      return count;
+    }
+
+    function renderKpis(data) {
+      const revenue = sum(data.sales,'amount');
+      const units = sum(data.sales,'qty');
+      const visits = data.visits.length;
+      const incidents = data.incidents.length;
+      const totalMachines = salesMachinePopulation(data);
+      const salesMachines = new Set([...unique(data.sales,machineIdentity)].filter(key=>totalMachines.has(key)));
+      const visitMachines = new Set([...unique(data.visits,machineIdentity)].filter(key=>totalMachines.has(key)));
+      const periodMonths=activePeriodMonths();
+      const revenuePerMachineMonth = totalMachines.size ? revenue / totalMachines.size / periodMonths : 0;
+      const machinesWithoutSales=Math.max(totalMachines.size-salesMachines.size,0);
+      const covered = [...salesMachines].filter(key => visitMachines.has(key)).length;
+      const coverage = percent(covered, salesMachines.size);
+      const items = [
+        ['revenue','Venta por máquina y mes', fmtCurrency.format(revenuePerMachineMonth), `${fmtCurrency.format(revenue)} · ${fmtInteger.format(totalMachines.size)} máquinas instaladas · ${fmtInteger.format(periodMonths)} mes${periodMonths===1?'':'es'}`],
+        ['units','Unidades', fmtInteger.format(units), `${fmtCurrency.format(units ? revenue / units : 0)} por unidad`],
+        ['visits','Visitas', fmtInteger.format(visits), `${fmtDecimal.format(visits / Math.max(totalMachines.size,1))} por máquina instalada`],
+        ['incidents','Incidencias', fmtInteger.format(incidents), `${fmtDecimal.format(units ? incidents / units * 1000 : 0)} por 1.000 ud.`],
+        ['machines','Nº máquinas total', fmtInteger.format(totalMachines.size), `${salesMachines.size} con venta · ${machinesWithoutSales} ${noSalesWord()}`],
+        ['coverage','COBERTURA (Visitas/Máquina)', `${fmtDecimal.format(coverage)}%`, `${covered} visitadas de ${salesMachines.size} máquinas con venta`]
+      ];
+      const icons={
+        revenue:'<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M7 6V5a2 2 0 0 1 2-2h8"/><circle cx="16.5" cy="12.5" r="2.5"/></svg>',
+        units:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7" rx="2"/><rect x="13" y="4" width="8" height="7" rx="2"/><rect x="8" y="13" width="8" height="7" rx="2"/></svg>',
+        visits:'<svg viewBox="0 0 24 24"><path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z"/><circle cx="12" cy="10" r="2"/></svg>',
+        incidents:'<svg viewBox="0 0 24 24"><path d="M10.3 4.2 2.7 18a2 2 0 0 0 1.8 3h15a2 2 0 0 0 1.8-3L13.7 4.2a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+        machines:'<svg viewBox="0 0 24 24"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><rect x="8" y="5.5" width="8" height="6" rx="1"/><path d="M8 15h3M8 18h5"/><circle cx="16" cy="16.5" r="1"/></svg>',
+        coverage:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="m9.5 12 1.7 1.7 3.6-4"/></svg>'
+      };
+      $('#kpiGrid').innerHTML = items.map(([icon,label,value,note]) => `<article class="kpi"><div class="kpi-head"><span class="kpi-label">${label}</span><span class="kpi-icon ${icon}" aria-hidden="true">${icons[icon]}</span></div><strong class="kpi-value">${value}</strong><span class="kpi-note">${note}</span></article>`).join('');
+    }
+
+    function renderTrend(data) {
+      const target = $('#trendChart');
+      const monthly = trendMode === 'month' || trendMode === 'units-month';
+      const units = trendMode === 'units-day' || trendMode === 'units-month';
+      const metricLabel = units ? 'Unidades' : 'Importe';
+      const formatValue = value => units ? `${fmtInteger.format(value)} unidades` : fmtCurrency.format(value);
+      $('#trendTitle').textContent = monthly ? 'Evolución mensual' : 'Evolución diaria';
+      $('#trendSubtitle').textContent = `${metricLabel}, visitas e incidencias · pulsa ${monthly?'un mes':'un día'} para filtrar`;
+      $('#trendMetricLabel').textContent = units ? 'Unidades' : 'Importe €';
+      document.querySelectorAll('[data-trend-mode]').forEach(button=>{
+        const active=button.dataset.trendMode===trendMode;
+        button.classList.toggle('active',active);
+        button.setAttribute('aria-pressed',String(active));
+      });
+      const availableDates = [...data.sales, ...data.visits, ...data.incidents].map(row => row.date).filter(Boolean).sort();
+      const selectedMonth = state.month ? monthBounds(state.month) : null;
+      const monthFrom=selectedMonth?(state.from&&state.from>selectedMonth[0]?state.from:selectedMonth[0]):'';
+      const monthTo=selectedMonth?(state.to&&state.to<selectedMonth[1]?state.to:selectedMonth[1]):'';
+      const rangeFrom = state.day || monthFrom || state.from || availableDates[0] || model.minDate;
+      const rangeTo = state.day || monthTo || state.to || availableDates.at(-1) || model.maxDate;
+      const periods = monthly ? monthRange(rangeFrom,rangeTo) : dateRange(rangeFrom, rangeTo);
+      if (!periods.length) { target.innerHTML = '<div class="chart-empty">No hay datos para este filtro.</div>'; return; }
+      const periodKey = row => monthly ? row.date.slice(0,7) : row.date;
+      const sales = group(data.sales, periodKey, row => units ? row.qty : row.amount);
+      const visits = group(data.visits, periodKey);
+      const issues = group(data.incidents, periodKey);
+      const H = 290, left = 64, right = 46, top = 28, bottom = 42;
+      const W = Math.max(940, left + right + periods.length * (monthly?86:22));
+      const plotW = W-left-right, plotH = H-top-bottom;
+      const values = periods.map(period => sales.get(period)||0);
+      const maxSales = Math.max(...values, 1), minSales = Math.min(...values, 0);
+      const maxVisits = Math.max(...periods.map(period => visits.get(period)||0), 1);
+      const step = plotW / periods.length;
+      const x = i => left + step*i + step/2;
+      const ySales = v => top + (maxSales-v)/(maxSales-minSales)*plotH;
+      const zero = ySales(0);
+      const yVisits = v => top + plotH - v/maxVisits*plotH;
+      let svg = `<svg class="trend-svg" data-metric="${units?'units':'amount'}" viewBox="0 0 ${W} ${H}" style="min-width:${W}px" role="img" aria-label="Evolución ${monthly?'mensual':'diaria'} de ${metricLabel.toLowerCase()}, visitas e incidencias">`;
+      if(!monthly) {
+        const monthGroups = [];
+        periods.forEach((date,index) => {
+          const key = date.slice(0,7), current = monthGroups.at(-1);
+          if (!current || current.key !== key) monthGroups.push({key,start:index,end:index});
+          else current.end=index;
+        });
+        monthGroups.forEach(month => {
+          const center = (x(month.start)+x(month.end))/2;
+          svg += `<text class="axis-text" x="${center}" y="14" text-anchor="middle">${fmtMonth.format(new Date(`${month.key}-15T12:00:00`))}</text>`;
+        });
+      }
+      for (let i=0;i<=4;i++) {
+        const y = top + plotH*i/4;
+        const val = maxSales-(maxSales-minSales)*i/4;
+        svg += `<line class="grid-line" x1="${left}" y1="${y}" x2="${W-right}" y2="${y}"/><text class="axis-text" x="${left-8}" y="${y+3}" text-anchor="end">${fmtInteger.format(val)}${units?'':'€'}</text>`;
+      }
+      periods.forEach((period,i) => {
+        const value = sales.get(period)||0;
+        const barW = Math.max(4, Math.min(step*.62, monthly?42:18));
+        const y = Math.min(ySales(value),zero), barH = Math.abs(ySales(value)-zero);
+        const selected = (monthly ? state.month===period : state.day===period) ? ' selected' : '';
+        const bounds=monthly?monthBounds(period):[period,period], periodFrom=bounds[0]<rangeFrom?rangeFrom:bounds[0], periodTo=bounds[1]>rangeTo?rangeTo:bounds[1];
+        const label = `${formatPeriod(periodFrom,periodTo)} · ${formatValue(value)} · ${visits.get(period)||0} visitas · ${issues.get(period)||0} incidencias`;
+        svg += `<g class="trend-period${selected}" role="button" tabindex="0" data-period="${period}" data-value="${value}" aria-label="${escapeHtml(label)}. Pulsar para filtrar"><title>${escapeHtml(label)}</title><rect class="period-hover" x="${left+step*i}" y="${top}" width="${step}" height="${plotH}" fill="transparent"/><rect class="revenue-bar" x="${x(i)-barW/2}" y="${y}" width="${barW}" height="${barH}" rx="2"/>`;
+        if (issues.get(period)) svg += `<circle class="issue-dot" cx="${x(i)}" cy="${top+7}" r="${4+Math.min(issues.get(period),5)*.6}"/>`;
+        svg += `</g>`;
+        const labelEvery = periods.length <= 16 ? 1 : Math.max(2,Math.ceil(periods.length/18));
+        if (i%labelEvery===0 || i===periods.length-1) svg += `<text class="axis-text" x="${x(i)}" y="${H-17}" text-anchor="middle">${monthly?fmtMonth.format(new Date(`${period}-15T12:00:00`)):period.slice(8,10)+'/'+period.slice(5,7)}</text>`;
+      });
+      const points = periods.map((period,i) => `${x(i)},${yVisits(visits.get(period)||0)}`).join(' ');
+      svg += `<polyline class="visit-line" points="${points}"/>`;
+      periods.forEach((period,i) => svg += `<circle class="visit-dot" cx="${x(i)}" cy="${yVisits(visits.get(period)||0)}" r="2.8"><title>${visits.get(period)||0} visitas</title></circle>`);
+      svg += `<text class="axis-text" x="${W-right+8}" y="${top+3}">${maxVisits} visitas</text><text class="axis-text" x="${left}" y="${H-3}">${monthly?'Mes':'Fecha'}</text></svg>`;
+      target.innerHTML = svg;
+      target.querySelectorAll('.trend-period').forEach(node => {
+        const activate = () => {
+          if(monthly) { state.month=state.month===node.dataset.period?'':node.dataset.period; state.day=''; }
+          else { state.day=state.day===node.dataset.period?'':node.dataset.period; state.month=''; }
+          renderAll();
+        };
+        node.addEventListener('click', activate);
+        node.addEventListener('keydown', event => { if (event.key==='Enter' || event.key===' ') { event.preventDefault(); activate(); } });
+      });
+    }
+
+    function renderVisitTable(data) {
+      const target = $('#visitTable');
+      const visits = new Map();
+      const population = salesMachinePopulation(data);
+      const [periodFrom,periodTo]=activeDateBounds(), periodBusinessDays=businessDaysInPeriod(periodFrom,periodTo);
+      for (const row of data.visits) {
+        const key = `${row.center}|${row.machine}`;
+        if(population.has(key)) visits.set(key,(visits.get(key)||0)+1);
+      }
+      const entries = [...population.values()].map(item => {
+        const count=visits.get(`${item.center}|${item.machine}`)||0;
+        return {...item,count,daysBetweenVisits:count?periodBusinessDays/count:null};
+      }).sort((a,b) => b.count-a.count || a.machine.localeCompare(b.machine));
+      if (!entries.length) { target.innerHTML = '<div class="chart-empty">Sin máquinas para este filtro.</div>'; return; }
+      target.innerHTML = `<table><colgroup><col style="width:16%"><col style="width:20%"><col style="width:27%"><col style="width:11%"><col style="width:26%"></colgroup><thead><tr><th>Máquina</th><th>Centro</th><th>Ubicación</th><th class="num">Visitas</th><th class="num" title="Días laborables del periodo filtrado divididos entre el número de visitas">Días entre visitas (laborables)</th></tr></thead><tbody>${entries.map(item => {
+        const center = model.centerLabels.get(item.center) || item.center;
+        const location = model.locations.get(`${item.center}|${item.machine}`) || 'Ubicación no informada';
+        return `<tr class="${state.machines.includes(machineIdentity(item))?'selected':''}" data-machine="${escapeHtml(machineIdentity(item))}"><td>${escapeHtml(item.machine)}</td><td><span class="truncate" title="${escapeHtml(center)}">${escapeHtml(center)}</span></td><td><span class="truncate" title="${escapeHtml(location)}">${escapeHtml(location)}</span></td><td class="num">${fmtInteger.format(item.count)}</td><td class="num">${item.daysBetweenVisits===null?'—':fmtDecimal.format(item.daysBetweenVisits)}</td></tr>`;
+      }).join('')}</tbody></table>`;
+      target.querySelectorAll('tbody tr').forEach(node => node.addEventListener('click', () => {
+        toggleSelection('machines',node.dataset.machine);
+        syncControls(); renderAll();
+      }));
+    }
+
+    function renderProductTable(data) {
+      const target = $('#productTable');
+      const entries = sortedEntries(group(data.sales,row=>row.article,row=>row.qty));
+      const total=entries.reduce((sum,[,units])=>sum+units,0);
+      if (!entries.length) { target.innerHTML = '<div class="chart-empty">Sin artículos para este filtro.</div>'; return; }
+      target.innerHTML = `<table><colgroup><col style="width:60%"><col style="width:22%"><col style="width:18%"></colgroup><thead><tr><th>Artículo</th><th class="num">Unidades</th><th class="num">% total</th></tr></thead><tbody>${entries.map(([article,units])=>`<tr class="${state.articles.includes(article)?'selected':''}" data-article="${escapeHtml(article)}"><td><span class="truncate" title="${escapeHtml(article)}">${escapeHtml(article)}</span></td><td class="num">${fmtInteger.format(units)}</td><td class="num">${fmtDecimal.format(percent(units,total))}%</td></tr>`).join('')}</tbody></table>`;
+      target.querySelectorAll('tbody tr').forEach(node=>node.addEventListener('click',()=>{toggleSelection('articles',node.dataset.article);syncControls();renderAll();}));
+    }
+
+    function renderOperationTable(data) {
+      const target = $('#operationTable');
+      const entries = sortedEntries(group(data.incidents,row=>String(row.operation||'Sin operación')));
+      const total=entries.reduce((sum,[,count])=>sum+count,0);
+      if (!entries.length) { target.innerHTML = '<div class="chart-empty">Sin incidencias para este filtro.</div>'; return; }
+      target.innerHTML = `<table><colgroup><col style="width:54%"><col style="width:27%"><col style="width:19%"></colgroup><thead><tr><th>Operación</th><th class="num">Nº incidencias</th><th class="num">% total</th></tr></thead><tbody>${entries.map(([operation,count])=>`<tr class="${state.operation===operation?'selected':''}" data-operation="${escapeHtml(operation)}"><td><span class="truncate" title="${escapeHtml(operation)}">${escapeHtml(operation)}</span></td><td class="num">${fmtInteger.format(count)}</td><td class="num">${fmtDecimal.format(percent(count,total))}%</td></tr>`).join('')}</tbody></table>`;
+      target.querySelectorAll('tbody tr').forEach(node=>node.addEventListener('click',()=>{state.operation=state.operation===node.dataset.operation?'':node.dataset.operation;syncControls();renderAll();}));
+    }
+
+    const spainMainland = [
+      [-9.30,43.03],[-9.18,43.25],[-8.73,43.39],[-8.18,43.54],[-7.52,43.62],[-6.72,43.58],[-5.85,43.58],[-5.05,43.55],[-4.25,43.45],[-3.55,43.50],[-2.80,43.36],[-2.15,43.33],[-1.44,43.25],[-1.30,43.05],[-1.72,42.62],[-1.48,42.36],[-.78,42.68],[.02,42.75],[.84,42.71],[1.55,42.62],[2.18,42.42],[2.83,42.34],[3.22,42.05],[3.29,41.72],[3.02,41.28],[2.48,40.78],[1.65,40.48],[.78,40.08],[.34,39.55],[-.20,39.05],[-.73,38.66],[-.70,38.20],[-.22,37.72],[-.47,37.39],[-1.25,37.29],[-1.88,36.96],[-2.63,36.74],[-3.36,36.69],[-4.08,36.73],[-4.65,36.50],[-5.20,36.38],[-5.61,36.00],[-6.10,36.17],[-6.56,36.54],[-6.98,36.80],[-7.42,37.18],[-7.31,37.56],[-7.09,38.03],[-7.00,38.54],[-7.27,39.02],[-7.04,39.55],[-6.86,40.05],[-6.93,40.46],[-6.80,41.04],[-6.52,41.63],[-6.18,41.93],[-6.31,42.13],[-7.02,42.14],[-7.44,41.90],[-8.16,42.00],[-8.67,42.20],[-8.16,42.49],[-8.70,42.71],[-9.12,42.57]
+    ];
+    const balearicIslands = [
+      [[1.18,38.78],[1.35,38.72],[1.58,38.92],[1.43,39.10],[1.18,39.04]],
+      [[2.30,39.28],[2.63,39.20],[3.03,39.34],[3.43,39.66],[3.22,39.94],[2.77,40.00],[2.36,39.78]],
+      [[3.78,39.82],[4.20,39.82],[4.34,40.01],[4.08,40.08],[3.76,39.98]]
+    ];
+    function mapPoint(lon,lat) { return [35+(lon+9.5)/14*470,25+(43.8-lat)/8.3*300]; }
+    function geoPath(points,projector=mapPoint) { return points.map(([lon,lat],index)=>`${index?'L':'M'}${projector(lon,lat).map(value=>value.toFixed(1)).join(' ')}`).join(' ')+' Z'; }
+    function centerMapMeta(center) {
+      const name=normalizeText(center);
+      if(name.includes('SAN PABLO NORTE')) return {coordinates:[-5.893,37.433],dx:13,dy:-17,anchor:'start'};
+      if(name.includes('SAN PABLO SUR')) return {coordinates:[-5.893,37.414],dx:13,dy:18,anchor:'start'};
+      if(name.includes('TABLADA')) return {coordinates:[-5.982,37.354],dx:-13,dy:18,anchor:'end'};
+      if(name.includes('CBC')) return {coordinates:[-6.289,36.527],dx:13,dy:19,anchor:'start'};
+      if(name.includes('PUERTO REAL')) return {coordinates:[-6.190,36.529],dx:13,dy:-17,anchor:'start'};
+      if(name.includes('PUERTO DE SANTA MARIA')) return {coordinates:[-6.228,36.601],dx:-13,dy:-11,anchor:'end'};
+      if(name.includes('GETAFE')) return {coordinates:[-3.730,40.307],dx:13,dy:-10,anchor:'start'};
+      if(name.includes('ILLESCAS')) return {coordinates:[-3.847,40.124],dx:13,dy:17,anchor:'start'};
+      if(name.includes('ALBACETE')) return {coordinates:[-1.863,38.949],dx:13,dy:-10,anchor:'start'};
+      return null;
+    }
+    function renderMap(data) {
+      const centers = new Map();
+      for (const row of data.sales) centers.set(row.center, (centers.get(row.center)||0)+row.amount);
+      for (const row of data.visits) if (!centers.has(row.center)) centers.set(row.center,0);
+      for (const row of data.incidents) if (!centers.has(row.center)) centers.set(row.center,0);
+      for (const row of data.preventives||[]) if (!centers.has(row.center)) centers.set(row.center,0);
+      const located = [...centers].map(([center,value])=>[center,value,centerMapMeta(center)]).filter(([, ,meta])=>meta);
+      const missing = centers.size - located.length;
+      let svg = `<svg class="map-svg" viewBox="0 0 620 360" role="img" aria-label="Mapa de España con centros Airbus"><path class="map-land" data-geography="spain-mainland" d="${geoPath(spainMainland)}"/>${balearicIslands.map(points=>`<path class="map-land" d="${geoPath(points)}"/>`).join('')}<rect class="map-inset" x="508" y="224" width="101" height="105" rx="10"/><text class="map-label" x="558" y="241" text-anchor="middle">ISLAS CANARIAS</text><g class="map-land"><path d="M519 279l10-5 8 4-5 7-11 1Z"/><path d="M544 272l7-9 6 7-4 10-7 1Z"/><path d="M563 286l8-8 7 6-3 9-9 1Z"/><path d="M585 276l9-5 5 5-8 6Z"/><path d="M603 268l4-3 2 5-5 3Z"/><path d="M534 303l5-3 4 5-6 4Z"/></g><path class="map-outline" d="M21 17H611V342H21Z"/>`;
+      for (const [center,value,meta] of located) {
+        const [x,y] = mapPoint(...meta.coordinates);
+        const selected = state.centers.includes(center) ? ' selected' : '';
+        svg += `<g class="map-pin${selected}" role="button" tabindex="0" data-center="${escapeHtml(center)}"><title>${escapeHtml(model.centerLabels.get(center)||center)} · ${fmtCurrency.format(value)}</title><circle cx="${x}" cy="${y}" r="7"/><text x="${x+meta.dx}" y="${y+meta.dy}" text-anchor="${meta.anchor}">${escapeHtml(center)}</text></g>`;
+      }
+      svg += '</svg>';
+      const note = centers.size ? `${located.length} centro${located.length===1?'':'s'} localizado${located.length===1?'':'s'}${missing?` · ${missing} sin coordenadas`:''}` : 'Sin centros para el filtro';
+      $('#mapChart').innerHTML = `${svg}<div class="map-summary">${note}</div>`;
+      $('#mapChart').querySelectorAll('.map-pin').forEach(node => {
+        const activate = () => { toggleSelection('centers',node.dataset.center); syncControls(); renderAll(); };
+        node.addEventListener('click', activate);
+        node.addEventListener('keydown', event => { if (event.key==='Enter' || event.key===' ') { event.preventDefault(); activate(); } });
+      });
+    }
+
+    function machineSummary(data) {
+      const map = new Map();
+      for(const [key,row] of salesMachinePopulation(data)) {
+        map.set(key,{center:row.center,machine:row.machine,revenue:0,qty:0,visits:0,incidents:0,lastVisit:'',dates:[],saleDates:new Set()});
+      }
+      const getMachine = row => map.get(machineIdentity(row));
+      data.sales.forEach(row => {
+        const item=getMachine(row);
+        if(!item) return;
+        item.revenue+=row.amount; item.qty+=row.qty; item.saleDates.add(row.date);
+      });
+      data.visits.forEach(row => {
+        const item=getMachine(row);
+        if(!item) return;
+        item.visits++; item.lastVisit=Math.max(item.lastVisit,row.date); item.dates.push(row.date);
+      });
+      data.incidents.forEach(row => {
+        const item=getMachine(row);
+        if(item) item.incidents++;
+      });
+      return [...map.values()].sort((a,b) => b.qty-a.qty || b.visits-a.visits);
+    }
+    function renderTables(data) {
+      const machines = machineSummary(data);
+      const centerCell = center => {
+        const label = escapeHtml(model.centerLabels.get(center) || center || 'Centro sin identificar');
+        return `<td><span class="truncate" title="${label}">${label}</span></td>`;
+      };
+      $('#machineTable').innerHTML = `<table><colgroup><col style="width:14%"><col style="width:18%"><col style="width:19%"><col style="width:8%"><col style="width:14%"><col style="width:9%"><col style="width:8%"><col style="width:10%"></colgroup><thead><tr><th>Máquina</th><th>Centro</th><th>Ubicación</th><th class="num">Ud.</th><th class="num">Importe</th><th class="num">Visitas</th><th class="num">Incid.</th><th class="num">Días venta</th></tr></thead><tbody>${machines.map(item => `<tr data-machine="${escapeHtml(machineIdentity(item))}"><td><strong>${escapeHtml(item.machine)}</strong></td>${centerCell(item.center)}<td><span class="truncate" title="${escapeHtml(model.locations.get(`${item.center}|${item.machine}`)||'—')}">${escapeHtml(model.locations.get(`${item.center}|${item.machine}`)||'—')}</span></td><td class="num">${fmtInteger.format(item.qty)}</td><td class="num">${fmtCurrency.format(item.revenue)}</td><td class="num">${fmtInteger.format(item.visits)}</td><td class="num">${fmtInteger.format(item.incidents)}</td><td class="num">${fmtInteger.format(item.saleDates.size)}</td></tr>`).join('')}</tbody></table>`;
+      $('#machineTable').querySelectorAll('tbody tr').forEach(row => row.addEventListener('click', () => { toggleSelection('machines',row.dataset.machine); syncControls(); renderAll(); }));
+
+      const issues = [...data.incidents].sort((a,b) => b.date.localeCompare(a.date));
+      $('#issueTable').innerHTML = `<table><colgroup><col style="width:11%"><col style="width:12%"><col style="width:12%"><col style="width:17%"><col style="width:14%"><col style="width:22%"><col style="width:12%"></colgroup><thead><tr><th>Fecha apertura</th><th>Fecha finalización</th><th>Máquina</th><th>Centro</th><th>Categoría</th><th>Operación</th><th>Estado</th></tr></thead><tbody>${issues.map(item => `<tr data-machine="${escapeHtml(machineIdentity(item))}"><td>${formatTableDate(item.date)}</td><td>${formatIncidentCloseDate(item.closed)}</td><td><strong>${escapeHtml(item.machine)}</strong></td>${centerCell(item.center)}<td>${escapeHtml(item.category)}</td><td><span class="truncate" title="${escapeHtml(item.operation||'—')}">${escapeHtml(item.operation||'—')}</span></td><td><span class="status ${normalizeText(item.status).includes('FINALIZADO')?'':'pending'}">${escapeHtml(item.status)}</span></td></tr>`).join('')}</tbody></table>`;
+      $('#issueTable').querySelectorAll('tbody tr').forEach(row => row.addEventListener('click', () => { toggleSelection('machines',row.dataset.machine); syncControls(); renderAll(); }));
+    }
+
+    function machineAuditSummary(data) {
+      const months=activePeriodMonths();
+      const machines=machineSummary(data).map(item=>({...item,monthlyRevenue:Math.round(item.revenue*100)/100/months,hasSales:item.saleDates.size>0}));
+      const orderMachine=(a,b)=>a.center.localeCompare(b.center,'es')||a.machine.localeCompare(b.machine,'es',{numeric:true});
+      const withoutSales=machines.filter(item=>!item.hasSales).sort(orderMachine);
+      const lowSales=machines.filter(item=>item.hasSales&&Math.round(item.revenue*100)<35000*months)
+        .sort((a,b)=>a.monthlyRevenue-b.monthlyRevenue||orderMachine(a,b));
+      const centers=new Map();
+      for(const item of machines) {
+        if(!centers.has(item.center)) centers.set(item.center,{center:item.center,total:0,withoutSales:0});
+        const entry=centers.get(item.center);
+        entry.total++;
+        if(!item.hasSales) entry.withoutSales++;
+      }
+      return {months,machines,withoutSales,lowSales,centers:[...centers.values()].sort((a,b)=>b.total-a.total||a.center.localeCompare(b.center,'es'))};
+    }
+    function limitAuditTableRows(target) {
+      const rows=[...target.querySelectorAll('tbody tr')];
+      if(!rows.length) return;
+      const header=target.querySelector('thead').getBoundingClientRect().height;
+      const body=rows.slice(0,10).reduce((height,row)=>height+row.getBoundingClientRect().height,0);
+      target.style.maxHeight=`${Math.ceil(header+body+2)}px`;
+    }
+    function bindAuditTable(target) {
+      target.querySelectorAll('tbody tr').forEach(row=>{
+        const activate=()=>{
+          if(row.dataset.machine) toggleSelection('machines',row.dataset.machine);
+          else toggleSelection('centers',row.dataset.center);
+          syncControls();renderAll();
+        };
+        row.addEventListener('click',activate);
+        row.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();activate();}});
+      });
+      limitAuditTableRows(target);
+    }
+    function renderMachineAuditTables(data) {
+      const audit=machineAuditSummary(data);
+      const centerLabelCell=center=>{const label=model.centerLabels.get(center)||center;return `<td><span class="truncate" title="${escapeHtml(label)}">${escapeHtml(label)}</span></td>`;};
+      const machineRowStart=item=>`<tr tabindex="0" class="${state.machines.includes(machineIdentity(item))?'selected':''}" data-machine="${escapeHtml(machineIdentity(item))}" aria-label="Filtrar máquina ${escapeHtml(item.machine)}, ${escapeHtml(model.centerLabels.get(item.center)||item.center)}"><td><span class="truncate" title="${escapeHtml(item.machine)}">${escapeHtml(item.machine)}</span></td>${centerLabelCell(item.center)}`;
+      $('#noSalesTitle').textContent=salesPartial()?'Máquinas sin dato de venta':'Máquinas sin venta';
+      $('#noSalesSubtitle').textContent=salesPartial()?`${fmtInteger.format(audit.withoutSales.length)} máquinas · sin venta en la fuente parcial: puede que vendan y no se lea aquí`:`${fmtInteger.format(audit.withoutSales.length)} máquinas · sin registros de venta en el periodo filtrado`;
+      $('#lowSalesSubtitle').textContent=`${fmtInteger.format(audit.lowSales.length)} máquinas con venta · importe ÷ ${audit.months} mes${audit.months===1?'':'es'} · de menor a mayor`;
+      $('#centerMachinesSubtitle').textContent=`${fmtInteger.format(audit.machines.length)} máquinas totales · ${fmtInteger.format(audit.withoutSales.length)} ${noSalesWord()} · según filtros`;
+
+      const noSales=$('#noSalesTable');
+      noSales.innerHTML=audit.withoutSales.length?`<table><colgroup><col style="width:16%"><col style="width:25%"><col style="width:13%"><col style="width:18%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr><th>Máquina</th><th>Centro</th><th class="num">Unidades</th><th class="num">Importe</th><th class="num">Visitas</th><th class="num">Incidencias</th></tr></thead><tbody>${audit.withoutSales.map(item=>`${machineRowStart(item)}<td class="num">${fmtInteger.format(item.qty)}</td><td class="num" title="${fmtCurrency.format(item.revenue)}">${fmtCurrency.format(item.revenue)}</td><td class="num">${fmtInteger.format(item.visits)}</td><td class="num">${fmtInteger.format(item.incidents)}</td></tr>`).join('')}</tbody></table>`:'<div class="audit-empty">No hay máquinas sin venta para este filtro.</div>';
+
+      const lowSales=$('#lowSalesTable');
+      lowSales.innerHTML=audit.lowSales.length?`<table><colgroup><col style="width:24%"><col style="width:42%"><col style="width:34%"></colgroup><thead><tr><th>Máquina</th><th>Centro</th><th class="num" title="Importe total de la máquina dividido entre los meses del periodo filtrado">Importe €/mes</th></tr></thead><tbody>${audit.lowSales.map(item=>`${machineRowStart(item)}<td class="num" title="${fmtCurrency.format(item.revenue)} del periodo ÷ ${audit.months} meses">${fmtCurrency.format(item.monthlyRevenue)}</td></tr>`).join('')}</tbody></table>`:'<div class="audit-empty">No hay máquinas con venta inferior a 350 €/mes para este filtro.</div>';
+
+      const centerMachines=$('#centerMachinesTable');
+      centerMachines.innerHTML=audit.centers.length?`<table><colgroup><col style="width:50%"><col style="width:26%"><col style="width:24%"></colgroup><thead><tr><th>Centro</th><th class="num">Máquinas total</th><th class="num">${salesPartial()?'Sin dato de venta':'Sin venta'}</th></tr></thead><tbody>${audit.centers.map(item=>`<tr tabindex="0" class="${state.centers.includes(item.center)?'selected':''}" data-center="${escapeHtml(item.center)}" aria-label="Filtrar centro ${escapeHtml(model.centerLabels.get(item.center)||item.center)}">${centerLabelCell(item.center)}<td class="num">${fmtInteger.format(item.total)}</td><td class="num">${fmtInteger.format(item.withoutSales)}</td></tr>`).join('')}</tbody></table>`:'<div class="audit-empty">No hay máquinas para este filtro.</div>';
+      [noSales,lowSales,centerMachines].forEach(bindAuditTable);
+    }
+
+    function renderOperationalHistory(data) {
+      const locationCell=row=>{const location=String(row.location||model.locations.get(machineIdentity(row))||'Ubicación no informada');return `<td><span class="truncate" title="${escapeHtml(location)}">${escapeHtml(location)}</span></td>`;};
+      const centerCell=center=>{const label=model.centerLabels.get(center)||center||'Centro sin identificar';return `<td><span class="truncate" title="${escapeHtml(label)}">${escapeHtml(label)}</span></td>`;};
+      const rowStart=item=>`<tr tabindex="0" class="${state.machines.includes(machineIdentity(item))?'selected':''}" data-machine="${escapeHtml(machineIdentity(item))}">`;
+
+      const visits=[...data.visits].sort((a,b)=>b.date.localeCompare(a.date)||a.center.localeCompare(b.center,'es')||a.machine.localeCompare(b.machine,'es',{numeric:true}));
+      const visitLog=$('#visitLogTable');
+      visitLog.innerHTML=visits.length?`<table><colgroup><col style="width:17%"><col style="width:27%"><col style="width:20%"><col style="width:36%"></colgroup><thead><tr><th>Fecha</th><th>Centro</th><th>Máquina</th><th>Ubicación</th></tr></thead><tbody>${visits.map(item=>`${rowStart(item)}<td>${formatTableDate(item.date)}</td>${centerCell(item.center)}<td><strong>${escapeHtml(item.machine)}</strong></td>${locationCell(item)}</tr>`).join('')}</tbody></table>`:'<div class="audit-empty">No hay visitas para este filtro.</div>';
+      const preventives=[...(data.preventives||[])].sort((a,b)=>b.date.localeCompare(a.date)||a.center.localeCompare(b.center,'es')||a.machine.localeCompare(b.machine,'es',{numeric:true}));
+      const preventiveTable=$('#preventiveTable');
+      if(preventivesNote) {
+        // No es que no haya preventivos: es que no hay de donde leerlos. Se dice.
+        $('#preventiveSubtitle').textContent='Sin fuente de datos';
+        preventiveTable.innerHTML=`<div class="audit-empty">${escapeHtml(preventivesNote)}</div>`;
+        bindAuditTable(visitLog);
+        return;
+      }
+      $('#preventiveSubtitle').textContent=`${fmtInteger.format(preventives.length)} mantenimientos · de más reciente a más antiguo`;
+      preventiveTable.innerHTML=preventives.length?`<table><colgroup><col style="width:14%"><col style="width:20%"><col style="width:15%"><col style="width:22%"><col style="width:19%"><col style="width:10%"></colgroup><thead><tr><th>Fecha</th><th>Centro</th><th>Máquina</th><th>Ubicación</th><th>Realizada por</th><th>Estado</th></tr></thead><tbody>${preventives.map(item=>`${rowStart(item)}<td>${formatTableDate(item.date)}</td>${centerCell(item.center)}<td><strong>${escapeHtml(item.machine)}</strong></td>${locationCell(item)}<td><span class="truncate" title="${escapeHtml(item.performedBy||'—')}">${escapeHtml(item.performedBy||'—')}</span></td><td><span class="status ${normalizeText(item.status).includes('FINALIZADO')?'':'pending'}" title="${escapeHtml(item.status)}">${escapeHtml(item.status)}</span></td></tr>`).join('')}</tbody></table>`:'<div class="audit-empty">No hay mantenimientos preventivos para este filtro.</div>';
+      [visitLog,preventiveTable].forEach(bindAuditTable);
+    }
+
+    function median(values) {
+      if (!values.length) return 0;
+      const sorted=[...values].sort((a,b)=>a-b), middle=Math.floor(sorted.length/2);
+      return sorted.length%2?sorted[middle]:(sorted[middle-1]+sorted[middle])/2;
+    }
+    function renderInsights(data) {
+      const units=sum(data.sales,'qty');
+      const machines=machineSummary(data);
+      const salesMachines=unique(data.sales,row=>`${row.center}|${row.machine}`);
+      const visitMachines=unique(data.visits,row=>`${row.center}|${row.machine}`);
+      const missing=[...salesMachines].filter(key=>!visitMachines.has(key)).map(key=>key.split('|')[1]);
+      const coverage=percent(salesMachines.size-missing.length,salesMachines.size);
+      const topMachine=[...machines].sort((a,b)=>b.qty-a.qty)[0];
+      const productUnits=sortedEntries(group(data.sales.filter(row=>normalizeText(row.article).replace(/[^A-Z]/g,'')!=='CREDITPURCHASE'),row=>row.article,row=>row.qty));
+      const visitGroups=new Map();
+      data.visits.forEach(row=>{const key=`${row.center}|${row.machine}`;if(!visitGroups.has(key))visitGroups.set(key,[]);visitGroups.get(key).push(row.date);});
+      const gaps=[];
+      visitGroups.forEach(dates=>{const uniqueDates=[...new Set(dates)].sort();for(let i=1;i<uniqueDates.length;i++)gaps.push(businessDaysBetween(uniqueDates[i-1],uniqueDates[i]));});
+      const closed=data.incidents.filter(row=>normalizeText(row.status).includes('FINALIZADO')).length;
+      const categories=sortedEntries(group(data.incidents,row=>row.category));
+      const cards=[
+        ['Cobertura de servicio', `${fmtDecimal.format(coverage)}% de las máquinas con venta tienen visitas`, missing.length ? `Sin visita registrada: ${missing.slice(0,6).join(', ')}${missing.length>6?'…':''}.` : 'No aparecen máquinas con venta sin visita en el periodo filtrado.'],
+        ['Concentración de unidades', topMachine ? `${topMachine.machine} lidera con ${fmtInteger.format(topMachine.qty)} unidades` : 'Sin unidades para analizar', topMachine ? `Representa el ${fmtDecimal.format(percent(topMachine.qty,units))}% de las unidades filtradas. El artículo líder es ${productUnits[0]?.[0]||'—'} con ${fmtInteger.format(productUnits[0]?.[1]||0)} unidades.` : 'Amplía o limpia los filtros.'],
+        ['Cadencia operativa', gaps.length ? `Mediana de ${fmtDecimal.format(median(gaps))} días laborables entre visitas` : 'No hay intervalos suficientes', gaps.length ? `El mayor intervalo observado es de ${fmtInteger.format(Math.max(...gaps))} días laborables, calculado por máquina (lunes a viernes, sin festivos).` : 'Se necesitan al menos dos fechas de visita por máquina.'],
+        ['Fiabilidad y calidad', `${fmtDecimal.format(units?data.incidents.length/units*1000:0)} incidencias por 1.000 unidades`, `${fmtDecimal.format(percent(closed,data.incidents.length))}% finalizadas${categories[0]?`; categoría principal: ${categories[0][0]}`:''}.`]
+      ];
+      $('#insightGrid').innerHTML=cards.map(([tag,title,text])=>`<article class="insight"><span class="insight-tag">${tag}</span><strong>${escapeHtml(title)}</strong><span>${escapeHtml(text)}</span></article>`).join('');
+    }
+
+    function renderChips() {
+      const chips=[];
+      if(state.day) chips.push(['day',`Día: ${formatPeriod(state.day,state.day)}`]);
+      if(state.month) chips.push(['month',`Mes: ${fmtMonth.format(new Date(`${state.month}-15T12:00:00`))}`]);
+      state.centers.forEach(value=>chips.push(['centers',`Centro: ${model.centerLabels.get(value)||value}`,value]));
+      state.locations.forEach(value=>chips.push(['locations',`Ubicación: ${model.locationEntries.find(item=>item.value===value)?.location||value}`,value]));
+      state.machines.forEach(value=>chips.push(['machines',`Máquina: ${model.machineEntries.find(item=>item.value===value)?.label||value}`,value]));
+      state.articles.forEach(value=>chips.push(['articles',`Artículo: ${value}`,value]));
+      if(state.operation) chips.push(['operation',`Operación: ${state.operation}`]);
+      $('#filterChips').innerHTML=chips.length?chips.map(([key,label,value=''])=>`<button type="button" class="active-chip" data-key="${key}" data-value="${escapeHtml(value)}">${escapeHtml(label)}</button>`).join(''):'<span style="color:var(--muted);font-size:11px">Sin selecciones adicionales.</span>';
+      $('#filterChips').querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
+        const key=btn.dataset.key;
+        if(Array.isArray(state[key])) state[key]=state[key].filter(value=>value!==btn.dataset.value);
+        else state[key]='';
+        syncControls();renderAll();
+      }));
+    }
+    const tableSortCollator=new Intl.Collator('es',{numeric:true,sensitivity:'base'});
+    function parseTableSortValue(rawValue) {
+      const raw=String(rawValue??'').trim();
+      if(!raw||raw==='—') return {empty:true,type:'text',value:''};
+      const date=raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if(date) return {empty:false,type:'number',value:Number(`${date[3]}${date[2]}${date[1]}`)};
+      const compact=raw.replace(/\s/g,'').replace(/[€%]$/,'');
+      if(/^[+-]?(?:\d{1,3}(?:\.\d{3})*|\d+)(?:,\d+)?$/.test(compact)) {
+        return {empty:false,type:'number',value:Number(compact.replace(/\./g,'').replace(',','.'))};
+      }
+      return {empty:false,type:'text',value:raw};
+    }
+    function compareTableSortValues(left,right,direction=1) {
+      if(left.empty!==right.empty) return left.empty?1:-1;
+      if(left.empty) return 0;
+      const compared=left.type==='number'&&right.type==='number'?left.value-right.value:tableSortCollator.compare(String(left.value),String(right.value));
+      return compared*direction;
+    }
+    function enableTableSorting() {
+      document.querySelectorAll('.table-wrap table').forEach(table=>{
+        const headers=[...table.querySelectorAll('thead th')];
+        headers.forEach((header,columnIndex)=>{
+          header.classList.add('sortable');
+          header.tabIndex=0;
+          header.setAttribute('role','button');
+          header.setAttribute('aria-sort','none');
+          const sort=()=>{
+            const direction=header.getAttribute('aria-sort')==='ascending'?-1:1;
+            headers.forEach(item=>item.setAttribute('aria-sort','none'));
+            header.setAttribute('aria-sort',direction===1?'ascending':'descending');
+            const body=table.querySelector('tbody');
+            const rows=[...body.rows].map((row,index)=>({row,index,value:parseTableSortValue(row.cells[columnIndex]?.textContent)}));
+            rows.sort((a,b)=>compareTableSortValues(a.value,b.value,direction)||a.index-b.index);
+            rows.forEach(item=>body.appendChild(item.row));
+          };
+          header.addEventListener('click',sort);
+          header.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();sort();}});
+        });
+      });
+    }
+    function renderAll() {
+      const data=filteredData();
+      renderKpis(data);
+      renderTrend(data);
+      renderMap(data);
+      renderVisitTable(data);
+      renderProductTable(data);
+      renderOperationTable(data);
+      renderTables(data);
+      renderMachineAuditTables(data);
+      renderOperationalHistory(data);
+      renderInsights(data);
+      renderChips();
+      enableTableSorting();
+      const [effectiveFrom,effectiveTo]=activeDateBounds();
+      $('#periodStamp').textContent=formatActivePeriod(effectiveFrom,effectiveTo);
+      const salesMachines=unique(model.sales,row=>`${row.center}|${row.machine}`), visitMachines=unique(model.visits,row=>`${row.center}|${row.machine}`);
+      const linked=[...salesMachines].filter(key=>visitMachines.has(key)).length;
+      $('#footerCoverage').textContent=`Enlace de fuentes: ${linked} de ${salesMachines.size} máquinas con venta tienen visitas (${fmtDecimal.format(percent(linked,salesMachines.size))}%).`;
+    }
+
+    function fillSelect(element, entries, placeholder, selected, labelFn=value=>value) {
+      element.innerHTML=`<option value="">${placeholder}</option>`+entries.map(value=>`<option value="${escapeHtml(value)}" ${selected===value?'selected':''}>${escapeHtml(labelFn(value))}</option>`).join('');
+      element.title=selected?labelFn(selected):placeholder;
+    }
+    function readMultiSelect(element) {
+      return [...element.querySelectorAll('input[type="checkbox"]:checked')].map(input=>input.value);
+    }
+    function fillMultiSelect(element,entries,placeholder,selected,labelFn=value=>value,onChange=()=>{}) {
+      const popup=element.querySelector('.multi-popup'), text=element.querySelector('summary span');
+      const refreshLabel=()=>{
+        const values=readMultiSelect(element);
+        text.textContent=values.length===1?labelFn(values[0]):values.length?`${values.length} seleccionados`:placeholder;
+        element.querySelector('summary').title=values.length?values.map(labelFn).join(', '):placeholder;
+      };
+      popup.innerHTML=`<input class="multi-search" type="search" aria-label="Buscar opciones" placeholder="Buscar…"><div class="multi-actions"><span>Selecciona y pulsa Aplicar</span><button type="button" class="multi-clear">Limpiar</button></div><div class="multi-options">${entries.map(value=>`<label class="multi-option"><input type="checkbox" value="${escapeHtml(value)}" ${selected.includes(value)?'checked':''}><span>${escapeHtml(labelFn(value))}</span></label>`).join('')}</div>`;
+      const changed=()=>{refreshLabel();onChange();};
+      popup.querySelectorAll('input[type="checkbox"]').forEach(input=>input.addEventListener('change',changed));
+      popup.querySelector('.multi-clear').addEventListener('click',()=>{popup.querySelectorAll('input[type="checkbox"]').forEach(input=>input.checked=false);changed();});
+      popup.querySelector('.multi-search').addEventListener('input',event=>{
+        const query=normalizeText(event.target.value);
+        popup.querySelectorAll('.multi-option').forEach(label=>label.hidden=!normalizeText(label.textContent).includes(query));
+      });
+      refreshLabel();
+    }
+    function refreshLocationFilter(centers,selected=state.locations) {
+      const entries=model.locationEntries.filter(item=>!centers.length||centers.includes(item.center));
+      const labels=new Map(entries.map(item=>[item.value,centers.length===1?item.location:item.label]));
+      const validSelected=selected.filter(value=>labels.has(value));
+      fillMultiSelect($('#locationFilter'),entries.map(item=>item.value),'Todas las ubicaciones',validSelected,value=>labels.get(value)||value,()=>{
+        refreshMachineFilter(centers,readMultiSelect($('#locationFilter')),readMultiSelect($('#machineFilter')));
+      });
+      return validSelected;
+    }
+    function refreshMachineFilter(centers,locations=[],selected=state.machines) {
+      const entries=model.machineEntries.filter(item=>(!centers.length||centers.includes(item.center))&&(!locations.length||locations.includes(item.locationValue)));
+      const labels=new Map(entries.map(item=>[item.value,item.label]));
+      const validSelected=selected.filter(value=>labels.has(value));
+      fillMultiSelect($('#machineFilter'),entries.map(item=>item.value),'Todas las máquinas',validSelected,value=>labels.get(value)||value);
+      return validSelected;
+    }
+    function syncControls() {
+      $('#dateFrom').value=state.from;
+      $('#dateTo').value=state.to;
+      fillMultiSelect($('#centerFilter'),model.centers,'Todos los centros',state.centers,value=>model.centerLabels.get(value)||value,()=>{
+        const centers=readMultiSelect($('#centerFilter'));
+        refreshLocationFilter(centers,readMultiSelect($('#locationFilter')));
+        refreshMachineFilter(centers,readMultiSelect($('#locationFilter')),readMultiSelect($('#machineFilter')));
+      });
+      state.locations=refreshLocationFilter(state.centers,state.locations);
+      state.machines=refreshMachineFilter(state.centers,state.locations,state.machines);
+      fillMultiSelect($('#articleFilter'),model.articles,'Todos los artículos',state.articles);
+    }
+    function setupModel(builtModel, reset=true) {
+      model=builtModel;
+      if(reset) { state={from:model.defaultFrom,to:model.defaultTo,centers:[],locations:[],machines:[],articles:[],operation:'',day:'',month:''}; trendMode='day'; }
+      syncControls();
+      $('#dateFrom').min=model.minDate; $('#dateFrom').max=model.maxDate;
+      $('#dateTo').min=model.minDate; $('#dateTo').max=model.maxDate;
+      renderAll();
+    }
+
+    $('#applyFilters').addEventListener('click',()=>{
+      state.from=$('#dateFrom').value; state.to=$('#dateTo').value; state.centers=readMultiSelect($('#centerFilter')); state.locations=readMultiSelect($('#locationFilter')); state.machines=readMultiSelect($('#machineFilter')); state.articles=readMultiSelect($('#articleFilter')); state.day=''; state.month='';
+      if(state.from&&state.to&&state.from>state.to) [state.from,state.to]=[state.to,state.from];
+      document.querySelectorAll('.multi-select').forEach(element=>element.open=false);
+      syncControls();
+      renderAll();
+    });
+    $('#resetFilters').addEventListener('click',()=>{state={from:model.defaultFrom,to:model.defaultTo,centers:[],locations:[],machines:[],articles:[],operation:'',day:'',month:''};syncControls();renderAll();});
+    globalThis.addEventListener?.('resize',()=>document.querySelectorAll('.audit-table').forEach(limitAuditTableRows));
+    document.addEventListener('click',event=>document.querySelectorAll('.multi-select[open]').forEach(element=>{if(!element.contains(event.target)) element.open=false;}));
+    document.addEventListener('keydown',event=>{if(event.key==='Escape') document.querySelectorAll('.multi-select[open]').forEach(element=>{element.open=false;element.querySelector('summary').focus();});});
+    $('#printBtn').addEventListener('click',()=>window.print());
+    document.querySelectorAll('[data-trend-mode]').forEach(button=>button.addEventListener('click',()=>{
+      const mode=button.dataset.trendMode;
+      if(mode===trendMode) return;
+      if((mode==='month'||mode==='units-month')&&state.day) { state.month=state.day.slice(0,7); state.day=''; }
+      trendMode=mode;
+      renderAll();
+    }));
+
+    function downloadBlob(blob, filename) {
+      const url=URL.createObjectURL(blob), anchor=document.createElement('a');
+      anchor.href=url; anchor.download=filename; document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }
+
+    function exportLocation(row) {
+      return String(row.location || model.locations.get(`${row.center}|${row.machine}`) || 'Ubicación no informada');
+    }
+    function compareExportRows(a,b) {
+      for (const index of [0,1,3,4]) {
+        const result=String(a[index]??'').localeCompare(String(b[index]??''),'es',{numeric:true});
+        if(result) return result;
+      }
+      return 0;
+    }
+    function buildExportRows(data) {
+      const salesMap=new Map();
+      data.sales.forEach(row=>{
+        const values=[model.centerLabels.get(row.center)||row.center,row.machine,exportLocation(row),row.date,row.article];
+        const key=values.join('\u001f');
+        if(!salesMap.has(key)) salesMap.set(key,{values,units:0,amount:0});
+        const item=salesMap.get(key);
+        item.units+=row.qty;
+        item.amount+=row.amount;
+      });
+      const sales=[...salesMap.values()].map(item=>[...item.values,item.units,item.amount]).sort(compareExportRows);
+
+      const visitMap=new Map();
+      data.visits.forEach(row=>{
+        const values=[
+          model.centerLabels.get(row.center)||row.center,row.machine,exportLocation(row),row.date,row.visitId??'',row.pdv||'',row.time||'',
+          row.route||'',row.employee||'',row.vehicle||'',row.client||''
+        ];
+        const key=values.join('\u001f');
+        if(!visitMap.has(key)) visitMap.set(key,{values,count:0});
+        visitMap.get(key).count++;
+      });
+      const visits=[...visitMap.values()].map(item=>[...item.values.slice(0,4),item.count,...item.values.slice(4)]).sort(compareExportRows);
+
+      const incidents=data.incidents.map(row=>[
+        model.centerLabels.get(row.center)||row.center,row.machine,exportLocation(row),row.date,
+        row.number??'',row.category||'',String(row.operation||'Sin operación'),row.status||'',row.technician??''
+      ]).sort(compareExportRows);
+      return {sales,visits,incidents};
+    }
+
+    function xmlEscape(value) {
+      return String(value??'').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+    }
+    function excelColumn(index) {
+      let name='';
+      for(let value=index+1;value>0;value=Math.floor((value-1)/26)) name=String.fromCharCode(65+(value-1)%26)+name;
+      return name;
+    }
+    function excelSerial(iso) {
+      const [year,month,day]=String(iso).split('-').map(Number);
+      return Number.isFinite(year+month+day)?Date.UTC(year,month-1,day)/86400000+25569:0;
+    }
+    function worksheetXml(headers,rows,widths,dateColumns=[],numberColumns=[],decimalColumns=[]) {
+      const dateSet=new Set(dateColumns), numberSet=new Set(numberColumns), decimalSet=new Set(decimalColumns), lastColumn=excelColumn(headers.length-1), lastRow=Math.max(rows.length+1,1);
+      const columns=widths.map((width,index)=>`<col min="${index+1}" max="${index+1}" width="${width}" customWidth="1"/>`).join('');
+      const makeCell=(value,rowIndex,columnIndex)=>{
+        const ref=`${excelColumn(columnIndex)}${rowIndex}`;
+        if(rowIndex===1) return `<c r="${ref}" s="2" t="inlineStr"><is><t>${xmlEscape(value)}</t></is></c>`;
+        if(value===null||value===undefined||value==='') return `<c r="${ref}"/>`;
+        if(dateSet.has(columnIndex)) return `<c r="${ref}" s="1"><v>${excelSerial(value)}</v></c>`;
+        if(decimalSet.has(columnIndex)&&Number.isFinite(+value)) return `<c r="${ref}" s="4"><v>${+value}</v></c>`;
+        if(numberSet.has(columnIndex)&&Number.isFinite(+value)) return `<c r="${ref}" s="3"><v>${+value}</v></c>`;
+        return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
+      };
+      const headerXml=`<row r="1" ht="22" customHeight="1">${headers.map((value,index)=>makeCell(value,1,index)).join('')}</row>`;
+      const rowsXml=rows.map((row,index)=>`<row r="${index+2}">${headers.map((_,column)=>makeCell(row[column],index+2,column)).join('')}</row>`).join('');
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:${lastColumn}${lastRow}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${columns}</cols><sheetData>${headerXml}${rowsXml}</sheetData><autoFilter ref="A1:${lastColumn}${lastRow}"/></worksheet>`;
+    }
+    function crc32(bytes) {
+      if(!crc32.table) {
+        crc32.table=Array.from({length:256},(_,index)=>{
+          let value=index;
+          for(let bit=0;bit<8;bit++) value=(value&1)?0xEDB88320^(value>>>1):value>>>1;
+          return value>>>0;
+        });
+      }
+      let value=0xFFFFFFFF;
+      for(const byte of bytes) value=crc32.table[(value^byte)&255]^(value>>>8);
+      return (value^0xFFFFFFFF)>>>0;
+    }
+    function zipStored(files,mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+      const encoder=new TextEncoder(), now=new Date(), localParts=[], centralParts=[], entries=[];
+      const dosTime=(now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1);
+      const dosDate=((Math.max(now.getFullYear(),1980)-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate();
+      let localOffset=0;
+      files.forEach(([name,content])=>{
+        const nameBytes=encoder.encode(name), data=typeof content==='string'?encoder.encode(content):content, checksum=crc32(data);
+        const header=new Uint8Array(30), view=new DataView(header.buffer);
+        view.setUint32(0,0x04034B50,true); view.setUint16(4,20,true); view.setUint16(8,0,true);
+        view.setUint16(10,dosTime,true); view.setUint16(12,dosDate,true); view.setUint32(14,checksum,true);
+        view.setUint32(18,data.length,true); view.setUint32(22,data.length,true); view.setUint16(26,nameBytes.length,true);
+        localParts.push(header,nameBytes,data);
+        entries.push({nameBytes,dataLength:data.length,checksum,offset:localOffset});
+        localOffset+=header.length+nameBytes.length+data.length;
+      });
+      entries.forEach(entry=>{
+        const header=new Uint8Array(46), view=new DataView(header.buffer);
+        view.setUint32(0,0x02014B50,true); view.setUint16(4,20,true); view.setUint16(6,20,true);
+        view.setUint16(12,dosTime,true); view.setUint16(14,dosDate,true); view.setUint32(16,entry.checksum,true);
+        view.setUint32(20,entry.dataLength,true); view.setUint32(24,entry.dataLength,true); view.setUint16(28,entry.nameBytes.length,true);
+        view.setUint32(42,entry.offset,true); centralParts.push(header,entry.nameBytes);
+      });
+      const centralSize=centralParts.reduce((total,part)=>total+part.length,0), end=new Uint8Array(22), endView=new DataView(end.buffer);
+      endView.setUint32(0,0x06054B50,true); endView.setUint16(8,entries.length,true); endView.setUint16(10,entries.length,true);
+      endView.setUint32(12,centralSize,true); endView.setUint32(16,localOffset,true);
+      return new Blob([...localParts,...centralParts,end],{type:mimeType});
+    }
+    function createExportWorkbook(data) {
+      const rows=buildExportRows(data), created=new Date().toISOString();
+      const sheets=[
+        ['Ventas',worksheetXml(['Centro','Máquina','Ubicación','Fecha','Artículo','Unidades','Importe'],rows.sales,[25,16,38,13,40,12,14],[3],[5],[6])],
+        ['Visitas',worksheetXml(['Centro','Máquina','Ubicación','Fecha','Nº visitas','ID visita','PDV','Hora','Ruta','Empleado','Vehículo','Cliente'],rows.visits,[25,16,38,13,13,14,14,10,42,30,16,24],[3],[4])],
+        ['Averías',worksheetXml(['Centro','Máquina','Ubicación','Fecha','Nº incidencia','Categoría','Operación','Estado','Técnico'],rows.incidents,[25,16,38,13,15,25,42,20,24],[3],[])]
+      ];
+      const contentTypes=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_,index)=>`<Override PartName="/xl/worksheets/sheet${index+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
+      const rootRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`;
+      const workbook=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView/></bookViews><sheets>${sheets.map(([name],index)=>`<sheet name="${xmlEscape(name)}" sheetId="${index+1}" r:id="rId${index+1}"/>`).join('')}</sheets><calcPr calcId="191029"/></workbook>`;
+      const workbookRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_,index)=>`<Relationship Id="rId${index+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index+1}.xml"/>`).join('')}<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+      const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="3"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="#,##0"/><numFmt numFmtId="166" formatCode="#,##0.00"/></numFmts><fonts count="2"><font><sz val="10"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/><family val="2"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00205B"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"><alignment vertical="center"/></xf><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles><dxfs count="0"/><tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/></styleSheet>`;
+      const core=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>Dashboard Servicio de Vending</dc:title><dc:creator>Dashboard Servicio de Vending</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${created}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${created}</dcterms:modified></cp:coreProperties>`;
+      const app=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>Dashboard Servicio de Vending</Application><HeadingPairs><vt:vector size="2" baseType="variant"><vt:variant><vt:lpstr>Hojas</vt:lpstr></vt:variant><vt:variant><vt:i4>3</vt:i4></vt:variant></vt:vector></HeadingPairs><TitlesOfParts><vt:vector size="3" baseType="lpstr">${sheets.map(([name])=>`<vt:lpstr>${xmlEscape(name)}</vt:lpstr>`).join('')}</vt:vector></TitlesOfParts></Properties>`;
+      return zipStored([
+        ['[Content_Types].xml',contentTypes],['_rels/.rels',rootRels],['docProps/core.xml',core],['docProps/app.xml',app],
+        ['xl/workbook.xml',workbook],['xl/_rels/workbook.xml.rels',workbookRels],['xl/styles.xml',styles],
+        ...sheets.map(([,xml],index)=>[`xl/worksheets/sheet${index+1}.xml`,xml])
+      ]);
+    }
+    $('#exportExcelBtn').addEventListener('click',()=>{
+      try {
+        const data=filteredData(), rows=buildExportRows(data), selectedMonth=state.month?monthBounds(state.month):null;
+        const monthFrom=selectedMonth?(state.from&&state.from>selectedMonth[0]?state.from:selectedMonth[0]):'', monthTo=selectedMonth?(state.to&&state.to<selectedMonth[1]?state.to:selectedMonth[1]):'';
+        const from=state.day||monthFrom||state.from||model.minDate||'sin_fecha', to=state.day||monthTo||state.to||model.maxDate||'sin_fecha';
+        downloadBlob(createExportWorkbook(data),`Informe_Vending_${from}_${to}.xlsx`);
+        showToast(`Excel exportado: ${fmtInteger.format(rows.sales.length)} ventas · ${fmtInteger.format(rows.visits.length)} visitas · ${fmtInteger.format(rows.incidents.length)} averías.`);
+      } catch(error) { console.error(error); showToast('No se pudo generar el Excel.'); }
+    });
+    // ------------------------------------------------------------------ arranque
+    // El cuadro de David se alimentaba arrastrando Excel. Aqui los datos los
+    // calcula cada noche la Lambda de agregados para el perfil de la sesion y
+    // los sirve /api/cuadro: el indice (maquinas, articulos, visitas,
+    // incidencias) y la venta troceada por mes. La pagina no elige de quien
+    // son: la API los saca del perfil de la sesion, nunca de la peticion.
+    let preventivesNote = '';
+    function bootMessage(text, isError=false) {
+      const main=$('main.shell');
+      main.innerHTML=`<div class="boot${isError?' error':''}" role="status">${escapeHtml(text)}</div>`;
+    }
+    async function getJson(url) {
+      const response = await fetch(url, { credentials: 'same-origin' });
+      if (response.status === 401) { location.href = '/'; throw new Error('Sin sesión'); }
+      let body = {};
+      try { body = await response.json(); } catch (error) {}
+      if (!response.ok) throw new Error(body.error || `No se ha podido leer ${url}`);
+      return body;
+    }
+    function describeData(indice, built) {
+      const generated = indice.generado ? new Date(indice.generado) : null;
+      const totals = `${fmtInteger.format(built.machineCensus.length)} máquinas · ${fmtInteger.format(built.visits.length)} visitas · ${fmtInteger.format(built.incidents.length)} incidencias`;
+      $('#dataStatusTitle').textContent = salesPartial() ? 'Datos de VenCloud · venta parcial' : 'Datos de VenCloud';
+      $('#dataStatusText').textContent = `${totals}${generated ? ` · calculado el ${generated.toLocaleString('es-ES')}` : ''}. Servidos desde este mismo dominio.`;
+      const notice = $('#salesNotice');
+      if (salesPartial()) {
+        const v = indice.ventas || {};
+        // El texto es de la pagina, no el _nota del servidor: aquel es para
+        // nosotros (cita informes y documentos) y esto lo lee el cliente.
+        notice.innerHTML = '<strong>La venta de este cuadro está incompleta.</strong> '
+          + 'Sale de la lectura que se hace en cada visita, no de la telemetría: sólo aparecen las máquinas que se leen al visitarlas, '
+          + 'y la venta se fecha el día de la lectura, no el de la venta. '
+          + `En este periodo tienen venta ${fmtInteger.format(v.maquinas_censo_con_venta || 0)} de ${fmtInteger.format(v.maquinas_censo || 0)} máquinas instaladas, `
+          + 'así que una máquina «sin dato de venta» puede estar vendiendo. Visitas e incidencias sí están completas.';
+        notice.hidden = false;
+      }
+    }
+    (async function start() {
+      setLoading(true, 'Cargando datos…');
+      try {
+        const yo = await getJson('/api/yo');
+        if (!(yo.sesiones || []).includes('cuadro')) { location.href = '/panel/'; return; }
+        $('#sessionWho').textContent = `${yo.nombre || yo.correo || ''}${yo.perfil ? ' · ' + yo.perfil : ''}`;
+        document.title = `${yo.perfil ? yo.perfil + ' · ' : ''}Cuadro de mando · digivend`;
+        if (normalizeText(yo.perfil).includes('AIRBUS')) $('#brandLogo').hidden = false;
+        if (yo.permisos && yo.permisos.exportar) $('#exportExcelBtn').hidden = false;
+        $('#panelBtn').hidden = !(yo.sesiones || []).some(sesion => sesion !== 'cuadro');
+
+        const indice = await getJson('/api/cuadro');
+        salesSource = indice.ventas || salesSource;
+        preventivesNote = indice.preventivos ? '' : 'Los mantenimientos preventivos todavía no se reciben de VenCloud. En cuanto lleguen, aparecerán aquí.';
+        const trozos = await Promise.all((indice.trozos || []).map((trozo, i, all) => {
+          $('#loadingText').textContent = `Cargando la venta (${all.length} ${all.length === 1 ? 'mes' : 'meses'})…`;
+          return getJson(`/api/cuadro?trozo=${encodeURIComponent(trozo)}`);
+        }));
+        const built = modelFromCuadro(indice, trozos);
+        describeData(indice, built);
+        setupModel(built, true);
+      } catch (error) {
+        console.error(error);
+        bootMessage(error.message || 'No se ha podido cargar el cuadro de mando.', true);
+      } finally {
+        setLoading(false);
+      }
+    })();
+    $('#panelBtn').addEventListener('click', () => { location.href = '/panel/'; });
+    $('#logoutBtn').addEventListener('click', async () => {
+      try { await fetch('/api/salir', { method: 'POST', credentials: 'same-origin' }); } catch (error) {}
+      location.href = '/';
+    });
+  </script></body></html>

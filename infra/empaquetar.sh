@@ -21,7 +21,7 @@ cp infra/lambda_extraccion.py "$TEMP/index.py"
 rm "$TEMP/index.py"
 
 # El de digivend-agregados apunta al modulo, asi que van con su nombre.
-(cd infra && zip -q "$SALIDA/agregados.zip" lambda_agregados.py reglas.py)
+(cd infra && zip -q "$SALIDA/agregados.zip" lambda_agregados.py reglas.py cuadro.py)
 
 # --- plataforma web --------------------------------------------------------
 (cd infra/api && zip -q "$SALIDA/api.zip" comun.py autorizacion.py catalogo.py lambda_api.py)

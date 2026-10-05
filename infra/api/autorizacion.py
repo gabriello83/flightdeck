@@ -28,7 +28,7 @@ def nivel_de(tipo):
 
 
 # ----------------------------------------------------------------------
-# las 16 sesiones del catalogo (docs/39)
+# las sesiones del catalogo (docs/39, mas el cuadro de mando de docs/46)
 # ----------------------------------------------------------------------
 # id: (nombre, tipo minimo, bloques del panel que necesita)
 SESIONES = {
@@ -49,6 +49,9 @@ SESIONES = {
     "catalogo":         ("Catalogo de informes",           "admin",       ()),
     "telefonos":        ("Telefonos y mensajes",           "admin",       ()),
     "carga":            ("Estado de la carga",             "admin",       ("carga",)),
+    # El cuadro de mando de David (docs/46). No pide ningun bloque del panel:
+    # va en su propia carpeta, cabina/<perfil>/cuadro/, y lo sirve /api/cuadro.
+    "cuadro":           ("Cuadro de mando",                "cliente",     ()),
 }
 
 

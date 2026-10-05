@@ -44,6 +44,7 @@ from collections import defaultdict
 import boto3
 
 import reglas as R
+from cuadro import Cuadro
 
 s3 = boto3.client("s3")
 BUCKET = os.environ["BUCKET"]
@@ -71,17 +72,25 @@ CLAVE_CENSO_ANTERIOR = "cabina/_censo/anterior.json"
 #
 # Anadir un informe aqui sigue siendo lo unico que hace falta para que entre en
 # la cabina; si no trae `centro`, va despues de los que si.
+#
+# La quinta columna es lo que hace con esas filas el cuadro de mando de los
+# perfiles de cliente (cuadro.py). Las dos fuentes de venta solo las usa el
+# cuadro: si ningun perfil lo calcula, ni se leen.
 FUENTES = [
     # con columna `centro`: ademas de sumar, ensenan el mapa
-    ("partes",      "crudo/visita_cabecera",      "visita_cabecera",      "come_partes"),
-    ("mov_maquina", "crudo/stock_maquina",        "stock_maquina",        "come_mov_maquina"),
-    ("sat",         "crudo/sat_averias",          "sat_averias",          "come_sat"),
+    ("partes",      "crudo/visita_cabecera",      "visita_cabecera",      "come_partes",      "come_partes"),
+    ("mov_maquina", "crudo/stock_maquina",        "stock_maquina",        "come_mov_maquina", None),
+    ("sat",         "crudo/sat_averias",          "sat_averias",          "come_sat",         "come_sat"),
+    # La telemetria trae centro, y va ANTES que la venta del parte: el dia que
+    # hay telemetria, la del parte no se usa (serian las mismas ventas dos veces).
+    ("telemetria",  "crudo/telemetria_ventas",    "telemetria_ventas",    None,               "come_ventas_telemetria"),
     # sin columna `centro`: dependen del mapa para saber de quien son
-    ("lineas",      "crudo/visita_reposiciones",  "visita_reposiciones",  "come_lineas"),
-    ("recaudacion", "crudo/recaudacion",          "recaudacion",          "come_recaudacion"),
-    ("sat_eventos", "crudo/sat_eventos",          "sat_eventos",          "come_sat_eventos"),
-    ("jornadas",    "crudo/jornadas",             "jornadas",             "come_jornadas"),
-    ("balance",     "crudo/stock_balance",        "stock_balance",        "come_balance"),
+    ("lineas",      "crudo/visita_reposiciones",  "visita_reposiciones",  "come_lineas",      None),
+    ("ventas_parte", "crudo/visita_ventas",       "visita_ventas",        None,               "come_ventas_visita"),
+    ("recaudacion", "crudo/recaudacion",          "recaudacion",          "come_recaudacion", None),
+    ("sat_eventos", "crudo/sat_eventos",          "sat_eventos",          "come_sat_eventos", None),
+    ("jornadas",    "crudo/jornadas",             "jornadas",             "come_jornadas",    None),
+    ("balance",     "crudo/stock_balance",        "stock_balance",        "come_balance",     None),
 ]
 
 
@@ -234,6 +243,11 @@ class MapaCentros:
         return self.de_quien_es(fila).centro
 
 
+def tiene_ambito(ambito):
+    """Un perfil con ambito es un perfil de cliente; sin ambito, el interno."""
+    return bool(ambito.get("clientes") or ambito.get("centros") or ambito.get("delegaciones"))
+
+
 def en_ambito(fila, ambito, mapa=None):
     """El ambito es aditivo: basta con encajar en uno de los tres.
 
@@ -257,7 +271,7 @@ def en_ambito(fila, ambito, mapa=None):
     porque funciona y porque no todos los perfiles van a reescribirse a la vez,
     no porque sea igual de bueno.
     """
-    if not (ambito.get("clientes") or ambito.get("centros") or ambito.get("delegaciones")):
+    if not tiene_ambito(ambito):
         return True
     q = mapa.de_quien_es(fila) if mapa is not None else _quien(fila)
     deleg = str(R.v(fila, "delegacion", ""))
@@ -292,6 +306,12 @@ class Acumulador:
         self.perfil = perfil
         self.ambito = perfil.get("ambito", {})
         self.hoy = hoy or datetime.date.today()
+        # El cuadro de mando de David se calcula para TODO perfil de cliente
+        # (con ambito), y quien lo ve lo decide la sesion «cuadro», que se marca
+        # en la consola al editar el perfil: asi activarlo no pide tocar este
+        # fichero. El interno (ambito vacio, todo el parque) no lo calcula: no lo
+        # necesita y su venta no cabria. `"cuadro": false` lo apaga a mano.
+        self.cuadro = Cuadro() if perfil.get("cuadro", tiene_ambito(self.ambito)) else None
         # Cuantas filas le han tocado. Es la cifra que delata un panel vacio
         # antes de que lo vea el cliente: un perfil a cero no es un mes flojo,
         # es un ambito que ha dejado de encajar.
@@ -815,6 +835,26 @@ def altas_desde_el_censo_anterior(acumuladores):
     return nuevos
 
 
+def escribe_cuadro(acu, periodo):
+    """Escribe el cuadro de un perfil: el indice y sus trozos de venta.
+
+    El trozo de un mes que ya salio de la ventana se queda en S3, y es a
+    proposito: borrarlo pediria `s3:DeleteObject` al rol, que hoy no lo tiene y
+    no lo necesita para nada mas. No se ve: la API solo sirve los trozos que
+    cita el indice de esta noche.
+    """
+    base = f"cabina/{acu.perfil['id']}/cuadro/"
+    ficheros = acu.cuadro.ficheros(acu.perfil, periodo)
+    for nombre, obj in ficheros.items():
+        escribe(base + nombre, obj)
+    v = ficheros["indice.json"]["ventas"]
+    return {"fuente": v["fuente"], "trozos": len(ficheros) - 1,
+            "maquinas_censo": v["maquinas_censo"],
+            "maquinas_censo_con_venta": v["maquinas_censo_con_venta"],
+            "visitas": len(ficheros["indice.json"]["visitas"]),
+            "incidencias": len(ficheros["indice.json"]["incidencias"])}
+
+
 def lambda_handler(event, context):
     hoy = datetime.date.today()
     dias = [hoy - datetime.timedelta(days=d) for d in range(1, DIAS + 1)]
@@ -834,9 +874,15 @@ def lambda_handler(event, context):
         leidas["instalaciones"] = len(censo)
         mapa.aprende(censo)
         for acu in acumuladores:
-            acu.come_instalaciones([f for f in censo if en_ambito(f, acu.ambito, mapa)])
+            propias = [f for f in censo if en_ambito(f, acu.ambito, mapa)]
+            acu.come_instalaciones(propias)
+            if acu.cuadro:
+                acu.cuadro.come_instalaciones(propias)
     del censo
-    for nombre, destino, id_informe, metodo in FUENTES:
+    con_cuadro = any(acu.cuadro for acu in acumuladores)
+    for nombre, destino, id_informe, metodo, metodo_cuadro in FUENTES:
+        if metodo is None and not con_cuadro:
+            continue
         for dia in dias:
             filas = lee_dia(destino, id_informe, dia)
             if not filas:
@@ -847,10 +893,17 @@ def lambda_handler(event, context):
             # informe completo.
             mapa.aprende(filas)
             for acu in acumuladores:
+                if metodo is None and not acu.cuadro:
+                    continue
+                if nombre == "telemetria":
+                    acu.cuadro.hay_telemetria(dia)
                 propias = [f for f in filas if en_ambito(f, acu.ambito, mapa)]
                 acu.filas_en_ambito += len(propias)
-                if propias:
+                if propias and metodo:
                     getattr(acu, metodo)(propias)
+                if acu.cuadro and metodo_cuadro:
+                    getattr(acu.cuadro, metodo_cuadro)(
+                        *((propias, dia) if metodo_cuadro.startswith("come_ventas") else (propias,)))
             # El trozo se suelta aqui: en ningun momento hay mas de un informe
             # de un dia en memoria.
             del filas
@@ -860,6 +913,10 @@ def lambda_handler(event, context):
     escritos = [escribe(f"cabina/{acu.perfil['id']}/panel.json",
                         acu.panel(hoy, periodo, nuevos.get(acu.perfil["id"], {})))
                 for acu in acumuladores]
+    cuadros = {}
+    for acu in acumuladores:
+        if acu.cuadro:
+            cuadros[acu.perfil["id"]] = escribe_cuadro(acu, periodo)
 
     escribe("cabina/_estado/carga.json", estado_de_la_carga(hoy))
     _cogidos = {acu.perfil.get("id"): lo_que_coge(acu.ambito, mapa) for acu in acumuladores}
@@ -895,6 +952,9 @@ def lambda_handler(event, context):
             for acu in acumuladores
         ],
         "ficheros": escritos,
+        # Que fuente de venta uso el cuadro y cuantas maquinas del censo tienen
+        # venta. «visita_ventas» es la parcial: falta el informe de telemetria.
+        "cuadros": cuadros,
     }
     for p_ in resumen["perfiles"]:
         if p_["filas"] == 0 and p_["declara"]:

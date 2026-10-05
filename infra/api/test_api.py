@@ -194,8 +194,8 @@ print("\nEl administrador")
 COOKIE_JEFE = cookie_de(llama("POST", "/api/acceso",
                               {"correo": "jefe@serunion.es", "clave": "OtraClaveLarga1"}))
 comprueba("ve los usuarios", llama("GET", "/api/admin/usuarios", cookie=COOKIE_JEFE)["statusCode"], 200)
-comprueba("ve las 17 sesiones",
-          len(cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_JEFE))["sesiones"]), 17)
+comprueba("ve las 18 sesiones",
+          len(cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_JEFE))["sesiones"]), 18)
 
 alta = llama("POST", "/api/admin/usuarios",
              {"correo": "Pepe@Airbus.com", "nombre": "Pepe", "perfil_id": "cli-airbus",
@@ -218,7 +218,7 @@ comprueba("no puede borrarse a si mismo",
 
 print("\nLa consola recibe lo que necesita para no repetir las reglas")
 pf = cuerpo_de(llama("GET", "/api/admin/perfiles", cookie=COOKIE_JEFE))
-comprueba("las 17 sesiones con su tipo minimo", len(pf["catalogo_sesiones"]), 17)
+comprueba("las 18 sesiones con su tipo minimo", len(pf["catalogo_sesiones"]), 18)
 comprueba("el techo de los cuatro tipos", sorted(pf["techo"]), ["admin", "cliente", "direccion", "operaciones"])
 comprueba("y la escalera de niveles", pf["niveles"]["cliente"] < pf["niveles"]["operaciones"], True)
 comprueba("y que trae puesto cada tipo", "alarmas_ver" in pf["implicitos"]["operaciones"], True)
@@ -281,6 +281,44 @@ comprueba("y dice cuales se pueden evaluar hoy", any(x["evaluable"] for x in cat
 comprueba("y cuales todavia no", any(not x["evaluable"] for x in cat), True)
 import catalogo as _cat
 comprueba("es la misma lista que evalua la Lambda de alarmas", len(cat), len(_cat.CATALOGO))
+
+print("\nEl cuadro de mando: solo con su sesion, y solo el de su perfil")
+falsos.OBJETOS["cabina/cli-airbus/cuadro/indice.json"] = json.dumps(
+    {"perfil": "cli-airbus", "trozos": ["2026-09"], "maquinas": [["24SE1983", 0, "Comedor", "S1", 1]]}).encode()
+falsos.OBJETOS["cabina/cli-airbus/cuadro/ventas-2026-09.json"] = json.dumps(
+    {"trozo": "2026-09", "filas": [[1, 0, 0, 2, 1.3]]}).encode()
+falsos.OBJETOS["cabina/interno/cuadro/indice.json"] = json.dumps(
+    {"perfil": "interno", "trozos": ["2026-09"]}).encode()
+# Una usuaria nueva: a estas alturas a Ana ya la han bloqueado mas arriba.
+falsos.USUARIOS_COG["eva@airbus.com"] = {"clave": "ClaveLarga123", "temporal": False}
+pon_fila("USUARIO#eva@airbus.com", {"nombre": "Eva", "perfil_id": "cli-airbus", "estado": "activo"})
+COOKIE_ANA = cookie_de(llama("POST", "/api/acceso", {"correo": "eva@airbus.com", "clave": "ClaveLarga123"}))
+_perfil_airbus = {"nombre": "AIRBUS", "tipo": "cliente", "ambito": {"clientes": ["AIRBUS"]},
+                  "sesiones": ["resumen"], "permisos": {}}
+pon_fila("PERFIL#cli-airbus", _perfil_airbus)
+comprueba("sin la sesion «cuadro», 403",
+          llama("GET", "/api/cuadro", cookie=COOKIE_ANA)["statusCode"], 403)
+pon_fila("PERFIL#cli-airbus", dict(_perfil_airbus, sesiones=["resumen", "cuadro"]))
+_ix = llama("GET", "/api/cuadro", cookie=COOKIE_ANA)
+comprueba("con ella, el indice de su perfil", cuerpo_de(_ix)["perfil"], "cli-airbus")
+comprueba("sin pasar por json: el cuerpo es el fichero tal cual",
+          _ix["body"], falsos.OBJETOS["cabina/cli-airbus/cuadro/indice.json"].decode())
+comprueba("un trozo que el indice cita",
+          cuerpo_de(llama("GET", "/api/cuadro", cookie=COOKIE_ANA, query={"trozo": "2026-09"}))["filas"],
+          [[1, 0, 0, 2, 1.3]])
+for _malo in ("2026-08", "../../interno/cuadro/indice", "2026-09.json", ""):
+    comprueba(f"un trozo que no cita ({_malo!r}), 400",
+              llama("GET", "/api/cuadro", cookie=COOKIE_ANA, query={"trozo": _malo})["statusCode"], 400)
+comprueba("y la query no cambia de perfil",
+          cuerpo_de(llama("GET", "/api/cuadro", cookie=COOKIE_ANA, query={"perfil": "interno"}))["perfil"],
+          "cli-airbus")
+comprueba("el catalogo de sesiones lo ofrece a la consola",
+          "cuadro" in cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))["catalogo_sesiones"], True)
+comprueba("y /api/yo dice que lo tiene",
+          "cuadro" in cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))["sesiones"], True)
+del falsos.OBJETOS["cabina/cli-airbus/cuadro/indice.json"]
+comprueba("sin calcular todavia, 503",
+          llama("GET", "/api/cuadro", cookie=COOKIE_ANA)["statusCode"], 503)
 
 print("\nUna ruta que no existe")
 comprueba("404", llama("GET", "/api/loquesea", cookie=COOKIE_JEFE)["statusCode"], 404)
