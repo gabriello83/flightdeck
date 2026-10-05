@@ -224,9 +224,8 @@ comprueba("y la escalera de niveles", pf["niveles"]["cliente"] < pf["niveles"]["
 comprueba("y que trae puesto cada tipo", "alarmas_ver" in pf["implicitos"]["operaciones"], True)
 
 print("\nY se ve que perfiles tienen panel calculado de verdad")
-# Un perfil vive en dos sitios: la ficha de la plataforma (DynamoDB) y la lista
-# de paneles que hay que calcular (config/perfiles.json, en el bucket de datos).
-# Tener solo el primero es tener un cliente que entra a una pantalla vacia.
+# Un perfil recien creado, o sin ambito, no tiene panel hasta que corren los
+# agregados: es un cliente que entra a una pantalla vacia, y la consola lo dice.
 _con = [p for p in pf["perfiles"] if p["panel"]["existe"]]
 _sin = [p for p in pf["perfiles"] if not p["panel"]["existe"]]
 comprueba("cli-airbus lo tiene", any(p["_id"] == "cli-airbus" for p in _con), True)

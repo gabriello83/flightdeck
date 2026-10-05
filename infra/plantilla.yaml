@@ -139,6 +139,12 @@ Resources:
             Effect: Allow
             Action: secretsmanager:GetSecretValue
             Resource: !Ref TokenVenCloud
+          # Los perfiles que da de alta la consola. La tabla es de la pila web,
+          # pero lleva el mismo prefijo: sigue siendo de este proyecto.
+          - Sid: SoloLeerPerfiles
+            Effect: Allow
+            Action: dynamodb:Scan
+            Resource: !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Prefijo}-plataforma"
           - Sid: SoloNuestrosRegistros
             Effect: Allow
             Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
@@ -204,6 +210,12 @@ Resources:
               - Effect: Deny
                 Action: [s3:GetObject]
                 Resource: !Sub "${Bucket.Arn}/restringido/*"
+              # El ambito de los perfiles que se dan de alta en la consola: asi
+              # un cliente nuevo no pide tocar perfiles.json. Solo leer, y solo
+              # esa tabla: usuarios y fichas se leen pero no se tocan.
+              - Effect: Allow
+                Action: [dynamodb:Scan]
+                Resource: !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Prefijo}-plataforma"
               - Effect: Allow
                 Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
                 Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Prefijo}-*"

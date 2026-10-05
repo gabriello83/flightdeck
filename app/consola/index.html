@@ -353,10 +353,9 @@ function vistaPerfiles(){
     if((amb.centros||[]).length) trozos.push("centros: " + amb.centros.length);
     if((amb.delegaciones||[]).length) trozos.push("delegaciones: " + amb.delegaciones.join(", "));
     const cuantos = USUARIOS.filter(u=>u.perfil_id===p._id).length;
-    /* Un perfil vive en DOS sitios, y tener sólo uno es el fallo silencioso que
-       más tiempo cuesta: la ficha de aquí (DynamoDB) y la lista de paneles que
-       hay que calcular (config/perfiles.json, en el bucket de datos). Sin el
-       segundo, sus usuarios entran a una pantalla que dice que no hay datos. */
+    /* Los agregados calculan cada noche el panel de todo perfil de aquí que
+       tenga ámbito, sumado a lo que diga config/perfiles.json. Un perfil sin
+       ámbito no se calcula: «todo el parque» sólo se declara en ese fichero. */
     const pan = p.panel || {};
     const panel = pan.existe
       ? `<span class="pill b">calculado</span><br><span class="cond">${esc(cuando(pan.calculado))}</span>`
@@ -364,7 +363,7 @@ function vistaPerfiles(){
     return `<tr>
       <td><b>${esc(p.nombre||p._id)}</b><br><span class="cond">${esc(p._id)}</span></td>
       <td data-et="Tipo">${esc(tipoLegible(p.tipo||"cliente"))}</td>
-      <td data-et="Ámbito"><span class="cond">${esc(trozos.join(" · ") || "todo (interno)")}</span></td>
+      <td data-et="Ámbito"><span class="cond">${esc(trozos.join(" · ") || (pan.existe ? "todo (interno)" : "sin ámbito: no se calcula"))}</span></td>
       <td data-et="Sesiones" class="n">${num((p.sesiones||[]).length)}</td>
       <td data-et="Usuarios" class="n">${num(cuantos)}</td>
       <td data-et="Panel">${panel}</td>
@@ -378,11 +377,10 @@ function vistaPerfiles(){
       <button class="btn fuerte" id="bNuevoPerfil" type="button">Nuevo perfil</button></div>
     <p class="sub">El perfil decide <b>qué datos</b> (el ámbito) y <b>qué pantallas</b> (las sesiones). Un perfil con usuarios no se puede borrar.</p>
     ${PERFILES.some(p=>!(p.panel||{}).existe) ? `<div class="nota mal">
-      Hay perfiles <b>sin panel calculado</b>. Dar de alta un perfil aquí no hace que se le calcule:
-      la lista de paneles que hay que calcular vive en <span class="cond">config/perfiles.json</span>,
-      en el bucket de datos, que es lo que lee la Lambda de agregados. Añade ahí el mismo
-      identificador y lánzala una vez; hasta entonces, sus usuarios entran a una pantalla que dice
-      que todavía no hay datos.</div>` : ""}
+      Hay perfiles <b>sin panel calculado</b>. Un perfil con ámbito (clientes, centros o
+      delegaciones) se calcula solo esa noche, a las 4:45; hasta entonces sus usuarios entran a una
+      pantalla que dice que todavía no hay datos. Un perfil <b>sin ámbito</b> no se calcula nunca:
+      ponle de qué cliente o centros es.</div>` : ""}
     ${PERFILES.length ? `<div class="tabla"><table>
       <thead><tr><th>Perfil</th><th>Tipo</th><th>Ámbito</th><th class="n">Sesiones</th><th class="n">Usuarios</th><th>Panel</th><th></th></tr></thead>
       <tbody>${filas}</tbody></table></div>` : `<p class="vacio">No hay ningún perfil.</p>`}
@@ -414,7 +412,7 @@ function formPerfil(pid){
     <div class="campo">
       <label for="fClientes">Ámbito · clientes</label>
       <input id="fClientes" value="${esc((amb.clientes||[]).join(", "))}" placeholder="AIRBUS">
-      <p class="pista">Separados por comas. Vacío los tres campos = todo, y eso sólo para perfiles internos.</p>
+      <p class="pista">Separados por comas. Con esto basta: esa noche se le calcula su panel. Vacíos los tres, no se calcula ninguno (el «todo el parque» del interno sólo se da en config/perfiles.json).</p>
     </div>
     <div class="fila">
       <div class="campo">

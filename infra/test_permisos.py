@@ -63,6 +63,7 @@ EQUIVALENCIAS = {
     "cog.admin_get_user": "cognito-idp:AdminGetUser",
     "ses.send_email": "ses:SendEmail",
     "sm.get_secret_value": "secretsmanager:GetSecretValue",
+    "s3.put_object": "s3:PutObject",
 }
 
 # que modulos lleva cada zip, y a que rol van
@@ -172,6 +173,45 @@ for rol in LAMBDAS:
         # El techo manda: si no esta en la frontera, dárselo al rol no sirve.
         comprueba(f"y la frontera lo deja pasar: {accion}", accion in frontera,
                   "esta en el rol pero la frontera lo deniega, asi que no se puede")
+
+# La pila de ingesta: los agregados leen los perfiles de la consola. Es la otra
+# plantilla, con su propia frontera, y el mismo fallo esperando: el codigo lee la
+# tabla, la prueba pasa con un DynamoDB falso, y en produccion AccessDenied.
+print("\nRolAgregados (plantilla.yaml)")
+ingesta = yaml.load(io.open(os.path.join(AQUI, "plantilla.yaml"), encoding="utf-8"),
+                    Loader=_Suelto)["Resources"]
+frontera_i = permitidas(ingesta["Frontera"]["Properties"]["PolicyDocument"])
+rol_i = permitidas(ingesta["RolAgregados"]["Properties"])
+usadas = set()
+for fichero in ("lambda_agregados.py", "cuadro.py", "reglas.py"):
+    texto = io.open(os.path.join(AQUI, fichero), encoding="utf-8").read()
+    texto = re.sub(r'"""(?:.|\n)*?"""', "", texto)
+    texto = re.sub(r"^\s*#.*$", "", texto, flags=re.M)
+    usadas |= set(RE_LLAMADA.findall(texto))
+comprueba("los agregados leen la tabla de la consola", "ddb.scan" in usadas, "no se ve la llamada")
+for llamada in sorted(usadas):
+    comprueba(f"lambda_agregados: {llamada} tiene su accion", llamada in EQUIVALENCIAS,
+              "anadela a EQUIVALENCIAS y mira que permiso necesita")
+    accion = EQUIVALENCIAS.get(llamada)
+    if not accion:
+        continue
+    comprueba(f"el rol permite {accion}", accion in rol_i, "el codigo lo llama y el rol no lo tiene")
+    comprueba(f"y la frontera lo deja pasar: {accion}", accion in frontera_i,
+              "esta en el rol pero la frontera lo deniega")
+_scan = [st for st in ingesta["RolAgregados"]["Properties"]["Policies"][0]["PolicyDocument"]["Statement"]
+         if "dynamodb:Scan" in (st.get("Action") or [])]
+comprueba("y solo sobre la tabla de la plataforma, no sobre todo DynamoDB",
+          all(str(st["Resource"]).endswith("table/${Prefijo}-plataforma") for st in _scan) and bool(_scan),
+          "el Scan del rol tiene que ser solo sobre <prefijo>-plataforma")
+# La tabla no va como variable de entorno A PROPOSITO: tocar la Lambda en la
+# plantilla haria que actualizar la pila le pisara el codigo con el marcador.
+# El codigo la saca de su propio nombre, <prefijo>-agregados.
+comprueba("la Lambda se llama <prefijo>-agregados, de donde saca la tabla",
+          ingesta["Agregados"]["Properties"]["FunctionName"] == "${Prefijo}-agregados",
+          "si cambia el nombre, el codigo no encuentra la tabla")
+comprueba("y no lleva TABLA en el entorno",
+          "TABLA" not in ingesta["Agregados"]["Properties"]["Environment"]["Variables"],
+          "actualizar la pila le pisaria el codigo con el marcador")
 
 print()
 if fallos:

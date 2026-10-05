@@ -76,14 +76,11 @@ VenCloud exporta esa hoja**: con eso se escribe el informe.
 ## Cómo se calcula y cómo se sirve
 
 `infra/cuadro.py` es un acumulador más de la Lambda de agregados, y se calcula para **todo perfil
-de cliente** de `perfiles.json` (los que tienen ámbito). Quién lo **ve** lo decide una casilla: la
-sesión «Cuadro de mando», que se marca en la consola al editar el perfil. Así activarlo para un
-cliente es cosa de la consola, sin tocar ningún fichero. El interno (ámbito vacío, todo el parque)
-no lo calcula; `"cuadro": false` en un perfil lo apaga a mano.
-
-Lo que la consola no puede hacer sola es dar de alta un cliente **nuevo**: la Lambda calcula los
-perfiles que están en `perfiles.json`, como ya pasaba con el panel. Para AIRBUS no hace falta: ya
-está.
+de cliente** (los que tienen ámbito), sea de `perfiles.json` o de la consola (`docs/47`). Quién lo
+**ve** lo decide una casilla: la sesión «Cuadro de mando», que se marca en la consola al editar el
+perfil. Así activarlo para un cliente, también uno nuevo, es cosa de la consola, sin tocar ningún
+fichero. El interno (ámbito vacío, todo el parque) no lo calcula; `"cuadro": false` en un perfil de
+`perfiles.json` lo apaga a mano.
 
 No va en `panel.json`. El cuadro filtra por día, máquina y artículo en el navegador, así que
 necesita la venta a ese grano: unas 230.000 combinaciones en 120 días con la venta parcial, y del

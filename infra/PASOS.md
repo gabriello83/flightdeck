@@ -300,6 +300,9 @@ queden viejos: compara el contenido de cada zip con los ficheros de los que sale
 > de datos. Subir el zip y no el manifiesto deja la extracción corriendo con la lista vieja **sin dar
 > ningún error**: simplemente baja un informe menos, y el síntoma aparece tres pasos más allá, en un
 > panel que no tiene datos. Están en `paquetes/config/` para que viajen juntos.
+>
+> Un cliente **nuevo** ya no pide tocar `perfiles.json`: los agregados leen también los perfiles
+> de la consola que tengan ámbito (`docs/47`).
 
 Si prefieres construirlos tú:
 
