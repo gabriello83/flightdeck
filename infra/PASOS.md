@@ -295,6 +295,12 @@ sáltate este paso y vuelve luego.
 con el botón *Download raw file* de GitHub. Una prueba (`infra/test_paquetes.py`) impide que se
 queden viejos: compara el contenido de cada zip con los ficheros de los que sale.
 
+> **Dos ficheros no van en ningún zip.** `config/manifiesto.json` —la lista de informes— y
+> `config/perfiles.json` —la lista de paneles a calcular— los leen las Lambdas **de S3**, del bucket
+> de datos. Subir el zip y no el manifiesto deja la extracción corriendo con la lista vieja **sin dar
+> ningún error**: simplemente baja un informe menos, y el síntoma aparece tres pasos más allá, en un
+> panel que no tiene datos. Están en `paquetes/config/` para que viajen juntos.
+
 Si prefieres construirlos tú:
 
 ```bash
@@ -365,6 +371,9 @@ bucket tiene que quedar `index.html`, `avisos/`, `consola/` y `panel/`, y nada m
 
 Vuelve a subir también `api.zip` y `alarmas.zip`: el catálogo de alarmas se ha movido a un módulo
 que usan los dos, y la API gana la ruta que se lo sirve al navegador.
+
+**c bis)** Y sube la configuración al bucket de **DATOS** (`digivend-vending-…`), carpeta `config/`:
+`manifiesto.json` y `perfiles.json`. No van en ningún zip, y sin ellos lo demás no sirve de nada.
 
 **d)** Vuelve a subir `agregados.zip` a `digivend-agregados` y lánzalo una vez a mano. La versión
 que tienes desplegada deja el panel de cliente **sin recaudación y sin reposición**: cinco de los

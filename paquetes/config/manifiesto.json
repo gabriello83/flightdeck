@@ -1,0 +1,288 @@
+{
+  "_comentario": [
+    "Las 30 tablas que se descargan cada noche. Cada entrada dice de donde sale,",
+    "con que clave de fecha se filtra y donde se guarda en S3.",
+    "",
+    "clave_fecha:",
+    "  propia  -> el informe filtra por la fecha de la propia fila",
+    "  madre   -> filtra por la fecha de la visita madre (asi todas las hijas de",
+    "             una noche contienen el mismo conjunto de visitas y cuadran)",
+    "  escritura -> filtra por la fecha en que se escribio la fila, no por el",
+    "             periodo contable. Solo prefacrecauda: el periodo se cierra",
+    "             semanas despues y si filtraramos por el no entraria nunca.",
+    "  ninguna -> maestro, se regenera entero cada noche",
+    "",
+    "El numero de informe (campo 'informe') hay que rellenarlo con el que VenCloud",
+    "asigne a cada EXT_*. Se deja a null a proposito: un numero inventado haria",
+    "que la carga bajara el informe equivocado sin dar error."
+  ],
+  "version": 1,
+  "ventana_reproceso_dias": 3,
+  "informes": [
+    {
+      "id": "visita_cabecera",
+      "nombre": "EXT_VISITA_CABECERA",
+      "informe": 105,
+      "clave_fecha": "propia",
+      "destino": "crudo/visita_cabecera",
+      "filas_mes": 88000
+    },
+    {
+      "id": "visita_reposiciones",
+      "nombre": "EXT_VISITA_REPOSICIONES",
+      "informe": 106,
+      "clave_fecha": "madre",
+      "destino": "crudo/visita_reposiciones",
+      "filas_mes": 205000
+    },
+    {
+      "id": "visita_inventario",
+      "nombre": "EXT_VISITA_INVENTARIO",
+      "informe": 107,
+      "clave_fecha": "madre",
+      "destino": "crudo/visita_inventario",
+      "filas_mes": 1000
+    },
+    {
+      "id": "visita_monbil",
+      "nombre": "EXT_VISITA_MONBIL",
+      "informe": 114,
+      "clave_fecha": "madre",
+      "destino": "crudo/visita_monbil",
+      "filas_mes": 200000
+    },
+    {
+      "id": "visita_tubos",
+      "nombre": "EXT_VISITA_TUBOS",
+      "informe": 115,
+      "clave_fecha": "madre",
+      "destino": "crudo/visita_tubos",
+      "filas_mes": 305000
+    },
+    {
+      "id": "visita_devoluciones",
+      "nombre": "EXT_VISITA_DEVOLUCIONES",
+      "informe": 126,
+      "clave_fecha": "madre",
+      "destino": "restringido/visita_devoluciones",
+      "filas_mes": 200,
+      "restringido": true,
+      "_nota": "Lleva nombre y DNI. Prefijo aparte con acceso restringido; nunca en la consola de cliente."
+    },
+    {
+      "id": "visita_ventas",
+      "nombre": "EXT_VISITA_VENTAS",
+      "informe": 128,
+      "clave_fecha": "madre",
+      "destino": "crudo/visita_ventas",
+      "filas_mes": 188000
+    },
+    {
+      "id": "recaudacion",
+      "nombre": "EXT_DINERO_RECAUDACION",
+      "informe": 132,
+      "clave_fecha": "escritura",
+      "destino": "crudo/recaudacion",
+      "filas_mes": 48000
+    },
+    {
+      "id": "recaudacion_iva",
+      "nombre": "EXT_DINERO_RECAUDACION_DETALLE",
+      "informe": 133,
+      "clave_fecha": "escritura",
+      "destino": "crudo/recaudacion_iva",
+      "filas_mes": 78000
+    },
+    {
+      "id": "stock_almacen",
+      "nombre": "EXT_STOCK_MOV_ALMACEN",
+      "informe": 138,
+      "clave_fecha": "propia",
+      "destino": "crudo/stock_almacen",
+      "filas_mes": 73000
+    },
+    {
+      "id": "stock_vehiculo",
+      "nombre": "EXT_STOCK_MOV_VEHICULO",
+      "informe": 139,
+      "clave_fecha": "propia",
+      "destino": "crudo/stock_vehiculo",
+      "filas_mes": 147000
+    },
+    {
+      "id": "stock_maquina",
+      "nombre": "EXT_STOCK_MOV_MAQUINA",
+      "informe": 140,
+      "clave_fecha": "propia",
+      "destino": "crudo/stock_maquina",
+      "filas_mes": 580000
+    },
+    {
+      "id": "stock_traspasos",
+      "nombre": "EXT_STOCK_TRASPASOS",
+      "informe": 141,
+      "clave_fecha": "propia",
+      "destino": "crudo/stock_traspasos",
+      "filas_mes": 1400
+    },
+    {
+      "id": "stock_regularizaciones",
+      "nombre": "EXT_STOCK_REGULARIZACIONES",
+      "informe": 142,
+      "clave_fecha": "propia",
+      "destino": "crudo/stock_regularizaciones",
+      "filas_mes": 35
+    },
+    {
+      "id": "stock_retornos",
+      "nombre": "EXT_STOCK_RETORNOS",
+      "informe": 145,
+      "clave_fecha": "propia",
+      "destino": "crudo/stock_retornos",
+      "filas_mes": 1400
+    },
+    {
+      "id": "stock_balance",
+      "nombre": "EXT_STOCK_INVENTARIOS_ALM",
+      "informe": 146,
+      "clave_fecha": "propia",
+      "destino": "crudo/stock_balance",
+      "filas_mes": 3500
+    },
+    {
+      "id": "stock_balance_prod",
+      "nombre": "EXT_STOCK_INVENTARIOS_ALM_PROD",
+      "informe": 147,
+      "clave_fecha": "madre",
+      "destino": "crudo/stock_balance_prod",
+      "filas_mes": 50000
+    },
+    {
+      "id": "jornadas",
+      "nombre": "EXT_RUTAS_JORNADAS",
+      "informe": 161,
+      "clave_fecha": "propia",
+      "destino": "crudo/jornadas",
+      "filas_mes": 1500
+    },
+    {
+      "id": "sat_averias",
+      "nombre": "EXT_SAT_AVERIAS",
+      "informe": 156,
+      "clave_fecha": "propia",
+      "destino": "crudo/sat_averias",
+      "filas_mes": 3400
+    },
+    {
+      "id": "sat_eventos",
+      "nombre": "EXT_SAT_EVENTOS",
+      "informe": 165,
+      "clave_fecha": "madre",
+      "destino": "crudo/sat_eventos",
+      "filas_mes": 10500
+    },
+    {
+      "id": "sat_visitas",
+      "nombre": "EXT_SAT_VISITAS",
+      "informe": 163,
+      "clave_fecha": "madre",
+      "destino": "crudo/sat_visitas",
+      "filas_mes": 1700
+    },
+    {
+      "id": "sat_materiales",
+      "nombre": "EXT_SAT_MATERIALES",
+      "informe": 164,
+      "clave_fecha": "madre",
+      "destino": "crudo/sat_materiales",
+      "filas_mes": 100
+    },
+    {
+      "id": "m_rutas",
+      "nombre": "EXT_RUTAS_MAESTRO",
+      "informe": 157,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/rutas",
+      "filas_mes": 161
+    },
+    {
+      "id": "m_rutas_pdvs",
+      "nombre": "EXT_RUTAS_PDVS",
+      "informe": 158,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/rutas_pdvs",
+      "filas_mes": 5258
+    },
+    {
+      "id": "m_rutas_criterios",
+      "nombre": "EXT_RUTAS_CRITERIOS",
+      "informe": 159,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/rutas_criterios",
+      "filas_mes": 4019
+    },
+    {
+      "id": "m_rutas_operarios",
+      "nombre": "EXT_RUTAS_OPERARIOS",
+      "informe": 160,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/rutas_operarios",
+      "filas_mes": 129
+    },
+    {
+      "id": "m_rutas_fondos",
+      "nombre": "EXT_RUTAS_FONDOS",
+      "informe": 162,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/rutas_fondos",
+      "filas_mes": 7794
+    },
+    {
+      "id": "m_sat_catalogo",
+      "nombre": "EXT_SAT_CATALOGO",
+      "informe": 172,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/sat_catalogo",
+      "filas_mes": 101
+    },
+    {
+      "id": "m_carriles",
+      "nombre": "EXT_MAESTRO_CARRILES",
+      "informe": 136,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/carriles",
+      "filas_mes": 15088
+    },
+    {
+      "id": "m_recetas",
+      "nombre": "EXT_MAESTRO_RECETAS",
+      "informe": 129,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/recetas",
+      "filas_mes": 612
+    },
+    {
+      "id": "m_instalaciones",
+      "nombre": "EXT_INSTALACIONES",
+      "informe": 173,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/instalaciones",
+      "filas_mes": 4500
+    }
+  ],
+  "descartados": {
+    "_nota": "Tablas vacias comprobadas una a una. No se bajan. El SQL esta escrito en docs/17 por si algun dia se usan.",
+    "lista": [
+      "partesvisitainvcanales",
+      "partesvisitacontajes",
+      "partesvisitacontajesdetalle",
+      "partesvisitaincidencias",
+      "recogidasbolsasrec",
+      "recogidasbolsasrecdetalles",
+      "pdvstransbancariasdetalles",
+      "partesvisitaauditcashlessgroups",
+      "planrecogida",
+      "plancargarutavehiculo"
+    ]
+  }
+}

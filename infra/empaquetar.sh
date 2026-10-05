@@ -27,8 +27,21 @@ rm "$TEMP/index.py"
 (cd infra/api && zip -q "$SALIDA/api.zip" comun.py autorizacion.py catalogo.py lambda_api.py)
 (cd infra/api && zip -q "$SALIDA/alarmas.zip" comun.py autorizacion.py catalogo.py lambda_alarmas.py)
 
+# --- configuracion que NO va dentro de ningun zip -------------------------
+# El manifiesto y los perfiles los leen las Lambdas de S3, no de su paquete. Se
+# copian aqui para que viajen con los zips y no se olviden: subir el zip y no el
+# manifiesto deja la extraccion corriendo con la lista de informes vieja, sin
+# dar ningun error —simplemente baja uno menos—.
+mkdir -p "$SALIDA/config"
+cp infra/manifiesto.json "$SALIDA/config/manifiesto.json"
+cp infra/perfiles.json   "$SALIDA/config/perfiles.json"
+
 echo "Listos en $SALIDA:"
 ls -la "$SALIDA"
+echo
+echo "config/ NO va en ningun zip: va al bucket de DATOS."
+echo "  config/manifiesto.json -> s3://<bucket de datos>/config/manifiesto.json"
+echo "  config/perfiles.json   -> s3://<bucket de datos>/config/perfiles.json"
 echo
 echo "El del asistente lleva el SDK de Anthropic y se hace aparte:"
 echo "  mkdir -p paquete && pip install anthropic -t paquete/"
