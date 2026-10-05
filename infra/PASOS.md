@@ -203,7 +203,7 @@ Deja `paquetes/extraccion.zip` y `paquetes/agregados.zip` (y de paso los de la w
 
 - **`extraccion.zip`**: una copia de `infra/lambda_extraccion.py` **renombrada a `index.py`**, y
   nada más. El nombre importa: el handler de esa función es `index.lambda_handler`.
-- **`agregados.zip`**: `lambda_agregados.py` y `reglas.py`, con sus nombres.
+- **`agregados.zip`**: `lambda_agregados.py`, `reglas.py` y `cuadro.py`, con sus nombres.
 
 En los dos casos, **los ficheros van en la raíz del zip, no dentro de una carpeta**.
 

@@ -561,6 +561,48 @@ left join stocks.articulos a  on a.id = v.articuloid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
+## A12 · EXT_TELEMETRIA_VENTAS  ·  **por crear**
+
+La venta de telemetría, **venta a venta y con su fecha**. Es la hoja «Ventas» del cuadro de David
+([46-el-cuadro-de-david.md](46-el-cuadro-de-david.md)) y la única fuente de venta que cubre todas
+las máquinas: A11 sólo trae las que se leen en el parte —365 de las 563 de AIRBUS en 120 días— y
+fecha la venta el día de la lectura.
+
+No agrega nada, como el resto de extracciones: una fila por venta, con su `id`. Son unas 60.000
+filas al día en todo el parque ([10-telemetria-un-dia.md](10-telemetria-un-dia.md)). El
+`articulo` sale vacío en la venta sin artículo (un 20 % en San Pablo): no es un error, es como la
+manda la máquina.
+
+```sql
+select
+  t.id                       as id,
+  cast(t.fechaventa as text) as fecha_venta,
+  m.codigo                   as matricula,
+  pdv.codigo                 as cod_pdv,
+  pdv.ubicacion              as ubicacion,
+  cen.numcentro              as num_centro,
+  cen.denomina               as centro,
+  cli.codigo                 as cod_cliente,
+  cli.nombre                 as cliente,
+  a.codigo                   as cod_articulo,
+  a.denomina                 as articulo,
+  t.seleccion                as seleccion,
+  t.precio                   as precio,
+  t.lineaprecio              as linea_precio,
+  t.tipotelemetria           as tipo_telemetria
+from telemetry.telemetrysales t
+left join recursos.maquinas m           on m.id   = t.maquinaid
+left join vending.pdvs pdv              on pdv.id = t.pdvid
+left join comercial.clientescentros cen on cen.id = pdv.clientecentroid
+left join comercial.clientes cli        on cli.id = cen.clienteid
+left join stocks.articulos a            on a.id   = t.articuloid
+where t.fechaventa >= '{0}' and t.fechaventa <= '{1} 23:59:59'
+order by t.fechaventa
+```
+
+Si el validador dice que `t.id` no existe, cámbialo por `t.transactionid as id`: es la clave que
+se cruza con el banco en B5 y también es única por venta.
+
 ---
 
 # Tanda B · El dinero

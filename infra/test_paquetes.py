@@ -29,7 +29,8 @@ ESPERADO = {
     # del zip el fichero tiene que llamarse index.py.
     "extraccion.zip": {"index.py": "infra/lambda_extraccion.py"},
     "agregados.zip": {"lambda_agregados.py": "infra/lambda_agregados.py",
-                      "reglas.py": "infra/reglas.py"},
+                      "reglas.py": "infra/reglas.py",
+                      "cuadro.py": "infra/cuadro.py"},
     "api.zip": {"comun.py": "infra/api/comun.py",
                 "autorizacion.py": "infra/api/autorizacion.py",
                 "catalogo.py": "infra/api/catalogo.py",

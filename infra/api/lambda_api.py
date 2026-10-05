@@ -129,6 +129,15 @@ def encamina(evento, metodo, ruta):
                            "_nota": "Los agregados corren a las 4:45; recien desplegado, lanzalos a mano."})
         return r(200, A.recorta(p, perfil))
 
+    # El cuadro de mando: el indice, o un trozo de venta. Igual que el panel, la
+    # carpeta sale del perfil de la sesion; lo unico que se pide es QUE trozo, y
+    # se valida contra la lista del propio indice antes de tocar S3.
+    if ruta == "/api/cuadro" and metodo == "GET":
+        if "cuadro" not in A.sesiones_de(perfil.get("tipo", "cliente"), perfil.get("sesiones", [])):
+            raise PermissionError("Este perfil no tiene el cuadro de mando.")
+        return cuadro(perfil.get("perfil_id", ""),
+                      (evento.get("queryStringParameters") or {}).get("trozo"))
+
     # El orden lo elige el usuario y se guarda en el SERVIDOR: asi lo encuentra
     # igual desde otro ordenador. El navegador no es el sitio donde vive.
     if ruta == "/api/orden":
@@ -193,6 +202,35 @@ def encamina(evento, metodo, ruta):
         return administra(evento, metodo, ruta, usuario)
 
     return r(404, {"error": "No existe esa ruta."})
+
+
+# ----------------------------------------------------------------------
+# el cuadro de mando
+# ----------------------------------------------------------------------
+def cuadro(perfil_id, trozo=None):
+    """Devuelve el fichero TAL CUAL esta en S3, sin abrirlo.
+
+    Un trozo de venta son un par de MB: leerlo como JSON y volver a escribirlo
+    solo gastaria memoria y tiempo de una Lambda de 512 MB para devolver lo mismo.
+    """
+    base = f"cabina/{perfil_id}/cuadro/"
+    try:
+        indice = s3.get_object(Bucket=BUCKET, Key=base + "indice.json")["Body"].read()
+    except Exception:
+        return r(503, {"error": "El cuadro de mando todavia no se ha calculado.",
+                       "_nota": "Lo escriben los agregados (4:45) para los perfiles con "
+                                "«cuadro» en config/perfiles.json."})
+    cuerpo = indice
+    if trozo is not None:
+        # Solo un trozo que el indice cite: asi no hay forma de componer otra
+        # clave, ni de este perfil ni de ningun otro.
+        if trozo not in json.loads(indice).get("trozos", []):
+            raise ValueError("Ese trozo no existe.")
+        cuerpo = s3.get_object(Bucket=BUCKET, Key=f"{base}ventas-{trozo}.json")["Body"].read()
+    return {"statusCode": 200,
+            "headers": {"content-type": "application/json; charset=utf-8",
+                        "cache-control": "no-store"},
+            "body": cuerpo.decode("utf-8")}
 
 
 # ----------------------------------------------------------------------
