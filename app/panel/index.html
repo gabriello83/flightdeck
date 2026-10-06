@@ -17,6 +17,10 @@
   --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
   --bien:#0ca30c; --aviso:#fab219; --grave:#ec835a; --critico:#d03b3b;
   --rejilla:#e8e7e2; --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+  /* El selector de tiempo de /comun/periodos.js lee estas cuatro: asi hereda
+     el tema de esta pagina, modo oscuro incluido, sin conocerlo. */
+  --pd-acento:var(--s1); --pd-apagado:var(--tinta-2); --pd-borde:var(--borde-fuerte);
+  --pd-fondo:var(--tarjeta);
 }
 @media (prefers-color-scheme: dark){
   :root:where(:not([data-theme="light"])){
@@ -172,6 +176,11 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   </header>
   <div class="periodo" id="periodo"></div>
 
+  <!-- El selector de tiempo. Lo monta /comun/periodos.js, que es el mismo en
+       esta pagina, en la consola y en el cuadro de mando. -->
+  <div id="selectorPeriodo"></div>
+  <p class="periodo" id="notaPeriodo" hidden></p>
+
   <div class="filtros" id="filtros" role="group" aria-label="Secciones" hidden></div>
 
   <div id="cargando">Cargando…</div>
@@ -199,6 +208,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   <p class="pieChat">Sólo ve los datos de este panel. No ejecuta acciones ni consulta nada más.</p>
 </aside>
 
+<script src="/comun/periodos.js"></script>
 <script>
 /* ===================================================================
    Panel de cliente · digivend.es
@@ -561,7 +571,7 @@ function definePaneles(P, YO){
   if(S && Array.isArray(S.visitas_por_dia) && S.visitas_por_dia.length)
     paneles.push({ id:"visitas_dia", sesion:"resumen", ancho:"todo",
       titulo:"Visitas por día",
-      sub:`${num(S.visitas)} visitas de persona en ${P.periodo?P.periodo.dias:"—"} días. Pasa el ratón para ver cada jornada.`,
+      sub:`${num(S.visitas)} visitas de persona en ${(P.periodo_elegido||P.periodo||{}).dias||"—"} días. Pasa el ratón para ver cada jornada.`,
       pinta:(c,W)=>{
         c.appendChild(lineaTemporal(S.visitas_por_dia,{fmt:num,W}));
         conTabla(c,[{t:"Día"},{t:"Visitas",n:true}],
@@ -717,7 +727,8 @@ function definePaneles(P, YO){
         ]);
         const p=document.createElement("p"); p.className="sub"; p.style.margin="10px 0 0";
         p.textContent = "«Fallos técnicos» se cuenta por operación, no por categoría: contarlo por "
-          + "categoría se deja fuera las averías archivadas en atención al cliente y las infravalora.";
+          + "categoría se deja fuera las averías archivadas en atención al cliente y las infravalora."
+          + (T._nota_cierre ? " " + T._nota_cierre : "");
         c.appendChild(p);
       }});
 
@@ -735,8 +746,82 @@ function definePaneles(P, YO){
   return paneles;
 }
 
+/* ---------- el periodo elegido ----------
+   El panel que sirve /api/panel es la foto de los últimos 120 días. Lo que
+   permite elegir el tiempo es la serie diaria de /api/serie: una fila por día
+   que se suma. Esta función traduce la suma de un rango a la MISMA forma que
+   tiene el panel, para que los paneles de abajo no tengan que saber de dónde
+   viene el número: se dibujan igual.
+
+   Lo que la serie no puede partir por días no se inventa: el reparto por
+   centro, la merma por artículo, las máquinas reincidentes, el inventario y
+   las instalaciones siguen siendo la foto de la ventana, y se dice arriba. */
+function mesProvisional(periodo, hoy){
+  /* Un mes no está cerrado hasta el final del siguiente: le falta el cobro por
+     tarjeta. La misma regla que reglas.mes_provisional en el servidor. */
+  const [a,m] = periodo.split("-").map(Number);
+  const sig = m===12 ? [a+1,1] : [a,m+1];
+  return (hoy.getFullYear()*100 + hoy.getMonth()+1) <= (sig[0]*100 + sig[1]);
+}
+
+function conPeriodo(base, T, hoy){
+  const P = {...base, periodo_elegido:{desde:T.desde, hasta:T.hasta, dias:T.dias}};
+  const bS = base.servicio || {}, bT = base.sat || {}, bJ = base.jornadas || {};
+
+  if(base.servicio){
+    const s = T.servicio;
+    P.servicio = {...bS,
+      visitas: s.visitas,
+      partes_totales: s.partes,
+      /* Máquinas y centros distintos de un rango no son la suma de los de cada
+         día: la misma máquina se visita muchas veces. Se quitan en vez de dar
+         un número que no significa nada. */
+      maquinas: null, centros: null,
+      maquinas_dia_max: s.maquinas_dia_max,
+      coste_servicio: {...(bS.coste_servicio||{}), visitas:s.visitas, coste:s.coste_servicio},
+      duracion_min: s.duracion_min,
+      visitas_por_dia: T.por_dia.map(d=>({f:d.f, v:d.visitas})),
+      carga: {...(bS.carga||{}), valor:s.carga.valor, unidades_total:s.carga.unidades,
+              unidades_vendibles:s.carga.vendibles},
+      merma: {...(bS.merma||{}), ...s.merma},
+    };
+    if(bS.coste_servicio === undefined) delete P.servicio.coste_servicio;
+  }
+
+  if(base.dinero){
+    P.dinero = {...base.dinero, periodos: T.dinero.lista.map(d=>({
+      periodo: d.periodo, registros: d.registros, efectivo: d.efectivo, banco: d.banco,
+      total: d.efectivo + d.banco, efectivo_sin_telemetria: d.ciego,
+      pct_ciego: d.efectivo > 0 ? 100*d.ciego/d.efectivo : 0,
+      provisional: mesProvisional(d.periodo, hoy),
+      ...(d.imposibles ? {filas_imposibles:d.imposibles} : {}),
+    }))};
+    P.dinero._nota_escritura = "La recaudación se agrupa por su periodo contable, no por el "
+      + "día en que se escribió: en un rango de días pueden aparecer meses anteriores.";
+  }
+
+  if(base.sat){
+    P.sat = {...bT, tareas:T.sat.tareas, tareas_con_ficticia:null,
+      averias_tecnicas:T.sat.averias_tecnicas, fallos_tecnicos:T.sat.fallos_tecnicos,
+      preventivos:T.sat.preventivos, horas_cierre:T.sat.horas_cierre,
+      _nota_cierre: "En un periodo elegido, el cierre mediano sólo cuenta las averías que se "
+        + "abren y se cierran el mismo día: las que cruzan de un día a otro no caben en una "
+        + "fila diaria."};
+  }
+
+  if(base.jornadas){
+    P.jornadas = {...bJ, jornadas:T.jornadas.jornadas, temperatura:T.jornadas.temperatura,
+      temperatura_fuera:T.jornadas.temperatura_fuera, km:T.jornadas.km,
+      km_total:T.jornadas.km_total,
+      gps:{con:T.jornadas.gps,
+           pct: T.jornadas.jornadas ? 100*T.jornadas.gps/T.jornadas.jornadas : 0}};
+  }
+  return P;
+}
+
 /* ---------- montaje ---------- */
 let PANELES=[], PANEL=null, YO=null, ORDEN=[], FILTRO="todo";
+let PANEL_VENTANA=null, SERIE=null, SELECTOR=null;
 
 function visibles(){
   const ses = new Set((YO&&YO.sesiones)||[]);
@@ -863,7 +948,9 @@ function pintaFiltros(){
 function pintaKpis(){
   const S=PANEL.servicio, D=PANEL.dinero, T=PANEL.sat;
   const k=[];
-  if(S) k.push(["Visitas", num(S.visitas), `${num(S.maquinas)} máquinas · ${num(S.centros)} centros`]);
+  if(S) k.push(["Visitas", num(S.visitas),
+    S.maquinas!=null ? `${num(S.maquinas)} máquinas · ${num(S.centros)} centros`
+                     : `hasta ${num(S.maquinas_dia_max||0)} máquinas en un día`]);
   if(S && S.duracion_min && S.duracion_min.n) k.push(["Duración mediana", num1(S.duracion_min.mediana)+" min", "por visita"]);
   if(D && D.periodos && D.periodos.length){
     const cerrados = D.periodos.filter(p=>!p.provisional);
@@ -987,6 +1074,90 @@ function avisa(texto, mal){
   a.classList.toggle("mal", !!mal);
 }
 
+/* ---------- el selector de tiempo ----------
+   Arranca en «la ventana», que es lo que esta página ha enseñado siempre: así
+   quien entra ve lo mismo que ayer y elige otro tiempo si quiere. Cada rango
+   pide a /api/serie sólo los meses que le falten; cambiar de rango dentro de
+   un mes ya bajado no pide nada. */
+async function arrancaPeriodo(){
+  if(!window.Periodos) return;                  /* sin el módulo, el panel va igual */
+  Periodos.ponEstilo();
+  let indice;
+  SERIE = new Periodos.Serie();
+  try{ indice = await SERIE.abre(); }
+  catch(e){
+    /* Recién desplegado todavía no hay histórico. No es un error que merezca
+       una alarma roja: el panel de la ventana está entero. */
+    $("#notaPeriodo").textContent = "El histórico por días todavía no está calculado, así que "
+      + "sólo se puede ver la ventana de siempre.";
+    $("#notaPeriodo").hidden = false;
+    return;
+  }
+  const hoy = new Date();
+  const conHistorico = (indice.meses||[]).length > 0;
+  SELECTOR = Periodos.montaSelector($("#selectorPeriodo"), {
+    hoy, primerDia: SERIE.primerDia(), inicial: null,
+    alCambiar: async ({desde, hasta}) => {
+      $("#cargando").textContent = "Sumando los días…";
+      $("#cargando").hidden = false;
+      try{
+        const T = await SERIE.totales(desde, hasta);
+        PANEL = conPeriodo(PANEL_VENTANA, T, hoy);
+        notaDelPeriodo(T);
+      }catch(e){
+        avisa("No se ha podido leer el histórico de ese periodo.", true);
+        return;
+      }finally{
+        $("#cargando").hidden = true;
+      }
+      PANELES = definePaneles(PANEL, YO);
+      pintaKpis();
+      pintaTodo();
+    }
+  });
+  /* Un botón más, el primero, para volver a la foto de la ventana. */
+  const volver = document.createElement("button");
+  volver.type = "button";
+  volver.className = "btn periodo-chip activo";
+  volver.textContent = "La ventana";
+  volver.addEventListener("click", ()=>{
+    PANEL = PANEL_VENTANA;
+    SELECTOR.muestra(PANEL.periodo?PANEL.periodo.desde:null,
+                     PANEL.periodo?PANEL.periodo.hasta:null, "ventana");
+    volver.classList.add("activo");
+    $("#notaPeriodo").hidden = true;
+    PANELES = definePaneles(PANEL, YO);
+    pintaKpis();
+    pintaTodo();
+  });
+  const chips = $("#selectorPeriodo").querySelector(".periodo-chips");
+  chips.insertBefore(volver, chips.firstChild);
+  chips.addEventListener("click", e=>{
+    if(e.target !== volver) volver.classList.remove("activo");
+  });
+  if(!conHistorico){
+    $("#notaPeriodo").textContent = "Todavía no hay ningún mes en el histórico: se rellena una "
+      + "vez desde el 1 de enero de 2025 y luego se mantiene cada noche.";
+    $("#notaPeriodo").hidden = false;
+  }
+}
+
+function notaDelPeriodo(T){
+  const n = $("#notaPeriodo");
+  if(!T.dias){
+    n.textContent = "No hay ningún día cargado en ese periodo. Si es de antes del relleno "
+      + "histórico, todavía no está; si es de hoy, la carga va de noche y trae hasta ayer.";
+    n.hidden = false;
+    return;
+  }
+  n.textContent = `${Periodos.etiqueta(T.desde, T.hasta)} · ${T.dias} `
+    + (T.dias===1 ? "día con dato" : "días con dato")
+    + ". Lo que no se puede partir por días —reparto por centro, merma por artículo, máquinas "
+    + "reincidentes, inventario e instalaciones— sigue siendo la foto de la ventana. Las medianas "
+    + "de un rango son aproximadas; los totales y las medias, exactos.";
+  n.hidden = false;
+}
+
 (async function(){
   let r;
   try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
@@ -1026,9 +1197,11 @@ function avisa(texto, mal){
   if((YO.sesiones||[]).includes("cuadro")) $("#bCuadro").hidden = false;
   $("#bCuadro").addEventListener("click", ()=>{ location.href = "/cuadro/"; });
 
+  PANEL_VENTANA = PANEL;
   PANELES = definePaneles(PANEL, YO);
   pintaKpis();
   pintaFiltros();
+  arrancaPeriodo();
   $("#bOrden").hidden = !(YO.permisos && YO.permisos.reordenar);
   $("#cargando").hidden = true;
   $("#rejilla").hidden = false;

@@ -10,4 +10,14 @@ for t in infra/test_manifiesto.py infra/test_extraccion.py infra/test_reglas.py 
   printf '%-34s ' "$t"
   if python3 "$t" >/dev/null 2>&1; then echo "pasa"; else echo "FALLA"; python3 "$t"; exit 1; fi
 done
+# Las tres pantallas, abiertas de verdad en un navegador. Necesita node y
+# playwright (npm install), asi que si no estan se dice y se sigue: lo demas no
+# depende de ellas.
+printf '%-34s ' "app/comun/prueba_pantallas.js"
+if [ -d node_modules/playwright ]; then
+  if node app/comun/prueba_pantallas.js >/dev/null 2>&1; then echo "pasa"
+  else echo "FALLA"; node app/comun/prueba_pantallas.js; exit 1; fi
+else
+  echo "saltada (npm install para probar las pantallas)"
+fi
 echo "Todo pasa."

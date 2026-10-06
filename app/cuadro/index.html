@@ -24,6 +24,12 @@
       --bad: #c7454f;
       --shadow: 0 14px 36px rgba(0, 32, 91, 0.08);
       --radius: 16px;
+      /* Las cuatro que lee el selector de tiempo de /comun/periodos.js: asi
+         sale con los colores de este cuadro sin conocerlos. */
+      --pd-acento: var(--airbus);
+      --pd-apagado: var(--muted);
+      --pd-borde: var(--line);
+      --pd-fondo: var(--white);
     }
 
     * { box-sizing: border-box; }
@@ -401,6 +407,11 @@
 
     <section class="filters" aria-label="Filtros del dashboard">
       <div class="filter-head"><strong>Filtros cruzados</strong><button type="button" class="btn" id="resetFilters">Limpiar selección</button></div>
+      <!-- El selector de tiempo. Lo monta /comun/periodos.js, el mismo que usan
+           la consola y el panel de cliente, para que «este mes» signifique lo
+           mismo en las tres. Elegir un rango baja del servidor los meses que
+           falten: la historia entera no cabe en el navegador. -->
+      <div id="selectorPeriodo"></div>
       <div class="filter-grid">
         <div class="field"><label for="dateFrom">Desde</label><input type="date" id="dateFrom"></div>
         <div class="field"><label for="dateTo">Hasta</label><input type="date" id="dateTo"></div>
@@ -494,6 +505,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div class="loading" id="loading"><div class="loading-card"><div class="spinner"></div><strong id="loadingText">Procesando Excel…</strong><p>Todo ocurre en este navegador.</p></div></div>
 
+  <script src="/comun/periodos.js"></script>
   <script>
 
     const $ = (selector) => document.querySelector(selector);
@@ -595,57 +607,93 @@
     // el cuadro del servidor: las maquinas y los articulos llegan una vez y las
     // filas los citan por posicion. Las operaciones que David deja fuera de las
     // incidencias (isExcludedIncidentOperation) se siguen dejando fuera.
-    function modelFromCuadro(indice, trozos) {
+    // El mismo modelo que montaba buildModel con los Excel de David, pero desde
+    // el cuadro del servidor. Ahora cada MES es un fichero que se entiende solo:
+    // trae su propia lista de maquinas y de articulos, y sus filas las citan por
+    // posicion dentro de ese mes. Por eso se puede bajar marzo de 2025 sin bajar
+    // nada mas, y por eso una maquina retirada hace un ano sigue teniendo centro
+    // en el mes en que estuvo. El indice solo trae el censo de HOY, que es lo que
+    // llena los desplegables, y la lista de meses que hay.
+    // Las operaciones que David deja fuera de las incidencias
+    // (isExcludedIncidentOperation) se siguen dejando fuera.
+    function modelFromCuadro(indice, meses) {
       const output = { sales: [], visits: [], incidents: [], preventives: [], files: [], centerLabels: new Map(), locations: new Map(), unrecognized: [] };
-      const centros = (indice.centros || []).map(nombre => centerKey(nombre));
-      (indice.centros || []).forEach((nombre, i) => { if (centros[i]) output.centerLabels.set(centros[i], centerLabel(nombre)); });
-      const maquinas = (indice.maquinas || []).map(([matricula, c, ubicacion, pdv, enCenso]) => {
-        const item = { center: centros[c] || 'SIN CENTRO', machine: machineKey(matricula), location: String(ubicacion || '').trim(), pdv: pdv || '', enCenso: !!enCenso };
+
+      function ponCentros(nombres) {
+        const claves = (nombres || []).map(nombre => centerKey(nombre));
+        (nombres || []).forEach((nombre, i) => { if (claves[i]) output.centerLabels.set(claves[i], centerLabel(nombre)); });
+        return claves;
+      }
+
+      // El censo de hoy: la poblacion de maquinas con la que se cuentan las que
+      // no tienen venta y con la que se llenan los desplegables.
+      const centrosCenso = ponCentros(indice.centros);
+      const censo = (indice.censo || []).map(([matricula, c, ubicacion, pdv]) => {
+        const item = { center: centrosCenso[c] || 'SIN CENTRO', machine: machineKey(matricula), location: String(ubicacion || '').trim(), pdv: pdv || '' };
         if (item.location) output.locations.set(`${item.center}|${item.machine}`, item.location);
         return item;
       });
-      const articulos = indice.articulos || [];
-      for (const trozo of trozos) {
-        const mes = trozo.mes;
-        for (const [dia, m, a, qty, amount] of trozo.filas || []) {
+
+      for (const mes of meses || []) {
+        const centros = ponCentros(mes.centros);
+        const maquinas = (mes.maquinas || []).map(([matricula, c, ubicacion, pdv]) => {
+          const item = { center: centros[c] || 'SIN CENTRO', machine: machineKey(matricula), location: String(ubicacion || '').trim(), pdv: pdv || '' };
+          // Lo que diga el censo de hoy manda; el mes solo rellena lo que no esta.
+          const clave = `${item.center}|${item.machine}`;
+          if (item.location && !output.locations.has(clave)) output.locations.set(clave, item.location);
+          return item;
+        });
+        const articulos = mes.articulos || [];
+        for (const [dia, m, a, qty, amount] of mes.ventas || []) {
           const maq = maquinas[m];
           if (!maq) continue;
-          output.sales.push({ center: maq.center, machine: maq.machine, date: `${mes}-${String(dia).padStart(2, '0')}`, article: articulos[a] || 'Sin artículo', qty, amount });
+          output.sales.push({ center: maq.center, machine: maq.machine, date: `${mes.mes}-${String(dia).padStart(2, '0')}`, article: articulos[a] || 'Sin artículo', qty, amount });
+        }
+        for (const [cuando, m] of mes.visitas || []) {
+          const maq = maquinas[m];
+          if (!maq) continue;
+          output.visits.push({ center: maq.center, machine: maq.machine, date: cuando.slice(0, 10), time: cuando.slice(11, 16), location: maq.location, visitId: '', pdv: maq.pdv, route: '', employee: '', vehicle: '', client: '' });
+        }
+        for (const [alta, fin, m, numero, categoria, operacion, estado] of mes.incidencias || []) {
+          const maq = maquinas[m];
+          if (!maq || isExcludedIncidentOperation(operacion)) continue;
+          output.incidents.push({ center: maq.center, machine: maq.machine, date: alta, received: alta, number: numero, location: maq.location, category: categoria || 'Sin categoría', operation: operacion, status: estado || 'Sin estado', closed: fin || '', technician: '' });
         }
       }
-      for (const [cuando, m] of indice.visitas || []) {
-        const maq = maquinas[m];
-        if (!maq) continue;
-        output.visits.push({ center: maq.center, machine: maq.machine, date: cuando.slice(0, 10), time: cuando.slice(11, 16), location: maq.location, visitId: '', pdv: maq.pdv, route: '', employee: '', vehicle: '', client: '' });
-      }
-      for (const [alta, fin, m, numero, categoria, operacion, estado] of indice.incidencias || []) {
-        const maq = maquinas[m];
-        if (!maq || isExcludedIncidentOperation(operacion)) continue;
-        output.incidents.push({ center: maq.center, machine: maq.machine, date: alta, received: alta, number: numero, location: maq.location, category: categoria || 'Sin categoría', operation: operacion, status: estado || 'Sin estado', closed: fin || '', technician: '' });
-      }
-      const payload = { machineCensus: maquinas.filter(item => item.enCenso).map(item => ({ center: item.center, machine: item.machine, location: item.location, centerLabel: output.centerLabels.get(item.center) || item.center })) };
-      const suppliedCensus=(payload.machineCensus||[]).filter(item=>item.center&&item.machine);
-      output.machineCensus=suppliedCensus.length?suppliedCensus:[...new Map(output.sales.map(row=>[machineIdentity(row),{center:row.center,machine:row.machine,location:output.locations.get(machineIdentity(row))||'',centerLabel:output.centerLabels.get(row.center)||row.center}])).values()];
+
+      const suppliedCensus = censo.filter(item => item.center && item.machine)
+        .map(item => ({ center: item.center, machine: item.machine, location: item.location, centerLabel: output.centerLabels.get(item.center) || item.center }));
+      output.machineCensus = suppliedCensus.length ? suppliedCensus
+        : [...new Map(output.sales.map(row => [machineIdentity(row), { center: row.center, machine: row.machine, location: output.locations.get(machineIdentity(row)) || '', centerLabel: output.centerLabels.get(row.center) || row.center }])).values()];
       const allRows = [...output.sales, ...output.visits, ...output.incidents, ...output.preventives];
       const allDates = allRows.map(row => row.date).filter(Boolean).sort();
-      const salesDates = output.sales.map(row=>row.date).filter(Boolean).sort();
-      output.minDate = allDates[0] || '';
-      output.maxDate = allDates.at(-1) || '';
-      output.defaultFrom = salesDates[0] || output.minDate;
-      output.defaultTo = salesDates.at(-1) || output.maxDate;
-      output.centers = [...new Set([...allRows.map(row => row.center),...output.machineCensus.map(row=>row.center)])].sort();
+      const salesDates = output.sales.map(row => row.date).filter(Boolean).sort();
+      // Los limites de las fechas son los de la HISTORIA que hay en el servidor,
+      // no los de los meses bajados: si fueran los bajados, el usuario no podria
+      // pedir un mes que no se ha pedido todavia, que es justo lo que hace falta.
+      const mesesHay = (indice.meses || []).map(m => m.mes).sort();
+      output.minDate = mesesHay.length ? `${mesesHay[0]}-01` : (allDates[0] || '');
+      output.maxDate = mesesHay.length ? finDeMes(mesesHay[mesesHay.length - 1]) : (allDates.at(-1) || '');
+      output.defaultFrom = salesDates[0] || allDates[0] || output.minDate;
+      output.defaultTo = salesDates.at(-1) || allDates.at(-1) || output.maxDate;
+      output.centers = [...new Set([...allRows.map(row => row.center), ...output.machineCensus.map(row => row.center)])].sort();
       output.machines = [...new Set(output.machineCensus.map(row => row.machine))].sort();
-      output.articles = [...new Set(output.sales.map(row => row.article))].sort((a,b) => a.localeCompare(b,'es'));
-      output.machineEntries = [...new Map(output.machineCensus.map(row=>[machineIdentity(row),{center:row.center,machine:row.machine}])).entries()]
-        .map(([value,row])=>{
-          const location=output.locations.get(value)||'Ubicación no informada';
-          return {value,center:row.center,location,locationValue:locationKey(row.center,location),label:`${row.machine} · ${output.centerLabels.get(row.center)||row.center} · ${location}`};
+      output.articles = [...new Set(output.sales.map(row => row.article))].sort((a, b) => a.localeCompare(b, 'es'));
+      output.machineEntries = [...new Map(output.machineCensus.map(row => [machineIdentity(row), { center: row.center, machine: row.machine }])).entries()]
+        .map(([value, row]) => {
+          const location = output.locations.get(value) || 'Ubicación no informada';
+          return { value, center: row.center, location, locationValue: locationKey(row.center, location), label: `${row.machine} · ${output.centerLabels.get(row.center) || row.center} · ${location}` };
         })
-        .sort((a,b)=>a.label.localeCompare(b.label,'es',{numeric:true}));
-      output.locationEntries=[...new Map(output.machineEntries.map(item=>[item.locationValue,{
-        value:item.locationValue,center:item.center,location:item.location,label:`${item.location} · ${output.centerLabels.get(item.center)||item.center}`
-      }])).values()].sort((a,b)=>a.label.localeCompare(b.label,'es',{numeric:true}));
+        .sort((a, b) => a.label.localeCompare(b.label, 'es', { numeric: true }));
+      output.locationEntries = [...new Map(output.machineEntries.map(item => [item.locationValue, {
+        value: item.locationValue, center: item.center, location: item.location, label: `${item.location} · ${output.centerLabels.get(item.center) || item.center}`
+      }])).values()].sort((a, b) => a.label.localeCompare(b.label, 'es', { numeric: true }));
       return output;
+    }
+
+    function finDeMes(mes) {
+      const [a, m] = mes.split('-').map(Number);
+      return `${mes}-${String(new Date(a, m, 0).getDate()).padStart(2, '0')}`;
     }
 
     function machineIdentity(row) { return `${row.center}|${row.machine}`; }
@@ -1437,6 +1485,67 @@
     // incidencias) y la venta troceada por mes. La pagina no elige de quien
     // son: la API los saca del perfil de la sesion, nunca de la peticion.
     let preventivesNote = '';
+    // El indice del cuadro y los meses ya bajados. Un mes se baja UNA vez por
+    // visita: volver a un rango ya visto no pide nada al servidor.
+    let INDICE = null;
+    const MESES = new Map();
+
+    /* Baja los meses que le falten a un intervalo y vuelve a montar el modelo.
+       Solo pide los meses que el indice dice que tienen dato: un intervalo que
+       cae donde no hay nada cargado no es un error, es un cuadro vacio, y la
+       pagina lo ensena asi en vez de dar un 400. */
+    async function cargaMeses(desde, hasta) {
+      const hay = (INDICE.meses || []).map(m => m.mes);
+      const quiere = (desde && hasta ? Periodos.meses(desde, hasta) : hay).filter(m => hay.includes(m));
+      const faltan = quiere.filter(m => !MESES.has(m));
+      if (faltan.length) {
+        setLoading(true, `Cargando la venta (${faltan.length} ${faltan.length === 1 ? 'mes' : 'meses'})…`);
+        for (let i = 0; i < faltan.length; i++) {
+          $('#loadingText').textContent = `Cargando la venta (${i + 1} de ${faltan.length})…`;
+          MESES.set(faltan[i], await getJson(`/api/cuadro?mes=${encodeURIComponent(faltan[i])}`));
+        }
+        setLoading(false);
+      }
+      return modelFromCuadro(INDICE, quiere.map(m => MESES.get(m)).filter(Boolean));
+    }
+
+    /* El selector de tiempo. Cambiar de rango hace dos cosas: bajar los meses
+       que falten y mover las dos fechas del filtro cruzado, que es lo que ya
+       filtraba todo lo de abajo. Los filtros de centro, maquina y articulo se
+       quedan como estaban: cambiar de mes no es empezar de cero. */
+    function montaSelectorPeriodo(desde, hasta) {
+      const caja = $('#selectorPeriodo');
+      if (!caja || !window.Periodos || !INDICE) return;
+      Periodos.ponEstilo();
+      const selector = Periodos.montaSelector(caja, {
+        primerDia: INDICE.primer_dia || Periodos.PRIMER_DIA,
+        inicial: null,
+        alCambiar: async ({ desde, hasta }) => {
+          try {
+            const built = await cargaMeses(desde, hasta);
+            setupModel(built, false);
+            state.from = desde; state.to = hasta; state.day = ''; state.month = '';
+            syncControls();
+            renderAll();
+            describeData(INDICE, built);
+          } catch (error) {
+            console.error(error);
+            showToast(error.message || 'No se ha podido cargar ese periodo.');
+          }
+        }
+      });
+      if (desde) selector.muestra(desde, hasta, 'intervalo');
+      // Y al reves: si alguien escribe las fechas a mano en el filtro cruzado,
+      // hay que bajar los meses de esas fechas o no veria nada.
+      $('#applyFilters').addEventListener('click', async () => {
+        if (!state.from || !state.to) return;
+        const built = await cargaMeses(state.from, state.to);
+        setupModel(built, false);
+        syncControls();
+        renderAll();
+        selector.muestra(state.from, state.to, 'intervalo');
+      });
+    }
     function bootMessage(text, isError=false) {
       const main=$('main.shell');
       main.innerHTML=`<div class="boot${isError?' error':''}" role="status">${escapeHtml(text)}</div>`;
@@ -1478,16 +1587,22 @@
         if (yo.permisos && yo.permisos.exportar) $('#exportExcelBtn').hidden = false;
         $('#panelBtn').hidden = !(yo.sesiones || []).some(sesion => sesion !== 'cuadro');
 
-        const indice = await getJson('/api/cuadro');
-        salesSource = indice.ventas || salesSource;
-        preventivesNote = indice.preventivos ? '' : 'Los mantenimientos preventivos todavía no se reciben de VenCloud. En cuanto lleguen, aparecerán aquí.';
-        const trozos = await Promise.all((indice.trozos || []).map((trozo, i, all) => {
-          $('#loadingText').textContent = `Cargando la venta (${all.length} ${all.length === 1 ? 'mes' : 'meses'})…`;
-          return getJson(`/api/cuadro?trozo=${encodeURIComponent(trozo)}`);
-        }));
-        const built = modelFromCuadro(indice, trozos);
-        describeData(indice, built);
+        INDICE = await getJson('/api/cuadro');
+        salesSource = INDICE.ventas || salesSource;
+        preventivesNote = INDICE.preventivos ? '' : 'Los mantenimientos preventivos todavía no se reciben de VenCloud. En cuanto lleguen, aparecerán aquí.';
+        // Se arranca en el ultimo mes con dato, no en la historia entera: son
+        // veintitantos meses de venta por dia, maquina y articulo, y bajarlos
+        // todos para ensenar la primera pantalla no tendria sentido. El selector
+        // de arriba baja los que hagan falta.
+        const hay = (INDICE.meses || []).map(m => m.mes).sort();
+        const ultimo = hay[hay.length - 1];
+        const desde = ultimo ? `${ultimo}-01` : '';
+        const hasta = ultimo ? finDeMes(ultimo) : '';
+        const built = await cargaMeses(desde, hasta);
+        describeData(INDICE, built);
         setupModel(built, true);
+        if (desde) { state.from = desde; state.to = hasta; syncControls(); renderAll(); }
+        montaSelectorPeriodo(desde, hasta);
       } catch (error) {
         console.error(error);
         bootMessage(error.message || 'No se ha podido cargar el cuadro de mando.', true);

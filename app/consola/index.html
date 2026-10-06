@@ -13,6 +13,10 @@
   --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
   --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
   --bien:#0ca30c; --aviso:#fab219; --grave:#ec835a; --critico:#d03b3b;
+  /* Las cuatro que lee el selector de tiempo de /comun/periodos.js, para que
+     herede el tema de esta pantalla sin conocerlo. */
+  --pd-acento:var(--s1); --pd-apagado:var(--tinta-2); --pd-borde:var(--borde-fuerte);
+  --pd-fondo:var(--tarjeta);
   --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
 }
 @media (prefers-color-scheme: dark){
@@ -155,6 +159,7 @@ footer.pie{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px so
   </footer>
 </form></dialog>
 
+<script src="/comun/periodos.js"></script>
 <script>
 /* ===================================================================
    Consola de administración · digivend.es
@@ -218,6 +223,9 @@ function avisa(t, bien){
 /* ---------- estado ---------- */
 let YO=null, USUARIOS=[], PERFILES=[], SESIONES={}, TECHO={}, NIVELES={}, IMPLICITOS={},
     CONFIG={}, TELEFONOS=[], COLA=[], CARGA=null, SECCION="usuarios", guardando=null;
+/* El histórico: la serie diaria del perfil de la sesión y lo último que se
+   sumó. Se queda en memoria para que volver a esta pestaña no vuelva a pedirlo. */
+let SERIE=null, SELECTOR=null, SUMA=null, RANGO=null;
 
 const SECCIONES = [
   ["usuarios",  "Usuarios"],
@@ -225,6 +233,7 @@ const SECCIONES = [
   ["plataforma","Plataforma"],
   ["telefonos", "Teléfonos"],
   ["carga",     "Carga"],
+  ["historico", "Histórico"],
   ["cola",      "Cola de acciones"],
 ];
 
@@ -615,6 +624,106 @@ function vistaCarga(){
     </tbody></table></div></section>` : ""}`;
 }
 
+/* ================= histórico =================
+   La misma pregunta que se hace desde el panel de cliente —cuánto hubo en este
+   tiempo— pero con el ámbito del administrador, que es todo el parque. El dato
+   sale de /api/serie, una fila por día, y la suma la hace /comun/periodos.js:
+   el mismo fichero que usan el panel y el cuadro, para que «este mes» signifique
+   lo mismo en las tres pantallas. */
+function vistaHistorico(){
+  const sinHistoria = SERIE && !SERIE.mesesConDato().length;
+  return `<section class="caja">
+    <h2>Histórico</h2>
+    <p class="sub">Desde el 1 de enero de 2025, día a día. Elige el tiempo que quieras mirar:
+      los totales y las medias son exactos; las medianas de un rango son aproximadas, porque
+      salen del histograma de cada día.</p>
+    <div id="selectorPeriodo"></div>
+    ${SERIE === null ? `<p class="vacio">El histórico todavía no está calculado. Lo escriben los
+       agregados cada noche; la historia anterior al despliegue se rellena una vez a mano.</p>`
+      : sinHistoria ? `<p class="vacio">Todavía no hay ningún mes en el histórico. Se rellena una
+       vez desde el 1 de enero de 2025 con el evento {"desde": "...", "hasta": "..."} de la Lambda
+       de agregados.</p>` : `<div id="cifrasPeriodo"></div>`}
+  </section>
+  ${SERIE && !sinHistoria ? `<section class="caja"><h2>Lo que hay cargado, mes a mes</h2>
+    <p class="sub">Lo que la serie tiene escrito. Un mes que falta o con pocos días es un relleno
+      que se quedó a medias: se vuelve a lanzar ese rango y se completa.</p>
+    <div class="tabla"><table><thead><tr><th>Mes</th><th class="n">Días</th>
+      <th class="n">Visitas</th><th class="n">Venta</th><th class="n">Tareas SAT</th></tr></thead><tbody>
+    ${(SERIE.indice.meses||[]).slice().reverse().map(m=>`<tr>
+      <td><span class="cond">${esc(m.mes)}</span>${m.dias<20?' <span class="pill c">a medias</span>':""}</td>
+      <td class="n" data-et="Días">${num(m.dias)}</td>
+      <td class="n" data-et="Visitas">${num(m.visitas)}</td>
+      <td class="n" data-et="Venta">${eur(m.importe)}</td>
+      <td class="n" data-et="Tareas SAT">${num(m.tareas)}</td></tr>`).join("")}
+    </tbody></table></div></section>` : ""}`;
+}
+
+function pintaCifrasPeriodo(){
+  const c = document.getElementById("cifrasPeriodo");
+  if(!c) return;
+  if(!SUMA){ c.innerHTML = `<p class="vacio">Elige un periodo.</p>`; return; }
+  const T = SUMA;
+  if(!T.dias){
+    c.innerHTML = `<p class="vacio">No hay ningún día cargado en ${esc(Periodos.etiqueta(RANGO.desde, RANGO.hasta))}.
+      Si es anterior al relleno, todavía no está; si es hoy, la carga va de noche y trae hasta ayer.</p>`;
+    return;
+  }
+  const d = T.servicio.duracion_min, h = T.sat.horas_cierre;
+  const dec = n => new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(n||0);
+  c.innerHTML = `<p class="sub">${esc(Periodos.etiqueta(T.desde, T.hasta))} ·
+      ${num(T.dias)} ${T.dias===1?"día":"días"} con dato</p>
+    <div class="kpis">
+      <div class="kpi"><div class="et">Visitas</div><div class="vl">${num(T.servicio.visitas)}</div>
+        <div class="nt">de persona</div></div>
+      <div class="kpi"><div class="et">Venta</div><div class="vl">${eur(T.venta.importe)}</div>
+        <div class="nt">${T.venta.fuentes.includes("visita_ventas")?"del parte: parcial":"telemetría"}</div></div>
+      <div class="kpi"><div class="et">Cargado</div><div class="vl">${eur(T.servicio.carga.valor)}</div>
+        <div class="nt">${num(T.servicio.carga.unidades)} unidades</div></div>
+      <div class="kpi"><div class="et">Merma</div>
+        <div class="vl">${eur(Object.values(T.servicio.merma).reduce((a,m)=>a+(m.euros||0),0))}</div>
+        <div class="nt">caducidad, rotura y retirada</div></div>
+      <div class="kpi"><div class="et">Tareas SAT</div><div class="vl">${num(T.sat.tareas)}</div>
+        <div class="nt">${num(T.sat.fallos_tecnicos)} fallos técnicos</div></div>
+      <div class="kpi"><div class="et">Visita (mediana)</div>
+        <div class="vl">${d.n?dec(d.mediana)+" min":"—"}</div>
+        <div class="nt">${d.n?"aproximada · media "+dec(d.media)+" min":"sin medir"}</div></div>
+      <div class="kpi"><div class="et">Jornadas</div><div class="vl">${num(T.jornadas.jornadas)}</div>
+        <div class="nt">${num(T.jornadas.km_total)} km</div></div>
+      <div class="kpi"><div class="et">Cierre de avería</div>
+        <div class="vl">${h.n?dec(h.mediana)+" h":"—"}</div>
+        <div class="nt">${h.n?"sólo las que abren y cierran el mismo día":"sin cierres del día"}</div></div>
+    </div>
+    ${T.dinero.lista.length ? `<div class="tabla" style="margin-top:14px"><table>
+      <thead><tr><th>Periodo contable</th><th class="n">Efectivo</th><th class="n">Banco</th>
+        <th class="n">Total</th><th class="n">Ciego</th></tr></thead><tbody>
+      ${T.dinero.lista.slice().reverse().map(p=>`<tr>
+        <td><span class="cond">${esc(p.periodo)}</span></td>
+        <td class="n" data-et="Efectivo">${eur(p.efectivo)}</td>
+        <td class="n" data-et="Banco">${eur(p.banco)}</td>
+        <td class="n" data-et="Total">${eur(p.efectivo+p.banco)}</td>
+        <td class="n" data-et="Ciego">${p.efectivo>0?dec(100*p.ciego/p.efectivo)+" %":"—"}</td></tr>`).join("")}
+      </tbody></table></div>
+      <p class="sub">La recaudación se agrupa por su periodo contable, no por el día en que se
+        escribió: en un rango de días pueden aparecer meses anteriores.</p>` : ""}`;
+}
+
+async function montaSelectorHistorico(){
+  const caja = document.getElementById("selectorPeriodo");
+  if(!caja || !window.Periodos || !SERIE) return;
+  Periodos.ponEstilo();
+  SELECTOR = Periodos.montaSelector(caja, {
+    primerDia: SERIE.primerDia(),
+    inicial: RANGO ? null : "mes",
+    alCambiar: async ({desde, hasta}) => {
+      RANGO = {desde, hasta};
+      try{ SUMA = await SERIE.totales(desde, hasta); }
+      catch(e){ avisa("No se ha podido leer el histórico: " + e.message); return; }
+      pintaCifrasPeriodo();
+    }
+  });
+  if(RANGO){ SELECTOR.pon(RANGO.desde, RANGO.hasta); }
+}
+
 /* ================= cola ================= */
 function vistaCola(){
   const filas = COLA.slice().reverse().map(c=>`<tr>
@@ -669,7 +778,9 @@ function pinta(){
   }));
   const v = $("#vista");
   v.innerHTML = ({usuarios: vistaUsuarios, perfiles: vistaPerfiles, plataforma: vistaPlataforma,
-                  telefonos: vistaTelefonos, carga: vistaCarga, cola: vistaCola}[SECCION] || vistaUsuarios)();
+                  telefonos: vistaTelefonos, carga: vistaCarga, historico: vistaHistorico,
+                  cola: vistaCola}[SECCION] || vistaUsuarios)();
+  if(SECCION==="historico") montaSelectorHistorico();
 
   if(SECCION==="usuarios"){
     $("#bNuevoUsuario").addEventListener("click", ()=>formUsuario(null));
@@ -737,6 +848,13 @@ async function carga(){
      deben impedir que la consola se abra. */
   try{ COLA = (await api("GET","/api/admin/cola")).cola || []; }catch(e){ COLA = []; }
   try{ CARGA = await api("GET","/api/estado-carga"); }catch(e){ CARGA = null; }
+  /* El histórico tampoco debe impedir que la consola se abra: recién
+     desplegado no existe todavía, y la pestaña lo dice en vez de fallar. */
+  try{
+    const s = new Periodos.Serie();
+    await s.abre();
+    SERIE = s;
+  }catch(e){ SERIE = null; }
   pinta();
 }
 

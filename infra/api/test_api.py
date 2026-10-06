@@ -9,6 +9,7 @@ bruta, cuenta sin ficha).
     python3 infra/api/test_api.py
 """
 
+import gzip
 import json
 import os
 import sys
@@ -283,11 +284,13 @@ comprueba("es la misma lista que evalua la Lambda de alarmas", len(cat), len(_ca
 
 print("\nEl cuadro de mando: solo con su sesion, y solo el de su perfil")
 falsos.OBJETOS["cabina/cli-airbus/cuadro/indice.json"] = json.dumps(
-    {"perfil": "cli-airbus", "trozos": ["2026-09"], "maquinas": [["24SE1983", 0, "Comedor", "S1", 1]]}).encode()
-falsos.OBJETOS["cabina/cli-airbus/cuadro/ventas-2026-09.json"] = json.dumps(
-    {"trozo": "2026-09", "filas": [[1, 0, 0, 2, 1.3]]}).encode()
+    {"perfil": "cli-airbus", "meses": [{"mes": "2026-09"}],
+     "censo": [["24SE1983", 0, "Comedor", "S1"]]}).encode()
+# Comprimido, como lo escriben los agregados: la API lo descomprime al servirlo.
+falsos.OBJETOS["cabina/cli-airbus/cuadro/mes-2026-09.json.gz"] = gzip.compress(json.dumps(
+    {"mes": "2026-09", "ventas": [[1, 0, 0, 2, 1.3]]}).encode())
 falsos.OBJETOS["cabina/interno/cuadro/indice.json"] = json.dumps(
-    {"perfil": "interno", "trozos": ["2026-09"]}).encode()
+    {"perfil": "interno", "meses": [{"mes": "2026-09"}]}).encode()
 # Una usuaria nueva: a estas alturas a Ana ya la han bloqueado mas arriba.
 falsos.USUARIOS_COG["eva@airbus.com"] = {"clave": "ClaveLarga123", "temporal": False}
 pon_fila("USUARIO#eva@airbus.com", {"nombre": "Eva", "perfil_id": "cli-airbus", "estado": "activo"})
@@ -302,12 +305,12 @@ _ix = llama("GET", "/api/cuadro", cookie=COOKIE_ANA)
 comprueba("con ella, el indice de su perfil", cuerpo_de(_ix)["perfil"], "cli-airbus")
 comprueba("sin pasar por json: el cuerpo es el fichero tal cual",
           _ix["body"], falsos.OBJETOS["cabina/cli-airbus/cuadro/indice.json"].decode())
-comprueba("un trozo que el indice cita",
-          cuerpo_de(llama("GET", "/api/cuadro", cookie=COOKIE_ANA, query={"trozo": "2026-09"}))["filas"],
+comprueba("un mes que el indice cita, descomprimido",
+          cuerpo_de(llama("GET", "/api/cuadro", cookie=COOKIE_ANA, query={"mes": "2026-09"}))["ventas"],
           [[1, 0, 0, 2, 1.3]])
 for _malo in ("2026-08", "../../interno/cuadro/indice", "2026-09.json", ""):
-    comprueba(f"un trozo que no cita ({_malo!r}), 400",
-              llama("GET", "/api/cuadro", cookie=COOKIE_ANA, query={"trozo": _malo})["statusCode"], 400)
+    comprueba(f"un mes que no cita ({_malo!r}), 400",
+              llama("GET", "/api/cuadro", cookie=COOKIE_ANA, query={"mes": _malo})["statusCode"], 400)
 comprueba("y la query no cambia de perfil",
           cuerpo_de(llama("GET", "/api/cuadro", cookie=COOKIE_ANA, query={"perfil": "interno"}))["perfil"],
           "cli-airbus")
@@ -318,6 +321,46 @@ comprueba("y /api/yo dice que lo tiene",
 del falsos.OBJETOS["cabina/cli-airbus/cuadro/indice.json"]
 comprueba("sin calcular todavia, 503",
           llama("GET", "/api/cuadro", cookie=COOKIE_ANA)["statusCode"], 503)
+
+print("\nEl historico: el indice de meses, y un mes recortado como el panel")
+falsos.OBJETOS["cabina/cli-airbus/serie/indice.json"] = json.dumps(
+    {"perfil": "cli-airbus", "primer_dia": "2025-01-01",
+     "meses": [{"mes": "2025-03", "visitas": 12}]}).encode()
+falsos.OBJETOS["cabina/cli-airbus/serie/2025-03.json.gz"] = gzip.compress(json.dumps(
+    {"mes": "2025-03", "filas": [
+        {"f": "2025-03-11",
+         "servicio": {"visitas": 3, "coste_servicio": 24.0},
+         "dinero": {"periodos": {"2025-02": {"efectivo": 100.0}}},
+         "sat": {"tareas": 2},
+         "jornadas": {"jornadas": 1},
+         "venta": {"importe": 7.0}}]}).encode())
+falsos.OBJETOS["cabina/interno/serie/indice.json"] = json.dumps(
+    {"perfil": "interno", "meses": [{"mes": "2025-03"}]}).encode()
+_ix = llama("GET", "/api/serie", cookie=COOKIE_ANA)
+comprueba("el indice es el de su perfil", cuerpo_de(_ix)["perfil"], "cli-airbus")
+comprueba("y dice desde cuando hay historia", cuerpo_de(_ix)["primer_dia"], "2025-01-01")
+pon_fila("PERFIL#cli-airbus", dict(_perfil_airbus, sesiones=["resumen", "cuadro"]))
+_f = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"mes": "2025-03"}))["filas"][0]
+comprueba("la fila lleva su fecha y sus visitas", (_f["f"], _f["servicio"]["visitas"]),
+          ("2025-03-11", 3))
+comprueba("con «resumen» ve servicio y dinero", sorted(k for k in _f if k != "f"),
+          ["dinero", "servicio", "venta"])
+comprueba("el coste de servicio NO sale: es interno",
+          "coste_servicio" in _f["servicio"], False)
+pon_fila("PERFIL#cli-airbus", dict(_perfil_airbus, sesiones=["servicio", "cuadro"]))
+_f = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"mes": "2025-03"}))["filas"][0]
+comprueba("un perfil que solo ve «servicio» no ve el dinero dia a dia",
+          sorted(k for k in _f if k != "f"), ["servicio"])
+comprueba("ni la venta, que es facturacion", "venta" in _f, False)
+for _malo in ("2025-02", "../../interno/serie/2025-03", ""):
+    comprueba(f"un mes que el indice no cita ({_malo!r}), 400",
+              llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"mes": _malo})["statusCode"], 400)
+comprueba("y la query no cambia de perfil",
+          cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"perfil": "interno"}))["perfil"],
+          "cli-airbus")
+del falsos.OBJETOS["cabina/cli-airbus/serie/indice.json"]
+comprueba("sin historico todavia, 503",
+          llama("GET", "/api/serie", cookie=COOKIE_ANA)["statusCode"], 503)
 
 print("\nUna ruta que no existe")
 comprueba("404", llama("GET", "/api/loquesea", cookie=COOKIE_JEFE)["statusCode"], 404)

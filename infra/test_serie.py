@@ -309,6 +309,76 @@ comprueba("las visitas de la ventana cuadran",
 comprueba("y el valor cargado",
           _t["servicio"]["carga"]["valor"], _panel["servicio"]["carga"]["valor"])
 
+# ----------------------------------------------------------------------
+# La misma cuenta, en el navegador
+# ----------------------------------------------------------------------
+# app/comun/periodos.js suma las mismas filas en el navegador. Si las dos
+# cuentas no dan lo mismo, el numero que lee el cliente no es el que decimos
+# nosotros, y eso no se ve mirando ninguno de los dos ficheros por separado.
+# Asi que se comparan de verdad, con node. Sin node, se dice y se salta.
+print("\nEl navegador suma lo mismo que Python")
+import shutil
+import subprocess
+import tempfile
+
+if not shutil.which("node"):
+    print("  (saltado: no hay node en esta maquina)")
+else:
+    _dias_js = []
+    for i, (minutos, importe) in enumerate([([5, 7, 60], 10.0), ([6], 0.0), ([8, 9], 2.5)]):
+        x = S.Dia(datetime.date(2025, 4, i + 1))
+        x.come_partes([parte(f"M{j}", f"2025-04-0{i + 1} 08:00:00", m)
+                       for j, m in enumerate(minutos)])
+        x.come_recaudacion([{"anho": 2025, "mes": 3, "imp_recaudado": importe,
+                             "imp_pago_bancario": 1.0, "tipo_telemetria": 40,
+                             "criterio_calculo": 3}])
+        x.come_jornadas([{"temperaturaini": 9.5, "kminiciales": 100, "kmfinales": 180,
+                          "maplatitudini": 1}])
+        _dias_js.append(x.fila())
+    _py = S.suma_filas(_dias_js)
+    _guion = f"""
+      global.window = undefined;
+      require({json.dumps(AQUI + '/../app/comun/periodos.js')});
+      const P = globalThis.Periodos;
+      const t = P.sumaFilas({json.dumps(_dias_js)}, {json.dumps(S.BORDES)});
+      console.log(JSON.stringify({{
+        visitas: t.servicio.visitas,
+        carga: t.servicio.carga.valor,
+        mediana: t.servicio.duracion_min.mediana,
+        media: t.servicio.duracion_min.media,
+        p90: t.servicio.duracion_min.p90,
+        efectivo: t.dinero.periodos["2025-03"].efectivo,
+        km: t.jornadas.km_total,
+        temp_fuera: t.jornadas.temperatura_fuera,
+        dias: t.dias,
+        rango_mes: P.rango("mes", new Date(2026, 2, 15)),
+        rango_pasado: P.rango("mes_pasado", new Date(2026, 0, 10)),
+        rango_semana: P.rango("semana", new Date(2026, 2, 15)),
+        meses: P.meses("2025-12-20", "2026-01-02")
+      }}));
+    """
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(_guion)
+        _ruta = fh.name
+    _js = json.loads(subprocess.run(["node", _ruta], capture_output=True, text=True,
+                                    check=True).stdout)
+    os.unlink(_ruta)
+    comprueba("las visitas", _js["visitas"], _py["servicio"]["visitas"])
+    casi("la mediana de minutos", _js["mediana"], _py["servicio"]["duracion_min"]["mediana"])
+    casi("la media de minutos", _js["media"], _py["servicio"]["duracion_min"]["media"])
+    casi("el p90", _js["p90"], _py["servicio"]["duracion_min"]["p90"])
+    casi("el efectivo del periodo", _js["efectivo"], _py["dinero"]["periodos"]["2025-03"]["efectivo"])
+    casi("los kilometros", _js["km"], _py["jornadas"]["km_total"])
+    comprueba("las temperaturas fuera de rango", _js["temp_fuera"],
+              _py["jornadas"]["temperatura_fuera"])
+    comprueba("y los dias", _js["dias"], _py["dias"])
+    comprueba("este mes", tuple(_js["rango_mes"]), S.rango("mes", datetime.date(2026, 3, 15)))
+    comprueba("el mes pasado de enero", tuple(_js["rango_pasado"]),
+              S.rango("mes_pasado", datetime.date(2026, 1, 10)))
+    comprueba("esta semana empieza el lunes tambien en el navegador",
+              tuple(_js["rango_semana"]), S.rango("semana", datetime.date(2026, 3, 15)))
+    comprueba("y los meses de un intervalo", _js["meses"], S.meses_entre("2025-12-20", "2026-01-02"))
+
 print()
 if fallos:
     print(f"{len(fallos)} PRUEBAS FALLIDAS: {', '.join(fallos)}")

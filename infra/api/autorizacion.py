@@ -187,6 +187,40 @@ def recorta(panel, perfil, config=None):
     return fuera
 
 
+def bloques_de(perfil):
+    """Los bloques del panel que las sesiones de este perfil necesitan."""
+    tipo = perfil.get("tipo", "cliente")
+    sesiones = sesiones_de(tipo, perfil.get("sesiones", []))
+    return {b for s in sesiones for b in SESIONES[s][2]}
+
+
+def recorta_dia(fila, perfil):
+    """Una fila de la serie diaria, con la misma tijera que el panel.
+
+    Una fila de la serie lleva los mismos bloques que el panel —servicio,
+    dinero, sat, jornadas—, con las mismas cifras partidas por dias. Si se
+    sirviera entera, la serie seria la puerta de atras del panel: un perfil al
+    que se le quito el dinero lo veria aqui dia a dia. Asi que se recorta
+    igual, y en la MISMA funcion de siempre, no en una copia.
+
+    La venta va con «dinero» a proposito: es facturacion.
+    """
+    necesarios = bloques_de(perfil)
+    tipo = perfil.get("tipo", "cliente")
+    fuera = {"f": fila.get("f")}
+    for bloque, v in fila.items():
+        if bloque == "f":
+            continue
+        pedido = "dinero" if bloque == "venta" else bloque
+        if pedido in necesarios:
+            fuera[bloque] = dict(v) if isinstance(v, dict) else v
+    if nivel_de(tipo) < NIVEL["direccion"]:
+        for bloque, campo in CAMPOS_INTERNOS:
+            if isinstance(fuera.get(bloque), dict):
+                fuera[bloque].pop(campo, None)
+    return fuera
+
+
 # ----------------------------------------------------------------------
 # lo que el asistente puede responder
 # ----------------------------------------------------------------------
