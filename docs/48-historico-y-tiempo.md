@@ -1,8 +1,8 @@
 # 48 · El histórico desde 2025, y elegir el tiempo
 
 > `infra/serie.py`, `infra/lambda_agregados.py`, `infra/cuadro.py`, `infra/api/lambda_api.py`
-> (`/api/serie`), `app/comun/periodos.js`, y el selector en `app/panel/`, `app/consola/` y
-> `app/cuadro/`.
+> (`/api/serie`, `/api/serie?centros=`), `app/comun/periodos.js`, y el selector de tiempo y de
+> lugar en `app/panel/`, `app/consola/` y `app/cuadro/`.
 
 Hasta aquí todo lo que se veía era **una foto de los últimos 120 días**. Sirve para «cómo va el
 parque» y no sirve para nada de lo que se pregunta a diario: cuánto se vendió ayer, cómo va este
@@ -149,13 +149,55 @@ función** que el panel (`autorizacion.recorta_dia`), ni en una copia ni en el n
 Y el perfil sale de la **sesión**, nunca de la petición: un mes sólo se sirve si el índice de ese
 perfil lo cita, así que no hay forma de componer la clave de otro.
 
+## Filtrar por delegación, cliente y centro
+
+Pedido el mismo día: «un filtro que puedas elegir Delegación, Cliente y Centro. Los perfiles
+clientes podrán ver solo Cliente y Centro; la delegación es un tema interno».
+
+**El centro es el átomo.** La noche escribe, además de la fila del día, el mismo día **partido por
+centro** (`serie.PorCentro`), en su propio fichero por mes. Cliente y delegación no se guardan en
+las cifras: son la **ficha** del centro, que va en el índice. Filtrar por un cliente es sumar sus
+centros; por una delegación, igual. Eso compra dos cosas:
+
+- Un centro que cambia de cliente —la mudanza de VenCloud de docs/44— se reagrupa con la ficha de
+  hoy sin reescribir ningún día.
+- Cada centro lleva su propio `Dia`, con las mismas reglas: la suma de todos los centros da la fila
+  del día. `infra/test_serie.py` lo comprueba, y comprueba que el navegador suma igual.
+
+| en S3 | qué es |
+|---|---|
+| `cabina/<perfil>/serie/centros-<AAAA-MM>.json.gz` | por día, las cifras de cada centro |
+| `indice.json` → `centros` | la ficha de cada centro: nombre, número, cliente, delegación |
+| `indice.json` → `meses_centros` | los meses que tienen el reparto por centro |
+
+**Lo que no se parte por centro**, y la pantalla lo dice: las jornadas (una ruta pasa por muchos
+centros) y el cierre de averías (va por avería). Con un filtro puesto no salen.
+
+**Va aparte** porque para el interno son cientos de centros por día: un mes son unos 4,5 MB de
+JSON. Quien no filtra no se lo baja, y cuando se baja la API lo manda comprimido (pasa de un mega:
+unos 170 KB), que además lo deja lejos del límite de 6 MB de una respuesta de Lambda.
+
+**La delegación no sale del servidor para un cliente.** `/api/serie` quita la delegación de las
+fichas y dice en `filtros` qué se puede elegir: `delegacion, cliente, centro` desde operaciones
+para arriba, `cliente, centro` para un cliente. Y un cliente sólo ve sus centros porque su serie se
+calculó con su ámbito: no hay un centro de otro que filtrar. El mes por centro se recorta centro a
+centro con la misma `recorta_dia`.
+
+En las pantallas:
+
+- **Panel de cliente**: debajo del tiempo, los desplegables. Un desplegable con una sola opción no
+  sale (un cliente con un solo cliente no ve el de «Cliente»). Con un lugar elegido y sin periodo,
+  suma las fechas de la ventana. El reparto por centro, que antes era la foto de la ventana, sale
+  ya del periodo.
+- **Consola**: delegación, cliente y centro, y una tabla por centro del periodo.
+- **Cuadro**: delegación (Serunion) y cliente. Eligen los centros del filtro de centro que ya
+  tenía, no son un segundo filtro.
+
 ## Lo que queda
 
-- **El reparto por centro, por días.** Es lo único que se echa en falta al elegir un periodo. Para
-  un perfil de cliente son diez centros y cabría de sobra en la fila del día; para el interno son
-  más de mil, y ahí no. O sea que la fila tendría que llevarlo sólo cuando el perfil tiene pocos
-  centros, y eso es una forma distinta de fila según el perfil: se deja escrito aquí y se hace
-  cuando se pida, no por adelantado.
+- **El reparto por centro sin filtro.** Al elegir un periodo sin lugar, el reparto por centro del
+  panel sigue siendo la foto de la ventana, para no bajar el mes por centro a quien no lo pide. Con
+  un lugar elegido ya sale del periodo.
 - **La venta sigue siendo parcial** mientras no exista el informe `EXT_TELEMETRIA_VENTAS`
   (docs/46): el histórico de venta arrastra la misma limitación, y el cuadro lo avisa.
 - **Las averías que cruzan de un día a otro** no entran en el cierre mediano de un rango: una fila

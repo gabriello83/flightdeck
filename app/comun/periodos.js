@@ -181,6 +181,187 @@
     return t;
   }
 
+  // ---------------------------------------------- partido por centro (filtro)
+  /* El filtro por delegación, cliente y centro. El CENTRO es el átomo: cada día
+     tiene sus cifras partidas por centro (serie/centros-<mes>), y la ficha de
+     cada centro —nombre, cliente y, sólo para Serunion, delegación— viene en el
+     índice. Filtrar por un cliente es sumar sus centros. La misma cuenta que
+     `serie.filas_de_centros` en Python: infra/test_serie.py compara las dos. */
+  function sumaProfunda(a, b) {
+    if (a === null || a === undefined) return JSON.parse(JSON.stringify(b));
+    if (b && typeof b === "object") {
+      if ("h" in b && "n" in b) return sumaHist(a, b);
+      const out = Object.assign({}, a);
+      for (const k in b) out[k] = sumaProfunda(a[k], b[k]);
+      return out;
+    }
+    if (typeof a === "number" && typeof b === "number") {
+      const r = a + b;
+      return Number.isInteger(r) ? r : Math.round(r * 1000) / 1000;
+    }
+    return b;
+  }
+
+  /* Las filas de cada día sumando sólo los centros de `quiere` (un Set; null =
+     todos), con la forma de la fila del día: sumaFilas las junta igual. */
+  function filasDeCentros(filasCentros, quiere) {
+    const out = [];
+    const orden = (filasCentros || []).slice().sort((a, b) => a.f.localeCompare(b.f));
+    for (const f of orden) {
+      let fila = null;
+      for (const clave in (f.centros || {})) {
+        if (quiere && !quiere.has(clave)) continue;
+        fila = sumaProfunda(fila, f.centros[clave]);
+      }
+      if (fila) { fila.f = f.f; out.push(fila); }
+    }
+    return out;
+  }
+
+  /* Un renglón por centro para un rango. La misma cuenta que serie.suma_centros. */
+  function sumaCentros(filasCentros, quiere) {
+    const por = {};
+    for (const f of filasCentros || []) {
+      for (const clave in (f.centros || {})) {
+        if (quiere && !quiere.has(clave)) continue;
+        const c = f.centros[clave], s = c.servicio || {}, ve = c.venta || {}, sat = c.sat || {};
+        const a = por[clave] || (por[clave] = { visitas: 0, min_n: 0, min_suma: 0,
+          maquinas_dia_max: 0, carga_valor: 0, merma_euros: 0, venta_importe: 0, tareas: 0, dias: 0 });
+        a.dias += 1;
+        a.visitas += s.visitas || 0;
+        a.min_n += (s.min || {}).n || 0;
+        a.min_suma += (s.min || {}).suma || 0;
+        a.maquinas_dia_max = Math.max(a.maquinas_dia_max, s.maquinas_dia || 0);
+        a.carga_valor += (s.carga || {}).valor || 0;
+        for (const m in (s.merma || {})) a.merma_euros += (s.merma[m] || {}).euros || 0;
+        a.venta_importe += ve.importe || 0;
+        a.tareas += sat.tareas || 0;
+      }
+    }
+    for (const k in por) {
+      const a = por[k];
+      a.min_medio = a.min_n ? Math.round(10 * a.min_suma / a.min_n) / 10 : null;
+    }
+    return por;
+  }
+
+  /* Qué centros entran con lo elegido. null = sin filtro (todos). */
+  function centrosElegidos(fichas, sel) {
+    sel = sel || {};
+    if (!sel.delegacion && !sel.cliente && !sel.centro) return null;
+    const out = new Set();
+    for (const k in (fichas || {})) {
+      const f = fichas[k] || {};
+      if (sel.delegacion && f.delegacion !== sel.delegacion) continue;
+      if (sel.cliente && f.cliente !== sel.cliente) continue;
+      if (sel.centro && k !== sel.centro) continue;
+      out.add(k);
+    }
+    return out;
+  }
+
+  function etiquetaLugar(fichas, sel) {
+    sel = sel || {};
+    const partes = [];
+    if (sel.delegacion) partes.push("Delegación " + sel.delegacion);
+    if (sel.cliente) partes.push(sel.cliente);
+    if (sel.centro) partes.push(((fichas || {})[sel.centro] || {}).nombre || sel.centro);
+    return partes.join(" · ");
+  }
+
+  /* Los desplegables en cascada: Delegación → Cliente → Centro. La delegación
+     sólo sale si el índice la ofrece (`filtros`): a un cliente la API ni se la
+     manda. Con un solo centro no se pinta nada: no habría nada que elegir. */
+  function montaFiltroLugar(contenedor, opciones) {
+    const o = opciones || {};
+    const fichas = o.fichas || {};
+    const filtros = o.filtros || ["cliente", "centro"];
+    const claves = Object.keys(fichas);
+    contenedor.innerHTML = "";
+    const sel = { delegacion: "", cliente: "", centro: "" };
+    if (claves.length < 2) {
+      contenedor.hidden = true;
+      return { estado: () => Object.assign({}, sel), quiere: () => null, etiqueta: () => "" };
+    }
+    contenedor.hidden = false;
+    contenedor.classList.add("filtro-lugar");
+
+    const NOMBRES = { delegacion: ["Delegación", "Todas"], cliente: ["Cliente", "Todos"],
+                      centro: ["Centro", "Todos"] };
+    const cajas = {};
+    // Un desplegable con una sola opción no deja elegir nada: un cliente con
+    // un solo cliente no ve el de «Cliente», y nadie ve el de una delegación.
+    const distintos = dim => new Set(claves.map(k => dim === "centro" ? k : (fichas[k] || {})[dim])
+                                           .filter(Boolean)).size;
+    for (const dim of ["delegacion", "cliente", "centro"]) {
+      if (!filtros.includes(dim) || distintos(dim) < 2) continue;
+      const id = "pdL" + dim + Math.random().toString(36).slice(2, 7);
+      const l = document.createElement("label");
+      l.htmlFor = id; l.textContent = NOMBRES[dim][0];
+      const s = document.createElement("select");
+      s.id = id; s.dataset.dim = dim;
+      s.addEventListener("change", () => {
+        sel[dim] = s.value;
+        // Lo de abajo se vacía si ya no cuadra con lo de arriba.
+        if (dim === "delegacion") { sel.cliente = ""; sel.centro = ""; }
+        if (dim === "cliente") sel.centro = "";
+        rellena(); avisa();
+      });
+      contenedor.appendChild(l); contenedor.appendChild(s);
+      cajas[dim] = s;
+    }
+    if (!Object.keys(cajas).length) {
+      contenedor.hidden = true;
+      return { estado: () => Object.assign({}, sel), quiere: () => null, etiqueta: () => "" };
+    }
+    const quitar = document.createElement("button");
+    quitar.type = "button"; quitar.className = "btn filtro-quitar"; quitar.textContent = "Quitar filtro";
+    quitar.addEventListener("click", () => { sel.delegacion = sel.cliente = sel.centro = ""; rellena(); avisa(); });
+    contenedor.appendChild(quitar);
+
+    function opcionesDe(dim) {
+      const vistos = new Map();
+      for (const k of claves) {
+        const f = fichas[k] || {};
+        if (dim !== "delegacion" && sel.delegacion && f.delegacion !== sel.delegacion) continue;
+        if (dim === "centro" && sel.cliente && f.cliente !== sel.cliente) continue;
+        if (dim === "delegacion" && f.delegacion) vistos.set(f.delegacion, f.delegacion);
+        if (dim === "cliente" && f.cliente) vistos.set(f.cliente, f.cliente);
+        if (dim === "centro") vistos.set(k, (f.nombre || k) + (f.num && f.num !== f.nombre ? ` (${f.num})` : ""));
+      }
+      return [...vistos.entries()].sort((a, b) => a[1].localeCompare(b[1], "es"));
+    }
+
+    function rellena() {
+      for (const dim in cajas) {
+        const s = cajas[dim];
+        s.innerHTML = "";
+        const todas = document.createElement("option");
+        todas.value = ""; todas.textContent = NOMBRES[dim][1];
+        s.appendChild(todas);
+        for (const [v, t] of opcionesDe(dim)) {
+          const op = document.createElement("option");
+          op.value = v; op.textContent = t;
+          s.appendChild(op);
+        }
+        s.value = sel[dim];
+      }
+      quitar.hidden = !(sel.delegacion || sel.cliente || sel.centro);
+    }
+
+    function avisa() {
+      if (o.alCambiar) o.alCambiar(Object.assign({}, sel),
+                                   centrosElegidos(fichas, sel), etiquetaLugar(fichas, sel));
+    }
+
+    rellena();
+    return {
+      estado: () => Object.assign({}, sel),
+      quiere: () => centrosElegidos(fichas, sel),
+      etiqueta: () => etiquetaLugar(fichas, sel)
+    };
+  }
+
   // ------------------------------------------------------- la serie, en caché
   // Un mes se baja UNA vez por visita a la pagina. Cambiar de rango dentro del
   // mismo mes no vuelve a pedir nada, y un intervalo largo solo pide los meses
@@ -194,6 +375,7 @@
     this.ruta = o.ruta || "/api/serie";
     this.indice = null;
     this.cache = new Map();
+    this.cacheCentros = new Map();
   }
 
   Serie.prototype.abre = async function () {
@@ -232,8 +414,43 @@
     return out;
   };
 
-  Serie.prototype.totales = async function (desde, hasta, avisa) {
-    return sumaFilas(await this.filas(desde, hasta, avisa), this.bordes());
+  /* Las fichas de los centros y por qué se puede filtrar. La API ya le quita
+     la delegación a quien no es de Serunion. */
+  Serie.prototype.fichas = function () { return (this.indice && this.indice.centros) || {}; };
+  Serie.prototype.filtros = function () {
+    return (this.indice && this.indice.filtros) || ["cliente", "centro"];
+  };
+
+  /* Lo mismo que `filas`, pero del día partido por centro. Sólo se baja si
+     alguien filtra: quien mira el total no lo necesita. */
+  Serie.prototype.filasCentros = async function (desde, hasta, avisa) {
+    await this.abre();
+    const conCentros = (this.indice && this.indice.meses_centros) || [];
+    const quiere = meses(desde, hasta).filter(m => conCentros.includes(m));
+    const faltan = quiere.filter(m => !this.cacheCentros.has(m));
+    for (let i = 0; i < faltan.length; i++) {
+      if (avisa) avisa(i + 1, faltan.length);
+      const d = await this.getJson(`${this.ruta}?centros=${encodeURIComponent(faltan[i])}`);
+      this.cacheCentros.set(faltan[i], d.filas || []);
+    }
+    const out = [];
+    for (const m of quiere) {
+      for (const f of this.cacheCentros.get(m) || []) {
+        if (f.f >= desde && f.f <= hasta) out.push(f);
+      }
+    }
+    return out;
+  };
+
+  /* Los totales de un rango; con `centros` (un Set), sólo de esos centros.
+     Con filtro, `por_centro` trae además un renglón por centro. */
+  Serie.prototype.totales = async function (desde, hasta, avisa, centros) {
+    if (!centros) return sumaFilas(await this.filas(desde, hasta, avisa), this.bordes());
+    const fc = await this.filasCentros(desde, hasta, avisa);
+    const t = sumaFilas(filasDeCentros(fc, centros), this.bordes());
+    t.filtrado = true;
+    t.por_centro = sumaCentros(fc, centros);
+    return t;
   };
 
   // ------------------------------------------------------------- el selector
@@ -352,6 +569,11 @@
   border:1px solid var(--pd-borde,#cdccc5);border-radius:6px;
   background:var(--pd-fondo,#fff);color:inherit}
 .periodo-sello{color:var(--pd-apagado,#52514e)}
+.filtro-lugar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;margin:0 0 14px}
+.filtro-lugar label{color:var(--pd-apagado,#52514e);margin-left:4px}
+.filtro-lugar select{font:inherit;padding:4px 6px;max-width:260px;
+  border:1px solid var(--pd-borde,#cdccc5);border-radius:6px;
+  background:var(--pd-fondo,#fff);color:inherit}
 @media (max-width:700px){.selector-periodo{gap:8px}.periodo-chip{font-size:12px;padding:4px 9px}}
 `;
 
@@ -366,6 +588,7 @@
 
   global.Periodos = {
     RANGOS, ORDEN, PRIMER_DIA, rango, meses, etiqueta, iso,
-    sumaFilas, sumaHist, resumenHist, Serie, montaSelector, ponEstilo, ESTILO
+    sumaFilas, sumaHist, resumenHist, Serie, montaSelector, ponEstilo, ESTILO,
+    filasDeCentros, sumaCentros, centrosElegidos, etiquetaLugar, montaFiltroLugar
   };
 })(typeof window !== "undefined" ? window : globalThis);

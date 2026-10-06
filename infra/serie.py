@@ -33,6 +33,7 @@ Sin dependencias: se prueba con `python3 infra/test_serie.py`.
 """
 
 import datetime
+import json
 
 import reglas as R
 
@@ -170,15 +171,18 @@ class Dia:
     motivo: las reglas son las de `reglas.py` y no hay una segunda copia.
     """
 
-    __slots__ = ("fecha", "visitas", "partes", "maquinas", "centros", "minutos",
+    __slots__ = ("por_centro", "fecha", "visitas", "partes", "maquinas", "centros", "minutos",
                  "carga_valor", "carga_unidades", "carga_vendibles", "merma",
                  "periodos", "sat_tareas", "sat_averias", "sat_preventivos",
                  "sat_fallos", "sat_apertura", "sat_cierre", "jornadas",
                  "km", "temperaturas", "con_gps", "venta_unidades",
                  "venta_importe", "venta_maquinas", "venta_fuente")
 
-    def __init__(self, fecha):
+    def __init__(self, fecha, centro_de=None):
         self.fecha = fecha.isoformat() if hasattr(fecha, "isoformat") else str(fecha)[:10]
+        # El mismo dia partido por centro, si quien lo crea sabe de que centro
+        # es cada fila (ver PorCentro).
+        self.por_centro = PorCentro(centro_de) if centro_de else None
         self.visitas = self.partes = 0
         self.maquinas = set()
         self.centros = set()
@@ -392,6 +396,183 @@ class Dia:
                 "fuente": self.venta_fuente,
             },
         }
+
+
+# ----------------------------------------------------------------------
+# el mismo dia, partido por centro
+# ----------------------------------------------------------------------
+# POR QUE VA APARTE. El filtro por delegacion, cliente y centro necesita saber
+# de que centro es cada cifra de cada dia. El CENTRO es el atomo: cliente y
+# delegacion son atributos suyos —la ficha del centro, que va en el indice—, asi
+# que filtrar por un cliente es sumar sus centros. Guardarlo por centro y no por
+# cliente es lo que permite que la mudanza de clientes de VenCloud (docs/44) no
+# rompa la historia: un centro que cambia de cliente se reagrupa con la ficha
+# de hoy, sin reescribir ningun dia.
+#
+# Va en su propio fichero por mes (`centros-<mes>.json.gz`) y no dentro de la
+# fila del dia porque para el interno son cientos de centros por dia: quien no
+# filtra no tiene por que bajarselos.
+#
+# Lo que se guarda por centro es lo que se puede atribuir a un centro y sumar:
+# visitas, carga, merma, recaudacion, tareas de SAT y venta. Las jornadas no:
+# una jornada es de una ruta, que pasa por muchos centros. El cierre de las
+# averias tampoco: sale de los eventos, que van por averia.
+
+class PorCentro:
+    """Las cifras de un dia, por centro. `centro_de(fila)` dice de que centro es.
+
+    Cada centro lleva su propio `Dia`, asi que las reglas son las mismas que las
+    de la fila del dia, sin una segunda copia: la suma de todos los centros da
+    la fila del dia (salvo lo que no tiene centro, que no se puede filtrar).
+    """
+
+    # Lo que no se parte por centro: las jornadas son de una ruta, y el cierre
+    # de una averia sale de los eventos, que van por averia y no por maquina.
+    NO_SE_PARTE = ("jornadas",)
+
+    def __init__(self, centro_de):
+        self.centro_de = centro_de
+        self.c = {}
+
+    def _grupos(self, filas):
+        grupos = {}
+        for f in filas:
+            clave = self.centro_de(f)
+            if clave:
+                grupos.setdefault(str(clave), []).append(f)
+        return grupos
+
+    def _reparte(self, metodo, filas):
+        for clave, grupo in self._grupos(filas).items():
+            if clave not in self.c:
+                self.c[clave] = Dia("1900-01-01")
+            getattr(self.c[clave], metodo)(grupo)
+
+    def come_partes(self, filas):
+        self._reparte("come_partes", filas)
+
+    def come_lineas(self, filas):
+        self._reparte("come_lineas", filas)
+
+    def come_mov_maquina(self, filas):
+        self._reparte("come_mov_maquina", filas)
+
+    def come_recaudacion(self, filas):
+        self._reparte("come_recaudacion", filas)
+
+    def come_sat(self, filas):
+        self._reparte("come_sat", filas)
+
+    def come_ventas_telemetria(self, filas):
+        self._reparte("come_ventas_telemetria", filas)
+
+    def come_ventas_visita(self, filas):
+        self._reparte("come_ventas_visita", filas)
+
+    def fila(self, fecha):
+        """{"f": dia, "centros": {clave: bloques}}, con los mismos bloques que la
+        fila del dia —para que la API la recorte con la misma tijera— y sin lo
+        que va a cero: para el interno son cientos de centros por dia y casi
+        todos tienen uno o dos bloques."""
+        centros = {}
+        for clave, d in sorted(self.c.items()):
+            if d.vacio():
+                continue
+            x = d.fila()
+            x.pop("f", None)
+            for b in self.NO_SE_PARTE:
+                x.pop(b, None)
+            x["sat"].pop("cierres", None)
+            x["servicio"].pop("centros_dia", None)
+            x["venta"].pop("fuente", None)
+            x = _compacta(x)
+            if x:
+                centros[clave] = x
+        return {"f": fecha, "centros": centros}
+
+
+def _compacta(v):
+    """Quita ceros, vacios y histogramas sin valores, recursivamente."""
+    if isinstance(v, dict):
+        if "h" in v and "n" in v:           # un histograma
+            return v if v.get("n") else None
+        out = {}
+        for k, x in v.items():
+            x = _compacta(x)
+            if x not in (None, 0, 0.0, {}, [], ""):
+                out[k] = x
+        return out
+    return v
+
+
+def _suma_profunda(a, b):
+    """Suma dos bloques de centro: numeros se suman, histogramas con suma_hist."""
+    if a is None:
+        return json.loads(json.dumps(b))
+    if isinstance(b, dict):
+        if "h" in b and "n" in b:
+            return suma_hist(a, b)
+        out = dict(a)
+        for k, x in b.items():
+            out[k] = _suma_profunda(a.get(k), x)
+        return out
+    if isinstance(b, (int, float)) and isinstance(a, (int, float)):
+        r = a + b
+        return round(r, 3) if isinstance(r, float) else r
+    return b
+
+
+def filas_de_centros(filas_centros, quiere=None):
+    """Las filas de un dia, pero sumando solo los centros de `quiere`.
+
+    Salen con la forma de la fila del dia, asi que `suma_filas` las junta igual
+    y la pantalla no distingue si hay filtro o no. Lo que no se parte por centro
+    —jornadas, cierre de averias, distintos del dia entre centros— no sale.
+    `maquinas_dia` si se suma: una maquina es de un solo centro.
+
+    La misma cuenta que `filasDeCentros` en app/comun/periodos.js.
+    """
+    out = []
+    for f in sorted(filas_centros or [], key=lambda x: x.get("f", "")):
+        fila = None
+        for clave, c in (f.get("centros") or {}).items():
+            if quiere is not None and clave not in quiere:
+                continue
+            fila = _suma_profunda(fila, c)
+        if fila:
+            fila["f"] = f["f"]
+            out.append(fila)
+    return out
+
+
+def suma_centros(filas_centros, quiere=None):
+    """Un renglon por centro para un rango: visitas, venta, tareas... sumadas.
+
+    La misma cuenta que `sumaCentros` en app/comun/periodos.js.
+    """
+    por = {}
+    for f in filas_centros or []:
+        for clave, c in (f.get("centros") or {}).items():
+            if quiere is not None and clave not in quiere:
+                continue
+            s, ve, sat = c.get("servicio") or {}, c.get("venta") or {}, c.get("sat") or {}
+            a = por.setdefault(clave, {"visitas": 0, "min_n": 0, "min_suma": 0.0,
+                                       "maquinas_dia_max": 0, "carga_valor": 0.0,
+                                       "merma_euros": 0.0, "venta_importe": 0.0,
+                                       "tareas": 0, "dias": 0})
+            a["dias"] += 1
+            a["visitas"] += s.get("visitas", 0)
+            a["min_n"] += (s.get("min") or {}).get("n", 0)
+            a["min_suma"] = round(a["min_suma"] + (s.get("min") or {}).get("suma", 0), 3)
+            a["maquinas_dia_max"] = max(a["maquinas_dia_max"], s.get("maquinas_dia", 0))
+            a["carga_valor"] = round(a["carga_valor"] + (s.get("carga") or {}).get("valor", 0), 2)
+            a["merma_euros"] = round(a["merma_euros"] + sum(
+                (m or {}).get("euros", 0) for m in (s.get("merma") or {}).values()), 2)
+            a["venta_importe"] = round(a["venta_importe"] + ve.get("importe", 0), 2)
+            a["tareas"] += sat.get("tareas", 0)
+    for a in por.values():
+        a["min_medio"] = round(a["min_suma"] / a["min_n"], 1) if a["min_n"] else None
+    return por
 
 
 # ----------------------------------------------------------------------

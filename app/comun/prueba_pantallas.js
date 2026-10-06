@@ -77,6 +77,26 @@ const SERIE = {
 };
 const pedidos = [];
 
+// El dia partido por centro (serie/centros-<mes>), con la forma de PorCentro:
+// los bloques de la fila del dia menos jornadas y cierres. 500092 se lleva
+// todo menos una visita, que es de 500100; y CONSUM, que solo ve el interno.
+const FICHAS = {
+  '500092': { nombre: 'AIRBUS SAN PABLO SUR', num: '500092', cliente: 'AIRBUS', cod_cliente: 'C7', delegacion: 'SEVILLA' },
+  '500100': { nombre: 'AIRBUS GETAFE', num: '500100', cliente: 'AIRBUS', cod_cliente: 'C7', delegacion: 'MADRID' },
+  '600': { nombre: 'CONSUM MURCIA', num: '600', cliente: 'CONSUM', cod_cliente: 'C9', delegacion: 'MADRID' }
+};
+function centrosDe(fila) {
+  return {
+    f: fila.f,
+    centros: {
+      '500092': { servicio: { visitas: fila.servicio.visitas - 1, min: fila.servicio.min },
+                  venta: { importe: fila.venta.importe } },
+      '500100': { servicio: { visitas: 1 }, sat: { tareas: 1 } },
+      '600': { servicio: { visitas: 40 } }
+    }
+  };
+}
+
 const API = {
   '/api/yo': {
     correo: 'eva@airbus.com', nombre: 'Eva', tipo: 'cliente', perfil: 'AIRBUS',
@@ -168,7 +188,25 @@ const servidor = http.createServer((pet, res) => {
     pedidos.push(u.pathname + (u.search || ''));
     if (u.pathname === '/api/serie') {
       const mes = u.searchParams.get('mes');
-      if (!mes) return json(API['/api/serie']);
+      const interno = API['/api/yo'].tipo !== 'cliente';
+      const suyos = k => interno || k !== '600';
+      const cm = u.searchParams.get('centros');
+      if (cm !== null) {
+        if (!SERIE[cm]) { res.writeHead(400); return res.end('{"error":"mes"}'); }
+        return json({ mes: cm, filas: SERIE[cm].map(centrosDe).map(f => ({ f: f.f,
+          centros: Object.fromEntries(Object.entries(f.centros).filter(([k]) => suyos(k))) })) });
+      }
+      if (!mes) {
+        // Como la API de verdad: a un cliente, sin delegacion y solo sus centros.
+        const centros = {};
+        for (const [k, v] of Object.entries(FICHAS)) {
+          if (!suyos(k)) continue;
+          centros[k] = { ...v };
+          if (!interno) delete centros[k].delegacion;
+        }
+        return json({ ...API['/api/serie'], meses_centros: Object.keys(SERIE), centros,
+                      filtros: interno ? ['delegacion', 'cliente', 'centro'] : ['cliente', 'centro'] });
+      }
       if (!SERIE[mes]) { res.writeHead(400); return res.end('{"error":"mes"}'); }
       return json({ mes, filas: SERIE[mes] });
     }
@@ -244,6 +282,25 @@ const servidor = http.createServer((pet, res) => {
       pedidos.slice(antes).filter(x => x.startsWith('/api/serie?')).length === 0,
       JSON.stringify(pedidos.slice(antes)));
 
+    console.log('  · el filtro de lugar');
+    comprueba_que('el cliente tiene filtro de centro', await pagina.isVisible('#filtroLugar select[data-dim="centro"]'));
+    comprueba('pero no de delegacion, que es interna',
+      await pagina.$$eval('#filtroLugar select[data-dim="delegacion"]', x => x.length), 0);
+    comprueba('ni de cliente: solo tiene uno',
+      await pagina.$$eval('#filtroLugar select[data-dim="cliente"]', x => x.length), 0);
+    comprueba('y solo ve sus centros',
+      await pagina.$$eval('#filtroLugar select[data-dim="centro"] option', x => x.map(o => o.value)),
+      ['', '500100', '500092']);
+    await pagina.click('.periodo-chip[data-rango="mes_pasado"]');
+    await pagina.waitForTimeout(300);
+    await pagina.selectOption('#filtroLugar select[data-dim="centro"]', '500100');
+    await pagina.waitForFunction(() => document.querySelector('#notaPeriodo').textContent.includes('AIRBUS GETAFE'));
+    comprueba('el mes pasado de un solo centro', (await pagina.textContent('#kpis .kpi .vl')).trim(), '1');
+    comprueba_que('bajando el mes partido por centro', pedidos.includes(`/api/serie?centros=${MES_PASADO}`));
+    await pagina.click('.filtro-quitar');
+    await pagina.waitForFunction(() => document.querySelector('#kpis .kpi .vl').textContent.trim() === '7');
+    comprueba('quitar el filtro vuelve al total', (await pagina.textContent('#kpis .kpi .vl')).trim(), '7');
+
     await pagina.click('text=La ventana');
     await pagina.waitForFunction(() => document.querySelector('#kpis .kpi .vl').textContent.includes('999'));
     comprueba('se puede volver a la ventana',
@@ -273,6 +330,17 @@ const servidor = http.createServer((pet, res) => {
     const cifras = await pagina.textContent('#cifrasPeriodo');
     comprueba_que('un intervalo de 2025 suma sus dias', cifras.includes('2 días'), cifras.slice(0, 200));
     comprueba_que('con sus visitas', cifras.includes('10'));
+    comprueba_que('el interno si filtra por delegacion',
+      await pagina.isVisible('#filtroLugar select[data-dim="delegacion"]'));
+    await pagina.selectOption('#filtroLugar select[data-dim="delegacion"]', 'MADRID');
+    await pagina.waitForSelector('#cifrasPeriodo table th:has-text("Delegación")');
+    comprueba('los clientes de esa delegacion',
+      await pagina.$$eval('#filtroLugar select[data-dim="cliente"] option', x => x.map(o => o.value)),
+      ['', 'AIRBUS', 'CONSUM']);
+    const porCentro = await pagina.textContent('#cifrasPeriodo');
+    comprueba_que('una tabla con sus centros', porCentro.includes('CONSUM MURCIA') && porCentro.includes('AIRBUS GETAFE')
+      && !porCentro.includes('SAN PABLO'), porCentro.slice(0, 300));
+    comprueba_que('y la suma de los dos dias de esos centros', porCentro.includes('82'), porCentro.slice(0, 300));
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
@@ -297,10 +365,29 @@ const servidor = http.createServer((pet, res) => {
     comprueba('y mueve las fechas del filtro cruzado',
       [await pagina.inputValue('#dateFrom'), await pagina.inputValue('#dateTo')],
       ['2025-03-01', '2025-03-31']);
+    comprueba_que('el cliente con un solo cliente no ve filtro de lugar en el cuadro',
+      !(await pagina.isVisible('#filtroLugar select')));
     const tabla = await pagina.textContent('#visitLogTable');
     comprueba_que('la tabla de visitas ensena las de marzo de 2025', tabla.includes('2025'), tabla.slice(0, 120));
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
+  }
+
+  console.log('\nEl cuadro, visto desde Serunion');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores } = await abre('/cuadro/');
+    await pagina.waitForSelector('#filtroLugar select[data-dim="delegacion"]');
+    comprueba('ofrece delegacion y cliente, el centro ya lo tenia',
+      await pagina.$$eval('#filtroLugar select', x => x.map(s => s.dataset.dim)), ['delegacion', 'cliente']);
+    await pagina.selectOption('#filtroLugar select[data-dim="delegacion"]', 'SEVILLA');
+    await pagina.waitForFunction(() => document.querySelector('#centerFilterText').textContent !== 'Todos los centros');
+    comprueba_que('elegir una delegacion marca sus centros en el filtro de centro',
+      (await pagina.textContent('#centerFilterText')).includes('SAN PABLO'),
+      await pagina.textContent('#centerFilterText'));
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
   await navegador.close();

@@ -179,6 +179,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   <!-- El selector de tiempo. Lo monta /comun/periodos.js, que es el mismo en
        esta pagina, en la consola y en el cuadro de mando. -->
   <div id="selectorPeriodo"></div>
+  <div id="filtroLugar" hidden></div>
   <p class="periodo" id="notaPeriodo" hidden></p>
 
   <div class="filtros" id="filtros" role="group" aria-label="Secciones" hidden></div>
@@ -581,7 +582,9 @@ function definePaneles(P, YO){
   if(S && Array.isArray(S.por_centro) && S.por_centro.length)
     paneles.push({ id:"centros", sesion:"resumen", ancho:S.por_centro.length>6?"todo":null,
       titulo:"Visitas por centro",
-      sub:`${num(S.centros)} centros y ${num(S.maquinas)} máquinas atendidas en el periodo.`,
+      sub: S.centros===null
+        ? "En un periodo elegido, «Máquinas» es el máximo de un día: la misma máquina se visita muchas veces."
+        : `${num(S.centros)} centros y ${num(S.maquinas)} máquinas atendidas en el periodo.`,
       pinta:(c,W)=>{
         c.appendChild(barrasH(S.por_centro,{etiqueta:d=>d.centro, valor:d=>d.visitas,
           fmt:num, anchoEt:Math.min(230, Math.round(W*0.34)), W}));
@@ -807,6 +810,19 @@ function conPeriodo(base, T, hoy){
       _nota_cierre: "En un periodo elegido, el cierre mediano sólo cuenta las averías que se "
         + "abren y se cierran el mismo día: las que cruzan de un día a otro no caben en una "
         + "fila diaria."};
+  }
+
+  if(T.filtrado){
+    /* Con un filtro de delegación, cliente o centro, el reparto por centro sí
+       sale del periodo: el día viene partido por centro. Las jornadas no se
+       pueden partir por centro —una ruta pasa por muchos— y no se enseñan. */
+    const fichas = (SERIE && SERIE.fichas()) || {};
+    if(P.servicio) P.servicio.por_centro = Object.entries(T.por_centro||{})
+      .map(([k,d])=>({centro:(fichas[k]||{}).nombre||k, visitas:d.visitas,
+                      maquinas:d.maquinas_dia_max, min_medio:d.min_medio||0, tareas_sat:d.tareas}))
+      .sort((a,b)=>b.visitas-a.visitas).slice(0,60);
+    delete P.jornadas;
+    return P;
   }
 
   if(base.jornadas){
@@ -1097,23 +1113,14 @@ async function arrancaPeriodo(){
   const conHistorico = (indice.meses||[]).length > 0;
   SELECTOR = Periodos.montaSelector($("#selectorPeriodo"), {
     hoy, primerDia: SERIE.primerDia(), inicial: null,
-    alCambiar: async ({desde, hasta}) => {
-      $("#cargando").textContent = "Sumando los días…";
-      $("#cargando").hidden = false;
-      try{
-        const T = await SERIE.totales(desde, hasta);
-        PANEL = conPeriodo(PANEL_VENTANA, T, hoy);
-        notaDelPeriodo(T);
-      }catch(e){
-        avisa("No se ha podido leer el histórico de ese periodo.", true);
-        return;
-      }finally{
-        $("#cargando").hidden = true;
-      }
-      PANELES = definePaneles(PANEL, YO);
-      pintaKpis();
-      pintaTodo();
-    }
+    alCambiar: ({desde, hasta}) => { RANGO = {desde, hasta}; recalcula(hoy); }
+  });
+  /* El filtro de lugar: delegación (sólo Serunion), cliente y centro. Sale del
+     índice de la serie, que ya viene con el ámbito del perfil: un cliente sólo
+     ve sus centros, y la API no le manda la delegación. */
+  Periodos.montaFiltroLugar($("#filtroLugar"), {
+    fichas: SERIE.fichas(), filtros: SERIE.filtros(),
+    alCambiar: (sel, quiere, etiqueta) => { LUGAR = {quiere, etiqueta}; recalcula(hoy); }
   });
   /* Un botón más, el primero, para volver a la foto de la ventana. */
   const volver = document.createElement("button");
@@ -1121,14 +1128,9 @@ async function arrancaPeriodo(){
   volver.className = "btn periodo-chip activo";
   volver.textContent = "La ventana";
   volver.addEventListener("click", ()=>{
-    PANEL = PANEL_VENTANA;
-    SELECTOR.muestra(PANEL.periodo?PANEL.periodo.desde:null,
-                     PANEL.periodo?PANEL.periodo.hasta:null, "ventana");
+    RANGO = null;
     volver.classList.add("activo");
-    $("#notaPeriodo").hidden = true;
-    PANELES = definePaneles(PANEL, YO);
-    pintaKpis();
-    pintaTodo();
+    recalcula(hoy);
   });
   const chips = $("#selectorPeriodo").querySelector(".periodo-chips");
   chips.insertBefore(volver, chips.firstChild);
@@ -1142,7 +1144,39 @@ async function arrancaPeriodo(){
   }
 }
 
-function notaDelPeriodo(T){
+let RANGO=null, LUGAR={quiere:null, etiqueta:""};
+
+/* Lo que se ve sale de dos cosas: el periodo (o la ventana) y el lugar (o
+   todo el ámbito). Sin ninguna de las dos, la foto de la ventana tal cual. Un
+   lugar sin periodo se suma sobre las fechas de la ventana. */
+async function recalcula(hoy){
+  if(!RANGO && !LUGAR.quiere){
+    PANEL = PANEL_VENTANA;
+    SELECTOR.muestra(PANEL.periodo?PANEL.periodo.desde:null,
+                     PANEL.periodo?PANEL.periodo.hasta:null, "ventana");
+    $("#notaPeriodo").hidden = true;
+  }else{
+    const r = RANGO || {desde:(PANEL_VENTANA.periodo||{}).desde, hasta:(PANEL_VENTANA.periodo||{}).hasta};
+    if(!r.desde || !r.hasta) return;
+    $("#cargando").textContent = LUGAR.quiere ? "Sumando los días de esos centros…" : "Sumando los días…";
+    $("#cargando").hidden = false;
+    try{
+      const T = await SERIE.totales(r.desde, r.hasta, null, LUGAR.quiere);
+      PANEL = conPeriodo(PANEL_VENTANA, T, hoy);
+      notaDelPeriodo(T, LUGAR.etiqueta);
+    }catch(e){
+      avisa("No se ha podido leer el histórico de ese periodo.", true);
+      return;
+    }finally{
+      $("#cargando").hidden = true;
+    }
+  }
+  PANELES = definePaneles(PANEL, YO);
+  pintaKpis();
+  pintaTodo();
+}
+
+function notaDelPeriodo(T, lugar){
   const n = $("#notaPeriodo");
   if(!T.dias){
     n.textContent = "No hay ningún día cargado en ese periodo. Si es de antes del relleno "
@@ -1150,11 +1184,15 @@ function notaDelPeriodo(T){
     n.hidden = false;
     return;
   }
-  n.textContent = `${Periodos.etiqueta(T.desde, T.hasta)} · ${T.dias} `
+  n.textContent = (lugar ? lugar + " · " : "")
+    + `${Periodos.etiqueta(T.desde, T.hasta)} · ${T.dias} `
     + (T.dias===1 ? "día con dato" : "días con dato")
-    + ". Lo que no se puede partir por días —reparto por centro, merma por artículo, máquinas "
+    + (T.filtrado ? ". Las jornadas no se pueden partir por centro y no salen; la merma por "
+        + "artículo, las máquinas reincidentes, el inventario y las instalaciones son de todo el "
+        + "ámbito y de la ventana. Los totales y las medias son exactos." : "")
+    + (T.filtrado ? "" : ". Lo que no se puede partir por días —reparto por centro, merma por artículo, máquinas "
     + "reincidentes, inventario e instalaciones— sigue siendo la foto de la ventana. Las medianas "
-    + "de un rango son aproximadas; los totales y las medias, exactos.";
+    + "de un rango son aproximadas; los totales y las medias, exactos.");
   n.hidden = false;
 }
 

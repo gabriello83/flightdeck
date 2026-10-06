@@ -146,7 +146,10 @@ def encamina(evento, metodo, ruta):
     # ayer, este mes, el mes pasado o un intervalo cualquiera desde 2025 sin que
     # la pagina tenga que bajarse la historia entera.
     if ruta == "/api/serie" and metodo == "GET":
-        return serie(perfil, (evento.get("queryStringParameters") or {}).get("mes"))
+        q = evento.get("queryStringParameters") or {}
+        if "centros" in q:
+            return serie_centros(perfil, q["centros"])
+        return serie(perfil, q.get("mes"))
 
     # El orden lo elige el usuario y se guarda en el SERVIDOR: asi lo encuentra
     # igual desde otro ordenador. El navegador no es el sitio donde vive.
@@ -284,11 +287,73 @@ def serie(perfil, mes=None):
                        "_nota": "Lo escriben los agregados cada noche; la historia "
                                 "anterior se rellena a mano una vez."})
     if mes is None:
-        return _como_json(indice)
+        return r(200, indice_serie_visible(json.loads(indice), perfil))
     mes = _mes_valido(indice, mes)
     datos = json.loads(_crudo(f"{base}{mes}.json.gz"))
     return r(200, {"mes": mes,
                    "filas": [A.recorta_dia(f, perfil) for f in datos.get("filas", [])]})
+
+
+def ve_delegaciones(perfil):
+    """La delegacion es organizacion interna de Serunion: un cliente no la ve,
+    ni como filtro ni en la ficha de sus centros."""
+    return A.nivel_de(perfil.get("tipo", "cliente")) >= A.NIVEL["operaciones"]
+
+
+def indice_serie_visible(indice, perfil):
+    """El indice de la serie como lo puede ver este perfil.
+
+    Las fichas de los centros llevan cliente y delegacion para poder filtrar.
+    Un perfil de cliente se queda sin la delegacion: no es suya, es nuestra.
+    Los centros que salen son solo los de su serie, que ya se calculo con su
+    ambito: no hay forma de ver un centro de otro.
+    """
+    interno = ve_delegaciones(perfil)
+    indice = dict(indice)
+    indice["centros"] = {k: {c: x for c, x in (v or {}).items()
+                             if interno or c != "delegacion"}
+                         for k, v in (indice.get("centros") or {}).items()}
+    indice["filtros"] = ["delegacion", "cliente", "centro"] if interno else ["cliente", "centro"]
+    return indice
+
+
+def serie_centros(perfil, mes):
+    """El mismo dia partido por centro, para el filtro de delegacion, cliente y
+    centro. Con la misma tijera que la fila del dia, centro a centro."""
+    base = f"cabina/{perfil.get('perfil_id', '')}/serie/"
+    try:
+        indice = json.loads(_crudo(base + "indice.json"))
+    except Exception:
+        return r(503, {"error": "El historico todavia no se ha calculado."})
+    if str(mes) not in [str(m) for m in (indice.get("meses_centros") or [])]:
+        raise ValueError("Ese mes no tiene el reparto por centro.")
+    mes = str(mes)
+    datos = json.loads(_crudo(f"{base}centros-{mes}.json.gz"))
+    filas = []
+    for f in datos.get("filas", []):
+        centros = {}
+        for clave, c in (f.get("centros") or {}).items():
+            x = A.recorta_dia(dict(c, f=None), perfil)
+            x.pop("f", None)
+            if x:
+                centros[clave] = x
+        filas.append({"f": f.get("f"), "centros": centros})
+    return _json_grande({"mes": mes, "filas": filas})
+
+
+def _json_grande(datos):
+    """Una respuesta que puede pasar del limite de una Lambda (6 MB): por encima
+    de 1 MB va comprimida, y el navegador la descomprime solo. El mes del
+    interno partido por centro es la que lo necesita."""
+    cuerpo = json.dumps(datos, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    cabeceras = {"content-type": "application/json; charset=utf-8", "cache-control": "no-store"}
+    if len(cuerpo) <= 1_000_000:
+        return {"statusCode": 200, "headers": cabeceras, "body": cuerpo.decode("utf-8")}
+    import base64
+    import gzip
+    return {"statusCode": 200, "headers": dict(cabeceras, **{"content-encoding": "gzip"}),
+            "isBase64Encoded": True,
+            "body": base64.b64encode(gzip.compress(cuerpo)).decode("ascii")}
 
 
 # ----------------------------------------------------------------------

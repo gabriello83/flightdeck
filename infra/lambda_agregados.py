@@ -248,6 +248,12 @@ class MapaCentros:
         self.aprendidas = 0
         self.clientes = set()
         self.centros = {}       # num_centro -> nombre, para poder listarlos
+        self.num_de = {}        # nombre de centro -> num_centro
+        # La ficha de cada centro: nombre, cliente y delegacion. Es lo que deja
+        # filtrar la serie por cliente o por delegacion sumando centros (serie.py,
+        # PorCentro). Manda lo ultimo leido: un centro que cambia de cliente se
+        # reagrupa con la ficha de hoy.
+        self.fichas = {}
 
     def aprende(self, filas):
         """Se llama con las filas CRUDAS, antes de filtrar por ambito.
@@ -269,6 +275,17 @@ class MapaCentros:
                 self.clientes.add(quien.cliente)
             if quien.num_centro:
                 self.centros.setdefault(quien.num_centro, quien.centro)
+                if quien.centro:
+                    self.num_de.setdefault(quien.centro, quien.num_centro)
+            clave = quien.num_centro or self.num_de.get(quien.centro, quien.centro)
+            if clave:
+                ficha = self.fichas.setdefault(clave, {"nombre": "", "num": "", "cliente": "",
+                                                       "cod_cliente": "", "delegacion": ""})
+                for k, v_ in (("nombre", quien.centro), ("num", quien.num_centro),
+                              ("cliente", quien.cliente), ("cod_cliente", quien.cod_cliente),
+                              ("delegacion", str(R.v(f, "delegacion", "") or ""))):
+                    if v_:
+                        ficha[k] = str(v_)[:60]
             m = R.v(f, "matricula", "")
             if m and m not in self.por_matricula:
                 self.por_matricula[m] = quien
@@ -290,6 +307,16 @@ class MapaCentros:
 
     def centro_de(self, fila):
         return self.de_quien_es(fila).centro
+
+    def clave_centro(self, fila):
+        """La clave con la que la serie parte por centro: el numero si se sabe,
+        y si no el nombre. Es la misma que usa `lo_que_coge`."""
+        q = self.de_quien_es(fila)
+        return q.num_centro or self.num_de.get(q.centro, q.centro)
+
+    def fichas_de(self, claves):
+        """Las fichas de esos centros, para el indice de la serie de un perfil."""
+        return {c: dict(self.fichas.get(c) or {"nombre": c}) for c in claves}
 
 
 # ----------------------------------------------------------------------
@@ -1000,7 +1027,7 @@ def escribe_cuadro(acu, periodo, dias_leidos):
             "sin_sitio": sin_sitio}
 
 
-def escribe_serie(perfil_id, filas, dias_leidos):
+def escribe_serie(perfil_id, filas, dias_leidos, filas_centros=None, mapa=None):
     """Fusiona las filas de esta ejecucion en los meses de la serie, y el indice.
 
     Un dia recalculado sustituye al que hubiera; los dias que esta ejecucion no
@@ -1021,6 +1048,22 @@ def escribe_serie(perfil_id, filas, dias_leidos):
         escribe_comprimido(f"{base}{mes}.json.gz", {"mes": mes, "filas": fusion})
         lineas[mes] = S.resumen_mes(mes, fusion)
 
+    # El mismo dia partido por centro, en su propio fichero por mes: quien no
+    # filtra no se lo baja. Se fusiona igual, por dias.
+    meses_centros = set(anterior.get("meses_centros") or [])
+    fichas = dict(anterior.get("centros") or {})
+    centros_mes = defaultdict(list)
+    for f in filas_centros or []:
+        centros_mes[f["f"][:7]].append(f)
+    for mes, nuevas in sorted(centros_mes.items()):
+        viejo = _json_de(f"{base}centros-{mes}.json.gz") or {}
+        fusion = S.fusiona_mes(viejo.get("filas"), nuevas)
+        escribe_comprimido(f"{base}centros-{mes}.json.gz", {"mes": mes, "filas": fusion})
+        meses_centros.add(mes)
+        if mapa is not None:
+            # La ficha de hoy manda: un centro que cambio de cliente se reagrupa.
+            fichas.update(mapa.fichas_de({c for x in fusion for c in x["centros"]}))
+
     indice = {
         "generado": datetime.datetime.utcnow().isoformat() + "Z",
         "perfil": perfil_id,
@@ -1028,12 +1071,18 @@ def escribe_serie(perfil_id, filas, dias_leidos):
         "meses": sorted(lineas.values(), key=lambda x: x["mes"]),
         "bordes": S.BORDES,
         "rangos": {k: S.NOMBRES_RANGO[k] for k in S.RANGOS},
+        # Los meses que tienen el dia partido por centro, y la ficha de cada
+        # centro (nombre, cliente, delegacion) para filtrar sumando centros. La
+        # API quita la delegacion a los perfiles de cliente.
+        "meses_centros": sorted(meses_centros),
+        "centros": dict(sorted(fichas.items())),
         "_nota": ("Un fichero por mes en serie/<AAAA-MM>.json. Cada fila es un dia y se "
                   "suma; las medianas de un rango salen de los histogramas, con los "
                   "tramos de «bordes»."),
     }
     escribe(base + "indice.json", indice)
-    return {"meses": len(lineas), "meses_escritos": sorted(por_mes), "dias": len(filas)}
+    return {"meses": len(lineas), "meses_escritos": sorted(por_mes), "dias": len(filas),
+            "centros": len(fichas)}
 
 
 # Que hace la serie diaria con las filas de cada fuente. El balance no esta a
@@ -1056,6 +1105,15 @@ def come_serie(dia, nombre, filas):
     metodo = SERIE_COME.get(nombre)
     if metodo:
         getattr(dia, metodo)(filas)
+        # El mismo dia partido por centro, para el filtro de delegacion, cliente
+        # y centro. Las jornadas no se parten: una ruta pasa por muchos centros.
+        partido = getattr(dia.por_centro, metodo, None) if dia.por_centro else None
+        # La venta del parte de un dia con telemetria no entra en el dia (ver
+        # Dia.come_ventas_visita), asi que tampoco en sus centros.
+        if metodo == "come_ventas_visita" and dia.venta_fuente == "telemetria":
+            partido = None
+        if partido:
+            partido(filas)
 
 
 def dias_a_agregar(hoy, event):
@@ -1139,14 +1197,14 @@ def lambda_handler(event, context):
     # del parte de ese dia, que es lo que evita contar la venta dos veces.
     con_cuadro = any(acu.cuadro for acu in acumuladores)
     fuentes = [f for f in FUENTES if f[3] is not None or con_cuadro]
-    series = defaultdict(list)
+    series, series_centros = defaultdict(list), defaultdict(list)
     leidos, parado_en = [], None
     for dia in dias:
         if not _queda_tiempo(context):
             parado_en = dia.isoformat()
             print(f"PARO por tiempo antes de {parado_en}.")
             break
-        del_dia = {acu.perfil["id"]: S.Dia(dia) for acu in acumuladores}
+        del_dia = {acu.perfil["id"]: S.Dia(dia, mapa.clave_centro) for acu in acumuladores}
         for nombre, destino, id_informe, metodo, metodo_cuadro in fuentes:
             filas = lee_dia(destino, id_informe, dia)
             if not filas:
@@ -1184,6 +1242,9 @@ def lambda_handler(event, context):
             # nada que no diga su ausencia.
             if not d.vacio():
                 series[pid].append(d.fila())
+                por_centro = d.por_centro.fila(d.fecha)
+                if por_centro["centros"]:
+                    series_centros[pid].append(por_centro)
 
     dias_leidos = [d.isoformat() for d in leidos]
     if not leidos:
@@ -1201,7 +1262,8 @@ def lambda_handler(event, context):
     for acu in acumuladores:
         if acu.cuadro:
             cuadros[acu.perfil["id"]] = escribe_cuadro(acu, periodo, dias_leidos)
-    series_escritas = {pid: escribe_serie(pid, filas, dias_leidos)
+    series_escritas = {pid: escribe_serie(pid, filas, dias_leidos,
+                                          series_centros.get(pid, []), mapa)
                        for pid, filas in series.items()}
 
     if not historico:

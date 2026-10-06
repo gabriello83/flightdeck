@@ -412,6 +412,9 @@
            mismo en las tres. Elegir un rango baja del servidor los meses que
            falten: la historia entera no cabe en el navegador. -->
       <div id="selectorPeriodo"></div>
+      <!-- Cliente y, para Serunion, delegación. Eligen los centros del filtro
+           de abajo: el cuadro ya filtraba por centro y esto sólo lo rellena. -->
+      <div id="filtroLugar" hidden></div>
       <div class="filter-grid">
         <div class="field"><label for="dateFrom">Desde</label><input type="date" id="dateFrom"></div>
         <div class="field"><label for="dateTo">Hasta</label><input type="date" id="dateTo"></div>
@@ -1546,6 +1549,35 @@
         selector.muestra(state.from, state.to, 'intervalo');
       });
     }
+    /* Cliente y delegación. La ficha de cada centro viene del índice de la
+       serie (/api/serie), que ya trae el ámbito del perfil y, a un cliente, sin
+       la delegación. Elegir un cliente o una delegación marca sus centros en el
+       filtro de centro de siempre: no hay un segundo filtro que mantener. */
+    async function montaFiltroLugar() {
+      const caja = $('#filtroLugar');
+      if (!caja || !window.Periodos) return;
+      const serie = new Periodos.Serie({ getJson });
+      try { await serie.abre(); } catch (error) { return; }   // sin histórico, sin filtro
+      const fichas = {};
+      for (const ficha of Object.values(serie.fichas())) {
+        const clave = centerKey(ficha.nombre || '');
+        if (clave && !fichas[clave]) fichas[clave] = ficha;
+      }
+      Periodos.montaFiltroLugar(caja, {
+        fichas, filtros: serie.filtros().filter(f => f !== 'centro'),
+        alCambiar: (sel, quiere) => {
+          if (!quiere) state.centers = [];
+          else {
+            const hay = [...quiere].filter(c => model.centers.includes(c));
+            // Ninguno con dato en este periodo: se marcan igual, y sale vacío,
+            // que es la verdad; dejarlo en «todos» enseñaría lo que no es.
+            state.centers = hay.length ? hay : [...quiere];
+          }
+          syncControls();
+          renderAll();
+        }
+      });
+    }
     function bootMessage(text, isError=false) {
       const main=$('main.shell');
       main.innerHTML=`<div class="boot${isError?' error':''}" role="status">${escapeHtml(text)}</div>`;
@@ -1603,6 +1635,7 @@
         setupModel(built, true);
         if (desde) { state.from = desde; state.to = hasta; syncControls(); renderAll(); }
         montaSelectorPeriodo(desde, hasta);
+        await montaFiltroLugar();
       } catch (error) {
         console.error(error);
         bootMessage(error.message || 'No se ha podido cargar el cuadro de mando.', true);

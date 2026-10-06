@@ -206,7 +206,8 @@ def censo(matricula):
             "centro": "AIRBUS SAN PABLO SUR", "cod_pdv": "P" + matricula,
             "ubicacion": "Comedor", "matricula": matricula,
             "baja_pdv": "1900-01-01 00:00:00", "estado_pdv": 0,
-            "baja_centro": "1900-01-01", "baja_cliente": "1900-01-01 00:00:00"}
+            "baja_centro": "1900-01-01", "baja_cliente": "1900-01-01 00:00:00",
+            "delegacion": "SEVILLA"}
 
 
 ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"] = gzip.compress(
@@ -244,6 +245,31 @@ comprueba("lleva los tramos de los histogramas", sorted(_ix["bordes"]),
           ["horas_cierre", "km", "minutos", "temperatura"])
 comprueba("y los rangos con nombre", _ix["rangos"]["mes_pasado"], "Mes pasado")
 comprueba("con su linea por mes", [m["mes"] for m in _ix["meses"]], [MES])
+
+print("\nEl mismo dia, partido por centro, para filtrar por delegacion, cliente y centro")
+_cen = json.loads(gzip.decompress(ALMACEN[f"cabina/interno/serie/centros-{MES}.json.gz"]))["filas"]
+comprueba("hay fichero de centros del mes", len(_cen) > 0, True)
+comprueba("con la clave del numero de centro", sorted({c for x in _cen for c in x["centros"]}),
+          ["500092"])
+_todas = S.suma_filas(S.filas_de_centros(_cen))
+_dia = S.suma_filas(serie_de("interno", MES))
+comprueba("todos los centros juntos dan las visitas del dia",
+          _todas["servicio"]["visitas"], _dia["servicio"]["visitas"])
+comprueba("y la venta", _todas["venta"]["importe"], _dia["venta"]["importe"])
+casi("y la media de minutos", _todas["servicio"]["duracion_min"]["media"],
+     _dia["servicio"]["duracion_min"]["media"])
+comprueba("un centro que no esta no suma nada",
+          S.filas_de_centros(_cen, {"999"}), [])
+comprueba("las jornadas no se parten por centro",
+          any("jornadas" in c for x in _cen for c in x["centros"].values()), False)
+_ixi = json.loads(ALMACEN["cabina/interno/serie/indice.json"])
+comprueba("el indice cita el mes con centros", _ixi["meses_centros"], [MES])
+comprueba("y la ficha del centro lleva su cliente y su delegacion",
+          {k: _ixi["centros"]["500092"][k] for k in ("nombre", "cliente", "delegacion")},
+          {"nombre": "AIRBUS SAN PABLO SUR", "cliente": "SERUNION, SA", "delegacion": "SEVILLA"})
+_tabla = S.suma_centros(_cen)
+comprueba("la tabla por centro cuenta sus visitas", _tabla["500092"]["visitas"],
+          _dia["servicio"]["visitas"])
 
 print("\nUn relleno historico: solo serie y cuadro, ni panel ni censo")
 pon("crudo/visita_cabecera", "visita_cabecera", datetime.date(2025, 3, 11),
@@ -378,6 +404,59 @@ else:
     comprueba("esta semana empieza el lunes tambien en el navegador",
               tuple(_js["rango_semana"]), S.rango("semana", datetime.date(2026, 3, 15)))
     comprueba("y los meses de un intervalo", _js["meses"], S.meses_entre("2025-12-20", "2026-01-02"))
+
+
+print("\nY filtra por centro igual que Python")
+if shutil.which("node"):
+    _fc = []
+    for i in range(3):
+        pc = S.PorCentro(lambda f: f.get("num_centro"))
+        pc.come_partes([dict(parte(f"M{j}", f"2025-05-0{i + 1} 08:00:00", 4 + j + i),
+                             num_centro=c)
+                        for j, c in enumerate(["1", "1", "2", "3"])])
+        pc.come_ventas_visita([{"matricula": "M1", "num_total": 2, "imp_total": 1.35 + i,
+                                "num_centro": c} for c in ("1", "2")])
+        pc.come_recaudacion([{"anho": 2025, "mes": 4, "imp_recaudado": 10.1, "imp_pago_bancario": 2,
+                              "tipo_telemetria": 0, "criterio_calculo": 3, "num_centro": "3"}])
+        _fc.append(pc.fila(f"2025-05-0{i + 1}"))
+    _quiere = {"1", "3"}
+    _py = S.suma_filas(S.filas_de_centros(_fc, _quiere))
+    _pyc = S.suma_centros(_fc, _quiere)
+    _guion = f"""
+      require({json.dumps(AQUI + '/../app/comun/periodos.js')});
+      const P = globalThis.Periodos;
+      const q = new Set({json.dumps(sorted(_quiere))});
+      const t = P.sumaFilas(P.filasDeCentros({json.dumps(_fc)}, q), {json.dumps(S.BORDES)});
+      const c = P.sumaCentros({json.dumps(_fc)}, q);
+      const fichas = {{"1": {{"cliente": "A", "delegacion": "D1"}}, "2": {{"cliente": "B", "delegacion": "D1"}},
+                      "3": {{"cliente": "A", "delegacion": "D2"}}}};
+      console.log(JSON.stringify({{
+        visitas: t.servicio.visitas, media: t.servicio.duracion_min.media,
+        mediana: t.servicio.duracion_min.mediana, importe: t.venta.importe,
+        efectivo: (t.dinero.periodos["2025-04"] || {{}}).efectivo, dias: t.dias,
+        c1: c["1"].visitas, c3: c["3"].min_medio, c2: c["2"] === undefined,
+        porCliente: [...P.centrosElegidos(fichas, {{cliente: "A"}})].sort(),
+        porDeleg: [...P.centrosElegidos(fichas, {{delegacion: "D1"}})].sort(),
+        nada: P.centrosElegidos(fichas, {{}})
+      }}));
+    """
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(_guion)
+        _ruta = fh.name
+    _js = json.loads(subprocess.run(["node", _ruta], capture_output=True, text=True,
+                                    check=True).stdout)
+    os.unlink(_ruta)
+    comprueba("las visitas de los centros elegidos", _js["visitas"], _py["servicio"]["visitas"])
+    casi("la media de minutos", _js["media"], _py["servicio"]["duracion_min"]["media"])
+    casi("la mediana", _js["mediana"], _py["servicio"]["duracion_min"]["mediana"])
+    casi("la venta", _js["importe"], _py["venta"]["importe"])
+    casi("el efectivo", _js["efectivo"], _py["dinero"]["periodos"]["2025-04"]["efectivo"])
+    comprueba("los dias", _js["dias"], _py["dias"])
+    comprueba("la tabla por centro", (_js["c1"], _js["c3"]), (_pyc["1"]["visitas"], _pyc["3"]["min_medio"]))
+    comprueba("un centro no elegido no sale", _js["c2"], "2" not in _pyc)
+    comprueba("un cliente son sus centros", _js["porCliente"], ["1", "3"])
+    comprueba("una delegacion, los suyos", _js["porDeleg"], ["1", "2"])
+    comprueba("sin elegir nada, sin filtro", _js["nada"], None)
 
 print()
 if fallos:

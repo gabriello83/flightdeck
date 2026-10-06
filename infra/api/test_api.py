@@ -358,6 +358,41 @@ for _malo in ("2025-02", "../../interno/serie/2025-03", ""):
 comprueba("y la query no cambia de perfil",
           cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"perfil": "interno"}))["perfil"],
           "cli-airbus")
+
+print("\nEl filtro por delegacion, cliente y centro")
+_ficha = {"nombre": "AIRBUS GETAFE", "num": "1001", "cliente": "AIRBUS OPERATIONS SL",
+          "cod_cliente": "C7", "delegacion": "MADRID"}
+for _pid in ("cli-airbus", "interno"):
+    falsos.OBJETOS[f"cabina/{_pid}/serie/indice.json"] = json.dumps(
+        {"perfil": _pid, "meses": [{"mes": "2025-03"}], "meses_centros": ["2025-03"],
+         "centros": {"1001": _ficha}}).encode()
+    falsos.OBJETOS[f"cabina/{_pid}/serie/centros-2025-03.json.gz"] = gzip.compress(json.dumps(
+        {"mes": "2025-03", "filas": [{"f": "2025-03-11", "centros": {"1001": {
+            "servicio": {"visitas": 3, "coste_servicio": 24.0},
+            "dinero": {"periodos": {"2025-02": {"efectivo": 100.0}}},
+            "sat": {"tareas": 2}, "venta": {"importe": 7.0}}}}]}).encode())
+_ixc = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA))
+comprueba("el cliente ve la ficha de su centro", _ixc["centros"]["1001"]["cliente"],
+          "AIRBUS OPERATIONS SL")
+comprueba("pero sin la delegacion, que es interna", "delegacion" in _ixc["centros"]["1001"], False)
+comprueba("y solo puede filtrar por cliente y centro", _ixc["filtros"], ["cliente", "centro"])
+_ixj = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_JEFE))
+comprueba("el interno si ve la delegacion", _ixj["centros"]["1001"]["delegacion"], "MADRID")
+comprueba("y puede filtrar por ella", _ixj["filtros"], ["delegacion", "cliente", "centro"])
+_c = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"centros": "2025-03"}))
+_c1 = _c["filas"][0]["centros"]["1001"]
+comprueba("el mes por centro sale recortado como la fila del dia", sorted(_c1), ["servicio"])
+comprueba("sin el coste de servicio", "coste_servicio" in _c1["servicio"], False)
+for _malo in ("2025-02", "../../interno/serie/centros-2025-03", ""):
+    comprueba(f"un mes por centro que el indice no cita ({_malo!r}), 400",
+              llama("GET", "/api/serie", cookie=COOKIE_ANA,
+                    query={"centros": _malo})["statusCode"], 400)
+_grande = L._json_grande({"x": "a" * 1_200_000})
+comprueba("una respuesta de mas de un mega va comprimida",
+          (_grande["headers"].get("content-encoding"), _grande["isBase64Encoded"]), ("gzip", True))
+comprueba("y sigue siendo el mismo json",
+          json.loads(gzip.decompress(__import__("base64").b64decode(_grande["body"])))["x"][:3], "aaa")
+
 del falsos.OBJETOS["cabina/cli-airbus/serie/indice.json"]
 comprueba("sin historico todavia, 503",
           llama("GET", "/api/serie", cookie=COOKIE_ANA)["statusCode"], 503)
