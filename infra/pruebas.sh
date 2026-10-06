@@ -3,7 +3,7 @@
 #   sh infra/pruebas.sh
 set -e
 cd "$(dirname "$0")/.."
-for t in infra/test_manifiesto.py infra/test_extraccion.py infra/test_reglas.py infra/test_agregados.py infra/test_cuadro.py \
+for t in infra/test_manifiesto.py infra/test_extraccion.py infra/test_reglas.py infra/test_agregados.py infra/test_cuadro.py infra/test_serie.py \
          infra/test_permisos.py infra/test_sql.py infra/test_paquetes.py \
          infra/api/test_autorizacion.py infra/api/test_api.py \
          infra/api/test_alarmas.py infra/api/test_asistente.py; do
