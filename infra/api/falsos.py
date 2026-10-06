@@ -5,6 +5,7 @@ Se instala en sys.modules ANTES de importar las Lambdas, asi que ni boto3 ni la
 red entran en juego. Lo justo para que las pruebas ejerciten el codigo de verdad.
 """
 
+import datetime
 import json
 import types
 
@@ -55,6 +56,12 @@ class _S3:
     def put_object(self, Bucket, Key, Body, **kw):
         OBJETOS[Key] = Body
         return {}
+
+    def head_object(self, Bucket, Key):
+        if Key not in OBJETOS:
+            raise _Error(Key)
+        return {"LastModified": datetime.datetime(2026, 10, 2, 4, 45,
+                                                  tzinfo=datetime.timezone.utc)}
 
 
 class _NoAutorizado(Exception):

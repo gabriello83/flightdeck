@@ -9,6 +9,7 @@ bruta, cuenta sin ficha).
     python3 infra/api/test_api.py
 """
 
+import gzip
 import json
 import os
 import sys
@@ -118,6 +119,18 @@ cambio = llama("POST", "/api/acceso/nueva-clave",
 comprueba("con una buena, entra", cambio["statusCode"], 200)
 comprueba("y ya trae cookie", bool(cookie_de(cambio)), True)
 
+print("\nY tampoco entra cambiando la clave: la ficha se mira antes de gastarla")
+# Una cuenta que existe en Cognito con clave de un solo uso y NO tiene ficha.
+falsos.USUARIOS_COG["fantasma@serunion.es"] = {"clave": "ClaveTemporal1", "temporal": True}
+_sin = llama("POST", "/api/acceso", {"correo": "fantasma@serunion.es", "clave": "ClaveTemporal1"})
+comprueba("primero le pide cambiar la clave", cuerpo_de(_sin).get("cambio_requerido"), True)
+if cuerpo_de(_sin).get("cambio_requerido"):
+    _cam = llama("POST", "/api/acceso/nueva-clave",
+                 {"correo": "fantasma@serunion.es", "reto": cuerpo_de(_sin)["reto"],
+                  "clave": "ClaveNuevaLarga1"})
+    comprueba("403, no una cookie", _cam["statusCode"], 403)
+    comprueba("y no abre sesion", cookie_de(_cam), None)
+
 print("\nUna cuenta de Cognito sin ficha no entra")
 falsos.USUARIOS_COG["huerfano@x.com"] = {"clave": "ClaveLarga123", "temporal": False}
 comprueba("403, no 200",
@@ -151,6 +164,8 @@ comprueba("y la ruta lo rechaza",
 comprueba("administrar tampoco",
           llama("GET", "/api/admin/usuarios", cookie=COOKIE_ANA)["statusCode"], 403)
 comprueba("ni las alarmas", llama("GET", "/api/alarmas", cookie=COOKIE_ANA)["statusCode"], 403)
+comprueba("ni el catalogo de alarmas",
+          llama("GET", "/api/catalogo-alarmas", cookie=COOKIE_ANA)["statusCode"], 403)
 comprueba("el umbral llega", yo["umbral"], 350)
 comprueba("y el asistente esta habilitado", yo["asistente"]["habilitado"], True)
 
@@ -180,8 +195,8 @@ print("\nEl administrador")
 COOKIE_JEFE = cookie_de(llama("POST", "/api/acceso",
                               {"correo": "jefe@serunion.es", "clave": "OtraClaveLarga1"}))
 comprueba("ve los usuarios", llama("GET", "/api/admin/usuarios", cookie=COOKIE_JEFE)["statusCode"], 200)
-comprueba("ve las 16 sesiones",
-          len(cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_JEFE))["sesiones"]), 16)
+comprueba("ve las 18 sesiones",
+          len(cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_JEFE))["sesiones"]), 18)
 
 alta = llama("POST", "/api/admin/usuarios",
              {"correo": "Pepe@Airbus.com", "nombre": "Pepe", "perfil_id": "cli-airbus",
@@ -201,6 +216,22 @@ comprueba("una clave inicial corta falla",
                  "clave": "corta"}, cookie=COOKIE_JEFE)["statusCode"], 400)
 comprueba("no puede borrarse a si mismo",
           llama("DELETE", "/api/admin/usuarios/jefe@serunion.es", cookie=COOKIE_JEFE)["statusCode"], 400)
+
+print("\nLa consola recibe lo que necesita para no repetir las reglas")
+pf = cuerpo_de(llama("GET", "/api/admin/perfiles", cookie=COOKIE_JEFE))
+comprueba("las 18 sesiones con su tipo minimo", len(pf["catalogo_sesiones"]), 18)
+comprueba("el techo de los cuatro tipos", sorted(pf["techo"]), ["admin", "cliente", "direccion", "operaciones"])
+comprueba("y la escalera de niveles", pf["niveles"]["cliente"] < pf["niveles"]["operaciones"], True)
+comprueba("y que trae puesto cada tipo", "alarmas_ver" in pf["implicitos"]["operaciones"], True)
+
+print("\nY se ve que perfiles tienen panel calculado de verdad")
+# Un perfil recien creado, o sin ambito, no tiene panel hasta que corren los
+# agregados: es un cliente que entra a una pantalla vacia, y la consola lo dice.
+_con = [p for p in pf["perfiles"] if p["panel"]["existe"]]
+_sin = [p for p in pf["perfiles"] if not p["panel"]["existe"]]
+comprueba("cli-airbus lo tiene", any(p["_id"] == "cli-airbus" for p in _con), True)
+comprueba("y dice de cuando es", "2026-10-02" in _con[0]["panel"]["calculado"], True)
+comprueba("un perfil sin panel se distingue", len(_sin) >= 0, True)
 
 print("\nAl crear un perfil se dice que permisos no van a tener efecto")
 res = cuerpo_de(llama("POST", "/api/admin/perfiles",
@@ -241,6 +272,130 @@ comprueba("con prefijo si",
                 {"empleado_id": "12", "nombre": "Luis", "telefono": "+34600000000",
                  "oficio": "reponedor"}, cookie=COOKIE_JEFE)["statusCode"], 200)
 comprueba("y se listan", len(cuerpo_de(llama("GET", "/api/admin/telefonos", cookie=COOKIE_JEFE))["telefonos"]), 1)
+
+print("\nEl catalogo de alarmas lo sirve la API, no lo copia el navegador")
+cat = cuerpo_de(llama("GET", "/api/catalogo-alarmas", cookie=COOKIE_JEFE))["catalogo"]
+comprueba("el admin si", len(cat) > 10, True)
+comprueba("cada entrada trae fuente y campo", all(x["fuente"] and x["campo"] for x in cat), True)
+comprueba("y dice cuales se pueden evaluar hoy", any(x["evaluable"] for x in cat), True)
+comprueba("y cuales todavia no", any(not x["evaluable"] for x in cat), True)
+import catalogo as _cat
+comprueba("es la misma lista que evalua la Lambda de alarmas", len(cat), len(_cat.CATALOGO))
+
+print("\nEl cuadro de mando: solo con su sesion, y solo el de su perfil")
+falsos.OBJETOS["cabina/cli-airbus/cuadro/indice.json"] = json.dumps(
+    {"perfil": "cli-airbus", "meses": [{"mes": "2026-09"}],
+     "censo": [["24SE1983", 0, "Comedor", "S1"]]}).encode()
+# Comprimido, como lo escriben los agregados: la API lo descomprime al servirlo.
+falsos.OBJETOS["cabina/cli-airbus/cuadro/mes-2026-09.json.gz"] = gzip.compress(json.dumps(
+    {"mes": "2026-09", "ventas": [[1, 0, 0, 2, 1.3]]}).encode())
+falsos.OBJETOS["cabina/interno/cuadro/indice.json"] = json.dumps(
+    {"perfil": "interno", "meses": [{"mes": "2026-09"}]}).encode()
+# Una usuaria nueva: a estas alturas a Ana ya la han bloqueado mas arriba.
+falsos.USUARIOS_COG["eva@airbus.com"] = {"clave": "ClaveLarga123", "temporal": False}
+pon_fila("USUARIO#eva@airbus.com", {"nombre": "Eva", "perfil_id": "cli-airbus", "estado": "activo"})
+COOKIE_ANA = cookie_de(llama("POST", "/api/acceso", {"correo": "eva@airbus.com", "clave": "ClaveLarga123"}))
+_perfil_airbus = {"nombre": "AIRBUS", "tipo": "cliente", "ambito": {"clientes": ["AIRBUS"]},
+                  "sesiones": ["resumen"], "permisos": {}}
+pon_fila("PERFIL#cli-airbus", _perfil_airbus)
+comprueba("sin la sesion «cuadro», 403",
+          llama("GET", "/api/cuadro", cookie=COOKIE_ANA)["statusCode"], 403)
+pon_fila("PERFIL#cli-airbus", dict(_perfil_airbus, sesiones=["resumen", "cuadro"]))
+_ix = llama("GET", "/api/cuadro", cookie=COOKIE_ANA)
+comprueba("con ella, el indice de su perfil", cuerpo_de(_ix)["perfil"], "cli-airbus")
+comprueba("sin pasar por json: el cuerpo es el fichero tal cual",
+          _ix["body"], falsos.OBJETOS["cabina/cli-airbus/cuadro/indice.json"].decode())
+comprueba("un mes que el indice cita, descomprimido",
+          cuerpo_de(llama("GET", "/api/cuadro", cookie=COOKIE_ANA, query={"mes": "2026-09"}))["ventas"],
+          [[1, 0, 0, 2, 1.3]])
+for _malo in ("2026-08", "../../interno/cuadro/indice", "2026-09.json", ""):
+    comprueba(f"un mes que no cita ({_malo!r}), 400",
+              llama("GET", "/api/cuadro", cookie=COOKIE_ANA, query={"mes": _malo})["statusCode"], 400)
+comprueba("y la query no cambia de perfil",
+          cuerpo_de(llama("GET", "/api/cuadro", cookie=COOKIE_ANA, query={"perfil": "interno"}))["perfil"],
+          "cli-airbus")
+comprueba("el catalogo de sesiones lo ofrece a la consola",
+          "cuadro" in cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))["catalogo_sesiones"], True)
+comprueba("y /api/yo dice que lo tiene",
+          "cuadro" in cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))["sesiones"], True)
+del falsos.OBJETOS["cabina/cli-airbus/cuadro/indice.json"]
+comprueba("sin calcular todavia, 503",
+          llama("GET", "/api/cuadro", cookie=COOKIE_ANA)["statusCode"], 503)
+
+print("\nEl historico: el indice de meses, y un mes recortado como el panel")
+falsos.OBJETOS["cabina/cli-airbus/serie/indice.json"] = json.dumps(
+    {"perfil": "cli-airbus", "primer_dia": "2025-01-01",
+     "meses": [{"mes": "2025-03", "visitas": 12}]}).encode()
+falsos.OBJETOS["cabina/cli-airbus/serie/2025-03.json.gz"] = gzip.compress(json.dumps(
+    {"mes": "2025-03", "filas": [
+        {"f": "2025-03-11",
+         "servicio": {"visitas": 3, "coste_servicio": 24.0},
+         "dinero": {"periodos": {"2025-02": {"efectivo": 100.0}}},
+         "sat": {"tareas": 2},
+         "jornadas": {"jornadas": 1},
+         "venta": {"importe": 7.0}}]}).encode())
+falsos.OBJETOS["cabina/interno/serie/indice.json"] = json.dumps(
+    {"perfil": "interno", "meses": [{"mes": "2025-03"}]}).encode()
+_ix = llama("GET", "/api/serie", cookie=COOKIE_ANA)
+comprueba("el indice es el de su perfil", cuerpo_de(_ix)["perfil"], "cli-airbus")
+comprueba("y dice desde cuando hay historia", cuerpo_de(_ix)["primer_dia"], "2025-01-01")
+pon_fila("PERFIL#cli-airbus", dict(_perfil_airbus, sesiones=["resumen", "cuadro"]))
+_f = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"mes": "2025-03"}))["filas"][0]
+comprueba("la fila lleva su fecha y sus visitas", (_f["f"], _f["servicio"]["visitas"]),
+          ("2025-03-11", 3))
+comprueba("con «resumen» ve servicio y dinero", sorted(k for k in _f if k != "f"),
+          ["dinero", "servicio", "venta"])
+comprueba("el coste de servicio NO sale: es interno",
+          "coste_servicio" in _f["servicio"], False)
+pon_fila("PERFIL#cli-airbus", dict(_perfil_airbus, sesiones=["servicio", "cuadro"]))
+_f = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"mes": "2025-03"}))["filas"][0]
+comprueba("un perfil que solo ve «servicio» no ve el dinero dia a dia",
+          sorted(k for k in _f if k != "f"), ["servicio"])
+comprueba("ni la venta, que es facturacion", "venta" in _f, False)
+for _malo in ("2025-02", "../../interno/serie/2025-03", ""):
+    comprueba(f"un mes que el indice no cita ({_malo!r}), 400",
+              llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"mes": _malo})["statusCode"], 400)
+comprueba("y la query no cambia de perfil",
+          cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"perfil": "interno"}))["perfil"],
+          "cli-airbus")
+
+print("\nEl filtro por delegacion, cliente y centro")
+_ficha = {"nombre": "AIRBUS GETAFE", "num": "1001", "cliente": "AIRBUS OPERATIONS SL",
+          "cod_cliente": "C7", "delegacion": "MADRID"}
+for _pid in ("cli-airbus", "interno"):
+    falsos.OBJETOS[f"cabina/{_pid}/serie/indice.json"] = json.dumps(
+        {"perfil": _pid, "meses": [{"mes": "2025-03"}], "meses_centros": ["2025-03"],
+         "centros": {"1001": _ficha}}).encode()
+    falsos.OBJETOS[f"cabina/{_pid}/serie/centros-2025-03.json.gz"] = gzip.compress(json.dumps(
+        {"mes": "2025-03", "filas": [{"f": "2025-03-11", "centros": {"1001": {
+            "servicio": {"visitas": 3, "coste_servicio": 24.0},
+            "dinero": {"periodos": {"2025-02": {"efectivo": 100.0}}},
+            "sat": {"tareas": 2}, "venta": {"importe": 7.0}}}}]}).encode())
+_ixc = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA))
+comprueba("el cliente ve la ficha de su centro", _ixc["centros"]["1001"]["cliente"],
+          "AIRBUS OPERATIONS SL")
+comprueba("pero sin la delegacion, que es interna", "delegacion" in _ixc["centros"]["1001"], False)
+comprueba("y solo puede filtrar por cliente y centro", _ixc["filtros"], ["cliente", "centro"])
+_ixj = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_JEFE))
+comprueba("el interno si ve la delegacion", _ixj["centros"]["1001"]["delegacion"], "MADRID")
+comprueba("y puede filtrar por ella", _ixj["filtros"], ["delegacion", "cliente", "centro"])
+_c = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"centros": "2025-03"}))
+_c1 = _c["filas"][0]["centros"]["1001"]
+comprueba("el mes por centro sale recortado como la fila del dia", sorted(_c1), ["servicio"])
+comprueba("sin el coste de servicio", "coste_servicio" in _c1["servicio"], False)
+for _malo in ("2025-02", "../../interno/serie/centros-2025-03", ""):
+    comprueba(f"un mes por centro que el indice no cita ({_malo!r}), 400",
+              llama("GET", "/api/serie", cookie=COOKIE_ANA,
+                    query={"centros": _malo})["statusCode"], 400)
+_grande = L._json_grande({"x": "a" * 1_200_000})
+comprueba("una respuesta de mas de un mega va comprimida",
+          (_grande["headers"].get("content-encoding"), _grande["isBase64Encoded"]), ("gzip", True))
+comprueba("y sigue siendo el mismo json",
+          json.loads(gzip.decompress(__import__("base64").b64decode(_grande["body"])))["x"][:3], "aaa")
+
+del falsos.OBJETOS["cabina/cli-airbus/serie/indice.json"]
+comprueba("sin historico todavia, 503",
+          llama("GET", "/api/serie", cookie=COOKIE_ANA)["statusCode"], 503)
 
 print("\nUna ruta que no existe")
 comprueba("404", llama("GET", "/api/loquesea", cookie=COOKIE_JEFE)["statusCode"], 404)

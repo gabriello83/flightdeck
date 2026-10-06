@@ -1,5 +1,9 @@
 # La ingesta: Lambda y S3
 
+> **Está en producción desde el 02/10/2026.** 120 días de dato, carga nocturna de 90 segundos,
+> agregados de 84. Y comprobado: la cabina reproduce al céntimo las cifras que sacamos a mano
+> durante la campaña. Ver [docs/42](../docs/42-la-cabina-en-produccion.md).
+
 Lo que convierte el prototipo en un sistema vivo. Cinco ficheros:
 
 | fichero | qué es |
@@ -19,23 +23,65 @@ del proyecto se lanzan de una vez con `sh infra/pruebas.sh`.
 
 ---
 
-## Lo único que no está probado contra la API real
+## La llamada a VenCloud, resuelta
 
-**Nunca hemos hecho una llamada a VenCloud desde aquí**: el host está bloqueado por la política de
-red del entorno. Lo que no sabemos con certeza es **la forma exacta de la respuesta** de
-`GetReportV2`.
+Durante todo el proyecto esto fue el único hueco: el host está bloqueado desde mi entorno, así
+que nunca pude comprobar la forma real de `GetReportV2`. **Ya está cerrado**, con una sonda que
+probó quince formas de llamada en una sola ejecución (`{"sonda": true}` como evento de prueba).
 
-Por eso la extracción está escrita para que eso no pueda costar una noche de datos:
+```
+GET  .../VenCloudExternalApi.svc/GetReportV2/{token}/{empresa}/{informe}%7C{desde}%7C{hasta}/
+```
 
-1. **Primero guarda los bytes tal cual**, comprimidos, en `crudo/`. Pase lo que pase después, el
-   dato está.
-2. **Después intenta contar las filas** con un lector tolerante que reconoce las envolturas
-   habituales (`Rows`, `Data`, `Table`, `d`, lista pelada). Si no reconoce ninguna, **devuelve
-   `null` en vez de inventarse un número**.
-3. El registro de cada noche queda en `registro/extraccion/`, con bytes y filas por informe.
+Tres detalles, y cada uno costó una respuesta distinta del servidor:
 
-La primera carga se lanza **a mano**, se mira ese registro, y si el lector no reconoció la
-envoltura se ajusta una función de diez líneas. No hay nada más que adivinar.
+| detalle | cómo se supo |
+|---|---|
+| **GET**, no POST | con la barra final, un POST devuelve **405** — y un 405 no es «no existe», es «existe y el método no es ése». El `Allow` lo confirma: `GET` |
+| **barra final** | sin ella el servicio devuelve **307** redirigiendo a la misma URL con barra |
+| **fecha `aaaa-mm-dd`** | con `30/09/2026` devuelve **404** y con `2026-09-30`, 307. La barra de la fecha cae dentro de la *ruta*, e **IIS rechaza por defecto cualquier barra codificada ahí** — es su protección contra el doble escapado y no se puede sortear desde el cliente |
+
+El endpoint se normaliza al arrancar para quitarle la doble barra que arrastrábamos de las notas:
+dejarla costaba una redirección en cada una de las 74 llamadas de la noche, para acabar en la
+misma URL.
+
+Dos cosas más que dijo la sonda. El servicio **no publica contrato**: `?wsdl` falla porque la
+operación `GetReport` devuelve un `Message` en crudo, y no hay página de ayuda REST. Por eso no
+había nada que consultar y hubo que medirlo. Y una fecha con hora (`2026-09-30 00:00:00`) da
+**400**, lo que confirma de paso que el parámetro se valida de verdad y no se ignora.
+
+### El filtro de fechas: comprobado
+
+La primera carga completa (02/10/2026) cerró **74 de 74 descargas, cero errores, 143,8 MB**.
+Y el filtro quedó demostrado sin lugar a dudas: `visita_inventario` devolvió **1.212, 9 y 131
+filas** en tres días consecutivos. Un informe que ignorase la fecha no puede producir eso.
+
+Volúmenes medidos, que son los que hay que esperar cada noche:
+
+| | |
+|---|---|
+| incrementales | **43 MB al día** repartidos en 22 informes |
+| maestros | **13,8 MB**, enteros cada noche |
+| una noche en régimen | unos **57 MB en crudo**, que comprimidos son muchos menos |
+
+Los conteos cuadran con lo que medimos informe a informe durante la campaña: 10.447 líneas de
+tubos al día contra 10.167 esperadas, 6.827 de monedero contra 6.667, 143 tareas de SAT contra
+113. Todo dentro de la variación normal entre meses.
+
+### Dos informes que devuelven cero, y está bien
+
+`stock_balance` y `stock_balance_prod` dieron **cero filas los tres días**. No es un fallo: los
+dos filtran por `infinventarioresumenes.fecha`, que es la fecha de un **cierre mensual**. Sólo
+hay filas el día que se genera el cierre, y ese día no cayó dentro de la ventana.
+
+Tiene dos consecuencias prácticas:
+
+1. **El agregado no puede sumar varios cierres.** En una ventana de 120 días caben tres o cuatro,
+   y sumarlos multiplicaría las existencias por cuatro y contaría cada máquina cuatro veces en el
+   cumplimiento de inventario. `bloque_inventario` se queda con la foto más reciente y publica de
+   qué periodo es.
+2. **Si la carga nocturna falla cuatro días seguidos justo en el cierre, ese mes se pierde** hasta
+   que se rellene a mano. Es el caso que justifica el modo de relleno histórico.
 
 ## Los números de informe · **los 30 rellenos**
 
@@ -96,6 +142,32 @@ bucket de la cuenta. La plantilla **no referencia ni adopta ningún recurso exis
 crea—, los horarios van en su propio grupo de Scheduler, y todo lleva la etiqueta
 `Proyecto=digivend` para que el gasto salga aparte en la factura. El detalle, en
 [`AISLAMIENTO.md`](AISLAMIENTO.md).
+
+## El relleno histórico
+
+La carga nocturna trae tres días. **La cabina necesita nueve meses**, y esa historia no la trae
+nunca una ventana de tres días: hay que rellenarla una vez.
+
+```json
+{"desde": "2026-01-01", "hasta": "2026-01-31"}
+```
+
+Como evento de prueba de la Lambda de extracción. Carga ese rango **del día más antiguo al más
+nuevo**, y si se le acaba el tiempo **para a los 90 segundos del límite y dice por dónde
+continuar**:
+
+```json
+{"descargas_ok": 440, "incompleto": true, "continuar_desde": "2026-01-21",
+ "_siguiente": "Relanza con {\"desde\": \"2026-01-21\", \"hasta\": \"...\"}"}
+```
+
+Se relanza con esa fecha y se sigue. Como los días se cargan en orden, lo ya cargado queda
+siempre seguido: no hay huecos que buscar después.
+
+Dos detalles pensados: **un relleno no vuelve a bajar los maestros** —son la foto de hoy, no
+tienen historia que rellenar— y **su registro va a `registro/extraccion/historico/`**, para no
+pisar el de la noche. Admite también `"solo": ["visita_cabecera"]` para rellenar un informe
+suelto, y `"pausa"` para espaciar las llamadas; con esto último, cuidado, que es su ERP.
 
 ## La carga es idempotente
 

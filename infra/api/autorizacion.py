@@ -28,7 +28,7 @@ def nivel_de(tipo):
 
 
 # ----------------------------------------------------------------------
-# las 16 sesiones del catalogo (docs/39)
+# las sesiones del catalogo (docs/39, mas el cuadro de mando de docs/46)
 # ----------------------------------------------------------------------
 # id: (nombre, tipo minimo, bloques del panel que necesita)
 SESIONES = {
@@ -44,10 +44,14 @@ SESIONES = {
     "avisos":           ("Avisos y acciones",              "operaciones", ("alarmas",)),
     "rentabilidad":     ("Rentabilidad",                   "direccion",   ("servicio", "dinero", "sat")),
     "cumplimiento":     ("Cumplimiento",                   "direccion",   ("inventario", "dinero")),
+    "instalaciones":    ("Instalaciones y altas",          "operaciones", ("instalaciones",)),
     "usuarios":         ("Usuarios y permisos",            "admin",       ()),
     "catalogo":         ("Catalogo de informes",           "admin",       ()),
     "telefonos":        ("Telefonos y mensajes",           "admin",       ()),
     "carga":            ("Estado de la carga",             "admin",       ("carga",)),
+    # El cuadro de mando de David (docs/46). No pide ningun bloque del panel:
+    # va en su propia carpeta, cabina/<perfil>/cuadro/, y lo sirve /api/cuadro.
+    "cuadro":           ("Cuadro de mando",                "cliente",     ()),
 }
 
 
@@ -176,6 +180,40 @@ def recorta(panel, perfil, config=None):
         if bloque in panel:
             fuera[bloque] = dict(panel[bloque]) if isinstance(panel[bloque], dict) else panel[bloque]
 
+    if nivel_de(tipo) < NIVEL["direccion"]:
+        for bloque, campo in CAMPOS_INTERNOS:
+            if isinstance(fuera.get(bloque), dict):
+                fuera[bloque].pop(campo, None)
+    return fuera
+
+
+def bloques_de(perfil):
+    """Los bloques del panel que las sesiones de este perfil necesitan."""
+    tipo = perfil.get("tipo", "cliente")
+    sesiones = sesiones_de(tipo, perfil.get("sesiones", []))
+    return {b for s in sesiones for b in SESIONES[s][2]}
+
+
+def recorta_dia(fila, perfil):
+    """Una fila de la serie diaria, con la misma tijera que el panel.
+
+    Una fila de la serie lleva los mismos bloques que el panel —servicio,
+    dinero, sat, jornadas—, con las mismas cifras partidas por dias. Si se
+    sirviera entera, la serie seria la puerta de atras del panel: un perfil al
+    que se le quito el dinero lo veria aqui dia a dia. Asi que se recorta
+    igual, y en la MISMA funcion de siempre, no en una copia.
+
+    La venta va con «dinero» a proposito: es facturacion.
+    """
+    necesarios = bloques_de(perfil)
+    tipo = perfil.get("tipo", "cliente")
+    fuera = {"f": fila.get("f")}
+    for bloque, v in fila.items():
+        if bloque == "f":
+            continue
+        pedido = "dinero" if bloque == "venta" else bloque
+        if pedido in necesarios:
+            fuera[bloque] = dict(v) if isinstance(v, dict) else v
     if nivel_de(tipo) < NIVEL["direccion"]:
         for bloque, campo in CAMPOS_INTERNOS:
             if isinstance(fuera.get(bloque), dict):

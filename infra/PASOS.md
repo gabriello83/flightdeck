@@ -188,27 +188,26 @@ la raíz del bucket, la extracción no los encuentra y se para nada más empezar
 
 ## Paso 5 · El código de las dos Lambdas — 10 min
 
-### 5a · La extracción se pega
+**Las dos van en zip, ninguna se pega.** Pegar en el editor de la consola parece más cómodo y
+no lo es: con cuatrocientas líneas el navegador puede truncar el pegado, y el error que sale
+luego es un fallo de sintaxis a mitad del fichero que **no apunta a la causa**. Ya nos pasó.
 
-Es un solo fichero. `Lambda → Functions → digivend-extraccion → pestaña Code`.
-
-Doble clic en `index.py`, **selecciona todo lo que hay y bórralo**, pega el contenido entero de
-`infra/lambda_extraccion.py`, y pulsa **Deploy** (arriba a la derecha del editor). Espera a que
-diga que se ha desplegado.
-
-### 5b · Los agregados van en zip
-
-Son dos ficheros, así que no se pueden pegar. En tu ordenador, dentro de la carpeta `infra/`:
+Prepara los dos zips de una vez:
 
 ```bash
-cd infra
-zip agregados.zip lambda_agregados.py reglas.py
+sh infra/empaquetar.sh
 ```
 
-En Windows sin `zip`: selecciona **esos dos ficheros**, botón derecho → *Enviar a → Carpeta
-comprimida*. **Los dos ficheros tienen que quedar en la raíz del zip, no dentro de una carpeta.**
+Deja `paquetes/extraccion.zip` y `paquetes/agregados.zip` (y de paso los de la web, para el paso
+12). Si no tienes `sh` a mano, se hacen a mano:
 
-`Lambda → digivend-agregados → Code → Upload from → .zip file` → elige `agregados.zip` → **Save**.
+- **`extraccion.zip`**: una copia de `infra/lambda_extraccion.py` **renombrada a `index.py`**, y
+  nada más. El nombre importa: el handler de esa función es `index.lambda_handler`.
+- **`agregados.zip`**: `lambda_agregados.py`, `reglas.py` y `cuadro.py`, con sus nombres.
+
+En los dos casos, **los ficheros van en la raíz del zip, no dentro de una carpeta**.
+
+Y se suben igual: `Lambda → la función → Code → Upload from → .zip file` → el zip → **Save**.
 
 ## Paso 6 · La primera carga, a mano — 5 min + espera
 
@@ -265,8 +264,12 @@ Cuando pase a `Issued`, copia el **ARN**.
 
 `CloudFormation → Create stack` → **`infra/plantilla-web.yaml`**. Vuelve a `eu-west-1`.
 
+**Stack name**: `digivend-web`. Son dos pilas separadas a propósito —`digivend-ingesta` y
+`digivend-web`—, y se puede borrar o rehacer la de la web entera sin tocar un byte de los datos.
+
 | parámetro | qué poner |
 |---|---|
+| `Prefijo` | **`digivend`, el mismo que la ingesta**. No lo cambies: es lo que hace que esta pila encuentre lo de la otra. Ninguno de los recursos de las dos se llama igual, así que no chocan |
 | `BucketDatos` | el `NombreBucket` del paso 2 |
 | `RemitenteAvisos` | una dirección verificada en SES, para las alarmas por correo |
 | `Dominio` y `CertificadoArn` | **déjalos vacíos de momento** |
@@ -288,15 +291,32 @@ sáltate este paso y vuelve luego.
 
 ## Paso 12 · El código de las tres Lambdas — 10 min
 
-```bash
-cd infra/api
-zip api.zip comun.py autorizacion.py lambda_api.py
-zip alarmas.zip comun.py autorizacion.py lambda_alarmas.py
+**No hace falta construirlos.** Están en el repositorio, en `paquetes/`, y se descargan uno a uno
+con el botón *Download raw file* de GitHub. Una prueba (`infra/test_paquetes.py`) impide que se
+queden viejos: compara el contenido de cada zip con los ficheros de los que sale.
 
+> **Dos ficheros no van en ningún zip.** `config/manifiesto.json` —la lista de informes— y
+> `config/perfiles.json` —la lista de paneles a calcular— los leen las Lambdas **de S3**, del bucket
+> de datos. Subir el zip y no el manifiesto deja la extracción corriendo con la lista vieja **sin dar
+> ningún error**: simplemente baja un informe menos, y el síntoma aparece tres pasos más allá, en un
+> panel que no tiene datos. Están en `paquetes/config/` para que viajen juntos.
+>
+> Un cliente **nuevo** ya no pide tocar `perfiles.json`: los agregados leen también los perfiles
+> de la consola que tengan ámbito (`docs/47`).
+
+Si prefieres construirlos tú:
+
+```bash
+sh infra/empaquetar.sh          # deja api.zip, alarmas.zip, agregados.zip y extraccion.zip en paquetes/
+
+# El del asistente lleva el SDK de Anthropic y va aparte:
 mkdir -p paquete && pip install anthropic -t paquete/
-cp comun.py autorizacion.py lambda_asistente.py paquete/
-cd paquete && zip -r ../asistente.zip . && cd ..
+cp infra/api/comun.py infra/api/autorizacion.py infra/api/lambda_asistente.py paquete/
+(cd paquete && zip -r ../paquetes/asistente.zip .)
 ```
+
+Hazlos con el script y no a mano: `api.zip` y `alarmas.zip` llevan además `catalogo.py`, y si falta,
+la función no arranca —el error es un `ImportError` en el arranque, que no dice gran cosa.
 
 Sube cada zip a su función: `api.zip` → `digivend-api`, `alarmas.zip` → `digivend-alarmas`,
 `asistente.zip` → `digivend-asistente`.
@@ -329,13 +349,81 @@ El segundo, **cambiando el correo por el tuyo** (en minúsculas, las dos veces):
 
 Las comillas escapadas del campo `dato` son a propósito: dentro va un texto que contiene JSON.
 
-**c)** Sube la página: `S3 → el bucket `digivend-web-…` → Upload` del contenido de `app/consola/`
-y `app/airbus/`.
+**c)** Sube las páginas: `S3 → el bucket `digivend-web-…` → Upload`. Son cuatro ficheros y cada uno
+va en su sitio, porque la ruta es la que decide qué página sale:
+
+| Fichero del repositorio | Dónde va en el bucket |
+|---|---|
+| `app/index.html` | en la raíz, `index.html` |
+| `app/panel/index.html` | dentro de una carpeta `panel/` |
+| `app/avisos/index.html` | dentro de una carpeta `avisos/` |
+| `app/consola/index.html` | dentro de una carpeta `consola/` |
+
+**OJO con cómo se suben**, que es donde se falla. `Add folder` sobre `app/` **no** vale: S3 usa el
+nombre de la carpeta como prefijo y las claves quedan `app/index.html`, que no es donde CloudFront
+las busca. El resultado es un `AccessDenied` de S3 en la raíz, sin nada en CloudWatch, porque la
+petición no llega a ninguna Lambda.
+
+La forma correcta, en `Upload`:
+
+1. `Add files` → **sólo** `index.html`.
+2. `Add folder` → `panel`. Otra vez `Add folder` → `avisos`. Y otra → `consola`.
+
+Es decir: `Add folder` sobre **cada subcarpeta**, nunca sobre la que las contiene. En la raíz del
+bucket tiene que quedar `index.html`, `avisos/`, `consola/` y `panel/`, y nada más.
+
+Vuelve a subir también `api.zip` y `alarmas.zip`: el catálogo de alarmas se ha movido a un módulo
+que usan los dos, y la API gana la ruta que se lo sirve al navegador.
+
+**c bis)** Y sube la configuración al bucket de **DATOS** (`digivend-vending-…`), carpeta `config/`:
+`manifiesto.json` y `perfiles.json`. No van en ningún zip, y sin ellos lo demás no sirve de nada.
+
+**d)** Vuelve a subir `agregados.zip` a `digivend-agregados` y lánzalo una vez a mano. La versión
+que tienes desplegada deja el panel de cliente **sin recaudación y sin reposición**: cinco de los
+ocho informes no traen la columna `centro`, así que sus filas no encajaban en el ámbito de AIRBUS y
+se caían enteras. La nueva aprende de qué centro es cada máquina mientras lee, y de paso publica el
+desglose por centro que usa el panel. Tarda lo mismo que antes.
+
+## Paso 13 bis · Actualiza la pila web — 5 min
+
+**Si creaste la pila antes del 3 de octubre, este paso no es opcional.** La plantilla tenía tres
+fallos que sólo aparecen al usarla:
+
+0. **A los roles les faltaba `dynamodb:Scan`.** Es lo que usa `lista()`, y con ello la consola
+   entera: usuarios, perfiles y teléfonos contestaban 500 con un «Error interno» que no dice nada
+   de IAM. Al de alarmas le faltaba además `DeleteItem`, que es lo que saca de la cola lo ya
+   enviado. Y faltaba en la **frontera de permisos**, que es el techo: darlo sólo en el rol no
+   habría servido de nada, y es el fallo que más cuesta ver porque el rol «parece» correcto.
+
+   Ahora hay una prueba, `infra/test_permisos.py`, que lee la plantilla y el código y comprueba que
+   cada Lambda tenga permiso para cada llamada que hace —y que la frontera la deje pasar—. Falla
+   también si alguien añade una llamada nueva sin decir qué permiso necesita.
+
+Y los otros dos:
+
+1. **`/panel/` no existía.** CloudFront sólo sabe servir el index de la raíz. Una petición a
+   `/panel/` le llega a S3 como la clave `panel/`, que no es ningún objeto, y S3 contesta 403 —no
+   404, porque con acceso por OAC no hay permiso de listar—. Con la página de error que había,
+   `/panel/` devolvía la pantalla de acceso, que al ver que ya hay sesión volvía a mandar a
+   `/panel/`: un bucle de redirecciones del que no se sale.
+2. **La página de error se comía los errores de la API.** Las páginas de error de CloudFront no son
+   por comportamiento: son de toda la distribución, `/api/*` incluido. Un 403 de la API («este
+   perfil no ve las alarmas») salía como la pantalla de acceso con un 200, y el navegador recibía
+   HTML donde esperaba JSON.
+
+Ahora hay una función de borde que convierte `/panel/` en `/panel/index.html` antes de ir a S3, y
+no hay páginas de error de distribución.
+
+`CloudFormation → digivend-web → Update stack → Replace current template` → sube
+`infra/plantilla-web.yaml` → los parámetros se quedan como están → marca la casilla de IAM.
+
+Tarda unos minutos porque toca CloudFront. Cuando acabe, `CloudFront → la distribución →
+Invalidations → Create invalidation → /*`, para que no te sirva lo viejo de la caché.
 
 ## Paso 14 · Entrar — 2 min
 
-Abre la `UrlProvisional` del paso 10. Entra con tu correo y la contraseña del paso 13a. Te pedirá
-cambiarla: es de un solo uso.
+Abre la `UrlProvisional` del paso 10 (`CloudFormation → digivend-web → Outputs`). Entra con tu
+correo y la contraseña del paso 13a. Te pedirá cambiarla: es de un solo uso.
 
 Desde dentro ya puedes crear el perfil de AIRBUS y sus usuarios sin volver a tocar la consola de
 AWS.
@@ -353,6 +441,9 @@ Un `CNAME` de `dashboard.digivend.es` al nombre que da la salida `DondeApuntaElD
 Cuando termines el paso 7, pásame el registro y **cierro el único hueco que queda** en todo el
 sistema: la forma exacta de la respuesta de `GetReportV2`.
 
-Y queda pendiente enchufar las dos páginas a la API: hoy el acceso de la consola es un prototipo
-que no valida contraseñas, y el orden de los paneles se guarda en el navegador en vez de en el
-servidor. El backend ya está; es trabajo mío, no tuyo.
+Las cuatro páginas —el acceso (`app/index.html`), el panel (`app/panel/index.html`), los avisos
+(`app/avisos/index.html`) y la consola (`app/consola/index.html`)— ya van contra la API de verdad: la contraseña la valida Cognito desde dentro de AWS, el panel sale de `/api/panel` ya
+recortado por el perfil de la sesión, y el orden de los paneles se guarda en el servidor, así que
+el cliente lo encuentra igual desde otro ordenador. Y la consola de administración ya no es el
+prototipo: da de alta en Cognito, guarda en DynamoDB y no lleva copiada ni una regla de permisos,
+porque se las pide a la API.

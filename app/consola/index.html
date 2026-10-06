@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consola · digivend</title>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M4 11V5h2v6zm3 0V7h2v4zm3 0V3h2v8z' fill='white'/%3E%3C/svg%3E">
-<title>digivend · Consola</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M3 4h10v2H3zm0 3h10v2H3zm0 3h6v2H3z' fill='white'/%3E%3C/svg%3E">
 <style>
 :root{
   color-scheme: light;
@@ -13,766 +13,898 @@
   --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
   --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
   --bien:#0ca30c; --aviso:#fab219; --grave:#ec835a; --critico:#d03b3b;
+  /* Las cuatro que lee el selector de tiempo de /comun/periodos.js, para que
+     herede el tema de esta pantalla sin conocerlo. */
+  --pd-acento:var(--s1); --pd-apagado:var(--tinta-2); --pd-borde:var(--borde-fuerte);
+  --pd-fondo:var(--tarjeta);
   --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
 }
-@media (prefers-color-scheme: dark){ :root:where(:not([data-theme="light"])){
-  color-scheme: dark;
-  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
-  --tinta:#fff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --sombra:none;
-}}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --sombra:none;
+  }
+}
 :root[data-theme="dark"]{
   color-scheme: dark;
   --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
-  --tinta:#fff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
   --s1:#3987e5; --s2:#d95926; --s3:#199e70; --sombra:none;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
-body{background:var(--fondo);color:var(--tinta);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
-
-/* ---------- acceso ---------- */
-#acceso{min-height:100dvh;display:grid;place-items:center;padding:24px}
-.caja{width:100%;max-width:410px;background:var(--tarjeta);border:1px solid var(--borde);
-  border-radius:14px;padding:28px 26px;box-shadow:var(--sombra)}
-.logo{display:flex;align-items:center;gap:10px;margin-bottom:4px}
-.logo svg{width:28px;height:28px;flex-shrink:0}
-.logo b{font-size:21px;letter-spacing:-.02em}
-.caja h1{font-size:15px;font-weight:500;color:var(--tinta-2);margin:0 0 22px}
-label.campo{display:block;margin-bottom:14px}
-label.campo span{display:block;font-size:13px;color:var(--tinta-2);margin-bottom:4px}
-input[type=text],input[type=password],input[type=email],input[type=number],select,textarea{
-  width:100%;font:inherit;font-size:14px;color:var(--tinta);background:var(--fondo);
-  border:1px solid var(--borde-fuerte);border-radius:8px;padding:8px 10px}
-input:focus,select:focus,textarea:focus{outline:2px solid var(--s1);outline-offset:1px;border-color:var(--s1)}
-textarea{min-height:70px;resize:vertical;line-height:1.45}
-button.pri{width:100%;font:inherit;font-size:15px;font-weight:600;color:#fff;background:var(--s1);
-  border:0;border-radius:9px;padding:10px;cursor:pointer;margin-top:4px}
-button.pri:hover{filter:brightness(1.08)}
-.err{color:var(--critico);font-size:13px;margin-top:10px;min-height:19px}
-.demo{margin-top:20px;padding-top:16px;border-top:1px solid var(--borde);font-size:12.5px;color:var(--tinta-3)}
-.demo b{color:var(--tinta-2)}
-.demo code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
-
-/* ---------- consola ---------- */
-#app{display:none}
-.barra{background:var(--tarjeta);border-bottom:1px solid var(--borde);position:sticky;top:0;z-index:20}
-.barra .in{max-width:1240px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.quien{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tinta-2)}
-.rol{font-size:11.5px;border:1px solid var(--borde-fuerte);border-radius:999px;padding:1px 9px;color:var(--tinta-2)}
-nav.tabs{max-width:1240px;margin:0 auto;padding:0 16px;display:flex;gap:3px;overflow-x:auto}
-nav.tabs button{font:inherit;font-size:13.5px;color:var(--tinta-2);background:transparent;border:0;
-  border-bottom:2px solid transparent;padding:10px 12px;cursor:pointer;white-space:nowrap}
-nav.tabs button[aria-selected="true"]{color:var(--tinta);border-bottom-color:var(--s1);font-weight:600}
-main{max-width:1240px;margin:0 auto;padding:20px 16px 72px}
-section.vista{display:none}
-section.vista.on{display:block}
-h2.tit{font-size:19px;margin:0 0 3px;letter-spacing:-.01em}
-p.des{color:var(--tinta-2);font-size:13.5px;margin:0 0 18px;max-width:72ch}
-.panel{background:var(--tarjeta);border:1px solid var(--borde);border-radius:12px;padding:16px 18px;box-shadow:var(--sombra);margin-bottom:16px}
-.panel h3{font-size:15px;margin:0 0 3px}
-.panel .sub{font-size:12.5px;color:var(--tinta-2);margin:0 0 14px}
-.fila{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
-.dos{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
-@media (max-width:900px){ .dos{grid-template-columns:1fr} }
-button.btn{font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);
-  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1060px;margin:0 auto;padding:18px 16px 72px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px;margin-left:8px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
 button.btn:hover{border-color:var(--tinta-3)}
-button.btn.acc{background:var(--s1);border-color:var(--s1);color:#fff}
-button.btn.peli{color:var(--critico);border-color:var(--critico)}
-.acc-fila{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+button.btn.fuerte{background:var(--s1);border-color:var(--s1);color:#fff;font-weight:600}
+button.btn[disabled]{opacity:.55;cursor:progress}
+button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);color:#fff}
+.pestanas{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 0}
+.nota{
+  margin:16px 0;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+.nota.mal{border-left-color:var(--critico);color:var(--critico)}
+.nota.bien{border-left-color:var(--bien);color:var(--tinta-2)}
+section.caja{
+  background:var(--tarjeta);border:1px solid var(--borde);border-radius:12px;
+  padding:14px 16px 16px;box-shadow:var(--sombra);margin-top:16px
+}
+section.caja h2{font-size:15px;margin:0 0 2px;font-weight:650;letter-spacing:-.01em}
+section.caja .sub{font-size:12.5px;color:var(--tinta-2);margin:2px 0 12px}
+.cabsec{display:flex;align-items:baseline;gap:12px;justify-content:space-between;flex-wrap:wrap}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
-th{text-align:left;font-weight:600;color:var(--tinta-2);font-size:12px;text-transform:uppercase;
-  letter-spacing:.03em;padding:6px 10px 6px 0;border-bottom:1px solid var(--borde)}
+.tabla{overflow-x:auto}
+th{text-align:left;font-weight:600;color:var(--tinta-2);font-size:12px;text-transform:uppercase;letter-spacing:.03em;padding:6px 10px 6px 0;border-bottom:1px solid var(--borde)}
 td{padding:7px 10px 7px 0;border-bottom:1px solid var(--borde);vertical-align:top}
+td.n,th.n{text-align:right;padding-right:0;font-variant-numeric:tabular-nums}
+/* El padding-right:0 es para la ultima columna; si la columna numerica lleva
+   otra detras, su cabecera se pega a la siguiente y se leen como una sola. */
+td.n:not(:last-child),th.n:not(:last-child){padding-right:18px}
 tr:last-child td{border-bottom:0}
-.tabla-env{overflow-x:auto}
-.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
-.pill{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:999px;border:1px solid;white-space:nowrap}
-.pill.ok{color:var(--bien);border-color:var(--bien)}
-.pill.no{color:var(--tinta-3);border-color:var(--borde-fuerte)}
-.pill.cri{color:var(--critico);border-color:var(--critico)}
-.pill.alt{color:var(--grave);border-color:var(--grave)}
-.pill.med{color:var(--aviso);border-color:var(--aviso)}
-.pill.baj{color:var(--s1);border-color:var(--s1)}
-.chk{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;padding:4px 0;cursor:pointer}
-.chk input{margin-top:3px;flex-shrink:0;accent-color:var(--s1)}
-.chk small{display:block;color:var(--tinta-3);font-size:12px}
-.grid-chk{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:2px 16px}
-.inter{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid var(--borde)}
-.inter:last-child{border-bottom:0}
-.inter .tx b{display:block;font-size:14px}
-.inter .tx small{color:var(--tinta-2);font-size:12.5px}
-.sw{display:inline-block;position:relative;width:42px;height:24px;flex-shrink:0;vertical-align:middle}
-.sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:1}
-.sw i{position:absolute;inset:0;background:var(--borde-fuerte);border-radius:999px;transition:background .15s}
-.sw i::after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .15s}
-.sw input:checked + i{background:var(--s1)}
-.sw input:checked + i::after{transform:translateX(18px)}
-.sw input:focus-visible + i{outline:2px solid var(--s1);outline-offset:2px}
-.aviso{border:1px solid var(--borde);border-left:3px solid var(--s2);border-radius:8px;
-  padding:11px 14px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px;margin-bottom:16px}
-.aviso b{color:var(--tinta)}
-.res{margin-top:12px;padding:11px 13px;border-radius:8px;border:1px solid var(--borde);background:var(--fondo);font-size:13px}
-.res.alto{border-color:var(--grave);color:var(--grave)}
-.res.ok{border-color:var(--bien);color:var(--bien)}
-.kpi4{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-.kpi4 .k{border:1px solid var(--borde);border-radius:10px;padding:10px 12px;background:var(--fondo)}
-.kpi4 .k .e{font-size:11.5px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
-.kpi4 .k .v{font-size:20px;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums}
-.kpi4 .k .n{font-size:11.5px;color:var(--tinta-3)}
-dialog{border:1px solid var(--borde);border-radius:14px;background:var(--tarjeta);color:var(--tinta);
-  padding:0;max-width:720px;width:calc(100% - 32px);box-shadow:0 10px 50px rgba(0,0,0,.3)}
-dialog::backdrop{background:rgba(0,0,0,.45)}
-dialog .cab{padding:16px 20px 0}
-dialog .cue{padding:12px 20px 20px;max-height:min(70dvh,620px);overflow:auto}
-dialog h3{margin:0 0 3px;font-size:17px}
-.sep{margin:18px 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--tinta-3);
-  border-top:1px solid var(--borde);padding-top:13px}
-.sep:first-child{border-top:0;margin-top:4px;padding-top:0}
-footer{max-width:1240px;margin:0 auto;padding:0 16px 40px;color:var(--tinta-3);font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:1px 8px;border-radius:999px;border:1px solid;white-space:nowrap}
+.pill.b{color:var(--bien);border-color:var(--bien)}
+.pill.a{color:var(--grave);border-color:var(--grave)}
+.pill.c{color:var(--critico);border-color:var(--critico)}
+.pill.g{color:var(--tinta-3);border-color:var(--borde-fuerte)}
+.cond{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:var(--tinta-2)}
+.vacio{color:var(--tinta-3);font-size:13.5px;padding:8px 0}
+.enlace{font:inherit;font-size:12.5px;color:var(--critico);background:transparent;border:0;border-bottom:1px dotted;cursor:pointer;padding:0}
+.enlace.neutro{color:var(--tinta-2)}
+dialog{
+  border:1px solid var(--borde);border-radius:14px;background:var(--tarjeta);color:var(--tinta);
+  padding:0;width:min(600px,calc(100% - 24px));box-shadow:0 10px 40px rgba(0,0,0,.25)
+}
+dialog::backdrop{background:rgba(0,0,0,.35)}
+dialog h2{font-size:16px;margin:0;padding:16px 18px 2px}
+dialog .sub{font-size:12.5px;color:var(--tinta-2);margin:0;padding:0 18px 12px}
+dialog .cuerpo{padding:0 18px 4px;max-height:70dvh;overflow-y:auto}
+dialog footer{display:flex;gap:8px;justify-content:flex-end;padding:14px 18px;border-top:1px solid var(--borde);margin-top:12px}
+label{display:block;font-size:13px;font-weight:500;margin:0 0 5px}
+.campo{margin-bottom:14px}
+.fila{display:flex;gap:10px;flex-wrap:wrap}
+.fila>.campo{flex:1;min-width:150px}
+input,select,textarea{
+  width:100%;padding:8px 10px;font:inherit;font-size:14px;color:var(--tinta);
+  background:var(--fondo);border:1px solid var(--borde-fuerte);border-radius:8px
+}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--s1);outline-offset:1px;border-color:var(--s1)}
+.marcas{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 14px;font-size:13.5px;color:var(--tinta-2)}
+.marcas label{display:flex;align-items:center;gap:7px;font-weight:400;margin:0}
+.marcas input{width:auto;flex-shrink:0}
+.marcas label.fuera{color:var(--tinta-3)}
+.marcas label.fuera span{text-decoration:line-through}
+.marcas .porque{font-size:11.5px;color:var(--tinta-3);text-decoration:none}
+.pista{font-size:12px;color:var(--tinta-3);margin:4px 0 0}
+.pista.mal{color:var(--grave)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--fondo);border:1px solid var(--borde);border-radius:10px;padding:11px 13px}
+.kpi .et{font-size:12px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
+.kpi .vl{font-size:22px;font-weight:650;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .nt{font-size:12px;color:var(--tinta-3);margin-top:2px}
+@media (max-width:640px){
+  .tabla table,.tabla tbody,.tabla tr,.tabla td{display:block;width:100%}
+  .tabla thead{display:none}
+  .tabla tr{border-bottom:1px solid var(--borde);padding:10px 0}
+  .tabla tr:last-child{border-bottom:0}
+  .tabla td{border:0;padding:3px 0}
+  .tabla td.n{text-align:left;padding-top:8px}
+  .tabla td[data-et]:not(:empty)::before{content:attr(data-et) " · ";color:var(--tinta-3);font-size:12px}
+}
+footer.pie{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+#cargando{padding:40px 0;color:var(--tinta-2)}
 </style>
 </head>
 <body>
-
-<!-- ============ ACCESO ============ -->
-<div id="acceso">
-  <form class="caja" id="fLogin" autocomplete="off">
-    <div class="logo">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3" fill="#2a78d6"/><path d="M4 11V5h2v6zm3 0V7h2v4zm3 0V3h2v8z" fill="white"/></svg>
-      <b>digivend</b>
+<div class="env">
+  <header class="top">
+    <div class="marca"><b>Consola</b><span id="quien"></span></div>
+    <div class="acciones">
+      <button class="btn" id="bPanel" type="button">Panel</button>
+      <button class="btn" id="bAvisos" type="button">Avisos</button>
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn" id="bSalir" type="button">Salir</button>
     </div>
-    <h1>Consola de servicio · Serunion Vending</h1>
+  </header>
 
-    <label class="campo"><span>Usuario o correo</span>
-      <input type="text" id="usr" required autocapitalize="off" spellcheck="false"></label>
-    <label class="campo"><span>Contraseña</span>
-      <input type="password" id="pwd" required></label>
-    <button class="pri" type="submit">Entrar</button>
-    <p class="err" id="errLogin" role="alert"></p>
+  <div class="pestanas" id="pestanas" hidden></div>
+  <div id="cargando">Cargando…</div>
+  <div class="nota mal" id="error" hidden></div>
+  <div id="vista"></div>
 
-    <div class="demo">
-      <b>Prototipo.</b> Esta pantalla <b>no valida contraseñas de verdad</b>: en producción el acceso
-      lo lleva Cognito y esta página nunca ve la contraseña. Aquí sirve para recorrer el flujo.<br><br>
-      Entra con <code>admin</code>, <code>operaciones</code> o <code>airbus</code> y cualquier contraseña.
-    </div>
-  </form>
+  <footer class="pie">Todo se sirve desde este dominio. Esta página no llama a ningún sitio externo.</footer>
 </div>
 
-<!-- ============ CONSOLA ============ -->
-<div id="app">
-  <header class="barra">
-    <div class="in">
-      <div class="logo"><svg viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3" fill="#2a78d6"/><path d="M4 11V5h2v6zm3 0V7h2v4zm3 0V3h2v8z" fill="white"/></svg><b style="font-size:17px">digivend</b></div>
-      <div class="quien">
-        <span id="quien"></span><span class="rol" id="rolTxt"></span>
-        <button class="btn" id="bTema" type="button">Oscuro</button>
-        <button class="btn" id="bSalir" type="button">Salir</button>
+<dialog id="dlg"><form method="dialog" id="form">
+  <h2 id="dlgTitulo"></h2>
+  <p class="sub" id="dlgSub"></p>
+  <div class="cuerpo" id="dlgCuerpo"></div>
+  <footer>
+    <button class="btn" type="button" id="bCancelar">Cancelar</button>
+    <button class="btn fuerte" type="submit" id="bGuardar">Guardar</button>
+  </footer>
+</form></dialog>
+
+<script src="/comun/periodos.js"></script>
+<script>
+/* ===================================================================
+   Consola de administración · digivend.es
+
+   Todo lo que se ve aquí sale de /api/admin/*, y el servidor comprueba en cada
+   ruta que quien llama es administrador. Esta página no decide nada: si alguien
+   la abre sin serlo, no es que no vea los botones — es que las rutas le
+   contestan 403.
+
+   Y no lleva copiadas las reglas del modelo de permisos. El techo de cada tipo
+   de perfil, el tipo mínimo de cada sesión y lo que cada tipo trae puesto los
+   manda la API en /api/admin/perfiles. Una copia aquí se quedaría vieja el día
+   que cambie autorizacion.py, y el síntoma sería un administrador marcando una
+   casilla que no hace nada.
+   =================================================================== */
+const CLAVE_TEMA = "digivend.tema";
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num = n => new Intl.NumberFormat("es-ES").format(n||0);
+const eur = n => new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n||0);
+
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = $("#bTema");
+  const oscuro = () => document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const pinta = () => { b.textContent = oscuro() ? "Modo claro" : "Modo oscuro"; };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const n = oscuro() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+  });
+})();
+$("#bPanel").addEventListener("click", ()=>{ location.href="/panel/"; });
+$("#bAvisos").addEventListener("click", ()=>{ location.href="/avisos/"; });
+$("#bSalir").addEventListener("click", async ()=>{
+  try{ await fetch("/api/salir", {method:"POST", credentials:"same-origin"}); }catch(e){}
+  location.href = "/";
+});
+
+/* ---------- llamadas ---------- */
+async function api(metodo, ruta, cuerpo){
+  const o = {method: metodo, credentials: "same-origin"};
+  if(cuerpo !== undefined){ o.headers = {"content-type":"application/json"}; o.body = JSON.stringify(cuerpo); }
+  const r = await fetch(ruta, o);
+  if(r.status === 401){ location.href = "/"; throw new Error("sin sesion"); }
+  let d = {};
+  try{ d = await r.json(); }catch(e){}
+  if(!r.ok) throw new Error(d.error || `Error ${r.status}`);
+  return d;
+}
+function avisa(t, bien){
+  const e=$("#error"); e.textContent=t; e.hidden=false;
+  e.className = "nota " + (bien ? "bien" : "mal");
+  clearTimeout(window._av); window._av = setTimeout(()=>{ e.hidden = true; }, 6000);
+}
+
+/* ---------- estado ---------- */
+let YO=null, USUARIOS=[], PERFILES=[], SESIONES={}, TECHO={}, NIVELES={}, IMPLICITOS={},
+    CONFIG={}, TELEFONOS=[], COLA=[], CARGA=null, SECCION="usuarios", guardando=null;
+/* El histórico: la serie diaria del perfil de la sesión y lo último que se
+   sumó. Se queda en memoria para que volver a esta pestaña no vuelva a pedirlo. */
+let SERIE=null, SELECTOR=null, SUMA=null, RANGO=null, LUGAR={sel:{}, quiere:null, etiqueta:""};
+
+const SECCIONES = [
+  ["usuarios",  "Usuarios"],
+  ["perfiles",  "Perfiles"],
+  ["plataforma","Plataforma"],
+  ["telefonos", "Teléfonos"],
+  ["carga",     "Carga"],
+  ["historico", "Histórico"],
+  ["cola",      "Cola de acciones"],
+];
+
+/* El nombre del tipo tal y como se lee, no como se llama la clave. */
+const NOMBRE_TIPO = {cliente:"cliente", operaciones:"operaciones", direccion:"dirección", admin:"administrador"};
+const tipoLegible = t => NOMBRE_TIPO[t] || t;
+
+function nombrePerfil(id){
+  const p = PERFILES.find(x=>x._id===id);
+  return p ? (p.nombre || id) : id;
+}
+function cuando(iso){
+  if(!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? String(iso)
+    : d.toLocaleString("es-ES",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+}
+
+/* ================= usuarios ================= */
+function vistaUsuarios(){
+  const filas = USUARIOS.map(u=>`<tr>
+    <td><b>${esc(u.nombre||"—")}</b><br><span class="cond">${esc(u._id)}</span></td>
+    <td data-et="Perfil">${esc(nombrePerfil(u.perfil_id))}</td>
+    <td data-et="Estado">${u.estado==="bloqueado"
+      ? `<span class="pill c">bloqueado</span>` : `<span class="pill b">activo</span>`}</td>
+    <td data-et="Asistente">${u.asistente===false ? `<span class="pill g">no</span>` : "sí"}
+      ${u.limite_preguntas_dia ? `<br><span class="cond">${num(u.limite_preguntas_dia)}/día</span>` : ""}</td>
+    <td class="n">
+      <button class="btn" data-ed="${esc(u._id)}">Editar</button>
+      <button class="enlace neutro" data-cl="${esc(u._id)}">Nueva contraseña</button>
+      <button class="enlace" data-bo="${esc(u._id)}">Borrar</button></td>
+  </tr>`).join("");
+  return `<section class="caja">
+    <div class="cabsec"><h2>Usuarios</h2>
+      <button class="btn fuerte" id="bNuevoUsuario" type="button">Nuevo usuario</button></div>
+    <p class="sub">${USUARIOS.length} de alta. La contraseña inicial la entregas tú: el usuario tiene que cambiarla al entrar.</p>
+    ${USUARIOS.length ? `<div class="tabla"><table>
+      <thead><tr><th>Quién</th><th>Perfil</th><th>Estado</th><th>Asistente</th><th></th></tr></thead>
+      <tbody>${filas}</tbody></table></div>`
+     : `<p class="vacio">Todavía no hay ningún usuario además de ti.</p>`}
+  </section>`;
+}
+
+function formUsuario(correo){
+  const u = correo ? USUARIOS.find(x=>x._id===correo) : null;
+  abreDlg(u ? "Editar usuario" : "Nuevo usuario",
+    u ? "El correo no se cambia: es la identidad de la cuenta en Cognito."
+      : "Se crea en Cognito con la contraseña que pongas, de un solo uso.",
+    `<div class="campo">
+       <label for="fNombre">Nombre</label>
+       <input id="fNombre" required maxlength="80" value="${esc(u?u.nombre:"")}">
+     </div>
+     <div class="campo">
+       <label for="fCorreo">Correo</label>
+       <input id="fCorreo" type="email" required ${u?"disabled":""} value="${esc(u?u._id:"")}">
+     </div>
+     ${u ? "" : `<div class="campo">
+       <label for="fClave">Contraseña inicial</label>
+       <input id="fClave" type="text" required minlength="12" autocomplete="off">
+       <p class="pista">Doce caracteres como mínimo, con mayúscula, minúscula y número. Apúntala: se la tienes que dar tú.</p>
+     </div>`}
+     <div class="campo">
+       <label for="fPerfil">Perfil</label>
+       <select id="fPerfil" required>${PERFILES.map(p=>
+         `<option value="${esc(p._id)}" ${u&&u.perfil_id===p._id?"selected":""}>${esc(p.nombre||p._id)} · ${esc(tipoLegible(p.tipo||""))}</option>`).join("")}</select>
+     </div>
+     <div class="fila">
+       <div class="campo">
+         <label for="fEstado">Estado</label>
+         <select id="fEstado">
+           <option value="activo" ${u&&u.estado==="bloqueado"?"":"selected"}>Activo</option>
+           <option value="bloqueado" ${u&&u.estado==="bloqueado"?"selected":""}>Bloqueado</option>
+         </select>
+         <p class="pista">Bloquear corta la sesión abierta en la siguiente llamada.</p>
+       </div>
+       <div class="campo">
+         <label for="fLimite">Preguntas al asistente por día</label>
+         <input id="fLimite" type="number" min="0" value="${u&&u.limite_preguntas_dia?u.limite_preguntas_dia:0}">
+         <p class="pista">0 = el límite general de la plataforma.</p>
+       </div>
+     </div>
+     <div class="campo">
+       <label for="fTelefono">Teléfono</label>
+       <input id="fTelefono" maxlength="30" placeholder="+34600000000" value="${esc(u&&u.telefono||"")}">
+     </div>
+     <div class="campo"><div class="marcas">
+       <label><input type="checkbox" id="fAsistente" ${u&&u.asistente===false?"":"checked"}> <span>Puede usar el asistente</span></label>
+     </div><p class="pista">Aun así hace falta que el perfil lo tenga y que esté encendido para la plataforma.</p></div>`,
+    async ()=>{
+      const cuerpo = {
+        correo: u ? u._id : $("#fCorreo").value.trim().toLowerCase(),
+        nombre: $("#fNombre").value.trim(),
+        perfil_id: $("#fPerfil").value,
+        estado: $("#fEstado").value,
+        asistente: $("#fAsistente").checked,
+        limite_preguntas_dia: Number($("#fLimite").value)||0,
+        telefono: $("#fTelefono").value.trim(),
+      };
+      if(!u) cuerpo.clave = $("#fClave").value;
+      const res = await api("POST","/api/admin/usuarios",cuerpo);
+      avisa(res.nuevo ? "Usuario creado. Dale la contraseña y que la cambie al entrar."
+                      : "Usuario guardado.", true);
+      await carga();
+    });
+}
+
+function nuevaClave(correo){
+  abreDlg("Nueva contraseña", `Para ${correo}. Es de un solo uso: la cambiará al entrar.`,
+    `<div class="campo">
+       <label for="fClave2">Contraseña</label>
+       <input id="fClave2" type="text" required minlength="12" autocomplete="off">
+       <p class="pista">Doce caracteres, con mayúscula, minúscula y número.</p>
+     </div>`,
+    async ()=>{
+      await api("POST", `/api/admin/usuarios/${encodeURIComponent(correo)}/clave`, {clave: $("#fClave2").value});
+      avisa("Contraseña cambiada. Entrégasela y que la cambie al entrar.", true);
+    });
+}
+
+/* ================= perfiles ================= */
+function vistaPerfiles(){
+  const filas = PERFILES.map(p=>{
+    const amb = p.ambito || {};
+    const trozos = [];
+    if((amb.clientes||[]).length) trozos.push("clientes: " + amb.clientes.join(", "));
+    if((amb.centros||[]).length) trozos.push("centros: " + amb.centros.length);
+    if((amb.delegaciones||[]).length) trozos.push("delegaciones: " + amb.delegaciones.join(", "));
+    const cuantos = USUARIOS.filter(u=>u.perfil_id===p._id).length;
+    /* Los agregados calculan cada noche el panel de todo perfil de aquí que
+       tenga ámbito, sumado a lo que diga config/perfiles.json. Un perfil sin
+       ámbito no se calcula: «todo el parque» sólo se declara en ese fichero. */
+    const pan = p.panel || {};
+    const panel = pan.existe
+      ? `<span class="pill b">calculado</span><br><span class="cond">${esc(cuando(pan.calculado))}</span>`
+      : `<span class="pill c">sin panel</span>`;
+    return `<tr>
+      <td><b>${esc(p.nombre||p._id)}</b><br><span class="cond">${esc(p._id)}</span></td>
+      <td data-et="Tipo">${esc(tipoLegible(p.tipo||"cliente"))}</td>
+      <td data-et="Ámbito"><span class="cond">${esc(trozos.join(" · ") || (pan.existe ? "todo (interno)" : "sin ámbito: no se calcula"))}</span></td>
+      <td data-et="Sesiones" class="n">${num((p.sesiones||[]).length)}</td>
+      <td data-et="Usuarios" class="n">${num(cuantos)}</td>
+      <td data-et="Panel">${panel}</td>
+      <td class="n">
+        <button class="btn" data-ed="${esc(p._id)}">Editar</button>
+        ${cuantos ? "" : `<button class="enlace" data-bo="${esc(p._id)}">Borrar</button>`}</td>
+    </tr>`;
+  }).join("");
+  return `<section class="caja">
+    <div class="cabsec"><h2>Perfiles</h2>
+      <button class="btn fuerte" id="bNuevoPerfil" type="button">Nuevo perfil</button></div>
+    <p class="sub">El perfil decide <b>qué datos</b> (el ámbito) y <b>qué pantallas</b> (las sesiones). Un perfil con usuarios no se puede borrar.</p>
+    ${PERFILES.some(p=>!(p.panel||{}).existe) ? `<div class="nota mal">
+      Hay perfiles <b>sin panel calculado</b>. Un perfil con ámbito (clientes, centros o
+      delegaciones) se calcula solo esa noche, a las 4:45; hasta entonces sus usuarios entran a una
+      pantalla que dice que todavía no hay datos. Un perfil <b>sin ámbito</b> no se calcula nunca:
+      ponle de qué cliente o centros es.</div>` : ""}
+    ${PERFILES.length ? `<div class="tabla"><table>
+      <thead><tr><th>Perfil</th><th>Tipo</th><th>Ámbito</th><th class="n">Sesiones</th><th class="n">Usuarios</th><th>Panel</th><th></th></tr></thead>
+      <tbody>${filas}</tbody></table></div>` : `<p class="vacio">No hay ningún perfil.</p>`}
+  </section>`;
+}
+
+function formPerfil(pid){
+  const p = pid ? PERFILES.find(x=>x._id===pid) : null;
+  const tipo0 = p ? (p.tipo||"cliente") : "cliente";
+  const amb = (p && p.ambito) || {};
+  const html = `
+    <div class="fila">
+      <div class="campo">
+        <label for="fPid">Identificador</label>
+        <input id="fPid" required maxlength="40" pattern="[a-z0-9-]+" ${p?"disabled":""} value="${esc(p?p._id:"")}" placeholder="cli-airbus">
+        <p class="pista">Minúsculas y guiones. No se cambia después: es el nombre de la carpeta de su panel.</p>
+      </div>
+      <div class="campo">
+        <label for="fNombreP">Nombre</label>
+        <input id="fNombreP" required maxlength="80" value="${esc(p?(p.nombre||""):"")}" placeholder="AIRBUS">
       </div>
     </div>
-    <nav class="tabs" id="tabs" role="tablist"></nav>
-  </header>
-  <main id="vistas"></main>
-  <footer>Todo se sirve desde digivend.es. Esta consola no llama a ningún dominio externo.</footer>
-</div>
-
-<dialog id="dlg"><div class="cab"><h3 id="dlgTit"></h3><p class="sub" id="dlgSub" style="color:var(--tinta-2);font-size:12.5px;margin:2px 0 0"></p></div><div class="cue" id="dlgCue"></div></dialog>
-
-<script>
-/* ======================================================================
-   digivend · consola de administración  (prototipo sobre datos de prueba)
-   Nada sale de este dominio: la configuración vive en el navegador y en
-   producción pasa a DynamoDB a través de /api, del mismo origen.
-   ====================================================================== */
-const CLAVE = "digivend.config";
-const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const num = n => new Intl.NumberFormat("es-ES").format(n);
-const hoy = () => new Date().toISOString().slice(0,10);
-function leer(k){ try{return localStorage.getItem(k)}catch(e){return null} }
-function escribir(k,v){ try{localStorage.setItem(k,v)}catch(e){} }
-
-/* ---------- tema ---------- */
-(function(){
-  const t=leer("digivend.tema"); if(t) document.documentElement.setAttribute("data-theme",t);
-})();
-
-/* ---------- configuración de partida ---------- */
-const SESIONES = [
-  {id:"resumen",        n:"Resumen",                     p:"cliente"},
-  {id:"venta_consumo",  n:"Venta y consumo",             p:"cliente"},
-  {id:"servicio",       n:"Servicio recibido",           p:"cliente"},
-  {id:"disponibilidad", n:"Disponibilidad",              p:"cliente"},
-  {id:"surtido",        n:"Surtido y planograma",        p:"cliente"},
-  {id:"calidad",        n:"Calidad y seguridad alimentaria", p:"cliente"},
-  {id:"rutas",          n:"Rutas y jornada",             p:"operaciones"},
-  {id:"recaudacion",    n:"Recaudación y efectivo",      p:"operaciones"},
-  {id:"stock",          n:"Stock y merma",               p:"operaciones"},
-  {id:"avisos",         n:"Avisos y acciones",           p:"operaciones"},
-  {id:"rentabilidad",   n:"Rentabilidad",                p:"direccion"},
-  {id:"cumplimiento",   n:"Cumplimiento",                p:"direccion"}
-];
-const FUENTES = {
-  jornadas:    {n:"Jornadas de ruta", campos:{temperatura_inicio:["Temperatura al arrancar","°C"], duracion:["Duración de la jornada","h"], km:["Kilómetros","km"]}},
-  visitas:     {n:"Visitas",          campos:{duracion_min:["Duración de la visita","min"], dias_sin_visita:["Días sin visita","d"], dias_sin_inventario:["Días desde el último inventario","d"]}},
-  recaudacion: {n:"Recaudación",      campos:{efectivo_sin_lectura:["Bolsas sin dato electrónico","%"], efectivo_ciego_mes:["Efectivo sin telemetría","€/mes"], dias_sin_contar:["Días desde la recogida sin contar","d"]}},
-  stock:       {n:"Stock y merma",    campos:{caducidad_mes:["Caducidad del periodo","€"], cambio_tubos:["Cambio parado en tubos","€"], articulos_sin_coste:["Artículos cargados sin coste",""]}},
-  sat:         {n:"SAT",              campos:{incidencias_30d:["Incidencias en 30 días",""], horas_abierta:["Horas con la avería abierta","h"], devoluciones_30d:["Devoluciones en 30 días",""]}},
-  telemetria:  {n:"Telemetría",       campos:{horas_sin_venta:["Horas sin venta","h"], venta_mes:["Venta mensual","€"]}}
-};
-const AGRUPAR = ["maquina","vehiculo","ruta","centro","delegacion","articulo"];
-const CANALES = [["bandeja","Sólo bandeja"],["correo","Correo"],["whatsapp","WhatsApp"]];
-const ROLES_AVISO = [["responsableven","Responsable de vending"],["responsablesat","Responsable de SAT"],["calidad","Calidad"],["supervisor","Supervisor de delegación"]];
-
-function configInicial(){ return {
-  clientes: [
-    {id:"airbus", n:"AIRBUS", centros:["AIRBUS GETAFE","AIRBUS SAN PABLO SUR","AIRBUS SAN PABLO NORTE","AIRBUS TABLADA","AIRBUS CBC","AIRBUS ILLESCAS","AIRBUS ITC","AIRBUS ALBACETE","AIRBUS ALBACETE (Parque Científico)"]},
-    {id:"consum", n:"CONSUM", centros:["CONSUM MURCIA"]}
-  ],
-  delegaciones: ["Madrid - Leganés","Cataluña - Cornellà","Levante - Murcia","Andalucía - Sevilla","Levante - Valencia","Norte - Bilbao","Madrid - Hospital La Paz","Andalucía - Málaga"],
-  perfiles: [
-    {id:"cli-airbus", n:"AIRBUS", tipo:"cliente",
-     ambito:{clientes:["airbus"],centros:[],delegaciones:[]},
-     sesiones:["resumen","venta_consumo","disponibilidad","surtido"],
-     umbrales:{rentabilidad_mes:350},
-     permisos:{reordenar:true,exportar:true,asistente:true,whatsapp:false,incidencia:false}},
-    {id:"ope-nacional", n:"Operaciones nacional", tipo:"operaciones",
-     ambito:{clientes:[],centros:[],delegaciones:[]},
-     sesiones:["resumen","venta_consumo","servicio","disponibilidad","surtido","calidad","rutas","recaudacion","stock","avisos"],
-     umbrales:{rentabilidad_mes:350},
-     permisos:{reordenar:true,exportar:true,asistente:true,whatsapp:true,incidencia:true}}
-  ],
-  usuarios: [
-    {id:"u1", n:"Gabriele Signorato", correo:"admin", perfil:"-", tipo:"admin",   alta:"2026-09-01", activo:true, asistente:true},
-    {id:"u2", n:"Operaciones",        correo:"operaciones", perfil:"ope-nacional", tipo:"operaciones", alta:"2026-09-15", activo:true, asistente:true},
-    {id:"u3", n:"Contacto AIRBUS",    correo:"airbus", perfil:"cli-airbus", tipo:"cliente", alta:"2026-10-01", activo:true, asistente:true}
-  ],
-  alarmas: [
-    {id:"frio",      n:"Frío del vehículo",            activa:true,  sev:"critica", fuente:"jornadas",    campo:"temperatura_inicio", op:">",  umbral:8,    agr:"vehiculo", ventana:"dia",  silencio:24,
-     dest:[{t:"rol",v:"supervisor",c:"whatsapp"},{t:"rol",v:"calidad",c:"correo"}],
-     asunto:"Cadena de frío: {{elemento}} arrancó a {{valor}} °C",
-     cuerpo:"El vehículo {{elemento}} de la ruta {{ruta}} inició jornada el {{fecha}} con el frigorífico a {{valor}} °C, por encima del umbral de {{umbral}} °C. Reponedor: {{empleado}}.", medido:115, base:1288, uni:"jornadas"},
-    {id:"bolsa",     n:"Bolsa sin dato electrónico",   activa:true,  sev:"alta",    fuente:"recaudacion", campo:"efectivo_sin_lectura", op:">", umbral:50, agr:"ruta",     ventana:"semana", silencio:168,
-     dest:[{t:"rol",v:"responsableven",c:"correo"}],
-     asunto:"Recaudación sin lectura en {{elemento}}",
-     cuerpo:"En {{elemento}} el {{valor}} % de las bolsas de la semana se cerró sin volcar la máquina.", medido:93, base:100, uni:"% de bolsas"},
-    {id:"reincidente",n:"Máquina reincidente",         activa:true,  sev:"alta",    fuente:"sat",         campo:"incidencias_30d", op:">=", umbral:5,  agr:"maquina",  ventana:"mes", silencio:168,
-     dest:[{t:"rol",v:"responsablesat",c:"whatsapp"}],
-     asunto:"{{elemento}}: {{valor}} incidencias en 30 días",
-     cuerpo:"La máquina {{elemento}} del centro {{centro}} acumula {{valor}} incidencias en los últimos 30 días.", medido:1317, base:2722, uni:"máquinas"},
-    {id:"inventario",n:"Inventario de máquina caducado",activa:true, sev:"media",   fuente:"visitas",     campo:"dias_sin_inventario", op:">", umbral:90, agr:"delegacion", ventana:"mes", silencio:720,
-     dest:[{t:"rol",v:"supervisor",c:"correo"}],
-     asunto:"Inventario fuera de norma en {{elemento}}",
-     cuerpo:"{{valor}} máquinas de {{elemento}} llevan más de {{umbral}} días sin inventario.", medido:2925, base:3200, uni:"máquinas"},
-    {id:"muda",      n:"Máquina muda",                 activa:false, sev:"alta",    fuente:"telemetria",  campo:"horas_sin_venta", op:">", umbral:48, agr:"maquina", ventana:"dia", silencio:24,
-     dest:[{t:"rol",v:"responsableven",c:"whatsapp"}],
-     asunto:"{{elemento}} sin ventas desde hace {{valor}} h",
-     cuerpo:"La máquina {{elemento}} de {{centro}} no registra ventas desde hace {{valor}} horas.", medido:61, base:547, uni:"máquinas"}
-  ],
-  telefonos: [
-    {n:"Gerson Eddy Espinoza Moreno", rol:"Reponedor", del:"Cataluña - Cornellà", tel:""},
-    {n:"Miguel Beltran Monzon",       rol:"Reponedor", del:"Levante - Valencia",  tel:""},
-    {n:"Jesús Darío Barea Gómez",     rol:"Técnico SAT", del:"Andalucía - Sevilla", tel:""},
-    {n:"David Gonzalez Pagador",      rol:"Técnico SAT", del:"Andalucía - Sevilla", tel:""}
-  ],
-  plantillas: [
-    {id:"frio_vehiculo_v1", n:"Aviso de cadena de frío", estado:"pendiente"},
-    {id:"maquina_parada_v1", n:"Máquina sin ventas",     estado:"pendiente"},
-    {id:"averia_reincidente_v1", n:"Máquina reincidente", estado:"pendiente"}
-  ],
-  carga: [
-    {t:"partesvisita",            f:"88.000/mes",  e:"ok"},
-    {t:"partesvisitareposiciones",f:"205.000/mes", e:"ok"},
-    {t:"partesvisitaauditmonbil", f:"200.000/mes", e:"ok"},
-    {t:"partesvisitaaudittubos",  f:"305.000/mes", e:"ok"},
-    {t:"partesvisitaventas",      f:"188.000/mes", e:"ok"},
-    {t:"prefacrecauda",           f:"48.000/mes",  e:"ok"},
-    {t:"diarmovmaq",              f:"580.000/mes", e:"ok"},
-    {t:"tareatecnica",            f:"3.400/mes",   e:"ok"},
-    {t:"rutascontrol",            f:"1.500/mes",   e:"ok"}
-  ]
-};}
-
-let C = (()=>{ try{ return JSON.parse(leer(CLAVE)) || configInicial(); }catch(e){ return configInicial(); } })();
-function guarda(){ escribir(CLAVE, JSON.stringify(C)); }
-let SESION = null;
-
-/* ---------- acceso (prototipo) ---------- */
-document.getElementById("fLogin").addEventListener("submit", e=>{
-  e.preventDefault();
-  const u = document.getElementById("usr").value.trim().toLowerCase();
-  const usuario = C.usuarios.find(x => x.correo.toLowerCase()===u && x.activo);
-  const err = document.getElementById("errLogin");
-  if(!usuario){ err.textContent = "No encontramos ese usuario. Prueba con admin, operaciones o airbus."; return; }
-  err.textContent=""; SESION = usuario;
-  document.getElementById("acceso").style.display="none";
-  document.getElementById("app").style.display="block";
-  arranca();
-});
-document.getElementById("bSalir").addEventListener("click", ()=>location.reload());
-document.getElementById("bTema").addEventListener("click", ()=>{
-  const osc = document.documentElement.getAttribute("data-theme")==="dark"
-    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
-  const n = osc?"light":"dark";
-  document.documentElement.setAttribute("data-theme",n); escribir("digivend.tema",n);
-  document.getElementById("bTema").textContent = osc?"Oscuro":"Claro";
-});
-
-/* ---------- diálogo ---------- */
-const dlg=document.getElementById("dlg");
-function abre(tit, sub, html, alGuardar){
-  document.getElementById("dlgTit").textContent=tit;
-  document.getElementById("dlgSub").textContent=sub||"";
-  document.getElementById("dlgCue").innerHTML=html;
-  dlg.showModal();
-  const g=document.getElementById("dlgGuardar");
-  if(g) g.onclick = ()=>{ if(alGuardar()!==false){ dlg.close(); } };
-  const c=document.getElementById("dlgCerrar");
-  if(c) c.onclick = ()=>dlg.close();
+    <div class="campo">
+      <label for="fTipo">Tipo</label>
+      <select id="fTipo">${["cliente","operaciones","direccion","admin"].map(t=>
+        `<option value="${t}" ${tipo0===t?"selected":""}>${esc(tipoLegible(t))}</option>`).join("")}</select>
+      <p class="pista">El tipo es un techo: marca lo que quieras, pero lo que el tipo no permite no se concede.</p>
+    </div>
+    <div class="campo">
+      <label for="fClientes">Ámbito · clientes</label>
+      <input id="fClientes" value="${esc((amb.clientes||[]).join(", "))}" placeholder="AIRBUS">
+      <p class="pista">Separados por comas. Con esto basta: esa noche se le calcula su panel. Vacíos los tres, no se calcula ninguno (el «todo el parque» del interno sólo se da en config/perfiles.json).</p>
+    </div>
+    <div class="fila">
+      <div class="campo">
+        <label for="fCentros">Ámbito · centros</label>
+        <input id="fCentros" value="${esc((amb.centros||[]).join(", "))}">
+      </div>
+      <div class="campo">
+        <label for="fDelegaciones">Ámbito · delegaciones</label>
+        <input id="fDelegaciones" value="${esc((amb.delegaciones||[]).join(", "))}">
+      </div>
+    </div>
+    <div class="campo">
+      <label>Sesiones que ve</label>
+      <div class="marcas" id="cajaSesiones"></div>
+    </div>
+    <div class="campo">
+      <label>Permisos</label>
+      <div class="marcas" id="cajaPermisos"></div>
+    </div>
+    <div class="campo">
+      <label for="fUmbral">Umbral de rentabilidad por máquina</label>
+      <input id="fUmbral" type="number" min="0" step="25"
+             value="${p&&p.reglas_negocio&&p.reglas_negocio.umbral_rentabilidad_mes || ""}"
+             placeholder="${esc(CONFIG.umbral_rentabilidad_mes||350)}">
+      <p class="pista">€/mes. Vacío = el general de la plataforma (${esc(CONFIG.umbral_rentabilidad_mes||350)} €).</p>
+    </div>`;
+  abreDlg(p ? "Editar perfil" : "Nuevo perfil",
+    "El ámbito se aplica al calcular, no al servir: su panel se escribe ya con sus centros y ningún otro.",
+    html, async ()=>{
+      const lista = id => $(id).value.split(",").map(x=>x.trim()).filter(Boolean);
+      const sesiones = [...document.querySelectorAll("#cajaSesiones input:checked")].map(i=>i.value);
+      const permisos = {};
+      document.querySelectorAll("#cajaPermisos input").forEach(i=>{ permisos[i.value] = i.checked; });
+      const umbral = $("#fUmbral").value;
+      const res = await api("POST","/api/admin/perfiles",{
+        perfil_id: p ? p._id : $("#fPid").value.trim(),
+        nombre: $("#fNombreP").value.trim(),
+        tipo: $("#fTipo").value,
+        ambito: {clientes: lista("#fClientes"), centros: lista("#fCentros"), delegaciones: lista("#fDelegaciones")},
+        sesiones, permisos,
+        reglas_negocio: umbral ? {umbral_rentabilidad_mes: Number(umbral)} : {},
+      });
+      avisa(res.ignorados && res.ignorados.length
+        ? `Perfil guardado. Sin efecto en este tipo: ${res.ignorados.join(", ")}.`
+        : "Perfil guardado.", true);
+      await carga();
+    });
+  /* Las casillas se repintan al cambiar el tipo: lo que un cliente no puede
+     tener tiene que verse tachado en el momento, no al guardar. */
+  const repinta = () => pintaCasillas(p);
+  $("#fTipo").addEventListener("change", repinta);
+  repinta();
 }
-const pieDlg = `<div class="acc-fila" style="justify-content:flex-end">
-  <button class="btn" type="button" id="dlgCerrar">Cancelar</button>
-  <button class="btn acc" type="button" id="dlgGuardar">Guardar</button></div>`;
 
-/* ---------- utilidades de formulario ---------- */
-const campo=(et,html)=>`<label class="campo"><span>${esc(et)}</span>${html}</label>`;
-const opts=(lista,sel)=>lista.map(([v,t])=>`<option value="${esc(v)}"${v===sel?" selected":""}>${esc(t)}</option>`).join("");
-const chks=(lista,sel,name)=>lista.map(([v,t,d])=>`<label class="chk"><input type="checkbox" name="${name}" value="${esc(v)}"${sel.includes(v)?" checked":""}><span>${esc(t)}${d?`<small>${esc(d)}</small>`:""}</span></label>`).join("");
-const vals=name=>[...document.querySelectorAll(`[name="${name}"]:checked`)].map(i=>i.value);
-const sevPill=s=>({critica:'<span class="pill cri">Crítica</span>',alta:'<span class="pill alt">Alta</span>',media:'<span class="pill med">Media</span>',baja:'<span class="pill baj">Baja</span>'})[s]||s;
+function pintaCasillas(p){
+  const tipo = $("#fTipo").value;
+  const nivel = NIVELES[tipo] != null ? NIVELES[tipo] : 0;
+  const puestas = new Set(p ? (p.sesiones||[]) : []);
+  $("#cajaSesiones").innerHTML = Object.entries(SESIONES).map(([id,s])=>{
+    const alcanza = (NIVELES[s.minimo] != null ? NIVELES[s.minimo] : 0) <= nivel;
+    return `<label class="${alcanza?"":"fuera"}">
+      <input type="checkbox" value="${esc(id)}" ${puestas.has(id)?"checked":""} ${alcanza?"":"disabled"}>
+      <span>${esc(s.nombre)}</span>${alcanza?"":`<span class="porque">· desde ${esc(tipoLegible(s.minimo))}</span>`}</label>`;
+  }).join("");
 
-/* ======================= VISTAS ======================= */
-const VISTAS = {
+  const techo = new Set(TECHO[tipo] || []);
+  const implicitos = new Set(IMPLICITOS[tipo] || []);
+  const dados = (p && p.permisos) || {};
+  const todos = [...new Set([].concat(...Object.values(TECHO)))].sort();
+  $("#cajaPermisos").innerHTML = todos.map(perm=>{
+    const dentro = techo.has(perm);
+    const marcado = perm in dados ? !!dados[perm] : (dentro && implicitos.has(perm));
+    return `<label class="${dentro?"":"fuera"}">
+      <input type="checkbox" value="${esc(perm)}" ${marcado?"checked":""} ${dentro?"":"disabled"}>
+      <span>${esc(perm)}</span>${dentro
+        ? (implicitos.has(perm) ? `<span class="porque">· de serie</span>` : "")
+        : `<span class="porque">· no en ${esc(tipoLegible(tipo))}</span>`}</label>`;
+  }).join("");
+}
 
-/* ---------------- usuarios ---------------- */
-usuarios(){
-  const perf = id => C.perfiles.find(p=>p.id===id);
-  return `
-  <h2 class="tit">Usuarios</h2>
-  <p class="des">Alta de personas, su perfil y qué pueden ver. El ámbito es múltiple y aditivo: a un
-    usuario se le pueden dar un cliente, unos centros y una delegación a la vez.</p>
-  <div class="panel">
-    <div class="tabla-env"><table>
-      <thead><tr><th>Nombre</th><th>Correo</th><th>Perfil</th><th>Ámbito</th><th>Asistente</th><th>Estado</th><th></th></tr></thead>
-      <tbody>${C.usuarios.map(u=>{
-        const p = perf(u.perfil);
-        const amb = u.tipo==="admin" ? "Todo"
-          : p ? [ ...(p.ambito.clientes.map(c=>(C.clientes.find(x=>x.id===c)||{n:c}).n)),
-                  ...p.ambito.centros, ...p.ambito.delegaciones ].join(" · ") || "Todo" : "—";
-        return `<tr>
-          <td><b>${esc(u.n)}</b></td>
-          <td class="mono">${esc(u.correo)}</td>
-          <td>${u.tipo==="admin"?'<span class="pill baj">Administrador</span>':esc(p?p.n:"—")}</td>
-          <td style="color:var(--tinta-2)">${esc(amb)}</td>
-          <td>${u.asistente?'<span class="pill ok">Activo</span>':'<span class="pill no">Desactivado</span>'}</td>
-          <td>${u.activo?'<span class="pill ok">Alta</span>':'<span class="pill no">Baja</span>'}</td>
-          <td style="text-align:right"><button class="btn" data-edit-u="${esc(u.id)}">Editar</button></td>
-        </tr>`;}).join("")}
-      </tbody></table></div>
-    <div class="acc-fila"><button class="btn acc" id="nuevoU">Crear usuario</button></div>
-  </div>`;
-},
-
-/* ---------------- perfiles ---------------- */
-perfiles(){
-  return `
-  <h2 class="tit">Perfiles</h2>
-  <p class="des">Un perfil define el ámbito, qué sesiones se ven, los umbrales de negocio y los
-    permisos. Los usuarios cuelgan de un perfil, así que un cambio aquí los afecta a todos.</p>
-  ${C.perfiles.map(p=>`
-  <div class="panel">
-    <h3>${esc(p.n)} <span class="pill baj">${esc(p.tipo)}</span></h3>
-    <p class="sub">${p.sesiones.length} sesiones · ámbito:
-      ${esc([...(p.ambito.clientes.map(c=>(C.clientes.find(x=>x.id===c)||{n:c}).n)),...p.ambito.centros,...p.ambito.delegaciones].join(" · ") || "todo")}</p>
-    <div class="kpi4">
-      <div class="k"><div class="e">Umbral rentabilidad</div><div class="v">${num(p.umbrales.rentabilidad_mes)} €</div><div class="n">al mes, por máquina</div></div>
-      <div class="k"><div class="e">Asistente de IA</div><div class="v" style="font-size:16px;padding-top:4px">${p.permisos.asistente?"Habilitado":"Deshabilitado"}</div><div class="n">para este perfil</div></div>
-      <div class="k"><div class="e">WhatsApp</div><div class="v" style="font-size:16px;padding-top:4px">${p.permisos.whatsapp?"Sí":"No"}</div><div class="n">envío de avisos</div></div>
-      <div class="k"><div class="e">Incidencias</div><div class="v" style="font-size:16px;padding-top:4px">${p.permisos.incidencia?"Sí":"No"}</div><div class="n">alta en VenCloud</div></div>
+/* ================= plataforma ================= */
+function vistaPlataforma(){
+  const conA = PERFILES.filter(p=>(p.permisos||{}).asistente || p.tipo==="admin").length;
+  return `<section class="caja">
+    <h2>El asistente</h2>
+    <p class="sub">Tres interruptores en serie, y el de arriba manda: plataforma, perfil y usuario. Si uno está apagado, no se enciende abajo.</p>
+    <div class="campo"><div class="marcas">
+      <label><input type="checkbox" id="cAsistente" ${CONFIG.asistente_global===false?"":"checked"}>
+        <span>Encendido para toda la plataforma</span></label>
+    </div></div>
+    <div class="fila">
+      <div class="campo">
+        <label for="cLimite">Preguntas por usuario y día</label>
+        <input id="cLimite" type="number" min="0" value="${esc(CONFIG.limite_preguntas_dia||0)}">
+        <p class="pista">0 = sin límite. Es lo que corta el gasto si alguien se desboca.</p>
+      </div>
+      <div class="campo">
+        <label for="cUmbral">Umbral de rentabilidad general</label>
+        <input id="cUmbral" type="number" min="0" step="25" value="${esc(CONFIG.umbral_rentabilidad_mes||350)}">
+        <p class="pista">€/mes por máquina. Un perfil puede tener el suyo.</p>
+      </div>
     </div>
-    <div class="acc-fila"><button class="btn" data-edit-p="${esc(p.id)}">Editar perfil</button></div>
-  </div>`).join("")}
-  <div class="panel"><div class="acc-fila"><button class="btn acc" id="nuevoP">Crear perfil</button></div></div>`;
-},
-
-/* ---------------- alarmas ---------------- */
-alarmas(){
-  const act = C.alarmas.filter(a=>a.activa).length;
-  return `
-  <h2 class="tit">Alarmas</h2>
-  <p class="des">Una alarma es una ficha de datos, no código: se crea, se edita, se duplica o se apaga
-    desde aquí. Cada destinatario elige su canal.</p>
-  <div class="aviso"><b>Antes de activar una alarma, pruébala.</b> El botón «Probar» la evalúa contra
-    el último día cargado y dice cuántas veces habría disparado. Un umbral mal puesto son cien
-    WhatsApps a la mañana siguiente.</div>
-  <div class="panel">
-    <h3>${act} de ${C.alarmas.length} activas</h3>
-    <p class="sub">Ordenadas por severidad.</p>
-    <div class="tabla-env"><table>
-      <thead><tr><th>Alarma</th><th>Severidad</th><th>Condición</th><th>Avisa a</th><th>Activa</th><th></th></tr></thead>
-      <tbody>${[...C.alarmas].sort((a,b)=>["critica","alta","media","baja"].indexOf(a.sev)-["critica","alta","media","baja"].indexOf(b.sev)).map(a=>{
-        const f=FUENTES[a.fuente], c=f&&f.campos[a.campo];
-        return `<tr>
-          <td><b>${esc(a.n)}</b><br><small style="color:var(--tinta-3)">por ${esc(a.agr)} · ${esc(a.ventana)} · silencio ${a.silencio} h</small></td>
-          <td>${sevPill(a.sev)}</td>
-          <td style="color:var(--tinta-2)">${esc(c?c[0]:a.campo)} ${esc(a.op)} ${num(a.umbral)} ${esc(c?c[1]:"")}</td>
-          <td style="color:var(--tinta-2)">${a.dest.map(d=>{
-              const r=ROLES_AVISO.find(x=>x[0]===d.v);
-              return esc((r?r[1]:d.v)+" ("+(CANALES.find(x=>x[0]===d.c)||["","—"])[1].toLowerCase()+")");
-            }).join("<br>")}</td>
-          <td><label class="sw"><input type="checkbox" data-tog="${esc(a.id)}"${a.activa?" checked":""} aria-label="Activar ${esc(a.n)}"><i></i></label></td>
-          <td style="text-align:right;white-space:nowrap">
-            <button class="btn" data-probar="${esc(a.id)}">Probar</button>
-            <button class="btn" data-edit-a="${esc(a.id)}">Editar</button></td>
-        </tr>`;}).join("")}
-      </tbody></table></div>
-    <div id="resProbar"></div>
-    <div class="acc-fila"><button class="btn acc" id="nuevaA">Crear alarma</button></div>
-  </div>`;
-},
-
-/* ---------------- asistente ---------------- */
-asistente(){
-  const global = C.asistente_global !== false;
-  return `
-  <h2 class="tit">Asistente de IA</h2>
-  <p class="des">Responde preguntas sobre el cuadro de mando. Se habilita por perfil y por usuario, y
-    puede apagarse de golpe para toda la plataforma.</p>
-
-  <div class="panel">
-    <div class="inter">
-      <div class="tx"><b>Asistente habilitado en toda la plataforma</b>
-        <small>Si se apaga aquí, nadie lo ve, tenga el permiso que tenga.</small></div>
-      <label class="sw"><input type="checkbox" id="togGlobal"${global?" checked":""} aria-label="Asistente en toda la plataforma"><i></i></label>
-    </div>
-    <div class="inter">
-      <div class="tx"><b>Modelo</b><small>Claude Opus 5.5, unos 2 céntimos por pregunta.</small></div>
-      <span class="mono" style="color:var(--tinta-2)">claude-opus-5-5</span>
-    </div>
-    <div class="inter">
-      <div class="tx"><b>Límite por usuario y día</b><small>Corta el gasto si alguien se desboca.</small></div>
-      <input type="number" id="limAsist" value="${C.asistente_limite||50}" min="0" step="10" style="width:110px">
-    </div>
-  </div>
-
-  <div class="dos">
-    <div class="panel">
-      <h3>Por perfil</h3>
-      <p class="sub">Quién lo tiene disponible.</p>
-      ${C.perfiles.map(p=>`<div class="inter"><div class="tx"><b>${esc(p.n)}</b><small>${esc(p.tipo)}</small></div>
-        <label class="sw"><input type="checkbox" data-asist-p="${esc(p.id)}"${p.permisos.asistente?" checked":""} aria-label="Asistente para ${esc(p.n)}"><i></i></label></div>`).join("")}
-    </div>
-    <div class="panel">
-      <h3>Por usuario</h3>
-      <p class="sub">Excepciones sobre lo que dice el perfil.</p>
-      ${C.usuarios.map(u=>`<div class="inter"><div class="tx"><b>${esc(u.n)}</b><small>${esc(u.correo)}</small></div>
-        <label class="sw"><input type="checkbox" data-asist-u="${esc(u.id)}"${u.asistente?" checked":""} aria-label="Asistente para ${esc(u.n)}"><i></i></label></div>`).join("")}
-    </div>
-  </div>
-
-  <div class="panel">
-    <h3>Lo que el asistente no hace</h3>
-    <p class="sub">Fijo, no configurable. Está así a propósito.</p>
-    <ul style="margin:0;padding-left:20px;color:var(--tinta-2);font-size:13.5px;line-height:1.75">
-      <li>No consulta la base de datos: recibe funciones que la Lambda ya ha filtrado por el ámbito del usuario.</li>
-      <li>No da una cifra que no le haya devuelto una de esas funciones. Si no la tiene, lo dice.</li>
-      <li>No escribe en VenCloud ni envía mensajes por su cuenta.</li>
-      <li>No entra en devoluciones, que llevan nombre y DNI.</li>
-      <li>No opina sobre personas.</li>
+    <p class="pista">${num(conA)} perfil(es) lo tienen concedido.</p>
+    <div style="margin-top:12px"><button class="btn fuerte" id="bGuardaConfig" type="button">Guardar</button></div>
+  </section>
+  <section class="caja">
+    <h2>Lo que el asistente no hace</h2>
+    <p class="sub">No es configurable, y conviene saberlo antes de enseñárselo a un cliente.</p>
+    <ul style="margin:0;padding-left:20px;color:var(--tinta-2);font-size:13.5px">
+      <li>No consulta VenCloud ni lee nada por su cuenta: recibe el <b>mismo panel recortado</b> que el navegador de quien pregunta.</li>
+      <li>No ejecuta acciones. No manda WhatsApp ni abre incidencias.</li>
+      <li>No habla de centros fuera del ámbito del perfil, porque no los tiene.</li>
+      <li>No estima ni completa: si el dato no está, lo dice.</li>
     </ul>
-  </div>`;
-},
+  </section>`;
+}
 
-/* ---------------- teléfonos ---------------- */
-telefonos(){
-  return `
-  <h2 class="tit">Teléfonos y plantillas</h2>
-  <p class="des">Los teléfonos salen de <span class="mono">recursos.empleados</span>; aquí se corrigen
-    los que falten. Las plantillas de WhatsApp las aprueba Meta y tardan uno o dos días.</p>
-  <div class="panel">
-    <h3>Destinatarios</h3>
-    <p class="sub">Sin teléfono, el aviso cae a correo.</p>
-    <div class="tabla-env"><table>
-      <thead><tr><th>Nombre</th><th>Rol</th><th>Delegación</th><th>Teléfono</th></tr></thead>
-      <tbody>${C.telefonos.map((t,i)=>`<tr>
-        <td><b>${esc(t.n)}</b></td><td>${esc(t.rol)}</td><td style="color:var(--tinta-2)">${esc(t.del)}</td>
-        <td><input type="text" data-tel="${i}" value="${esc(t.tel)}" placeholder="+34…" style="max-width:190px"></td>
-      </tr>`).join("")}</tbody></table></div>
-  </div>
-  <div class="panel">
-    <h3>Plantillas de WhatsApp</h3>
-    <p class="sub">No se puede mandar texto libre a un número que no ha escrito antes: cada alarma
-      necesita su plantilla aprobada.</p>
-    <div class="tabla-env"><table>
-      <thead><tr><th>Identificador</th><th>Para</th><th>Estado</th></tr></thead>
-      <tbody>${C.plantillas.map(p=>`<tr><td class="mono">${esc(p.id)}</td><td>${esc(p.n)}</td>
-        <td>${p.estado==="aprobada"?'<span class="pill ok">Aprobada</span>':'<span class="pill med">Pendiente de Meta</span>'}</td></tr>`).join("")}</tbody></table></div>
-  </div>`;
-},
+/* ================= teléfonos ================= */
+function vistaTelefonos(){
+  const filas = TELEFONOS.map(t=>`<tr>
+    <td><b>${esc(t.nombre||"—")}</b><br><span class="cond">id ${esc(t._id)}</span></td>
+    <td data-et="Teléfono"><span class="cond">${esc(t.telefono)}</span></td>
+    <td data-et="Oficio">${esc(t.oficio||"—")}</td>
+    <td class="n"><button class="enlace" data-bo="${esc(t._id)}">Borrar</button></td>
+  </tr>`).join("");
+  return `<section class="caja">
+    <div class="cabsec"><h2>Teléfonos</h2>
+      <button class="btn fuerte" id="bNuevoTel" type="button">Añadir teléfono</button></div>
+    <p class="sub">De técnicos y reponedores. Sin teléfono dado de alta, un WhatsApp a esa persona no sale y queda un aviso diciéndolo.</p>
+    ${TELEFONOS.length ? `<div class="tabla"><table>
+      <thead><tr><th>Quién</th><th>Teléfono</th><th>Oficio</th><th></th></tr></thead>
+      <tbody>${filas}</tbody></table></div>` : `<p class="vacio">No hay ningún teléfono dado de alta.</p>`}
+  </section>`;
+}
 
-/* ---------------- carga ---------------- */
-carga(){
-  return `
-  <h2 class="tit">Estado de la carga</h2>
-  <p class="des">La carga nocturna trae 30 tablas de VenCloud, unos 2 millones de filas al mes.</p>
-  <div class="panel">
-    <div class="kpi4">
-      <div class="k"><div class="e">Última carga</div><div class="v" style="font-size:17px;padding-top:3px">${hoy()} 03:12</div><div class="n">hora de Madrid</div></div>
-      <div class="k"><div class="e">Tablas</div><div class="v">30</div><div class="n">22 incrementales</div></div>
-      <div class="k"><div class="e">Filas del mes</div><div class="v">~2 M</div><div class="n">66.000 al día</div></div>
-      <div class="k"><div class="e">Errores</div><div class="v" style="color:var(--bien)">0</div><div class="n">en la última noche</div></div>
+function formTelefono(){
+  abreDlg("Añadir teléfono", "El identificador es el del empleado en VenCloud.",
+    `<div class="fila">
+       <div class="campo"><label for="tId">Id del empleado</label><input id="tId" required maxlength="20"></div>
+       <div class="campo"><label for="tNombre">Nombre</label><input id="tNombre" maxlength="80"></div>
+     </div>
+     <div class="fila">
+       <div class="campo"><label for="tTel">Teléfono</label><input id="tTel" required placeholder="+34600000000">
+         <p class="pista">Con prefijo internacional. Sin el «+» no se acepta.</p></div>
+       <div class="campo"><label for="tOficio">Oficio</label>
+         <select id="tOficio"><option value="reponedor">reponedor</option><option value="tecnico">técnico</option></select></div>
+     </div>`,
+    async ()=>{
+      await api("POST","/api/admin/telefonos",{
+        empleado_id: $("#tId").value.trim(), nombre: $("#tNombre").value.trim(),
+        telefono: $("#tTel").value.trim(), oficio: $("#tOficio").value});
+      avisa("Teléfono guardado.", true);
+      await carga();
+    });
+}
+
+/* ================= carga ================= */
+function vistaCarga(){
+  if(!CARGA || CARGA.retraso_dias == null)
+    return `<section class="caja"><h2>La carga de esta noche</h2>
+      <p class="vacio">${esc((CARGA&&CARGA._nota) || "Todavía no hay ninguna carga registrada.")}</p></section>`;
+  const r = CARGA;
+  const tarde = (r.retraso_dias||0) > 0;
+  const fallos = r.descargas_fallidas || 0;
+  const porInforme = Object.entries(r.filas_por_informe||{}).sort((a,b)=>(b[1]||0)-(a[1]||0));
+  const aCero = porInforme.filter(([,v])=>v===0).map(([k])=>k);
+  return `<section class="caja">
+    <h2>La carga de esta noche</h2>
+    <p class="sub">Corre a las 3:15 y los agregados a las 4:45. La última dejó escrito esto
+      ${r.ejecucion ? "el " + esc(cuando(r.ejecucion)) : ""}.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="et">Descargas</div><div class="vl">${num(r.descargas_ok)}</div>
+        <div class="nt">correctas</div></div>
+      <div class="kpi"><div class="et">Fallidas</div>
+        <div class="vl" ${fallos?'style="color:var(--critico)"':""}>${num(fallos)}</div>
+        <div class="nt">${fallos?"hay que mirarlas":"ninguna"}</div></div>
+      <div class="kpi"><div class="et">Descargado</div><div class="vl">${((r.bytes||0)/1048576).toFixed(1)} MB</div>
+        <div class="nt">en crudo</div></div>
+      <div class="kpi"><div class="et">Retraso</div>
+        <div class="vl" ${tarde?'style="color:var(--grave)"':""}>${num(r.retraso_dias)} d</div>
+        <div class="nt">${tarde?"lo que ves es de otra noche":"al día"}</div></div>
     </div>
-  </div>
-  <div class="panel">
-    <h3>Tablas principales</h3>
-    <p class="sub">El mes en curso está incompleto hasta el cierre del siguiente: le falta el cobro bancario.</p>
-    <div class="tabla-env"><table>
-      <thead><tr><th>Tabla</th><th>Volumen</th><th>Estado</th></tr></thead>
-      <tbody>${C.carga.map(x=>`<tr><td class="mono">${esc(x.t)}</td><td style="color:var(--tinta-2)">${esc(x.f)}</td>
-        <td><span class="pill ok">Al día</span></td></tr>`).join("")}</tbody></table></div>
-  </div>`;
-},
-
-/* ---------------- consolas ---------------- */
-consolas(){
-  const p = C.perfiles.find(x=>x.id===(SESION.perfil||"")) || null;
-  return `
-  <h2 class="tit">Consolas</h2>
-  <p class="des">El administrador ve todo lo que ven el cliente y operaciones.</p>
-  <div class="panel">
-    <h3>Panel de cliente AIRBUS</h3>
-    <p class="sub">Dieciséis paneles reordenables, sin llamadas fuera del dominio.</p>
-    <div class="acc-fila"><a class="btn acc" href="../airbus/" style="text-decoration:none">Abrir panel de AIRBUS</a></div>
-  </div>
-  <div class="panel">
-    <h3>Tu sesión</h3>
-    <p class="sub">Esto es lo que la Lambda resolvería a partir de tu token.</p>
-    <div class="tabla-env"><table><tbody>
-      <tr><td style="width:170px;color:var(--tinta-2)">Usuario</td><td><b>${esc(SESION.n)}</b></td></tr>
-      <tr><td style="color:var(--tinta-2)">Perfil</td><td>${esc(SESION.tipo==="admin"?"Administrador":(p?p.n:"—"))}</td></tr>
-      <tr><td style="color:var(--tinta-2)">Ámbito</td><td>${esc(SESION.tipo==="admin"?"Todo":(p?[...p.ambito.clientes,...p.ambito.centros,...p.ambito.delegaciones].join(" · ")||"Todo":"—"))}</td></tr>
-      <tr><td style="color:var(--tinta-2)">Asistente</td><td>${(C.asistente_global!==false && SESION.asistente && (SESION.tipo==="admin"||(p&&p.permisos.asistente)))?'<span class="pill ok">Habilitado</span>':'<span class="pill no">Deshabilitado</span>'}</td></tr>
-    </tbody></table></div>
-  </div>`;
-}
-};
-
-/* ======================= NAVEGACIÓN ======================= */
-const TABS = {
-  admin:       [["usuarios","Usuarios"],["perfiles","Perfiles"],["alarmas","Alarmas"],["asistente","Asistente de IA"],["telefonos","Teléfonos"],["carga","Carga"],["consolas","Consolas"]],
-  operaciones: [["consolas","Consolas"],["alarmas","Alarmas"]],
-  cliente:     [["consolas","Mi panel"]]
-};
-let actual = null;
-function arranca(){
-  document.getElementById("quien").textContent = SESION.n;
-  document.getElementById("rolTxt").textContent = SESION.tipo==="admin"?"Administrador":SESION.tipo;
-  const osc = document.documentElement.getAttribute("data-theme")==="dark"
-    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
-  document.getElementById("bTema").textContent = osc?"Claro":"Oscuro";
-  const tabs = TABS[SESION.tipo] || TABS.cliente;
-  const nav=document.getElementById("tabs");
-  nav.innerHTML = tabs.map(([id,t],i)=>`<button role="tab" data-v="${id}" aria-selected="${i===0}">${esc(t)}</button>`).join("");
-  nav.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>muestra(b.dataset.v)));
-  muestra(tabs[0][0]);
-}
-function muestra(v){
-  actual=v;
-  document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected", String(b.dataset.v===v)));
-  document.getElementById("vistas").innerHTML = `<section class="vista on">${VISTAS[v]()}</section>`;
-  conecta();
-  scrollTo({top:0,behavior:"instant"});
-}
-function repinta(){ muestra(actual); }
-
-/* ======================= ACCIONES ======================= */
-function conecta(){
-  const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-
-  /* --- usuarios --- */
-  if($("#nuevoU")) $("#nuevoU").onclick = ()=>formUsuario(null);
-  $$("[data-edit-u]").forEach(b=>b.onclick=()=>formUsuario(C.usuarios.find(u=>u.id===b.dataset.editU)));
-
-  /* --- perfiles --- */
-  if($("#nuevoP")) $("#nuevoP").onclick = ()=>formPerfil(null);
-  $$("[data-edit-p]").forEach(b=>b.onclick=()=>formPerfil(C.perfiles.find(p=>p.id===b.dataset.editP)));
-
-  /* --- alarmas --- */
-  if($("#nuevaA")) $("#nuevaA").onclick = ()=>formAlarma(null);
-  $$("[data-edit-a]").forEach(b=>b.onclick=()=>formAlarma(C.alarmas.find(a=>a.id===b.dataset.editA)));
-  $$("[data-tog]").forEach(i=>i.onchange=()=>{
-    const a=C.alarmas.find(x=>x.id===i.dataset.tog); a.activa=i.checked; guarda(); repinta();
-  });
-  $$("[data-probar]").forEach(b=>b.onclick=()=>{
-    const a=C.alarmas.find(x=>x.id===b.dataset.probar);
-    const n=a.medido, tot=a.base;
-    const alto = n > tot*0.25;
-    $("#resProbar").innerHTML = `<div class="res ${alto?"alto":"ok"}">
-      <b>${esc(a.n)}</b> · con el umbral actual (${esc(a.op)} ${num(a.umbral)}) habría disparado
-      <b>${num(n)}</b> de ${num(tot)} ${esc(a.uni)} del último periodo cargado.
-      ${alto ? "Son muchas: agrupa por "+esc(a.agr)+", sube el umbral o déjala sólo en bandeja antes de enchufar el WhatsApp."
-             : "Volumen razonable para avisar."}</div>`;
-  });
-
-  /* --- asistente --- */
-  if($("#togGlobal")) $("#togGlobal").onchange = e => { C.asistente_global = e.target.checked; guarda(); };
-  if($("#limAsist")) $("#limAsist").onchange = e => { C.asistente_limite = Number(e.target.value)||0; guarda(); };
-  $$("[data-asist-p]").forEach(i=>i.onchange=()=>{
-    C.perfiles.find(p=>p.id===i.dataset.asistP).permisos.asistente=i.checked; guarda();
-  });
-  $$("[data-asist-u]").forEach(i=>i.onchange=()=>{
-    C.usuarios.find(u=>u.id===i.dataset.asistU).asistente=i.checked; guarda();
-  });
-
-  /* --- teléfonos --- */
-  $$("[data-tel]").forEach(i=>i.onchange=()=>{ C.telefonos[+i.dataset.tel].tel=i.value.trim(); guarda(); });
+    ${tarde ? `<div class="nota mal" style="margin-bottom:0">La carga de esta noche no ha corrido: lo que ven
+      los paneles es de hace ${esc(r.retraso_dias)} día(s).</div>` : ""}
+    ${aCero.length ? `<div class="nota mal" style="margin-bottom:0">Descargado sin una sola fila:
+      <span class="cond">${esc(aCero.join(", "))}</span>. Un informe que baja a cero no da error —se
+      descarga igual, vacío—, así que es aquí donde se ve.</div>` : ""}
+    ${(r.errores||[]).length ? `<div class="tabla" style="margin-top:14px"><table>
+      <thead><tr><th>Informe</th><th>Qué pasó</th></tr></thead><tbody>
+      ${r.errores.map(e=>`<tr><td><span class="cond">${esc(e.id||e.informe||"—")}</span></td>
+        <td data-et="Error">${esc(e.error||e.motivo||JSON.stringify(e))}</td></tr>`).join("")}
+      </tbody></table></div>` : ""}
+  </section>
+  ${porInforme.length ? `<section class="caja"><h2>Filas por informe</h2>
+    <p class="sub">De la última carga. Un informe que baja a cero de un día para otro es la primera señal de que algo cambió en VenCloud.</p>
+    <div class="tabla"><table><thead><tr><th>Informe</th><th class="n">Filas</th></tr></thead><tbody>
+    ${porInforme.map(([k,v])=>`<tr><td><span class="cond">${esc(k)}</span>
+        ${v===0?` <span class="pill c">a cero</span>`:""}</td>
+      <td class="n" data-et="Filas">${v==null?"—":num(v)}</td></tr>`).join("")}
+    </tbody></table></div></section>` : ""}`;
 }
 
-/* ---------- formulario de usuario ---------- */
-function formUsuario(u){
-  const nuevo = !u;
-  u = u || {id:"u"+Date.now(), n:"", correo:"", perfil:C.perfiles[0]?.id||"", tipo:"cliente", alta:hoy(), activo:true, asistente:true};
-  abre(nuevo?"Crear usuario":"Editar usuario",
-    nuevo?"La contraseña inicial la fijas tú; el usuario la cambia al entrar por primera vez.":"",
-    `<div class="sep">Identidad</div>
-     ${campo("Nombre y apellidos",`<input type="text" id="uN" value="${esc(u.n)}">`)}
-     ${campo("Correo electrónico",`<input type="email" id="uC" value="${esc(u.correo)}" autocapitalize="off">`)}
-     ${nuevo?campo("Contraseña inicial",`<input type="password" id="uP" autocomplete="new-password">`):""}
-     <div class="sep">Acceso</div>
-     ${campo("Perfil",`<select id="uT">
-        <option value="cliente"${u.tipo==="cliente"?" selected":""}>Cliente</option>
-        <option value="operaciones"${u.tipo==="operaciones"?" selected":""}>Operaciones</option>
-        <option value="direccion"${u.tipo==="direccion"?" selected":""}>Dirección</option>
-        <option value="admin"${u.tipo==="admin"?" selected":""}>Administrador</option></select>`)}
-     ${campo("Perfil de visibilidad",`<select id="uPf">${C.perfiles.map(p=>`<option value="${esc(p.id)}"${u.perfil===p.id?" selected":""}>${esc(p.n)}</option>`).join("")}</select>`)}
-     <label class="chk"><input type="checkbox" id="uAct"${u.activo?" checked":""}><span>Usuario de alta<small>Si se desmarca, no puede entrar.</small></span></label>
-     <label class="chk"><input type="checkbox" id="uAs"${u.asistente?" checked":""}><span>Asistente de IA habilitado<small>Además hace falta que lo esté en su perfil y en toda la plataforma.</small></span></label>
-     ${pieDlg}`,
-    ()=>{
-      const n=document.getElementById("uN").value.trim();
-      const c=document.getElementById("uC").value.trim();
-      if(!n||!c){ alert("Hacen falta el nombre y el correo."); return false; }
-      Object.assign(u,{n,correo:c,tipo:document.getElementById("uT").value,
-        perfil:document.getElementById("uPf").value,
-        activo:document.getElementById("uAct").checked,
-        asistente:document.getElementById("uAs").checked});
-      if(nuevo) C.usuarios.push(u);
-      guarda(); repinta();
-    });
+/* ================= histórico =================
+   La misma pregunta que se hace desde el panel de cliente —cuánto hubo en este
+   tiempo— pero con el ámbito del administrador, que es todo el parque. El dato
+   sale de /api/serie, una fila por día, y la suma la hace /comun/periodos.js:
+   el mismo fichero que usan el panel y el cuadro, para que «este mes» signifique
+   lo mismo en las tres pantallas. */
+function vistaHistorico(){
+  const sinHistoria = SERIE && !SERIE.mesesConDato().length;
+  return `<section class="caja">
+    <h2>Histórico</h2>
+    <p class="sub">Desde el 1 de enero de 2025, día a día. Elige el tiempo que quieras mirar:
+      los totales y las medias son exactos; las medianas de un rango son aproximadas, porque
+      salen del histograma de cada día.</p>
+    <div id="selectorPeriodo"></div>
+    <div id="filtroLugar" hidden></div>
+    ${SERIE === null ? `<p class="vacio">El histórico todavía no está calculado. Lo escriben los
+       agregados cada noche; la historia anterior al despliegue se rellena una vez a mano.</p>`
+      : sinHistoria ? `<p class="vacio">Todavía no hay ningún mes en el histórico. Se rellena una
+       vez desde el 1 de enero de 2025 con el evento {"desde": "...", "hasta": "..."} de la Lambda
+       de agregados.</p>` : `<div id="cifrasPeriodo"></div>`}
+  </section>
+  ${SERIE && !sinHistoria ? `<section class="caja"><h2>Lo que hay cargado, mes a mes</h2>
+    <p class="sub">Lo que la serie tiene escrito. Un mes que falta o con pocos días es un relleno
+      que se quedó a medias: se vuelve a lanzar ese rango y se completa.</p>
+    <div class="tabla"><table><thead><tr><th>Mes</th><th class="n">Días</th>
+      <th class="n">Visitas</th><th class="n">Venta</th><th class="n">Tareas SAT</th></tr></thead><tbody>
+    ${(SERIE.indice.meses||[]).slice().reverse().map(m=>`<tr>
+      <td><span class="cond">${esc(m.mes)}</span>${m.dias<20?' <span class="pill c">a medias</span>':""}</td>
+      <td class="n" data-et="Días">${num(m.dias)}</td>
+      <td class="n" data-et="Visitas">${num(m.visitas)}</td>
+      <td class="n" data-et="Venta">${eur(m.importe)}</td>
+      <td class="n" data-et="Tareas SAT">${num(m.tareas)}</td></tr>`).join("")}
+    </tbody></table></div></section>` : ""}`;
 }
 
-/* ---------- formulario de perfil ---------- */
-function formPerfil(p){
-  const nuevo=!p;
-  p = p || {id:"p"+Date.now(), n:"", tipo:"cliente", ambito:{clientes:[],centros:[],delegaciones:[]},
-            sesiones:["resumen"], umbrales:{rentabilidad_mes:350},
-            permisos:{reordenar:true,exportar:true,asistente:true,whatsapp:false,incidencia:false}};
-  const centros = C.clientes.flatMap(c=>c.centros);
-  abre(nuevo?"Crear perfil":"Editar perfil","Ámbito múltiple: lo que marques se suma.",
-    `<div class="sep">Identidad</div>
-     ${campo("Nombre",`<input type="text" id="pN" value="${esc(p.n)}">`)}
-     ${campo("Tipo",`<select id="pT">${opts([["cliente","Cliente"],["operaciones","Operaciones"],["direccion","Dirección"]],p.tipo)}</select>`)}
-     <div class="sep">Ámbito · clientes</div>
-     <div class="grid-chk">${chks(C.clientes.map(c=>[c.id,c.n]),p.ambito.clientes,"pcli")}</div>
-     <div class="sep">Ámbito · centros</div>
-     <div class="grid-chk">${chks(centros.map(c=>[c,c]),p.ambito.centros,"pcen")}</div>
-     <div class="sep">Ámbito · delegaciones</div>
-     <div class="grid-chk">${chks(C.delegaciones.map(d=>[d,d]),p.ambito.delegaciones,"pdel")}</div>
-     <div class="sep">Sesiones visibles</div>
-     <div class="grid-chk">${chks(SESIONES.map(s=>[s.id,s.n,s.p]),p.sesiones,"pses")}</div>
-     <div class="sep">Umbrales de negocio</div>
-     ${campo("Umbral de rentabilidad (€/mes por máquina)",`<input type="number" id="pU" value="${p.umbrales.rentabilidad_mes}" min="0" step="25">`)}
-     <div class="sep">Permisos</div>
-     <label class="chk"><input type="checkbox" id="pAs"${p.permisos.asistente?" checked":""}><span>Asistente de IA</span></label>
-     <label class="chk"><input type="checkbox" id="pWa"${p.permisos.whatsapp?" checked":""}><span>Enviar WhatsApp<small>Sólo para operaciones y dirección.</small></span></label>
-     <label class="chk"><input type="checkbox" id="pIn"${p.permisos.incidencia?" checked":""}><span>Abrir incidencia en VenCloud</span></label>
-     <label class="chk"><input type="checkbox" id="pRe"${p.permisos.reordenar?" checked":""}><span>Reordenar los paneles</span></label>
-     <label class="chk"><input type="checkbox" id="pEx"${p.permisos.exportar?" checked":""}><span>Exportar datos</span></label>
-     ${pieDlg}`,
-    ()=>{
-      const n=document.getElementById("pN").value.trim();
-      if(!n){ alert("El perfil necesita un nombre."); return false; }
-      Object.assign(p,{n,tipo:document.getElementById("pT").value,
-        ambito:{clientes:vals("pcli"),centros:vals("pcen"),delegaciones:vals("pdel")},
-        sesiones:vals("pses"),
-        umbrales:{rentabilidad_mes:Number(document.getElementById("pU").value)||0},
-        permisos:{asistente:document.getElementById("pAs").checked,
-                  whatsapp:document.getElementById("pWa").checked,
-                  incidencia:document.getElementById("pIn").checked,
-                  reordenar:document.getElementById("pRe").checked,
-                  exportar:document.getElementById("pEx").checked}});
-      if(nuevo) C.perfiles.push(p);
-      guarda(); repinta();
-    });
+function pintaCifrasPeriodo(){
+  const c = document.getElementById("cifrasPeriodo");
+  if(!c) return;
+  if(!SUMA){ c.innerHTML = `<p class="vacio">Elige un periodo.</p>`; return; }
+  const T = SUMA;
+  if(!T.dias){
+    c.innerHTML = `<p class="vacio">No hay ningún día cargado en ${esc(Periodos.etiqueta(RANGO.desde, RANGO.hasta))}.
+      Si es anterior al relleno, todavía no está; si es hoy, la carga va de noche y trae hasta ayer.</p>`;
+    return;
+  }
+  const d = T.servicio.duracion_min, h = T.sat.horas_cierre;
+  const dec = n => new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(n||0);
+  const fichas = SERIE.fichas();
+  const filas = T.filtrado ? Object.entries(T.por_centro||{}).sort((a,b)=>b[1].visitas-a[1].visitas) : [];
+  c.innerHTML = `<p class="sub">${LUGAR.etiqueta ? esc(LUGAR.etiqueta)+" · " : ""}${esc(Periodos.etiqueta(T.desde, T.hasta))} ·
+      ${num(T.dias)} ${T.dias===1?"día":"días"} con dato</p>
+    <div class="kpis">
+      <div class="kpi"><div class="et">Visitas</div><div class="vl">${num(T.servicio.visitas)}</div>
+        <div class="nt">de persona</div></div>
+      <div class="kpi"><div class="et">Venta</div><div class="vl">${eur(T.venta.importe)}</div>
+        <div class="nt">${T.venta.fuentes.includes("visita_ventas")?"del parte: parcial":"telemetría"}</div></div>
+      <div class="kpi"><div class="et">Cargado</div><div class="vl">${eur(T.servicio.carga.valor)}</div>
+        <div class="nt">${num(T.servicio.carga.unidades)} unidades</div></div>
+      <div class="kpi"><div class="et">Merma</div>
+        <div class="vl">${eur(Object.values(T.servicio.merma).reduce((a,m)=>a+(m.euros||0),0))}</div>
+        <div class="nt">caducidad, rotura y retirada</div></div>
+      <div class="kpi"><div class="et">Tareas SAT</div><div class="vl">${num(T.sat.tareas)}</div>
+        <div class="nt">${num(T.sat.fallos_tecnicos)} fallos técnicos</div></div>
+      <div class="kpi"><div class="et">Visita (mediana)</div>
+        <div class="vl">${d.n?dec(d.mediana)+" min":"—"}</div>
+        <div class="nt">${d.n?"aproximada · media "+dec(d.media)+" min":"sin medir"}</div></div>
+      ${T.filtrado ? "" : `<div class="kpi"><div class="et">Jornadas</div><div class="vl">${num(T.jornadas.jornadas)}</div>
+        <div class="nt">${num(T.jornadas.km_total)} km</div></div>
+      <div class="kpi"><div class="et">Cierre de avería</div>
+        <div class="vl">${h.n?dec(h.mediana)+" h":"—"}</div>
+        <div class="nt">${h.n?"sólo las que abren y cierran el mismo día":"sin cierres del día"}</div></div>`}
+    </div>
+    ${T.filtrado ? `<p class="sub">Con filtro de lugar no salen las jornadas ni el cierre de
+      averías: una ruta pasa por muchos centros y el cierre va por avería, no por centro.</p>` : ""}
+    ${filas.length ? `<div class="tabla" style="margin-top:14px"><table>
+      <thead><tr><th>Centro</th><th>Cliente</th>${SERIE.filtros().includes("delegacion")?"<th>Delegación</th>":""}
+        <th class="n">Visitas</th><th class="n">Min./visita</th><th class="n">Venta</th>
+        <th class="n">Cargado</th><th class="n">Tareas SAT</th></tr></thead><tbody>
+      ${filas.map(([k,d])=>{ const f = fichas[k]||{}; return `<tr>
+        <td data-et="Centro">${esc(f.nombre||k)} <span class="cond">${esc(f.num||"")}</span></td>
+        <td data-et="Cliente">${esc(f.cliente||"—")}</td>
+        ${SERIE.filtros().includes("delegacion")?`<td data-et="Delegación">${esc(f.delegacion||"—")}</td>`:""}
+        <td class="n" data-et="Visitas">${num(d.visitas)}</td>
+        <td class="n" data-et="Min./visita">${d.min_medio===null?"—":dec(d.min_medio)}</td>
+        <td class="n" data-et="Venta">${eur(d.venta_importe)}</td>
+        <td class="n" data-et="Cargado">${eur(d.carga_valor)}</td>
+        <td class="n" data-et="Tareas SAT">${num(d.tareas)}</td></tr>`; }).join("")}
+      </tbody></table></div>` : ""}
+    ${T.dinero.lista.length ? `<div class="tabla" style="margin-top:14px"><table>
+      <thead><tr><th>Periodo contable</th><th class="n">Efectivo</th><th class="n">Banco</th>
+        <th class="n">Total</th><th class="n">Ciego</th></tr></thead><tbody>
+      ${T.dinero.lista.slice().reverse().map(p=>`<tr>
+        <td><span class="cond">${esc(p.periodo)}</span></td>
+        <td class="n" data-et="Efectivo">${eur(p.efectivo)}</td>
+        <td class="n" data-et="Banco">${eur(p.banco)}</td>
+        <td class="n" data-et="Total">${eur(p.efectivo+p.banco)}</td>
+        <td class="n" data-et="Ciego">${p.efectivo>0?dec(100*p.ciego/p.efectivo)+" %":"—"}</td></tr>`).join("")}
+      </tbody></table></div>
+      <p class="sub">La recaudación se agrupa por su periodo contable, no por el día en que se
+        escribió: en un rango de días pueden aparecer meses anteriores.</p>` : ""}`;
 }
 
-/* ---------- formulario de alarma ---------- */
-function formAlarma(a){
-  const nuevo=!a;
-  a = a || {id:"a"+Date.now(), n:"", activa:false, sev:"media", fuente:"jornadas", campo:"temperatura_inicio",
-            op:">", umbral:0, agr:"maquina", ventana:"dia", silencio:24, dest:[],
-            asunto:"", cuerpo:"", medido:0, base:100, uni:"casos"};
-  const camposDe = f => Object.entries(FUENTES[f].campos).map(([k,v])=>[k,v[0]]);
-  abre(nuevo?"Crear alarma":"Editar alarma","Siete bloques. Pruébala antes de activarla.",
-    `<div class="sep">1 · Nombre y severidad</div>
-     ${campo("Nombre",`<input type="text" id="aN" value="${esc(a.n)}">`)}
-     ${campo("Severidad",`<select id="aS">${opts([["critica","Crítica — WhatsApp inmediato"],["alta","Alta — WhatsApp y bandeja"],["media","Media — bandeja y resumen diario"],["baja","Baja — resumen semanal"]],a.sev)}</select>`)}
-     <div class="sep">2 · Qué vigilar</div>
-     ${campo("Fuente",`<select id="aF">${opts(Object.entries(FUENTES).map(([k,v])=>[k,v.n]),a.fuente)}</select>`)}
-     ${campo("Campo",`<select id="aC">${opts(camposDe(a.fuente),a.campo)}</select>`)}
-     <div class="sep">3 · Condición</div>
-     <div class="fila">
-       ${campo("Operador",`<select id="aO">${opts([[">","mayor que"],[">=","mayor o igual"],["<","menor que"],["<=","menor o igual"],["=","igual a"]],a.op)}</select>`)}
-       ${campo("Umbral",`<input type="number" id="aU" value="${a.umbral}" step="any">`)}
-     </div>
-     <div class="sep">4 · Agrupación y ventana</div>
-     <div class="fila">
-       ${campo("Agrupar por",`<select id="aG">${opts(AGRUPAR.map(x=>[x,x]),a.agr)}</select>`)}
-       ${campo("Ventana",`<select id="aV">${opts([["dia","Del día"],["semana","De la semana"],["mes","Del mes"]],a.ventana)}</select>`)}
-       ${campo("Silencio (horas)",`<input type="number" id="aSi" value="${a.silencio}" min="0" step="1">`)}
-     </div>
-     <div class="sep">5 · Ámbito</div>
-     <div class="grid-chk">${chks(C.delegaciones.map(d=>[d,d]),(a.ambito&&a.ambito.delegaciones)||[],"adel")}</div>
-     <p class="sub" style="margin:6px 0 0">Sin marcar nada, la alarma aplica a todas las delegaciones.</p>
-     <div class="sep">6 · Destinatarios y canal</div>
-     <div id="dests">${(a.dest.length?a.dest:[{t:"rol",v:"responsableven",c:"bandeja"}]).map((d,i)=>filaDest(d,i)).join("")}</div>
-     <div class="acc-fila"><button class="btn" type="button" id="masDest">Añadir destinatario</button></div>
-     <div class="sep">7 · Mensaje</div>
-     ${campo("Asunto",`<input type="text" id="aA" value="${esc(a.asunto)}">`)}
-     ${campo("Cuerpo",`<textarea id="aB">${esc(a.cuerpo)}</textarea>`)}
-     <p class="sub" style="margin:2px 0 0">Variables: <span class="mono">{{elemento}} {{valor}} {{umbral}} {{fecha}} {{ruta}} {{centro}} {{empleado}}</span></p>
-     ${pieDlg}`,
-    ()=>{
-      const n=document.getElementById("aN").value.trim();
-      if(!n){ alert("La alarma necesita un nombre."); return false; }
-      const dest=[...document.querySelectorAll("[data-dest]")].map(fila=>({
-        t:"rol", v:fila.querySelector(".dv").value, c:fila.querySelector(".dc").value }));
-      Object.assign(a,{n, sev:document.getElementById("aS").value,
-        fuente:document.getElementById("aF").value, campo:document.getElementById("aC").value,
-        op:document.getElementById("aO").value, umbral:Number(document.getElementById("aU").value)||0,
-        agr:document.getElementById("aG").value, ventana:document.getElementById("aV").value,
-        silencio:Number(document.getElementById("aSi").value)||0,
-        ambito:{delegaciones:vals("adel")},
-        dest, asunto:document.getElementById("aA").value, cuerpo:document.getElementById("aB").value});
-      if(nuevo) C.alarmas.push(a);
-      guarda(); repinta();
-    });
-  /* fuente -> campos */
-  document.getElementById("aF").onchange = e => {
-    const sel=document.getElementById("aC");
-    sel.innerHTML = opts(camposDe(e.target.value), null);
+async function montaSelectorHistorico(){
+  const caja = document.getElementById("selectorPeriodo");
+  if(!caja || !window.Periodos || !SERIE) return;
+  Periodos.ponEstilo();
+  /* El filtro se pinta vacío al volver a la pestaña, así que empieza sin lugar. */
+  LUGAR = {sel:{}, quiere:null, etiqueta:""};
+  const suma = async () => {
+    if(!RANGO) return;
+    try{ SUMA = await SERIE.totales(RANGO.desde, RANGO.hasta, null, LUGAR.quiere); }
+    catch(e){ avisa("No se ha podido leer el histórico: " + e.message); return; }
+    pintaCifrasPeriodo();
   };
-  document.getElementById("masDest").onclick = () => {
-    document.getElementById("dests").insertAdjacentHTML("beforeend", filaDest({t:"rol",v:"responsableven",c:"bandeja"}));
-  };
+  /* Delegación, cliente y centro: cada centro trae su ficha en el índice de la
+     serie, y filtrar es sumar los centros elegidos. */
+  Periodos.montaFiltroLugar(document.getElementById("filtroLugar"), {
+    fichas: SERIE.fichas(), filtros: SERIE.filtros(),
+    alCambiar: (sel, quiere, etiqueta) => { LUGAR = {sel, quiere, etiqueta}; suma(); }
+  });
+  SELECTOR = Periodos.montaSelector(caja, {
+    primerDia: SERIE.primerDia(),
+    inicial: RANGO ? null : "mes",
+    alCambiar: ({desde, hasta}) => { RANGO = {desde, hasta}; suma(); }
+  });
+  if(RANGO){ SELECTOR.pon(RANGO.desde, RANGO.hasta); }
 }
-function filaDest(d){
-  return `<div class="fila" data-dest style="margin-bottom:6px">
-    <label class="campo" style="margin:0"><span>Avisar a</span><select class="dv">${opts(ROLES_AVISO,d.v)}</select></label>
-    <label class="campo" style="margin:0"><span>Canal</span><select class="dc">${opts(CANALES,d.c)}</select></label>
-  </div>`;
+
+/* ================= cola ================= */
+function vistaCola(){
+  const filas = COLA.slice().reverse().map(c=>`<tr>
+    <td data-et="Cuándo">${esc(cuando(c.cuando))}</td>
+    <td data-et="Qué"><b>${esc(c.tipo||"—")}</b><br><span class="cond">${esc(
+      c.tipo==="whatsapp" ? `${c.destino||""}: ${c.texto||""}` : `${c.matricula||""}: ${c.descripcion||""}`)}</span></td>
+    <td data-et="Pedido por">${esc(c.pedido_por||"—")}</td>
+    <td data-et="Estado">${c.estado==="en_cola" ? `<span class="pill a">en cola</span>` : `<span class="pill b">${esc(c.estado||"")}</span>`}</td>
+  </tr>`).join("");
+  return `<section class="caja">
+    <h2>Cola de acciones</h2>
+    <p class="sub">WhatsApp e incidencias que alguien pidió desde un panel. No se envían en el momento: si el
+      proveedor tarda o falla, quien pulsó el botón no se queda esperando y el mensaje no se pierde.
+      <b>El alta de incidencia en VenCloud es una escritura en el ERP y todavía no está enchufada</b>: la petición
+      queda aquí, visible, y nadie cree que se ha dado de alta.</p>
+    ${COLA.length ? `<div class="tabla"><table>
+      <thead><tr><th>Cuándo</th><th>Qué</th><th>Pedido por</th><th>Estado</th></tr></thead>
+      <tbody>${filas}</tbody></table></div>` : `<p class="vacio">No hay nada en cola.</p>`}
+  </section>`;
 }
+
+/* ---------- diálogo genérico ---------- */
+function abreDlg(titulo, sub, html, alGuardar){
+  $("#dlgTitulo").textContent = titulo;
+  $("#dlgSub").textContent = sub || "";
+  $("#dlgCuerpo").innerHTML = html + `<p class="nota mal" id="errForm" hidden></p>`;
+  guardando = alGuardar;
+  $("#dlg").showModal();
+  const primero = $("#dlgCuerpo").querySelector("input:not([disabled]),select");
+  if(primero) primero.focus();
+}
+$("#bCancelar").addEventListener("click", ()=>$("#dlg").close());
+$("#form").addEventListener("submit", async e=>{
+  e.preventDefault();
+  if(!guardando) return;
+  $("#bGuardar").disabled = true;
+  try{
+    await guardando();
+    $("#dlg").close();
+  }catch(err){
+    const p = $("#errForm"); p.textContent = err.message || "No se ha podido guardar."; p.hidden = false;
+  }finally{ $("#bGuardar").disabled = false; }
+});
+
+/* ---------- montaje ---------- */
+function pinta(){
+  $("#pestanas").innerHTML = SECCIONES.map(([id,n])=>
+    `<button class="btn" type="button" data-s="${id}" aria-pressed="${id===SECCION}">${esc(n)}</button>`).join("");
+  $("#pestanas").hidden = false;
+  $("#pestanas").querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{
+    SECCION = b.dataset.s; pinta();
+  }));
+  const v = $("#vista");
+  v.innerHTML = ({usuarios: vistaUsuarios, perfiles: vistaPerfiles, plataforma: vistaPlataforma,
+                  telefonos: vistaTelefonos, carga: vistaCarga, historico: vistaHistorico,
+                  cola: vistaCola}[SECCION] || vistaUsuarios)();
+  if(SECCION==="historico") montaSelectorHistorico();
+
+  if(SECCION==="usuarios"){
+    $("#bNuevoUsuario").addEventListener("click", ()=>formUsuario(null));
+    v.querySelectorAll("[data-ed]").forEach(b=>b.addEventListener("click", ()=>formUsuario(b.dataset.ed)));
+    v.querySelectorAll("[data-cl]").forEach(b=>b.addEventListener("click", ()=>nuevaClave(b.dataset.cl)));
+    v.querySelectorAll("[data-bo]").forEach(b=>b.addEventListener("click", ()=>borraUsuario(b.dataset.bo)));
+  }
+  if(SECCION==="perfiles"){
+    $("#bNuevoPerfil").addEventListener("click", ()=>formPerfil(null));
+    v.querySelectorAll("[data-ed]").forEach(b=>b.addEventListener("click", ()=>formPerfil(b.dataset.ed)));
+    v.querySelectorAll("[data-bo]").forEach(b=>b.addEventListener("click", ()=>borraPerfil(b.dataset.bo)));
+  }
+  if(SECCION==="plataforma") $("#bGuardaConfig").addEventListener("click", guardaConfig);
+  if(SECCION==="telefonos"){
+    $("#bNuevoTel").addEventListener("click", formTelefono);
+    v.querySelectorAll("[data-bo]").forEach(b=>b.addEventListener("click", ()=>borraTelefono(b.dataset.bo)));
+  }
+}
+
+async function borraUsuario(correo){
+  if(correo === YO.correo) return avisa("No puedes borrar tu propia cuenta.");
+  if(!confirm(`¿Borrar a ${correo}? Se borra también de Cognito y no se puede deshacer.`)) return;
+  try{ await api("DELETE", `/api/admin/usuarios/${encodeURIComponent(correo)}`); avisa("Usuario borrado.", true); await carga(); }
+  catch(e){ avisa(e.message); }
+}
+async function borraPerfil(pid){
+  if(!confirm(`¿Borrar el perfil «${nombrePerfil(pid)}»?`)) return;
+  try{ await api("DELETE", `/api/admin/perfiles/${encodeURIComponent(pid)}`); avisa("Perfil borrado.", true); await carga(); }
+  catch(e){ avisa(e.message); }
+}
+async function borraTelefono(id){
+  if(!confirm("¿Borrar este teléfono?")) return;
+  try{ await api("DELETE", `/api/admin/telefonos/${encodeURIComponent(id)}`); avisa("Teléfono borrado.", true); await carga(); }
+  catch(e){ avisa(e.message); }
+}
+async function guardaConfig(){
+  const b = $("#bGuardaConfig"); b.disabled = true;
+  try{
+    CONFIG = await api("PUT","/api/admin/config",{
+      asistente_global: $("#cAsistente").checked,
+      limite_preguntas_dia: Number($("#cLimite").value)||0,
+      umbral_rentabilidad_mes: Number($("#cUmbral").value)||0,
+    });
+    avisa("Guardado. El interruptor global tiene efecto en la siguiente pregunta de cualquiera.", true);
+  }catch(e){ avisa(e.message); }
+  finally{ b.disabled = false; }
+}
+
+async function carga(){
+  const [us, pf, cf, tl] = await Promise.all([
+    api("GET","/api/admin/usuarios"),
+    api("GET","/api/admin/perfiles"),
+    api("GET","/api/admin/config"),
+    api("GET","/api/admin/telefonos"),
+  ]);
+  USUARIOS = us.usuarios || [];
+  PERFILES = pf.perfiles || [];
+  SESIONES = pf.catalogo_sesiones || {};
+  TECHO = pf.techo || {};
+  NIVELES = pf.niveles || {};
+  IMPLICITOS = pf.implicitos || {};
+  CONFIG = cf || {};
+  TELEFONOS = tl.telefonos || [];
+  /* Estas dos pueden no estar todavía (sin carga nocturna aún, por ejemplo) y no
+     deben impedir que la consola se abra. */
+  try{ COLA = (await api("GET","/api/admin/cola")).cola || []; }catch(e){ COLA = []; }
+  try{ CARGA = await api("GET","/api/estado-carga"); }catch(e){ CARGA = null; }
+  /* El histórico tampoco debe impedir que la consola se abra: recién
+     desplegado no existe todavía, y la pestaña lo dice en vez de fallar. */
+  try{
+    const s = new Periodos.Serie();
+    await s.abre();
+    SERIE = s;
+  }catch(e){ SERIE = null; }
+  pinta();
+}
+
+(async function(){
+  let r;
+  try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(r.status === 401){ location.href = "/"; return; }
+  if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
+  YO = await r.json();
+  $("#quien").textContent = `${YO.nombre || YO.correo} · ${YO.perfil || ""}`;
+  if(YO.tipo !== "admin"){
+    $("#cargando").hidden = true;
+    avisa("Esta pantalla es sólo para el administrador.");
+    $("#vista").innerHTML = `<section class="caja"><h2>No es tu pantalla</h2>
+      <p class="sub">Tu panel está en <a href="/panel/">/panel/</a>.</p></section>`;
+    return;
+  }
+  try{ await carga(); }
+  catch(e){ $("#cargando").textContent = "No se ha podido cargar la consola: " + e.message; return; }
+  $("#cargando").hidden = true;
+})();
 </script>
 </body>
 </html>

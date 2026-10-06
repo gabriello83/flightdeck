@@ -137,6 +137,13 @@ def efectivo_en_cajon(filas_monbil):
                      for f in filas_monbil if float(v(f, "valor")) in MONEDAS), 2)
 
 
+# Una recaudacion de una maquina son 8,80 EUR de media (428.003 EUR en 48.443
+# filas, agosto). Cien mil euros en UNA fila no es un mes bueno: es un contador
+# roto. Junio del 2026 traia una fila de -7.521 millones que se llevaba por
+# delante el mes entero y dejaba el porcentaje ciego en -0,0.
+LIMITE_FILA_RECAUDACION = 100_000.0
+
+
 def recaudacion_del_periodo(filas, anio, mes):
     """prefacrecauda se agrupa por anho/mes, nunca por `fecha`.
 
@@ -144,21 +151,35 @@ def recaudacion_del_periodo(filas, anio, mes):
     que 52.161 son del periodo de julio. Y el cobro por tarjeta de un mes entero
     se escribe de golpe al mes siguiente, asi que el mes en curso se ve un 55 %
     mas pequeno de lo que es.
+
+    Las filas imposibles se APARTAN Y SE CUENTAN, nunca se tiran en silencio:
+    quien lea el panel tiene que poder ver que ese mes llevaba basura dentro. Es
+    el mismo criterio que con las denominaciones que no son monedas.
     """
     f = [x for x in filas if int(v(x, "anho")) == anio and int(v(x, "mes")) == mes]
-    ef = round(sum(float(v(x, "imp_recaudado")) for x in f), 2)
-    bk = round(sum(float(v(x, "imp_pago_bancario")) for x in f), 2)
-    ciego = round(sum(float(v(x, "imp_recaudado")) for x in f
+    buenas = [x for x in f if abs(float(v(x, "imp_recaudado"))) <= LIMITE_FILA_RECAUDACION
+              and abs(float(v(x, "imp_pago_bancario"))) <= LIMITE_FILA_RECAUDACION]
+    descartadas = len(f) - len(buenas)
+    ef = round(sum(float(v(x, "imp_recaudado")) for x in buenas), 2)
+    bk = round(sum(float(v(x, "imp_pago_bancario")) for x in buenas), 2)
+    ciego = round(sum(float(v(x, "imp_recaudado")) for x in buenas
                       if int(v(x, "tipo_telemetria")) == 0), 2)
-    return {
+    out = {
         "periodo": f"{anio}-{mes:02d}",
-        "registros": len(f),
+        "registros": len(buenas),
         "efectivo": ef,
         "banco": bk,
         "total": round(ef + bk, 2),
         "efectivo_sin_telemetria": ciego,
-        "pct_ciego": round(100 * ciego / ef, 1) if ef else 0.0,
+        "pct_ciego": round(100 * ciego / ef, 1) if ef > 0 else 0.0,
     }
+    if descartadas:
+        out["filas_imposibles"] = descartadas
+        out["_nota_imposibles"] = (
+            f"{descartadas} fila(s) con importes por encima de "
+            f"{LIMITE_FILA_RECAUDACION:,.0f} EUR apartadas: son contadores rotos, "
+            "no recaudacion. Mirarlas en el crudo antes de dar el mes por bueno.")
+    return out
 
 
 def es_acto_de_recaudar(fila):
@@ -332,3 +353,212 @@ def cumplimiento_inventario(maquinas, hoy, dias_norma=90):
         "nunca": nunca,
         "pct_en_norma": round(100 * en_norma / total, 1) if total else 0.0,
     }
+
+
+# ----------------------------------------------------------------------
+# instalaciones: lo que esta puesto, y lo que esta puesto a medias
+# ----------------------------------------------------------------------
+# `estado_pdv` NO es un estado de alta o baja: es «tiene maquina puesta». Medido
+# sobre el censo del 5 de octubre de 2026: de 3.200 con estado 1, las 3.200
+# tienen maquina; de 2.005 con estado 0, ninguna. El 9 es el unico que significa
+# baja, y esa fila ademas traia su fecha. Asi que lo que marca una baja es la
+# fecha, y el estado solo sirve para no contar dos veces.
+ESTADO_PDV_BAJA = 9
+
+# Cuantos dias se considera «alta reciente». Un mes da tiempo a que alguien mire
+# el panel el lunes siguiente y todavia lo vea.
+DIAS_ALTA_RECIENTE = 30
+
+# Y cuanto se le da a un punto de venta nuevo para que le pongan la maquina.
+# Esto es mas largo a proposito: entre que se firma y se instala pasan semanas,
+# y lo que interesa es la lista de lo que lleva demasiado esperando.
+#
+# POR QUE NO VALE «sin maquina» a secas: de los 2.006 puntos de venta sin
+# maquina del censo real, 1.946 tienen `alta_pdv` a 1900-01-01 —el centinela de
+# «nunca»— y solo 60 tienen fecha de verdad. Marcarlos todos habria llenado el
+# panel de dos mil casos que nadie va a tocar, y entonces no lo abre nadie.
+DIAS_INSTALACION_PENDIENTE = 90
+
+# El sistema de telemetria. 0 es «ninguno»; 40 es NAYAX, que es el que tenemos.
+SIN_TELEMETRIA = 0
+
+# Cuantos dias se considera «alta reciente». Un mes da tiempo a que alguien mire
+# el panel el lunes siguiente y todavia lo vea.
+DIAS_ALTA_RECIENTE = 30
+
+# Las cinco tarifas que valen. Cuelgan de tres sitios —punto de venta, centro y
+# cliente— y en dos sabores: vending y OCS (el cafe de oficina). Basta con UNA:
+# asi lo hace el informe 10 de VenCloud, que es el que lleva anos usandose.
+CAMPOS_TARIFA = ("tarifa_vending_pdv", "tarifa_vending_centro", "tarifa_vending_cliente",
+                 "tarifa_ocs_centro", "tarifa_ocs_cliente")
+
+
+def _vivo(fila, campo_baja, campo_activo=None):
+    if fecha_valida(v(fila, campo_baja, "")):
+        return False
+    if campo_activo is not None:
+        activo = v(fila, campo_activo, None)
+        if activo is not None and not int(activo):
+            return False
+    return True
+
+
+def cliente_vivo(fila):
+    return _vivo(fila, "baja_cliente", "cliente_activo")
+
+
+def centro_vivo(fila):
+    return _vivo(fila, "baja_centro", "centro_activo")
+
+
+def pdv_vivo(fila):
+    """Un punto de venta sin fecha de baja."""
+    if not _vivo(fila, "baja_pdv"):
+        return False
+    estado = v(fila, "estado_pdv", None)
+    return estado is None or int(estado) != ESTADO_PDV_BAJA
+
+
+def dias_desde(fila, campo, hoy):
+    """Dias desde una fecha del censo, o None si no la hay o es el centinela."""
+    import datetime
+    f = v(fila, campo, "")
+    if not fecha_valida(f):
+        return None
+    try:
+        return (hoy - datetime.date.fromisoformat(str(f)[:10])).days
+    except ValueError:
+        return None
+
+
+def instalacion_pendiente(fila, hoy, dias=DIAS_INSTALACION_PENDIENTE):
+    """Punto de venta dado de alta de verdad hace poco y todavia sin maquina."""
+    if instalado(fila):
+        return False
+    d = dias_desde(fila, "alta_pdv", hoy)
+    return d is not None and 0 <= d <= dias
+
+
+def instalado(fila):
+    """Hay maquina puesta en el punto de venta."""
+    return bool(v(fila, "matricula", "")) and bool(v(fila, "cod_pdv", ""))
+
+
+def sin_tarifa(fila):
+    """Ninguno de los tres niveles tiene tarifa, ni de vending ni de OCS.
+
+    Una maquina vendiendo sin tarifa configurada es dinero mal facturado o
+    directamente perdido.
+    """
+    return not any(v(fila, campo, 0) for campo in CAMPOS_TARIFA)
+
+
+def sin_planograma(fila):
+    """Marcada como sin planograma, o sin un solo canal con articulo.
+
+    Las dos cosas, porque son dos fallos distintos: la bandera es una decision
+    («esta maquina no lleva planograma») y los canales son el hecho. Sin
+    planograma no se puede distinguir «no habia demanda» de «estaba vacia».
+    """
+    if int(v(fila, "sin_planograma", 0) or 0):
+        return True
+    return int(v(fila, "canales_con_articulo", 0) or 0) == 0
+
+
+def telemetria_sin_dato(fila):
+    """Tiene sistema de telemetria y no tiene dispositivo que lo mande.
+
+    Es la peor de las tres porque no se nota: la maquina vende, el parte se
+    cierra, y la venta por tarjeta no llega nunca. Se ve en el efectivo ciego
+    tres meses despues.
+    """
+    if int(v(fila, "telemetria", 0) or 0) == SIN_TELEMETRIA:
+        return False
+    return not str(v(fila, "dispositivo_telemetria", "")).strip()
+
+
+# La fila centinela de VenCloud: el cliente 0 «Ventas Contado», con centro -1 y
+# punto de venta -99. No es un cliente, igual que 00SE0000 no es una maquina.
+CENTINELAS = {"cod_cliente": "0", "num_centro": "-1", "cod_pdv": "-99"}
+
+
+def es_centinela(fila):
+    return any(str(v(fila, campo, "")) == valor for campo, valor in CENTINELAS.items())
+
+
+def incidencias_de(fila, hoy=None):
+    """Las pegas de configuracion de una fila del censo, por su nombre.
+
+    Se para en la primera que corta: un cliente sin centros no tiene sentido que
+    salga ademas como «sin tarifa», porque no hay donde ponerla.
+    """
+    import datetime
+    hoy = hoy or datetime.date.today()
+    if es_centinela(fila) or not cliente_vivo(fila):
+        return []
+    if not v(fila, "num_centro", "") and not v(fila, "centro", ""):
+        return ["cliente_sin_centros"]
+    if not centro_vivo(fila):
+        return []
+    if not v(fila, "cod_pdv", ""):
+        return ["centro_sin_pdv"]
+    if not pdv_vivo(fila):
+        return []
+    if not instalado(fila):
+        # Sin maquina solo es una incidencia si el sitio es nuevo. Los 1.946 que
+        # llevan ahi desde siempre son huecos del parque, no trabajo pendiente.
+        return ["instalacion_pendiente"] if instalacion_pendiente(fila, hoy) else []
+    out = []
+    if sin_tarifa(fila):
+        out.append("sin_tarifa")
+    if sin_planograma(fila):
+        out.append("sin_planograma")
+    if telemetria_sin_dato(fila):
+        out.append("telemetria_sin_dato")
+    return out
+
+
+def altas_de(fila, hoy, dias=DIAS_ALTA_RECIENTE):
+    """Que se ha dado de alta hace poco en esta fila, con su fecha de verdad.
+
+    VenCloud si guarda la fecha de alta del cliente, del centro y del punto de
+    venta, asi que esto no hay que adivinarlo comparando censos: se lee. La
+    maquina no tiene fecha de instalacion —`fechacompra` es otra cosa—, y esa si
+    hay que verla aparecer.
+    """
+    if es_centinela(fila):
+        return {}
+    out = {}
+    for que, campo in (("clientes", "alta_cliente"), ("centros", "alta_centro"),
+                       ("pdvs", "alta_pdv")):
+        d = dias_desde(fila, campo, hoy)
+        if d is not None and 0 <= d <= dias:
+            out[que] = str(v(fila, campo, ""))[:10]
+    return out
+
+
+# El titulo de cada incidencia y por que importa. Viaja al panel para que la
+# pantalla no tenga que llevar una copia que se quede vieja.
+# Estos textos los lee una persona en la pantalla, asi que van acentuados: es lo
+# unico de este fichero que no es codigo.
+CATALOGO_INCIDENCIAS = {
+    "cliente_sin_centros":  ("Cliente sin centros",
+                             "Dado de alta y sin un solo centro colgando."),
+    "centro_sin_pdv":       ("Centro sin puntos de venta",
+                             "El centro existe y no tiene nada instalado."),
+    "centro_sin_maquinas":  ("Centro sin una sola máquina",
+                             "Tiene puntos de venta dados de alta y ni una máquina puesta en "
+                             "ninguno. O se retiraron todas, o la instalación nunca llegó."),
+    "instalacion_pendiente": ("Instalación pendiente",
+                             "Punto de venta dado de alta hace menos de tres meses y todavía sin "
+                             "máquina puesta."),
+    "sin_tarifa":           ("Sin tarifa",
+                             "Vende sin precio configurado —ni en el punto de venta, ni en el "
+                             "centro, ni en el cliente—: dinero mal facturado o perdido."),
+    "sin_planograma":       ("Sin planograma",
+                             "No se puede saber qué debería haber en cada canal, así que tampoco "
+                             "si estaba vacía o es que no había demanda."),
+    "telemetria_sin_dato":  ("Telemetría sin dato electrónico",
+                             "Tiene sistema de telemetría y no tiene dispositivo: la venta por "
+                             "tarjeta no llega, y se descubre en el efectivo ciego meses después."),
+}

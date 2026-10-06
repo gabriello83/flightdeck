@@ -28,6 +28,7 @@ import secrets
 import boto3
 
 import autorizacion as A
+import catalogo as CAT
 from comun import (abre_sesion, borra, cierra_sesion, config, cookie_sesion,
                    cuerpo, escribe, lee, lista, panel_de, quien_es, r, s3, BUCKET)
 
@@ -112,6 +113,7 @@ def encamina(evento, metodo, ruta):
             "nombre": usuario.get("nombre", ""),
             "tipo": perfil.get("tipo", "cliente"),
             "perfil": perfil.get("nombre") or perfil.get("perfil_id", ""),
+            "perfil_id": perfil.get("perfil_id", ""),
             "sesiones": A.sesiones_de(perfil.get("tipo", "cliente"), perfil.get("sesiones", [])),
             "catalogo_sesiones": {k: v[0] for k, v in A.SESIONES.items()},
             "permisos": permisos,
@@ -127,6 +129,28 @@ def encamina(evento, metodo, ruta):
                            "_nota": "Los agregados corren a las 4:45; recien desplegado, lanzalos a mano."})
         return r(200, A.recorta(p, perfil))
 
+    # El cuadro de mando: el indice, o el fichero de un mes. Igual que el panel,
+    # la carpeta sale del perfil de la sesion; lo unico que se pide es QUE mes, y
+    # se valida contra la lista del propio indice antes de tocar S3.
+    if ruta == "/api/cuadro" and metodo == "GET":
+        if "cuadro" not in A.sesiones_de(perfil.get("tipo", "cliente"), perfil.get("sesiones", [])):
+            raise PermissionError("Este perfil no tiene el cuadro de mando.")
+        q = evento.get("queryStringParameters") or {}
+        # Se mira si el parametro VIENE, no si trae algo: con `or`, un mes vacio
+        # se colaba como «dame el indice» en vez de darse por no valido.
+        # «trozo» es el nombre que uso la version de meses troceados.
+        return cuadro(perfil.get("perfil_id", ""),
+                      q["mes"] if "mes" in q else q.get("trozo"))
+
+    # La serie diaria: el indice de meses, o un mes. Es lo que permite pedir hoy,
+    # ayer, este mes, el mes pasado o un intervalo cualquiera desde 2025 sin que
+    # la pagina tenga que bajarse la historia entera.
+    if ruta == "/api/serie" and metodo == "GET":
+        q = evento.get("queryStringParameters") or {}
+        if "centros" in q:
+            return serie_centros(perfil, q["centros"])
+        return serie(perfil, q.get("mes"))
+
     # El orden lo elige el usuario y se guarda en el SERVIDOR: asi lo encuentra
     # igual desde otro ordenador. El navegador no es el sitio donde vive.
     if ruta == "/api/orden":
@@ -141,6 +165,13 @@ def encamina(evento, metodo, ruta):
                 raise ValueError("Orden no valido.")
             escribe(clave, {"orden": [str(x)[:40] for x in orden]}, "ORDEN")
             return r(200, {"ok": True})
+
+    # El catalogo lo sirve la API para que el formulario del navegador no lleve
+    # una copia que se quede vieja en cuanto alguien anada una fuente.
+    if ruta == "/api/catalogo-alarmas" and metodo == "GET":
+        if not permisos.get("alarmas_ver"):
+            raise PermissionError("Este perfil no ve las alarmas.")
+        return r(200, {"catalogo": CAT.para_el_navegador()})
 
     if ruta == "/api/alarmas":
         if metodo == "GET":
@@ -184,6 +215,145 @@ def encamina(evento, metodo, ruta):
         return administra(evento, metodo, ruta, usuario)
 
     return r(404, {"error": "No existe esa ruta."})
+
+
+# ----------------------------------------------------------------------
+# el cuadro de mando
+# ----------------------------------------------------------------------
+def _crudo(clave):
+    """El fichero de S3 tal cual, descomprimido si viene comprimido.
+
+    Un mes de venta son un par de MB: leerlo como JSON y volver a escribirlo
+    solo gastaria memoria y tiempo de una Lambda de 512 MB para devolver lo
+    mismo. Los meses se guardan comprimidos —un mes de AIRBUS pasa de tres
+    megas a unos cuatrocientos kilos—, asi que lo unico que se hace es
+    descomprimirlos.
+    """
+    cuerpo = s3.get_object(Bucket=BUCKET, Key=clave)["Body"].read()
+    if cuerpo[:2] == b"\x1f\x8b":
+        import gzip
+        cuerpo = gzip.decompress(cuerpo)
+    return cuerpo
+
+
+def _como_json(cuerpo):
+    return {"statusCode": 200,
+            "headers": {"content-type": "application/json; charset=utf-8",
+                        "cache-control": "no-store"},
+            "body": cuerpo.decode("utf-8")}
+
+
+def _mes_valido(indice, mes):
+    """Un mes que el indice de ese perfil cite, y nada mas.
+
+    Asi no hay forma de componer otra clave: ni de otro mes inventado, ni —lo
+    que importa— de otro perfil. El nombre no se concatena hasta despues de
+    encontrarlo en la lista.
+    """
+    meses = [str(m.get("mes")) for m in (json.loads(indice).get("meses") or [])]
+    if str(mes) not in meses:
+        raise ValueError("Ese mes no existe en este cuadro.")
+    return str(mes)
+
+
+def cuadro(perfil_id, mes=None):
+    """El indice del cuadro, o el fichero de un mes."""
+    base = f"cabina/{perfil_id}/cuadro/"
+    try:
+        indice = _crudo(base + "indice.json")
+    except Exception:
+        return r(503, {"error": "El cuadro de mando todavia no se ha calculado.",
+                       "_nota": "Lo escriben los agregados (4:45) para cada perfil de "
+                                "cliente con ambito."})
+    if mes is None:
+        return _como_json(indice)
+    return _como_json(_crudo(f"{base}mes-{_mes_valido(indice, mes)}.json.gz"))
+
+
+def serie(perfil, mes=None):
+    """La serie diaria del perfil de la sesion: el indice de meses, o un mes.
+
+    El recorte es el mismo que el del panel y por lo mismo: una fila de la serie
+    lleva los mismos bloques —servicio, dinero, sat, jornadas—, asi que un
+    perfil que no ve el dinero en el panel tampoco puede verlo aqui dia a dia.
+    Si no se recortara, la serie seria la puerta de atras del panel.
+    """
+    perfil_id = perfil.get("perfil_id", "")
+    base = f"cabina/{perfil_id}/serie/"
+    try:
+        indice = _crudo(base + "indice.json")
+    except Exception:
+        return r(503, {"error": "El historico todavia no se ha calculado.",
+                       "_nota": "Lo escriben los agregados cada noche; la historia "
+                                "anterior se rellena a mano una vez."})
+    if mes is None:
+        return r(200, indice_serie_visible(json.loads(indice), perfil))
+    mes = _mes_valido(indice, mes)
+    datos = json.loads(_crudo(f"{base}{mes}.json.gz"))
+    return r(200, {"mes": mes,
+                   "filas": [A.recorta_dia(f, perfil) for f in datos.get("filas", [])]})
+
+
+def ve_delegaciones(perfil):
+    """La delegacion es organizacion interna de Serunion: un cliente no la ve,
+    ni como filtro ni en la ficha de sus centros."""
+    return A.nivel_de(perfil.get("tipo", "cliente")) >= A.NIVEL["operaciones"]
+
+
+def indice_serie_visible(indice, perfil):
+    """El indice de la serie como lo puede ver este perfil.
+
+    Las fichas de los centros llevan cliente y delegacion para poder filtrar.
+    Un perfil de cliente se queda sin la delegacion: no es suya, es nuestra.
+    Los centros que salen son solo los de su serie, que ya se calculo con su
+    ambito: no hay forma de ver un centro de otro.
+    """
+    interno = ve_delegaciones(perfil)
+    indice = dict(indice)
+    indice["centros"] = {k: {c: x for c, x in (v or {}).items()
+                             if interno or c != "delegacion"}
+                         for k, v in (indice.get("centros") or {}).items()}
+    indice["filtros"] = ["delegacion", "cliente", "centro"] if interno else ["cliente", "centro"]
+    return indice
+
+
+def serie_centros(perfil, mes):
+    """El mismo dia partido por centro, para el filtro de delegacion, cliente y
+    centro. Con la misma tijera que la fila del dia, centro a centro."""
+    base = f"cabina/{perfil.get('perfil_id', '')}/serie/"
+    try:
+        indice = json.loads(_crudo(base + "indice.json"))
+    except Exception:
+        return r(503, {"error": "El historico todavia no se ha calculado."})
+    if str(mes) not in [str(m) for m in (indice.get("meses_centros") or [])]:
+        raise ValueError("Ese mes no tiene el reparto por centro.")
+    mes = str(mes)
+    datos = json.loads(_crudo(f"{base}centros-{mes}.json.gz"))
+    filas = []
+    for f in datos.get("filas", []):
+        centros = {}
+        for clave, c in (f.get("centros") or {}).items():
+            x = A.recorta_dia(dict(c, f=None), perfil)
+            x.pop("f", None)
+            if x:
+                centros[clave] = x
+        filas.append({"f": f.get("f"), "centros": centros})
+    return _json_grande({"mes": mes, "filas": filas})
+
+
+def _json_grande(datos):
+    """Una respuesta que puede pasar del limite de una Lambda (6 MB): por encima
+    de 1 MB va comprimida, y el navegador la descomprime solo. El mes del
+    interno partido por centro es la que lo necesita."""
+    cuerpo = json.dumps(datos, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    cabeceras = {"content-type": "application/json; charset=utf-8", "cache-control": "no-store"}
+    if len(cuerpo) <= 1_000_000:
+        return {"statusCode": 200, "headers": cabeceras, "body": cuerpo.decode("utf-8")}
+    import base64
+    import gzip
+    return {"statusCode": 200, "headers": dict(cabeceras, **{"content-encoding": "gzip"}),
+            "isBase64Encoded": True,
+            "body": base64.b64encode(gzip.compress(cuerpo)).decode("ascii")}
 
 
 # ----------------------------------------------------------------------
@@ -239,6 +409,14 @@ def nueva_clave(evento):
                          "con mayuscula, minuscula y numero.") from None
     except Exception:
         raise ValueError("No se ha podido cambiar la contrasena. Vuelve a entrar.") from None
+    # La misma comprobacion que en /api/acceso, y por lo mismo: una cuenta de
+    # Cognito sin ficha no es un usuario de la plataforma. Sin esto, quien
+    # llegara aqui sin ficha se gastaba su clave de un solo uso, recibia una
+    # cookie buena y luego se encontraba un 401 en todas las pantallas, sin
+    # entender por que. Ahora lo lee antes de gastar nada.
+    if not lee(f"USUARIO#{correo}"):
+        return r(403, {"error": "La cuenta no esta configurada. Avisa al administrador."})
+
     _limpia_fallos(correo)
     return r(200, {"ok": True}, [cookie_sesion(abre_sesion(correo))])
 
@@ -304,6 +482,26 @@ def guarda_alarma(evento, usuario):
 # ----------------------------------------------------------------------
 # administracion
 # ----------------------------------------------------------------------
+def _hay_panel(perfil_id):
+    """Si el perfil tiene panel calculado, y de cuando es.
+
+    Los agregados calculan cada noche el panel de cada perfil de esta consola
+    que tenga ambito, sumado a lo que diga config/perfiles.json. Uno recien
+    creado no lo tiene hasta esa noche, y uno sin ambito no lo tiene nunca: sus
+    usuarios entrarian a una pantalla que dice que todavia no hay datos y nadie
+    sabria por que.
+
+    Esto lo mira de frente: una cabecera por perfil, que son unos pocos.
+    """
+    if not perfil_id:
+        return {"existe": False}
+    try:
+        cab = s3.head_object(Bucket=BUCKET, Key=f"cabina/{perfil_id}/panel.json")
+        return {"existe": True, "calculado": cab["LastModified"].isoformat()}
+    except Exception:
+        return {"existe": False}
+
+
 def administra(evento, metodo, ruta, admin):
     resto = ruta[len("/api/admin/"):]
     d = cuerpo(evento)
@@ -366,11 +564,16 @@ def administra(evento, metodo, ruta, admin):
 
     if resto == "perfiles" and metodo == "GET":
         return r(200, {
-            "perfiles": lista("PERFIL#"),
+            "perfiles": [dict(p, panel=_hay_panel(p.get("_id", ""))) for p in lista("PERFIL#")],
             "catalogo_sesiones": {k: {"nombre": v[0], "minimo": v[1]} for k, v in A.SESIONES.items()},
             # El techo se envia para que el panel de admin pueda avisar de que
             # un permiso marcado no va a tener efecto en ese tipo de perfil.
             "techo": {k: sorted(v) for k, v in A.TECHO.items()},
+            # Y el orden de los tipos, para que la consola sepa que una sesion
+            # de «operaciones» no se le puede dar a un perfil de cliente sin
+            # tener que llevar esa escalera escrita por su cuenta.
+            "niveles": A.NIVEL,
+            "implicitos": {k: sorted(v) for k, v in A.IMPLICITOS.items()},
         })
 
     if resto == "perfiles" and metodo == "POST":

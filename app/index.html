@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>digivend</title>
+<!-- Un solo origen. Esta politica bloquea cualquier llamada a otro dominio:
+     es el requisito que manda en todo el proyecto, porque hay redes de cliente
+     que cortan las paginas que llaman fuera. La cabecera equivalente la pone
+     CloudFront, que ademas puede con frame-ancestors; aqui va por si la pagina
+     se abre suelta. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<style>
+:root{
+  --papel:#fcfcfb; --tarjeta:#ffffff; --borde:#e6e4de; --borde-fuerte:#cfccc3;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6; --malo:#b3261e;
+  --sombra:0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-tema="claro"]){
+    --papel:#141413; --tarjeta:#1a1a19; --borde:#2e2e2b; --borde-fuerte:#43423e;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --malo:#f2b8b5;
+    --sombra:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.4);
+  }
+}
+:root[data-tema="oscuro"]{
+  --papel:#141413; --tarjeta:#1a1a19; --borde:#2e2e2b; --borde-fuerte:#43423e;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --malo:#f2b8b5;
+  --sombra:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; min-height:100dvh; display:grid; place-items:center; padding:24px 16px;
+  background:var(--papel); color:var(--tinta);
+  font:400 15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.caja{width:100%; max-width:380px}
+.marca{font-weight:650; font-size:22px; letter-spacing:-.02em; margin:0 0 4px}
+.marca span{color:var(--tinta-2); font-weight:400; font-size:14px; letter-spacing:0}
+.tarjeta{
+  background:var(--tarjeta); border:1px solid var(--borde); border-radius:14px;
+  padding:22px; box-shadow:var(--sombra); margin-top:18px;
+}
+h1{font-size:16px; font-weight:600; margin:0 0 2px}
+.sub{color:var(--tinta-2); font-size:13px; margin:0 0 18px}
+label{display:block; font-size:13px; font-weight:500; margin:0 0 6px}
+input{
+  width:100%; padding:10px 12px; font:inherit; color:var(--tinta);
+  background:var(--papel); border:1px solid var(--borde-fuerte); border-radius:9px;
+}
+input:focus{outline:2px solid var(--s1); outline-offset:1px; border-color:var(--s1)}
+.campo{margin-bottom:14px}
+button{
+  width:100%; padding:11px 14px; font:inherit; font-weight:600; cursor:pointer;
+  color:#fff; background:var(--s1); border:1px solid var(--s1); border-radius:9px;
+}
+button:hover{filter:brightness(1.06)}
+button[disabled]{opacity:.6; cursor:progress}
+.aviso{
+  display:none; margin:0 0 14px; padding:10px 12px; border-radius:9px; font-size:13px;
+  color:var(--malo); background:color-mix(in srgb, var(--malo) 10%, transparent);
+  border:1px solid color-mix(in srgb, var(--malo) 35%, transparent);
+}
+.aviso.vis{display:block}
+.pie{margin-top:14px; color:var(--tinta-3); font-size:12px; text-align:center}
+.reglas{color:var(--tinta-2); font-size:12px; margin:-8px 0 14px}
+</style>
+</head>
+<body>
+<main class="caja">
+  <p class="marca">digivend <span>· operaciones de vending</span></p>
+
+  <form class="tarjeta" id="form" autocomplete="on">
+    <h1 id="titulo">Entrar</h1>
+    <p class="sub" id="subtitulo">Acceso para clientes y equipo de Serunion.</p>
+
+    <p class="aviso" id="aviso" role="alert" aria-live="polite"></p>
+
+    <div class="campo" id="campoCorreo">
+      <label for="correo">Correo</label>
+      <input id="correo" name="username" type="email" autocomplete="username"
+             required autofocus inputmode="email">
+    </div>
+
+    <div class="campo">
+      <label for="clave" id="etiquetaClave">Contraseña</label>
+      <input id="clave" name="password" type="password" autocomplete="current-password" required>
+    </div>
+
+    <p class="reglas" id="reglas" hidden>
+      Doce caracteres como mínimo, con mayúscula, minúscula y número.
+    </p>
+
+    <button type="submit" id="boton">Entrar</button>
+  </form>
+
+  <p class="pie">Todo se sirve desde este dominio. Esta página no llama a ningún sitio externo.</p>
+</main>
+
+<script>
+/* La pagina habla SOLO con /api, que es el mismo origen. El navegador no
+   conoce Cognito ni ningun otro servicio: de eso se encarga la Lambda, desde
+   dentro de AWS, donde la red del cliente no pinta nada. */
+const $ = s => document.querySelector(s);
+let reto = null;              // el que devuelve la API cuando toca cambiar la clave
+
+function avisa(texto){
+  const a = $("#aviso");
+  a.textContent = texto || "";
+  a.classList.toggle("vis", !!texto);
+}
+
+async function api(ruta, cuerpo){
+  const r = await fetch(ruta, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {"content-type": "application/json"},
+    body: JSON.stringify(cuerpo),
+  });
+  let d = {};
+  try { d = await r.json(); } catch(e) {}
+  return {ok: r.ok, estado: r.status, datos: d};
+}
+
+function modoCambioDeClave(correo){
+  reto = null;
+  $("#titulo").textContent = "Elige tu contraseña";
+  $("#subtitulo").textContent = "La que te dieron era de un solo uso.";
+  $("#campoCorreo").hidden = true;
+  $("#etiquetaClave").textContent = "Contraseña nueva";
+  $("#clave").value = "";
+  $("#clave").autocomplete = "new-password";
+  $("#reglas").hidden = false;
+  $("#boton").textContent = "Guardar y entrar";
+  $("#clave").focus();
+}
+
+async function aDondeVa(){
+  const r = await fetch("/api/yo", {credentials: "same-origin"});
+  if(!r.ok) return "/panel/";
+  const yo = await r.json();
+  /* El administrador va a su consola; quien tiene el cuadro de mando, al
+     cuadro (es lo que AIRBUS ya conoce: el de David); el resto, al panel. Quien
+     decide es la API: la pagina solo obedece a lo que le diga el perfil. */
+  if(yo.tipo === "admin") return "/consola/";
+  return (yo.sesiones || []).includes("cuadro") ? "/cuadro/" : "/panel/";
+}
+
+$("#form").addEventListener("submit", async e => {
+  e.preventDefault();
+  avisa("");
+  const boton = $("#boton");
+  boton.disabled = true;
+  const textoPrevio = boton.textContent;
+  boton.textContent = "Un momento…";
+
+  try{
+    const clave = $("#clave").value;
+    const correo = $("#correo").value.trim().toLowerCase();
+
+    const r = reto
+      ? await api("/api/acceso/nueva-clave", {correo: reto.correo, reto: reto.reto, clave})
+      : await api("/api/acceso", {correo, clave});
+
+    if(r.datos && r.datos.cambio_requerido){
+      reto = {correo: r.datos.correo, reto: r.datos.reto};
+      const guardado = reto;
+      modoCambioDeClave(correo);
+      reto = guardado;
+      return;
+    }
+    if(!r.ok){
+      avisa(r.datos.error || "No se ha podido entrar.");
+      return;
+    }
+    location.href = await aDondeVa();
+  }catch(err){
+    avisa("No hay conexión con el servidor. Inténtalo otra vez.");
+  }finally{
+    boton.disabled = false;
+    if(boton.textContent === "Un momento…") boton.textContent = textoPrevio;
+  }
+});
+
+/* Si ya hay sesion abierta, no se ensena el formulario: se entra directo. */
+(async function yaDentro(){
+  try{
+    const r = await fetch("/api/yo", {credentials: "same-origin"});
+    if(r.ok) location.href = await aDondeVa();
+  }catch(e){}
+})();
+</script>
+</body>
+</html>

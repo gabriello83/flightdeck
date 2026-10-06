@@ -139,6 +139,12 @@ Resources:
             Effect: Allow
             Action: secretsmanager:GetSecretValue
             Resource: !Ref TokenVenCloud
+          # Los perfiles que da de alta la consola. La tabla es de la pila web,
+          # pero lleva el mismo prefijo: sigue siendo de este proyecto.
+          - Sid: SoloLeerPerfiles
+            Effect: Allow
+            Action: dynamodb:Scan
+            Resource: !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Prefijo}-plataforma"
           - Sid: SoloNuestrosRegistros
             Effect: Allow
             Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
@@ -204,6 +210,12 @@ Resources:
               - Effect: Deny
                 Action: [s3:GetObject]
                 Resource: !Sub "${Bucket.Arn}/restringido/*"
+              # El ambito de los perfiles que se dan de alta en la consola: asi
+              # un cliente nuevo no pide tocar perfiles.json. Solo leer, y solo
+              # esa tabla: usuarios y fichas se leen pero no se tocan.
+              - Effect: Allow
+                Action: [dynamodb:Scan]
+                Resource: !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Prefijo}-plataforma"
               - Effect: Allow
                 Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
                 Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Prefijo}-*"
@@ -245,7 +257,11 @@ Resources:
       Handler: index.lambda_handler
       Role: !GetAtt RolExtraccion.Arn
       Timeout: 900
-      MemorySize: 512
+      # 2 GB no es por capricho: un dia de stock_maquina son unos 40 MB de JSON,
+      # y entre el cuerpo descargado y su copia comprimida se juntan varios
+      # cientos de megas. Ademas Lambda da mas CPU con mas memoria, asi que la
+      # noche entera acaba antes y el coste sale igual.
+      MemorySize: 2048
       Environment:
         Variables:
           VENCLOUD_ENDPOINT: !Ref VenCloudEndpoint
@@ -253,7 +269,10 @@ Resources:
           VENCLOUD_TOKEN_SECRETO: !Ref TokenVenCloud
           BUCKET: !Ref Bucket
           MANIFIESTO: config/manifiesto.json
-          FORMATO_FECHA: "%d/%m/%Y"
+          # ISO obligatorio. Una barra aqui viaja dentro de la RUTA de la URL,
+          # e IIS rechaza con 404 cualquier barra codificada en la ruta. Con
+          # %d/%m/%Y fallaron las 66 descargas incrementales de la primera carga.
+          FORMATO_FECHA: "%Y-%m-%d"
       Tags:
         - { Key: Proyecto, Value: !Ref Proyecto }
       Code:

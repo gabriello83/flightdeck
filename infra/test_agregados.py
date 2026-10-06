@@ -57,26 +57,48 @@ def pon(destino, id_informe, dia, filas):
 
 # ---------------------------------------------------------------- datos
 pon("crudo/visita_cabecera", "visita_cabecera", AYER,
-    [{"empleadoid": 0, "empleado": "SYSTEM", "tipo_parte": 2, "centro": "AIRBUS GETAFE",
+    [{"empleadoid": 0, "empleado": "SYSTEM", "tipo_parte": 2, "centro": "AIRBUS GETAFE", "num_centro": "1001",
+      "cliente": "AIRBUS OPERATIONS SL", "cod_cliente": "C7",
       "matricula": "A1", "minutos": 0, "fecha_ini": str(AYER)}] * 200
-    + [{"empleadoid": 7, "empleado": "Ana", "tipo_parte": 0, "centro": "AIRBUS GETAFE",
+    + [{"empleadoid": 7, "empleado": "Ana", "tipo_parte": 0, "centro": "AIRBUS GETAFE", "num_centro": "1001",
+        "cliente": "AIRBUS OPERATIONS SL", "cod_cliente": "C7",
         "matricula": "A1", "minutos": 7, "fecha_ini": str(AYER)}] * 100
-    + [{"empleadoid": 7, "empleado": "Ana", "tipo_parte": 0, "centro": "CONSUM MURCIA",
+    + [{"empleadoid": 7, "empleado": "Ana", "tipo_parte": 0, "centro": "CONSUM MURCIA", "num_centro": "2002",
+        "cliente": "CONSUM S COOP V", "cod_cliente": "C9",
         "matricula": "C1", "minutos": 400, "fecha_ini": str(AYER)}] * 10)
 
+# OJO: los informes de aqui abajo van SIN columna `centro`, porque el de verdad
+# no la trae. La primera version de esta prueba se la inventaba, y por eso no
+# descubrio que el panel de AIRBUS salia con 0 EUR de recaudacion y 0 unidades
+# cargadas: las filas sin centro no encajaban en ningun ambito y se caian.
+# Lo que si traen es `matricula`, y de ahi sale el centro por el mapa.
 pon("crudo/visita_reposiciones", "visita_reposiciones", AYER,
-    [{"tipo_linea": "CM", "cantidad": 10, "precio_coste": 1.0, "etiq_canal": "44", "centro": "AIRBUS GETAFE"}] * 50
-    + [{"tipo_linea": "CM", "cantidad": 100, "precio_coste": 0.004, "etiq_canal": "", "centro": "AIRBUS GETAFE"}] * 50)
+    [{"tipo_linea": "CM", "cantidad": 10, "precio_coste": 1.0, "etiq_canal": "44", "matricula": "A1"}] * 50
+    + [{"tipo_linea": "CM", "cantidad": 100, "precio_coste": 0.004, "etiq_canal": "", "matricula": "A1"}] * 50
+    # Y una maquina de Consum, que a AIRBUS no le toca.
+    + [{"tipo_linea": "CM", "cantidad": 7, "precio_coste": 1.0, "etiq_canal": "44", "matricula": "C1"}] * 20)
 
 pon("crudo/stock_maquina", "stock_maquina", AYER,
-    [{"motivo": "RC", "cantidad": -2, "puc": 0.60, "centro": "AIRBUS GETAFE"}] * 10
+    [{"motivo": "RC", "cantidad": -2, "puc": 0.60, "articulo": "DONETTES CLASICO",
+      "centro": "AIRBUS GETAFE"}] * 10
+    # Un solo envase de cafe pesa mas en euros que diez lineas de snack.
+    + [{"motivo": "RC", "cantidad": -1, "puc": 23.32,
+        "articulo": "CAFE SOLUBLE LIOFILIZADO DESCAFEINADO", "centro": "AIRBUS GETAFE"}]
     + [{"motivo": "CM", "cantidad": 10, "puc": 0.60, "centro": "AIRBUS GETAFE"}] * 10)
 
 pon("crudo/recaudacion", "recaudacion", AYER,
     [{"anho": HOY.year, "mes": HOY.month, "imp_recaudado": 100, "imp_pago_bancario": 0,
-      "tipo_telemetria": 40, "criterio_calculo": 3, "centro": "AIRBUS GETAFE"}] * 3
+      "tipo_telemetria": 40, "criterio_calculo": 3, "matricula": "A1"}] * 3
     + [{"anho": 2026, "mes": 1, "imp_recaudado": 100, "imp_pago_bancario": 120,
-        "tipo_telemetria": 0, "criterio_calculo": 3, "centro": "AIRBUS GETAFE"}] * 2)
+        "tipo_telemetria": 0, "criterio_calculo": 3, "matricula": "A1"}] * 2
+    # La fila rota de junio, como la de verdad
+    + [{"anho": 2026, "mes": 6, "imp_recaudado": -7_521_760_075.56, "imp_pago_bancario": 0,
+        "tipo_telemetria": 40, "criterio_calculo": 3, "matricula": "A1"}]
+    + [{"anho": 2026, "mes": 6, "imp_recaudado": 50, "imp_pago_bancario": 10,
+        "tipo_telemetria": 40, "criterio_calculo": 3, "matricula": "A1"}] * 4
+    # De Consum, para que se vea que el ambito sigue filtrando con el mapa puesto.
+    + [{"anho": 2026, "mes": 1, "imp_recaudado": 9_999, "imp_pago_bancario": 0,
+        "tipo_telemetria": 40, "criterio_calculo": 3, "matricula": "C1"}])
 
 pon("crudo/sat_averias", "sat_averias", AYER,
     [{"matricula": "00SE0000", "categoria": "ATENCION AL CLIENTE", "tipo_tarea": "A", "centro": "AIRBUS GETAFE"}] * 40
@@ -84,17 +106,94 @@ pon("crudo/sat_averias", "sat_averias", AYER,
     + [{"matricula": "A1", "categoria": "AVERIAS TECNICAS", "tipo_tarea": "E", "centro": "AIRBUS GETAFE"}] * 3)
 
 pon("crudo/sat_eventos", "sat_eventos", AYER,
-    [{"averia_id": 1, "estado": 0, "fecha": f"{AYER}T08:00:00", "centro": "AIRBUS GETAFE"},
-     {"averia_id": 1, "estado": 99, "fecha": f"{AYER}T14:00:00", "centro": "AIRBUS GETAFE"}])
+    [{"averia_id": 1, "estado": 0, "fecha": f"{AYER}T08:00:00", "matricula": "A1"},
+     {"averia_id": 1, "estado": 99, "fecha": f"{AYER}T14:00:00", "matricula": "A1"}])
 
+# Las jornadas son de una RUTA y un vehiculo, no de un centro, y el informe no
+# trae matricula: no hay forma de atribuirlas a un cliente, asi que solo salen en
+# el panel interno. Tampoco hace falta: el bloque de jornadas no llega a un
+# perfil de cliente (autorizacion.SESIONES lo pide a partir de «operaciones»).
 pon("crudo/jornadas", "jornadas", AYER,
-    [{"temperaturaini": 2.0, "kminiciales": 100, "kmfinales": 150, "maplatitudini": 37.4, "centro": "AIRBUS GETAFE"}] * 9
-    + [{"temperaturaini": 26.0, "kminiciales": 100, "kmfinales": 160, "maplatitudini": 0, "centro": "AIRBUS GETAFE"}])
+    [{"temperaturaini": 2.0, "kminiciales": 100, "kmfinales": 150, "maplatitudini": 37.4}] * 9
+    + [{"temperaturaini": 26.0, "kminiciales": 100, "kmfinales": 160, "maplatitudini": 0}])
 
+# DOS cierres mensuales dentro de la ventana: el de agosto y el de septiembre.
+# Es lo normal con 120 dias, y sumarlos multiplicaria las existencias.
 pon("crudo/stock_balance", "stock_balance", AYER,
-    [{"tipo_elemento": "M", "valor_total": 1000, "fecha_ult_inventario": str(HOY), "centro": "AIRBUS GETAFE"}] * 2
-    + [{"tipo_elemento": "M", "valor_total": 500, "fecha_ult_inventario": "1900-01-01", "centro": "AIRBUS GETAFE"}] * 2
-    + [{"tipo_elemento": "A", "valor_total": 9000, "fecha_ult_inventario": str(HOY), "centro": "AIRBUS GETAFE"}])
+    [{"anho": 2026, "mes": 9, "tipo_elemento": "M", "valor_total": 1000,
+      "fecha_ult_inventario": str(HOY), "matricula": "A1"}] * 2
+    + [{"anho": 2026, "mes": 9, "tipo_elemento": "M", "valor_total": 500,
+        "fecha_ult_inventario": "1900-01-01", "matricula": "A1"}] * 2
+    + [{"anho": 2026, "mes": 9, "tipo_elemento": "A", "valor_total": 9000,
+        "fecha_ult_inventario": str(HOY), "matricula": "A1"}]
+    + [{"anho": 2026, "mes": 8, "tipo_elemento": "M", "valor_total": 7777,
+        "fecha_ult_inventario": str(HOY), "matricula": "A1"}] * 6
+    + [{"anho": 2026, "mes": 8, "tipo_elemento": "A", "valor_total": 123456,
+        "fecha_ult_inventario": str(HOY), "matricula": "A1"}])
+
+# El censo de la instalacion: un maestro, con una pega de cada clase.
+ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"] = gzip.compress(json.dumps([
+    # bien puesta: tarifa, planograma y telemetria con su dispositivo
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P1", "matricula": "A1", "estado_pdv": 1, "tarifa_vending_pdv": 9, "cliente_activo": 1, "centro_activo": 1,
+     "canales_con_articulo": 12, "telemetria": 40, "dispositivo_telemetria": "NY-001",
+     "delegacion": "Madrid", "ubicacion": "Hall"},
+    # sin tarifa de ninguna clase
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P2", "matricula": "A2", "estado_pdv": 1, "canales_con_articulo": 8,
+     "telemetria": 0, "delegacion": "Madrid", "ubicacion": "Taller"},
+    # con telemetria y sin dispositivo: vende y la venta no llega
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P3", "matricula": "A3", "estado_pdv": 1, "tarifa_vending_pdv": 9,
+     "canales_con_articulo": 6, "telemetria": 40, "dispositivo_telemetria": "",
+     "delegacion": "Madrid", "ubicacion": "Cantina"},
+    # sin planograma: ni un canal con articulo
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P4", "matricula": "A4", "estado_pdv": 1, "tarifa_ocs_centro": 3,
+     "canales_con_articulo": 0, "telemetria": 0, "delegacion": "Madrid"},
+    # Dado de alta la semana pasada: sale como alta reciente, con su fecha.
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P6", "matricula": "A6", "estado_pdv": 1, "tarifa_vending_pdv": 9,
+     "canales_con_articulo": 10, "telemetria": 0, "ubicacion": "Nave 4",
+     "alta_pdv": (HOY - datetime.timedelta(days=6)).isoformat()},
+    # Un cliente dado de baja: no sale por ninguna parte, ni sus pegas.
+    {"cod_cliente": "C0", "cliente": "CLIENTE QUE SE FUE", "cliente_activo": 0,
+     "num_centro": "9999", "centro": "VIEJO", "cod_pdv": "Z1", "matricula": "Z1",
+     "estado_pdv": 1, "canales_con_articulo": 0, "telemetria": 40,
+     "dispositivo_telemetria": ""},
+    # punto de venta dado de baja: NO es una incidencia
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P5", "matricula": "", "estado_pdv": 9, "baja_pdv": "2026-01-15",
+     "canales_con_articulo": 0, "telemetria": 0},
+    # sitio de siempre y sin maquina: TAMPOCO. Son 1.946 en el parque real y
+    # llenarian el panel de casos que nadie va a tocar.
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P7", "matricula": "", "estado_pdv": 0, "alta_pdv": "1900-01-01"},
+    # pero uno dado de alta hace un mes y todavia vacio, SI: eso es una
+    # instalacion que no ha llegado.
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001", "centro": "AIRBUS GETAFE",
+     "cod_pdv": "P8", "matricula": "", "estado_pdv": 0, "ubicacion": "Nave 5",
+     "alta_pdv": (HOY - datetime.timedelta(days=40)).isoformat()},
+    # un centro entero con puntos de venta y ni una maquina: AIRBUS PUERTO REAL
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1010",
+     "centro": "AIRBUS PUERTO REAL", "cod_pdv": "R1", "matricula": "", "estado_pdv": 0,
+     "alta_pdv": "1900-01-01", "delegacion": "Cadiz"},
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1010",
+     "centro": "AIRBUS PUERTO REAL", "cod_pdv": "R2", "matricula": "", "estado_pdv": 0,
+     "alta_pdv": "1900-01-01", "delegacion": "Cadiz"},
+    # y la fila centinela de VenCloud, que no es un cliente
+    {"cod_cliente": "0", "cliente": "Ventas Contado", "num_centro": "-1", "centro": "Ventas Contado",
+     "cod_pdv": "-99", "matricula": "", "estado_pdv": 0},
+    # centro dado de alta y sin nada puesto
+    {"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1009", "centro": "AIRBUS NUEVO",
+     "cod_pdv": "", "matricula": ""},
+    # cliente nuevo sin un solo centro
+    {"cod_cliente": "C8", "cliente": "CLIENTE RECIEN FIRMADO", "num_centro": "", "centro": ""},
+    # y uno de Consum, que a AIRBUS no le toca
+    {"cod_cliente": "C9", "cliente": "CONSUM S COOP V", "num_centro": "2002", "centro": "CONSUM MURCIA",
+     "cod_pdv": "Q1", "matricula": "C1", "estado_pdv": 1, "canales_con_articulo": 0,
+     "telemetria": 40, "dispositivo_telemetria": ""},
+]).encode())
 
 ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
     {"id": "interno", "ambito": {}},
@@ -136,14 +235,32 @@ comprueba("unidades totales", airbus["servicio"]["carga"]["unidades_total"], 550
 comprueba("unidades vendibles", airbus["servicio"]["carga"]["unidades_vendibles"], 500)
 
 print("\nLa merma se valora con puc")
-comprueba("10 lineas de caducidad", airbus["servicio"]["merma"]["caducidad"]["lineas"], 10)
-comprueba("12 EUR", airbus["servicio"]["merma"]["caducidad"]["euros"], 12.0)
+comprueba("11 lineas de caducidad", airbus["servicio"]["merma"]["caducidad"]["lineas"], 11)
+comprueba("12 EUR de snack mas 23,32 de cafe",
+          airbus["servicio"]["merma"]["caducidad"]["euros"], 35.32)
+
+print("\nY el desglose explica por que: un envase de cafe pesa mas que 10 de snack")
+art = airbus["servicio"]["merma"]["caducidad_por_articulo"]
+comprueba("dos articulos", len(art), 2)
+comprueba("el cafe manda en euros", art[0]["articulo"], "CAFE SOLUBLE LIOFILIZADO DESCAFEINADO")
+comprueba("con UNA sola linea", art[0]["lineas"], 1)
+comprueba("y 23,32 EUR", art[0]["euros"], 23.32)
+comprueba("mientras el snack lleva 10 lineas", art[1]["lineas"], 10)
+comprueba("y solo 12 EUR", art[1]["euros"], 12.0)
+comprueba("el euro por unidad lo deja claro", art[0]["eur_unidad"], 23.32)
+comprueba("contra el del snack", art[1]["eur_unidad"], 0.6)
 
 print("\nEl mes en curso sale marcado como provisional")
 actual = [p for p in airbus["dinero"]["periodos"] if p["periodo"] == f"{HOY.year}-{HOY.month:02d}"][0]
 comprueba("provisional", actual["provisional"], True)
 comprueba("lleva su aviso", "tarjeta" in actual.get("_nota", ""), True)
+junio = [p for p in airbus["dinero"]["periodos"] if p["periodo"] == "2026-06"][0]
+comprueba("junio sobrevive a la fila rota", junio["efectivo"], 200.0)
+comprueba("y dice que aparto una", junio["filas_imposibles"], 1)
+comprueba("sin dejar el porcentaje en negativo", junio["pct_ciego"], 0.0)
+
 enero = [p for p in airbus["dinero"]["periodos"] if p["periodo"] == "2026-01"][0]
+comprueba("un mes limpio no lleva la marca", "filas_imposibles" in enero, False)
 comprueba("enero ya esta cerrado", enero["provisional"], False)
 comprueba("efectivo ciego de enero", enero["efectivo_sin_telemetria"], 200.0)
 comprueba("100 % ciego", enero["pct_ciego"], 100.0)
@@ -155,17 +272,238 @@ comprueba("12 averias tecnicas", airbus["sat"]["averias_tecnicas"], 12)
 comprueba("3 preventivos", airbus["sat"]["preventivos"], 3)
 comprueba("6 h de cierre", airbus["sat"]["horas_cierre"]["mediana"], 6.0)
 
-print("\nJornadas: temperatura, km y GPS")
-comprueba("10 jornadas", airbus["jornadas"]["jornadas"], 10)
-comprueba("1 fuera de temperatura", airbus["jornadas"]["temperatura_fuera"], 1)
-comprueba("510 km", airbus["jornadas"]["km_total"], 510)
-comprueba("90 % con GPS", airbus["jornadas"]["gps"]["pct"], 90.0)
+print("\nJornadas: temperatura, km y GPS (solo en el panel interno)")
+comprueba("10 jornadas", interno["jornadas"]["jornadas"], 10)
+comprueba("1 fuera de temperatura", interno["jornadas"]["temperatura_fuera"], 1)
+comprueba("510 km", interno["jornadas"]["km_total"], 510)
+comprueba("90 % con GPS", interno["jornadas"]["gps"]["pct"], 90.0)
+comprueba("y a un cliente no se le atribuye ninguna", airbus["jornadas"]["jornadas"], 0)
 
-print("\nInventario y existencias")
+print("\nEl mapa de centros: una fila sin centro acaba en el panel de su cliente")
+# Esto es lo que estaba roto. Las tres comprobaciones de arriba —carga 520 EUR,
+# 5.500 unidades y la recaudacion de enero— ya pasan por el mapa: sus informes no
+# traen centro. Aqui se mira el mapa de frente.
+comprueba("aprende las matriculas", res["maquinas_con_centro"] >= 2, True)
+_m = L.MapaCentros()
+_m.aprende([{"matricula": "A1", "centro": "AIRBUS GETAFE", "cod_pdv": "P1"}])
+comprueba("resuelve por matricula", _m.centro_de({"matricula": "A1"}), "AIRBUS GETAFE")
+comprueba("resuelve por pdv", _m.centro_de({"cod_pdv": "P1"}), "AIRBUS GETAFE")
+comprueba("respeta el centro que ya trae la fila",
+          _m.centro_de({"matricula": "A1", "centro": "OTRO"}), "OTRO")
+comprueba("y una maquina que no conoce no se la inventa",
+          _m.centro_de({"matricula": "ZZ"}), "")
+comprueba("con mapa, la fila de recaudacion entra en el ambito",
+          L.en_ambito({"matricula": "A1"}, {"clientes": ["AIRBUS"]}, _m), True)
+comprueba("y la de otro cliente, no",
+          L.en_ambito({"matricula": "ZZ"}, {"clientes": ["AIRBUS"]}, _m), False)
+comprueba("un ambito vacio sigue cogiendolo todo",
+          L.en_ambito({"matricula": "ZZ"}, {}, _m), True)
+
+print("\nLa mudanza de VenCloud: el cliente de verdad en vez del nombre del centro")
+# Hasta octubre de 2026 todos los centros colgaban del cliente «Serunion» y el
+# cliente real solo estaba en el nombre del centro. VenCloud los reasigna. Lo
+# que sigue prueba que el ambito acierta ANTES, DURANTE y DESPUES, sin que haya
+# que cambiar nada un dia concreto.
+AMB = {"clientes": ["AIRBUS"]}
+_m2 = L.MapaCentros()
+# ANTES: cliente SERUNION para todos, el nombre del centro es lo unico que distingue
+_m2.aprende([{"matricula": "A9", "centro": "AIRBUS GETAFE", "cliente": "SERUNION"},
+             {"matricula": "C9", "centro": "CONSUM MURCIA", "cliente": "SERUNION"}])
+comprueba("antes: entra por el nombre del centro",
+          L.en_ambito({"matricula": "A9"}, AMB, _m2), True)
+comprueba("antes: y Consum sigue fuera",
+          L.en_ambito({"matricula": "C9"}, AMB, _m2), False)
+# DESPUES: el centro ya no lleva el nombre del cliente delante, pero el campo si
+_m3 = L.MapaCentros()
+_m3.aprende([{"matricula": "A9", "centro": "GETAFE", "cliente": "AIRBUS OPERATIONS SL"},
+             {"matricula": "C9", "centro": "MURCIA", "cliente": "CONSUM COOP V"}])
+comprueba("despues: entra por el campo cliente",
+          L.en_ambito({"matricula": "A9"}, AMB, _m3), True)
+comprueba("despues: y Consum sigue fuera",
+          L.en_ambito({"matricula": "C9"}, AMB, _m3), False)
+comprueba("una fila que ya trae el cliente no necesita mapa",
+          L.en_ambito({"cliente": "AIRBUS OPERATIONS SL"}, AMB, _m3), True)
+comprueba("la lista de clientes vistos delata si la mudanza ha entrado",
+          sorted(_m3.clientes), ["AIRBUS OPERATIONS SL", "CONSUM COOP V"])
+comprueba("mientras no ha entrado, sale un solo nombre",
+          sorted(_m2.clientes), ["SERUNION"])
+
+print("\nEl resumen delata un perfil que se ha quedado sin filas")
+# Es la forma de enterarse ANTES de que llame el cliente. Un ambito que deja de
+# encajar —porque en VenCloud le cambiaron el nombre— no da ningun error: da un
+# panel vacio, que parece un mes flojo.
+porp = {p["id"]: p for p in res["perfiles"]}
+comprueba("AIRBUS trae filas", porp["cli-airbus"]["filas"] > 0, True)
+comprueba("y dice que declara AIRBUS", porp["cli-airbus"]["declara"], ["AIRBUS"])
+comprueba("y que centros coge, con su numero delante",
+          [c["nombre"] for c in porp["cli-airbus"]["coge_centros"]], ["AIRBUS GETAFE"])
+comprueba("el numero es el que hay que copiar a perfiles.json",
+          porp["cli-airbus"]["coge_centros"][0]["num"], "1001")
+comprueba("el interno coge todo", porp["interno"]["filas"] > porp["cli-airbus"]["filas"], True)
+# Y bajo que cliente de VenCloud cuelgan de verdad esos centros, que puede no
+# parecerse a lo que el perfil declara.
+comprueba("dice el cliente de verdad de los centros de AIRBUS",
+          porp["cli-airbus"]["clientes_de_verdad"], ["AIRBUS OPERATIONS SL"])
+comprueba("se cuentan los clientes leidos", res["clientes"]["total"], 4)
+comprueba("y salen con su nombre de verdad", res["clientes"]["muestra"],
+          ["AIRBUS OPERATIONS SL", "CLIENTE QUE SE FUE", "CLIENTE RECIEN FIRMADO",
+           "CONSUM S COOP V"])
+comprueba("la fila centinela de VenCloud no cuenta como cliente",
+          "Ventas Contado" not in str(res["clientes"]["muestra"]), True)
+
+# Y un perfil cuyo nombre ya no existe: cero filas y ninguna coincidencia.
+ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
+    {"id": "cli-fantasma", "ambito": {"clientes": ["EMPRESA QUE YA NO SE LLAMA ASI"]}},
+]}).encode()
+_r2 = L.lambda_handler({}, None)
+comprueba("un perfil que ya no encaja sale a cero", _r2["perfiles"][0]["filas"], 0)
+comprueba("y dice que no coge ningun centro", _r2["perfiles"][0]["coge_centros"], [])
+
+print("\nEl numero de centro aguanta un renombrado; el nombre, no")
+# Es lo que paso el 4 de octubre de 2026: «AIRBUS SAN PABLO» se partio en NORTE
+# y SUR. Un ambito escrito con numeros no se habria enterado.
+_m4 = L.MapaCentros()
+_m4.aprende([{"matricula": "P1", "num_centro": "3003", "centro": "AIRBUS SAN PABLO",
+              "cliente": "SERUNION", "cod_cliente": "S1"}])
+_por_nombre = {"centros": ["AIRBUS SAN PABLO"]}
+_por_numero = {"centros": ["3003"]}
+comprueba("antes del renombrado, el nombre vale",
+          L.en_ambito({"matricula": "P1"}, _por_nombre, _m4), True)
+comprueba("y el numero tambien",
+          L.en_ambito({"matricula": "P1"}, _por_numero, _m4), True)
+# Lo renombran: misma maquina, mismo numero de centro, nombre nuevo.
+_m5 = L.MapaCentros()
+_m5.aprende([{"matricula": "P1", "num_centro": "3003", "centro": "AIRBUS SAN PABLO NORTE",
+              "cliente": "SERUNION", "cod_cliente": "S1"}])
+comprueba("despues del renombrado, el nombre exacto ya no encaja",
+          L.en_ambito({"matricula": "P1"}, _por_nombre, _m5), False)
+comprueba("pero el numero sigue encajando",
+          L.en_ambito({"matricula": "P1"}, _por_numero, _m5), True)
+comprueba("y el codigo de cliente tambien vale como ambito",
+          L.en_ambito({"matricula": "P1"}, {"clientes": ["S1"]}, _m5), True)
+comprueba("un codigo que no es el suyo, no",
+          L.en_ambito({"matricula": "P1"}, {"clientes": ["S9"]}, _m5), False)
+
+print("\nInstalaciones: el censo y lo que esta puesto a medias")
+inst = airbus["instalaciones"]
+comprueba("cuenta los clientes del ambito", inst["censo"]["clientes"], 1)
+comprueba("y sus centros", inst["censo"]["centros"], 3)
+comprueba("y sus puntos de venta", inst["censo"]["pdvs"], 10)
+inc = inst["incidencias"]
+comprueba("una sin tarifa", inc["sin_tarifa"]["n"], 1)
+comprueba("y dice cual", inc["sin_tarifa"]["casos"][0]["pdv"], "P2")
+comprueba("una sin planograma", inc["sin_planograma"]["n"], 1)
+comprueba("una con telemetria y sin dispositivo", inc["telemetria_sin_dato"]["n"], 1)
+comprueba("y dice cual", inc["telemetria_sin_dato"]["casos"][0]["m"], "A3")
+comprueba("un centro sin puntos de venta", inc["centro_sin_pdv"]["n"], 1)
+comprueba("una instalacion pendiente", inc["instalacion_pendiente"]["n"], 1)
+# Un centro entero vacio no se ve en ninguna fila sola: hay que recorrerlo.
+# Es lo que le paso a AIRBUS PUERTO REAL, con 22 puntos de venta y 0 maquinas.
+comprueba("y un centro sin una sola maquina", inc["centro_sin_maquinas"]["n"], 1)
+comprueba("con su numero", inc["centro_sin_maquinas"]["casos"][0]["num_centro"], "1010")
+comprueba("y cuantos puntos de venta tiene",
+          inc["centro_sin_maquinas"]["casos"][0]["pdv"], "2 puntos de venta")
+comprueba("y es la de hace un mes", inc["instalacion_pendiente"]["casos"][0]["pdv"], "P8")
+comprueba("el sitio de siempre sin maquina NO es una incidencia",
+          any(c["pdv"] == "P7" for i in inc.values() for c in i["casos"]), False)
+comprueba("ni la fila centinela de VenCloud", "Ventas Contado" not in str(inc), True)
+comprueba("el punto de venta de baja NO es una incidencia",
+          any(c["pdv"] == "P5" for i in inc.values() for c in i["casos"]), False)
+comprueba("la de Consum no se cuela", "Q1" not in str(inc), True)
+comprueba("el catalogo explica cada una", len(inst["catalogo"]), 7)
+comprueba("y dice por que importa",
+          "efectivo ciego" in inst["catalogo"]["telemetria_sin_dato"]["porque"], True)
+# El cliente sin centros es del interno: AIRBUS no lo ve, y es correcto.
+comprueba("el interno si ve el cliente sin centros",
+          interno["instalaciones"]["incidencias"]["cliente_sin_centros"]["n"], 1)
+comprueba("un cliente dado de baja no da ni una incidencia",
+          "CLIENTE QUE SE FUE" not in str(interno["instalaciones"]["incidencias"]), True)
+
+print("\nLas altas se leen de VenCloud, no se adivinan")
+alt = inst["altas_recientes"]
+comprueba("un punto de venta de alta esta semana", len(alt["pdvs"]), 1)
+comprueba("con su codigo", alt["pdvs"][0]["id"], "P6")
+comprueba("y su fecha de verdad", alt["pdvs"][0]["cuando"],
+          (HOY - datetime.timedelta(days=6)).isoformat())
+comprueba("y su ubicacion, que es lo que se lee", alt["pdvs"][0]["nombre"], "Nave 4")
+comprueba("lo de hace anos no sale", len(alt["clientes"]), 0)
+
+print("\nLa primera vez no se inventa ninguna alta")
+comprueba("nuevos vacio", inst["nuevos"], {})
+comprueba("y lo dice", "primera vez" in inst["_nota_nuevos"], True)
+
+print("\nY a la siguiente, lo que haya aparecido sale como alta")
+_censo = json.loads(gzip.decompress(ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"]))
+_censo.append({"cod_cliente": "C7", "cliente": "AIRBUS OPERATIONS SL", "num_centro": "1001",
+               "centro": "AIRBUS GETAFE", "cod_pdv": "P9", "matricula": "A9",
+               "estado_pdv": 1, "tarifa_vending_pdv": 9, "canales_con_articulo": 4,
+               "telemetria": 40, "dispositivo_telemetria": "NY-009"})
+ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"] = gzip.compress(json.dumps(_censo).encode())
+# La prueba del perfil fantasma dejo otro perfiles.json puesto: se devuelve el
+# bueno, o esta ejecucion no calcularia el panel de AIRBUS.
+ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
+    {"id": "interno", "ambito": {}},
+    {"id": "cli-airbus", "ambito": {"clientes": ["AIRBUS"], "centros": [], "delegaciones": []}},
+]}).encode()
+L.lambda_handler({}, None)
+_inst2 = json.loads(ALMACEN["cabina/cli-airbus/panel.json"])["instalaciones"]
+comprueba("sale el punto de venta nuevo", _inst2["nuevos"]["pdvs"], ["P9"])
+comprueba("y su maquina", _inst2["nuevos"]["maquinas"], ["A9"])
+comprueba("y nada mas", _inst2["nuevos"]["clientes"], [])
+
+print("\nEl perfiles.json de verdad coge lo que tiene que coger")
+# Con los datos como los devolvio VenCloud el 4 de octubre de 2026, y con el
+# fichero tal cual se despliega: si alguien le cambia un numero, esto lo dice.
+import json as _json  # noqa: E402
+_amb = [x for x in _json.load(open(AQUI + "/perfiles.json"))["perfiles"]
+        if x["id"] == "cli-airbus"][0]["ambito"]
+_m6 = L.MapaCentros()
+_m6.aprende([
+    {"matricula": "MG", "num_centro": "500088", "centro": "AIRBUS GETAFE",
+     "cliente": "SERUNION, SA", "cod_cliente": "S1"},
+    {"matricula": "MN", "num_centro": "500093", "centro": "AIRBUS SAN PABLO NORTE",
+     "cliente": "SERUNION, SA", "cod_cliente": "S1"},
+    {"matricula": "MX", "num_centro": "2277", "centro": "SULO IBERICA SA",
+     "cliente": "SULO IBERICA SA", "cod_cliente": "S9"},
+])
+comprueba("coge Getafe", L.en_ambito({"matricula": "MG"}, _amb, _m6), True)
+comprueba("coge San Pablo Norte, que es de despues de la mudanza",
+          L.en_ambito({"matricula": "MN"}, _amb, _m6), True)
+comprueba("y no coge lo que no es suyo", L.en_ambito({"matricula": "MX"}, _amb, _m6), False)
+comprueba("una fila de recaudacion entra por su matricula",
+          L.en_ambito({"matricula": "MG", "anho": 2026, "mes": 9}, _amb, _m6), True)
+# Lo que da sentido a haber puesto numeros: que un renombrado no se lo lleve.
+_m7 = L.MapaCentros()
+_m7.aprende([{"matricula": "MG", "num_centro": "500088",
+              "centro": "AIRBUS GETAFE (EDIFICIO NUEVO)", "cliente": "SERUNION, SA"}])
+comprueba("y si manana renombran el centro, el numero aguanta",
+          L.en_ambito({"matricula": "MG"}, _amb, _m7), True)
+comprueba("los diez centros siguen declarados", len(_amb["centros"]), 10)
+
+print("\nPor centro: en cual de los centros pasa")
+pc = airbus["servicio"]["por_centro"]
+comprueba("un centro", len(pc), 1)
+comprueba("se llama como en VenCloud", pc[0]["centro"], "AIRBUS GETAFE")
+comprueba("con sus 100 visitas", pc[0]["visitas"], 100)
+comprueba("y una maquina", pc[0]["maquinas"], 1)
+comprueba("15 tareas de SAT", pc[0]["tareas_sat"], 15)
+comprueba("7 minutos de media", pc[0]["min_medio"], 7.0)
+comprueba("el interno ve los dos centros", len(interno["servicio"]["por_centro"]), 2)
+comprueba("ordenados por visitas", interno["servicio"]["por_centro"][0]["visitas"], 100)
+
+print("\nUna maquina reincidente dice de que centro es")
+rein = airbus["sat"]["reincidentes"]
+comprueba("A1 reincide", rein[0]["m"], "A1")
+comprueba("con 15 tareas", rein[0]["n"], 15)
+comprueba("y su centro delante", rein[0]["c"], "AIRBUS GETAFE")
+
+print("\nInventario y existencias: solo el ultimo cierre, nunca la suma")
+comprueba("se queda con septiembre", airbus["inventario"]["periodo_balance"], "2026-09")
 comprueba("4 maquinas", airbus["inventario"]["cumplimiento"]["maquinas"], 4)
 comprueba("2 nunca inventariadas", airbus["inventario"]["cumplimiento"]["nunca"], 2)
 comprueba("50 % en norma", airbus["inventario"]["cumplimiento"]["pct_en_norma"], 50.0)
-comprueba("existencias en almacen", airbus["inventario"]["existencias"]["A"], 9000.0)
+comprueba("existencias de septiembre, no 132.456", airbus["inventario"]["existencias"]["A"], 9000.0)
+comprueba("y no cuenta las 6 maquinas de agosto", airbus["inventario"]["cumplimiento"]["maquinas"], 4)
 
 print("\nEl estado de la carga queda donde la web puede leerlo")
 import datetime as _dt
@@ -182,6 +520,106 @@ comprueba("sin registro, lo dice", "retraso_dias" in L.estado_de_la_carga(HOY - 
 
 print("\nUn informe que falta no rompe la carga")
 comprueba("sin stock_vehiculo, sigue habiendo panel", "servicio" in airbus, True)
+
+# ----------------------------------------------------------------------
+print("\nSumar por trozos da lo mismo que sumar de golpe")
+# Es LA propiedad en la que se apoya el rediseno: si trocear cambiara el
+# resultado, el ahorro de memoria no valdria nada.
+import random  # noqa: E402
+
+random.seed(7)
+PARTES = []
+for i in range(3000):
+    sistema = i % 3 != 0
+    PARTES.append({
+        "empleadoid": 0 if sistema else 7,
+        "empleado": "SYSTEM" if sistema else "Ana",
+        "tipo_parte": 2 if sistema else 0,
+        "centro": "AIRBUS GETAFE",
+        "matricula": f"M{i % 40:03d}",
+        "minutos": 0 if sistema else random.choice([3, 5, 7, 9, 12, 45, 387]),
+        "fecha_ini": f"2026-09-{(i % 28) + 1:02d}T08:00:00",
+    })
+LINEAS = [{"tipo_linea": random.choice(["CM", "CM", "RC", "RM"]),
+           "cantidad": random.randint(1, 40),
+           "precio_coste": round(random.uniform(0.2, 2.5), 3),
+           "etiq_canal": random.choice(["", "11", "V58", "A12"]),
+           "centro": "AIRBUS GETAFE"} for _ in range(5000)]
+MOV = [{"motivo": random.choice(["RC", "RR", "RM", "CM"]),
+        "cantidad": -random.randint(1, 5),
+        "puc": round(random.uniform(0.1, 1.5), 3),
+        "centro": "AIRBUS GETAFE"} for _ in range(4000)]
+
+
+def panel_de(trozos_partes, trozos_lineas, trozos_mov):
+    acu = L.Acumulador({"id": "x", "ambito": {}})
+    for c in trozos_partes:
+        acu.come_partes(c)
+    for c in trozos_lineas:
+        acu.come_lineas(c)
+    for c in trozos_mov:
+        acu.come_mov_maquina(c)
+    return acu.panel(HOY, {})
+
+
+def trocea(lista, n):
+    tam = (len(lista) + n - 1) // n
+    return [lista[i:i + tam] for i in range(0, len(lista), tam)]
+
+
+entero = panel_de([PARTES], [LINEAS], [MOV])
+troceado = panel_de(trocea(PARTES, 17), trocea(LINEAS, 23), trocea(MOV, 11))
+
+for campo in ("visitas", "partes_totales", "maquinas", "centros"):
+    comprueba(f"{campo} igual", troceado["servicio"][campo], entero["servicio"][campo])
+comprueba("coste de servicio igual",
+          troceado["servicio"]["coste_servicio"]["coste"], entero["servicio"]["coste_servicio"]["coste"])
+comprueba("mediana de duracion igual",
+          troceado["servicio"]["duracion_min"]["mediana"], entero["servicio"]["duracion_min"]["mediana"])
+comprueba("visitas por dia iguales",
+          troceado["servicio"]["visitas_por_dia"], entero["servicio"]["visitas_por_dia"])
+comprueba("unidades cargadas iguales",
+          troceado["servicio"]["carga"]["unidades_total"], entero["servicio"]["carga"]["unidades_total"])
+comprueba("unidades vendibles iguales",
+          troceado["servicio"]["carga"]["unidades_vendibles"], entero["servicio"]["carga"]["unidades_vendibles"])
+# El valor cargado se redondea en cada trozo, asi que puede bailar centimos:
+# se compara con tolerancia, que es lo honesto, en vez de fingir que es exacto.
+dif = abs(troceado["servicio"]["carga"]["valor"] - entero["servicio"]["carga"]["valor"])
+comprueba(f"valor cargado igual al centimo (dif {dif:.4f})", dif < 0.05, True)
+for motivo in ("caducidad", "rotura", "retirada"):
+    comprueba(f"merma {motivo}: lineas",
+              troceado["servicio"]["merma"][motivo]["lineas"], entero["servicio"]["merma"][motivo]["lineas"])
+    d = abs(troceado["servicio"]["merma"][motivo]["euros"] - entero["servicio"]["merma"][motivo]["euros"])
+    comprueba(f"merma {motivo}: euros al centimo", d < 0.05, True)
+
+# ----------------------------------------------------------------------
+print("\nEl acumulador no guarda las filas: por eso cabe la historia")
+import sys  # noqa: E402
+
+
+def hondo(o, vistos=None):
+    vistos = vistos if vistos is not None else set()
+    if id(o) in vistos:
+        return 0
+    vistos.add(id(o))
+    t = sys.getsizeof(o)
+    if isinstance(o, dict):
+        t += sum(hondo(k, vistos) + hondo(v, vistos) for k, v in o.items())
+    elif isinstance(o, (list, tuple, set)):
+        t += sum(hondo(x, vistos) for x in o)
+    return t
+
+
+acu = L.Acumulador({"id": "x", "ambito": {}})
+for _ in range(20):          # 60.000 partes, como dos semanas de verdad
+    acu.come_partes(PARTES)
+crudo_en_memoria = hondo(PARTES) * 20
+acumulado = hondo(acu.__dict__)
+print(f"        60.000 filas ocupan {crudo_en_memoria/1e6:.1f} MB; "
+      f"el acumulador, {acumulado/1e6:.2f} MB")
+comprueba("suma las 20.000 visitas", acu.visitas, 20000)
+comprueba("y ocupa menos de la vigesima parte de las filas",
+          acumulado < crudo_en_memoria / 20, True)
 
 print()
 if fallos:

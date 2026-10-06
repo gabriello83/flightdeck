@@ -61,6 +61,8 @@ select
   pdv.codigo                 as cod_pdv,
   cen.numcentro              as num_centro,
   cen.denomina               as centro,
+  cli.codigo                 as cod_cliente,
+  cli.nombre                 as cliente,
   del.nombre                 as delegacion,
   ru.codigo                  as cod_ruta,
   ru.denomina                as ruta,
@@ -114,6 +116,7 @@ from vending.partesvisita p
 left join recursos.maquinas m           on m.id   = p.maquinaid
 left join vending.pdvs pdv              on pdv.id = p.pdvid
 left join comercial.clientescentros cen on cen.id = p.clientecentroid
+left join comercial.clientes cli        on cli.id = cen.clienteid
 left join general.delegaciones del      on del.id = p.delegacionid
 left join vending.rutas ru              on ru.id  = p.rutaid
 left join recursos.empleados emp        on emp.id = p.empleadoid
@@ -557,6 +560,48 @@ left join recursos.maquinas m on m.id = p.maquinaid
 left join stocks.articulos a  on a.id = v.articuloid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
+
+## A12 · EXT_TELEMETRIA_VENTAS  ·  **por crear**
+
+La venta de telemetría, **venta a venta y con su fecha**. Es la hoja «Ventas» del cuadro de David
+([46-el-cuadro-de-david.md](46-el-cuadro-de-david.md)) y la única fuente de venta que cubre todas
+las máquinas: A11 sólo trae las que se leen en el parte —365 de las 563 de AIRBUS en 120 días— y
+fecha la venta el día de la lectura.
+
+No agrega nada, como el resto de extracciones: una fila por venta, con su `id`. Son unas 60.000
+filas al día en todo el parque ([10-telemetria-un-dia.md](10-telemetria-un-dia.md)). El
+`articulo` sale vacío en la venta sin artículo (un 20 % en San Pablo): no es un error, es como la
+manda la máquina.
+
+```sql
+select
+  t.id                       as id,
+  cast(t.fechaventa as text) as fecha_venta,
+  m.codigo                   as matricula,
+  pdv.codigo                 as cod_pdv,
+  pdv.ubicacion              as ubicacion,
+  cen.numcentro              as num_centro,
+  cen.denomina               as centro,
+  cli.codigo                 as cod_cliente,
+  cli.nombre                 as cliente,
+  a.codigo                   as cod_articulo,
+  a.denomina                 as articulo,
+  t.seleccion                as seleccion,
+  t.precio                   as precio,
+  t.lineaprecio              as linea_precio,
+  t.tipotelemetria           as tipo_telemetria
+from telemetry.telemetrysales t
+left join recursos.maquinas m           on m.id   = t.maquinaid
+left join vending.pdvs pdv              on pdv.id = t.pdvid
+left join comercial.clientescentros cen on cen.id = pdv.clientecentroid
+left join comercial.clientes cli        on cli.id = cen.clienteid
+left join stocks.articulos a            on a.id   = t.articuloid
+where t.fechaventa >= '{0}' and t.fechaventa <= '{1} 23:59:59'
+order by t.fechaventa
+```
+
+Si el validador dice que `t.id` no existe, cámbialo por `t.transactionid as id`: es la clave que
+se cruza con el banco en B5 y también es única por venta.
 
 ---
 
@@ -1071,12 +1116,15 @@ select
   pdv.codigo  as cod_pdv,
   m.codigo    as matricula,
   cen.numcentro as num_centro,
-  cen.denomina  as centro
+  cen.denomina  as centro,
+  cli.codigo    as cod_cliente,
+  cli.nombre    as cliente
 from vending.rutasdetalle d
 join vending.rutas r                    on r.id   = d.rutaid
 left join vending.pdvs pdv              on pdv.id = d.pdvid
 left join recursos.maquinas m           on m.id   = pdv.maquinaid
 left join comercial.clientescentros cen on cen.id = pdv.clientecentroid
+left join comercial.clientes cli        on cli.id = cen.clienteid
 left join general.delegaciones del      on del.id = r.delegacionid
 order by del.nombre, r.codigo, d.norden
 ```
@@ -1214,6 +1262,8 @@ select
   pdv.codigo    as cod_pdv,
   cen.numcentro as num_centro,
   cen.denomina  as centro,
+  cli.codigo    as cod_cliente,
+  cli.nombre    as cliente,
   emp.nombre    as tecnico_asignado,
   del.nombre    as delegacion
 from sat.tareatecnica t
@@ -1222,6 +1272,7 @@ left join configuracion.satoperacionescategorias cat on cat.id = op.satoperacion
 left join recursos.maquinas m           on m.id   = t.maquinaid
 left join vending.pdvs pdv              on pdv.id = t.pdvid
 left join comercial.clientescentros cen on cen.id = t.clientecentroid
+left join comercial.clientes cli        on cli.id = cen.clienteid
 left join recursos.empleados emp        on emp.id = t.empasignadoid
 left join general.delegaciones del      on del.id = t.delegacionid
 where t.fecha >= '{0}' and t.fecha <= '{1} 23:59:59'
@@ -1360,6 +1411,102 @@ Está medido y detallado en [41-catalogo-sat.md](41-catalogo-sat.md), con la cor
 
 Los cinco volcados de maestro ya están escritos en `docs/08-sql-relleno.md`, bloque 5: artículos,
 máquinas, puntos de venta y planograma de canales. Faltan tres, que van aquí.
+
+## M5 · EXT_INSTALACIONES  *(sin parámetros)*  ·  **informe 173**
+
+El censo de la instalación, de arriba abajo: **cliente → centro → PDV → máquina**, con las banderas
+de configuración que hacen falta para saber si algo está puesto pero mal puesto.
+
+Arranca de `comercial.clientes` y baja con `left join`, no al revés. Así un cliente sin centros, o
+un centro sin puntos de venta, **sale igual** con el resto en blanco: es justo la clase de alta a
+medias que hay que ver.
+
+```sql
+select
+  cli.codigo                     as cod_cliente,
+  cli.nombre                     as cliente,
+  cli.activo                     as cliente_activo,
+  cast(cli.fechaalta as text)    as alta_cliente,
+  cast(cli.fechabaja as text)    as baja_cliente,
+  cli.tarifavendingid            as tarifa_vending_cliente,
+  cli.tarifaocsid                as tarifa_ocs_cliente,
+  cen.numcentro                  as num_centro,
+  cen.denomina                   as centro,
+  cen.activo                     as centro_activo,
+  cast(cen.fechaalta as text)    as alta_centro,
+  cast(cen.fechabaja as text)    as baja_centro,
+  cen.tarifavendingid            as tarifa_vending_centro,
+  cen.tarifaocsid                as tarifa_ocs_centro,
+  del.nombre                     as delegacion,
+  pdv.codigo                     as cod_pdv,
+  pdv.ubicacion                  as ubicacion,
+  pdv.clase                      as clase_pdv,
+  pdv.estado                     as estado_pdv,
+  cast(pdv.fechaalta as text)    as alta_pdv,
+  cast(pdv.fechabaja as text)    as baja_pdv,
+  pdv.tarifavendingid            as tarifa_vending_pdv,
+  m.codigo                       as matricula,
+  m.estado                       as estado_maquina,
+  m.tipoconectividad             as conectividad,
+  m.tipotelemetria               as telemetria,
+  m.telemetriadispositivo        as dispositivo_telemetria,
+  m.sinplanograma                as sin_planograma,
+  cast(m.fechaultcambioplanograma as text) as ult_cambio_plano,
+  coalesce(can.canales, 0)       as canales_con_articulo
+from comercial.clientes cli
+left join comercial.clientescentros cen on cen.clienteid = cli.id
+left join vending.pdvs pdv              on pdv.clientecentroid = cen.id
+left join recursos.maquinas m           on m.id = pdv.maquinaid
+left join general.delegaciones del      on del.id = pdv.delegacionid
+left join (
+  select c.maquinaid as maquinaid, count(*) as canales
+  from recursos.maquinascanales c
+  where c.articuloid is not null
+  group by c.maquinaid
+) can on can.maquinaid = m.id
+order by cli.codigo, cen.numcentro, pdv.codigo
+```
+
+**Lo que mide cada bandera**, y por qué está:
+
+| columna | la incidencia que destapa |
+|---|---|
+| `tarifa_vending_*`, `tarifa_ocs_*` | una máquina vendiendo **sin tarifa** es dinero mal facturado o perdido. Las tarifas cuelgan de tres sitios —punto de venta, centro y cliente— y basta con una |
+| `sin_planograma`, `canales_con_articulo` | sin planograma no se puede distinguir «no había demanda» de «estaba vacío» |
+| `telemetria`, `dispositivo_telemetria` | una máquina con telemetría y **sin dispositivo** no manda su venta: el dato electrónico no existe |
+| `activo`, `baja_*`, `estado_pdv` | para no dar por incidencia lo que está de baja a propósito |
+| `alta_cliente`, `alta_centro`, `alta_pdv` | las altas de verdad, con su fecha, sin tener que adivinarlas comparando censos |
+
+`telemetria` es el sistema: **40 es NAYAX**, 0 sin telemetría. `conectividad`: 0 sin conectividad,
+2 telemetría, 100 contadores manuales. Están en `docs/04`, informe 56.
+
+### Dos columnas que no están donde decía la documentación
+
+`docs/04` afirmaba que el identificador del dispositivo de telemetría era **`pdvs.telemetriadispositivo`**.
+No existe: la sonda M6 lista las 77 columnas de `vending.pdvs` y no está. Vive en
+**`recursos.maquinas`**, como dicen `docs/08` y `docs/10`. La primera versión de este informe fue
+con la columna mal y VenCloud la rechazó.
+
+Y la «tarifa de productos» del informe 10 de VenCloud se llama **`tarifaocsid`** (OCS, el servicio
+de café de oficina), y está tanto en `comercial.clientes` como en `comercial.clientescentros`. No
+hay ningún `tarifaproductosid`, que es lo que habría salido de adivinar.
+
+## M6 · EXT_SONDA_COLUMNAS  *(sin parámetros)*  ·  **informe 174**
+
+No es un informe de datos: es la pregunta «¿cómo se llaman de verdad estas columnas?». Se lanza una
+vez, se lee la respuesta y se añade lo que falte a `EXT_INSTALACIONES`.
+
+```sql
+select
+  c.table_schema as esquema,
+  c.table_name   as tabla,
+  c.column_name  as columna,
+  c.data_type    as tipo
+from information_schema.columns c
+where (c.table_schema = 'comercial' and c.table_name in ('clientes', 'clientescentros'))
+   or (c.table_schema = 'vending'   and c.table_name = 'pdvs')
+order by c.table_schema, c.table_name, c.ordinal_position
+```
 
 ## M1 · EXT_MAESTRO_CARRILES  *(sin parámetros)*
 

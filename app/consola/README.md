@@ -1,71 +1,58 @@
-# Consola · acceso y panel de administración
+# Consola de administración
 
-`index.html` · 35 KB · sin una sola llamada fuera del dominio, como el panel de cliente.
+`index.html` · contra `/api/admin/*`, sin una sola llamada fuera del dominio.
 
-## Lo primero, para que nadie se confunda
+## Lo primero, porque antes no era así
 
-**Esta pantalla de acceso no valida contraseñas.** Es el recorrido del flujo, no el flujo. En
-producción el acceso lo lleva **Cognito** y esta página **nunca ve la contraseña**: recibe un
-token y lo manda en cada llamada a `/api`.
+**Esta pantalla ya no es el prototipo.** La versión anterior no validaba contraseñas y guardaba
+la configuración en el navegador; se decía en esta misma página para que nadie la desplegara
+creyendo que protegía algo. Ahora el acceso lo lleva Cognito a través de `/api/acceso`, y todo lo
+que se ve aquí sale de DynamoDB a través de `/api/admin/*`.
 
-Lo dice la propia pantalla, debajo del formulario, para que nadie la despliegue creyendo que
-protege algo. Se entra con `admin`, `operaciones` o `airbus` y cualquier contraseña.
+Y lo que decide quién entra no es esta página. Si alguien que no es administrador la abre, no es
+que no vea los botones: es que **las rutas le contestan 403**. Lo de ocultar la pantalla es
+cortesía, no seguridad.
 
-La configuración se guarda en el navegador. En producción es DynamoDB a través de `/api`, del
-mismo origen — el resto del código no cambia.
+## Lo que no lleva escrito
 
-## Siete secciones
+La consola **no tiene copiadas las reglas del modelo de permisos**. El techo de cada tipo de
+perfil, el tipo mínimo de cada sesión y lo que cada tipo trae de serie los manda la API en
+`GET /api/admin/perfiles`, desde el mismo `autorizacion.py` que luego los aplica.
+
+Una copia aquí se quedaría vieja el día que cambiara esa pieza, y el síntoma sería el peor
+posible: un administrador marcando una casilla que no hace nada, convencido de haber concedido
+algo. Así, al cambiar el tipo de un perfil, las sesiones y los permisos que ese tipo no admite se
+tachan **en el momento**, con el motivo escrito al lado («desde operaciones», «no en cliente»), y
+además salen deshabilitados: no se pueden marcar ni por error.
+
+## Seis secciones
 
 | sección | qué hace |
 |---|---|
-| **Usuarios** | alta con nombre, correo y contraseña inicial; perfil; alta/baja; asistente sí o no |
-| **Perfiles** | ámbito múltiple (clientes + centros + delegaciones), sesiones visibles, umbrales y permisos |
-| **Alarmas** | el constructor, con prueba y silencio |
-| **Asistente de IA** | el interruptor, a tres niveles |
-| **Teléfonos** | teléfonos de técnicos y reponedores, y el estado de las plantillas de WhatsApp |
-| **Carga** | estado de la carga nocturna, tabla por tabla |
-| **Consolas** | acceso a los paneles, y qué resolvería la Lambda con tu token |
+| **Usuarios** | alta en Cognito con contraseña de un solo uso, perfil, bloqueo, límite de preguntas, nueva contraseña, baja |
+| **Perfiles** | ámbito (clientes + centros + delegaciones), sesiones visibles, permisos con su techo, umbral de rentabilidad |
+| **Plataforma** | el interruptor global del asistente, el límite de preguntas por día, el umbral general — y lo que el asistente **no** hace |
+| **Teléfonos** | los de técnicos y reponedores; sin teléfono dado de alta un WhatsApp no sale y queda un aviso diciéndolo |
+| **Carga** | lo que dejó escrito la carga nocturna: descargas, bytes, retraso, errores y filas por informe |
+| **Cola de acciones** | los WhatsApp y las altas de incidencia que alguien pidió desde un panel |
 
-Operaciones ve dos secciones (Consolas y Alarmas) y el cliente una. Las pestañas salen del perfil.
+Las alarmas no están aquí: viven en `/avisos/`, que es donde las usa quien las usa. La consola
+enlaza allí en vez de tener un segundo sitio donde tocarlas.
 
-## El constructor de alarmas
+## Dos detalles que son el trabajo de verdad
 
-Siete bloques, sin escribir una línea: **nombre y severidad · qué vigilar · condición · agrupación
-y ventana · ámbito · destinatarios y canal · mensaje**.
+**Un informe a cero se marca en rojo.** Es la única señal que hay cuando algo cambia en VenCloud:
+el informe se descarga igual, sin error, pero vacío. Si no se ve en esta pantalla, no se ve en
+ninguna, y los paneles siguen enseñando la cifra del día anterior como si tal cosa.
 
-Los campos a vigilar salen de un catálogo cerrado —seis fuentes con sus campos y su unidad—, así
-que **sólo se puede construir una regla sobre un dato que existe**. Al cambiar de fuente, los
-campos se recargan solos.
+**La cola dice que la incidencia no se ha dado de alta.** Dar de alta una incidencia en VenCloud
+es una **escritura en el ERP**, y hasta tener el endpoint y el permiso confirmados no se inventa la
+llamada: la petición se queda en la cola, visible, con quién la pidió y cuándo. Lo contrario sería
+que alguien creyera haber abierto un parte que no existe.
 
-Y dos cosas que evitan el desastre operativo:
+## Comprobado en Chromium
 
-- **«Probar»** evalúa la regla contra el último periodo cargado con los números que medimos de
-  verdad. La de frío contesta: *«con el umbral actual (> 8) habría disparado 115 de 1.288 jornadas»*.
-  Si pasa de un cuarto de los casos, avisa de que son muchas y sugiere agrupar, subir el umbral o
-  dejarla en bandeja antes de enchufar el WhatsApp.
-- **Silencio en horas**: no se repite el mismo aviso del mismo elemento hasta pasadas N. Sin esto
-  una máquina muda avisa cada hora durante tres días y la gente silencia el canal entero.
-
-Vienen cinco alarmas cargadas, con los umbrales y los volúmenes reales medidos en el proyecto:
-frío del vehículo (115 de 1.288 jornadas), bolsa sin dato electrónico (93 %), máquina reincidente
-(1.317 de 2.722), inventario caducado (2.925 de 3.200) y máquina muda (61 de 547, apagada).
-
-## El interruptor del asistente
-
-A tres niveles, y **el de arriba manda**:
-
-1. **Toda la plataforma** — si se apaga, nadie lo ve tenga el permiso que tenga.
-2. **Por perfil** — qué perfiles lo tienen disponible.
-3. **Por usuario** — excepciones sobre lo que dice el perfil.
-
-Más un **límite de preguntas por usuario y día**, que es lo que corta el gasto si alguien se
-desboca. Y la sección enumera lo que el asistente **no** hace, que es fijo y no configurable.
-
-Se puede comprobar: apagando el interruptor global, la sección «Consolas» pasa a decir
-*Deshabilitado* para el usuario que ha entrado.
-
-## Comprobado
-
-Renderizado en claro y oscuro: siete pestañas, el formulario de alarma con sus siete bloques, el
-alta de usuario funcionando, la prueba de alarma devolviendo los números medidos, y el interruptor
-global propagándose. Sin un solo error de consola.
+Claro, oscuro y móvil. El alta de usuario, el guardado de configuración sobreviviendo a una
+recarga, el error del servidor en un teléfono sin prefijo enseñado en el formulario, el techo
+tachándose al cambiar de tipo, y un usuario que no es administrador viendo que no es su pantalla.
+Sin errores de consola y sin una sola llamada fuera del dominio.
