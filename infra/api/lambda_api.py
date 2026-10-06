@@ -219,7 +219,7 @@ def cuadro(perfil_id, trozo=None):
     except Exception:
         return r(503, {"error": "El cuadro de mando todavia no se ha calculado.",
                        "_nota": "Lo escriben los agregados (4:45) para cada perfil de "
-                                "cliente de config/perfiles.json."})
+                                "cliente con ambito."})
     cuerpo = indice
     if trozo is not None:
         # Solo un trozo que el indice cite: asi no hay forma de componer otra
@@ -362,12 +362,11 @@ def guarda_alarma(evento, usuario):
 def _hay_panel(perfil_id):
     """Si el perfil tiene panel calculado, y de cuando es.
 
-    Un perfil vive en DOS sitios y es facil tener solo uno: la ficha de la
-    plataforma esta en DynamoDB —la que crea esta consola—, y la lista de
-    paneles que hay que CALCULAR esta en config/perfiles.json, en el bucket de
-    datos, que es lo que lee la Lambda de agregados. Dar de alta un cliente aqui
-    no hace que se le calcule el panel; sus usuarios entrarian a una pantalla
-    que dice que todavia no hay datos y nadie sabria por que.
+    Los agregados calculan cada noche el panel de cada perfil de esta consola
+    que tenga ambito, sumado a lo que diga config/perfiles.json. Uno recien
+    creado no lo tiene hasta esa noche, y uno sin ambito no lo tiene nunca: sus
+    usuarios entrarian a una pantalla que dice que todavia no hay datos y nadie
+    sabria por que.
 
     Esto lo mira de frente: una cabecera por perfil, que son unos pocos.
     """

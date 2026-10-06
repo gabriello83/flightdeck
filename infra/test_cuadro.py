@@ -32,7 +32,30 @@ class _S3Falso:
         return {}
 
 
-sys.modules["boto3"] = types.SimpleNamespace(client=lambda *a, **k: _S3Falso())
+# La tabla de la consola. None = la Lambda no tiene permiso para leerla.
+CONSOLA = {"fichas": None}
+
+
+class _DdbFalso:
+    """Devuelve las fichas de dos en dos, para que se vea que pagina."""
+
+    def scan(self, TableName, FilterExpression, ExpressionAttributeValues, ExclusiveStartKey=None):
+        if CONSOLA["fichas"] is None:
+            raise PermissionError("AccessDeniedException: not authorized to perform dynamodb:Scan")
+        items = [{"pk": {"S": f"PERFIL#{pid}"}, "sk": {"S": "FICHA"},
+                  "dato": {"S": json.dumps(d)}} for pid, d in CONSOLA["fichas"]]
+        items.append({"pk": {"S": "USUARIO#ana@x.com"}, "sk": {"S": "FICHA"}, "dato": {"S": "{}"}})
+        p = ExpressionAttributeValues[":p"]["S"]
+        items = [i for i in items if i["pk"]["S"].startswith(p)]
+        ini = ExclusiveStartKey["n"] if ExclusiveStartKey else 0
+        res = {"Items": items[ini:ini + 2]}
+        if ini + 2 < len(items):
+            res["LastEvaluatedKey"] = {"n": ini + 2}
+        return res
+
+
+sys.modules["boto3"] = types.SimpleNamespace(
+    client=lambda servicio, *a, **k: _DdbFalso() if servicio == "dynamodb" else _S3Falso())
 os.environ.setdefault("BUCKET", "prueba")
 os.environ["DIAS"] = "3"
 
@@ -163,7 +186,7 @@ comprueba("y ningun dia partido entre dos trozos",
           sum(len({f[0] for f in G[k]["filas"]}) for k in partes), 10)
 
 # ----------------------------------------------------------------------
-print("\nLa Lambda: el cuadro es de los perfiles de cliente, sin tocar perfiles.json")
+print("\nLa Lambda: el cuadro es de los perfiles de cliente")
 
 
 def pon(destino, id_informe, dia, filas):
@@ -223,6 +246,49 @@ _p = {x["id"]: x for x in json.load(open(AQUI + "/perfiles.json"))["perfiles"]}
 comprueba("AIRBUS lo calcula", L.Acumulador(_p["cli-airbus"]).cuadro is not None, True)
 comprueba("el interno no", L.Acumulador(_p["interno"]).cuadro is None, True)
 comprueba("y no hace falta ninguna marca en el fichero", "cuadro" in _p["cli-airbus"], False)
+
+print("\nUn cliente nuevo se da de alta en la consola, sin tocar perfiles.json")
+ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [{"id": "interno", "ambito": {}}, PERFIL]}).encode()
+CONSOLA["fichas"] = [
+    ("cli-consum", {"nombre": "CONSUM", "tipo": "cliente", "sesiones": ["cuadro"],
+                    "ambito": {"clientes": ["CONSUM"], "centros": [], "delegaciones": []}}),
+    ("cli-vacio", {"nombre": "A medias", "tipo": "cliente",
+                   "ambito": {"clientes": [], "centros": [], "delegaciones": []}}),
+    ("cli-x", {"nombre": "AIRBUS", "tipo": "cliente", "ambito": {"centros": ["2002"]}}),
+    ("interno", {"nombre": "Serunion", "tipo": "direccion", "ambito": {"centros": ["500092"]}}),
+]
+for k in [k for k in ALMACEN if k.startswith("cabina/")]:
+    del ALMACEN[k]
+res = L.lambda_handler({}, None)
+comprueba("el de la consola tiene su panel", json.loads(ALMACEN["cabina/cli-consum/panel.json"])["perfil"],
+          "cli-consum")
+_ix = json.loads(ALMACEN["cabina/cli-consum/cuadro/indice.json"])
+comprueba("y su cuadro, con su venta y solo la suya",
+          sum(f[4] for t in _ix["trozos"]
+              for f in json.loads(ALMACEN[f"cabina/cli-consum/cuadro/ventas-{t}.json"])["filas"]), 9.0)
+comprueba("uno sin ambito NO se calcula (veria todo el parque)",
+          [k for k in ALMACEN if k.startswith("cabina/cli-vacio/")], [])
+comprueba("y el resumen lo dice", res["consola"]["sin_ambito"], ["cli-vacio"])
+comprueba("se han leido las cuatro fichas, por paginas", res["consola"]["leidos"], 4)
+_ix = json.loads(ALMACEN["cabina/cli-x/cuadro/indice.json"])
+comprueba("en un perfil de los dos sitios, la consola SUMA ambito al fichero",
+          sum(f[4] for t in _ix["trozos"]
+              for f in json.loads(ALMACEN[f"cabina/cli-x/cuadro/ventas-{t}.json"])["filas"]), 10.2)
+comprueba("y el interno sigue siendo todo: la consola no lo recorta",
+          json.loads(ALMACEN["cabina/interno/panel.json"])["perfil"], "interno")
+_j, _ = L.junta_perfiles([{"id": "interno", "ambito": {}}], [CONSOLA["fichas"][3][1] | {"id": "interno"}])
+comprueba("(el interno junto con la consola no gana ambito)", _j[0]["ambito"], {})
+_j, _ = L.junta_perfiles([PERFIL], [{"id": "cli-x", "ambito": {"centros": ["500092", "2002"]}}])
+comprueba("al sumar no se repite un centro", _j[0]["ambito"]["centros"], ["500092", "2002"])
+_j, _ = L.junta_perfiles([PERFIL], [{"id": "cli-x", "ambito": {}}])
+comprueba("y una ficha de consola vacia no le quita nada al fichero", _j[0]["ambito"]["centros"], ["500092"])
+
+print("\nSi la Lambda no puede leer la consola, sigue con el fichero")
+CONSOLA["fichas"] = None
+res = L.lambda_handler({}, None)
+comprueba("el resumen dice por que", "AccessDenied" in (res["consola"]["error"] or ""), True)
+comprueba("y los perfiles del fichero salen igual", sorted(p["id"] for p in res["perfiles"]),
+          ["cli-x", "interno"])
 
 print()
 if fallos:

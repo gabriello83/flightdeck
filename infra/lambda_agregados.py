@@ -33,6 +33,9 @@ Variables de entorno:
   BUCKET       el mismo de la extraccion
   DIAS         (opcional) dias hacia atras que se agregan; por defecto 120
   PERFILES     (opcional) clave del fichero de perfiles; por defecto config/perfiles.json
+  TABLA        (opcional) la tabla de la plataforma, donde la consola guarda los
+               perfiles; si no esta, <prefijo>-plataforma, sacado del nombre de
+               esta funcion (digivend-agregados -> digivend-plataforma)
 """
 
 import datetime
@@ -50,6 +53,11 @@ s3 = boto3.client("s3")
 BUCKET = os.environ["BUCKET"]
 DIAS = int(os.environ.get("DIAS", "120"))
 CLAVE_PERFILES = os.environ.get("PERFILES", "config/perfiles.json")
+# La funcion se llama <prefijo>-agregados y la tabla <prefijo>-plataforma. Se
+# saca del nombre y no de una variable de la plantilla porque tocar la Lambda en
+# la plantilla haria que actualizar la pila le pisara el codigo con el marcador.
+_PREFIJO = os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "digivend-agregados").rsplit("-", 1)[0]
+TABLA = os.environ.get("TABLA", f"{_PREFIJO}-plataforma")
 # El censo de la instalacion: un maestro, no una ventana de dias.
 CLAVE_CENSO = os.environ.get("CENSO", "maestros/instalaciones/m_instalaciones.json.gz")
 # Donde se guarda el censo de la ultima ejecucion, para saber que es nuevo.
@@ -241,6 +249,86 @@ class MapaCentros:
 
     def centro_de(self, fila):
         return self.de_quien_es(fila).centro
+
+
+# ----------------------------------------------------------------------
+# los perfiles: el fichero y la consola
+# ----------------------------------------------------------------------
+def perfiles_de_la_consola():
+    """Los perfiles que el administrador ha dado de alta en la consola.
+
+    La consola guarda en DynamoDB, para cada perfil, su ambito (clientes,
+    centros, delegaciones). Leerlo aqui es lo que hace que dar de alta un
+    cliente en la consola baste para que esa noche se le calcule su panel, sin
+    tocar `perfiles.json`.
+
+    Si la tabla no se puede leer (falta el permiso, la pila web no esta) se
+    sigue con el fichero solo, como antes, y se dice en el registro: un fallo
+    aqui no puede dejar a nadie sin su panel de ayer.
+    """
+    try:
+        ddb = boto3.client("dynamodb")
+        out, arranque = [], None
+        while True:
+            kw = {"TableName": TABLA,
+                  "FilterExpression": "begins_with(pk, :p) AND sk = :s",
+                  "ExpressionAttributeValues": {":p": {"S": "PERFIL#"}, ":s": {"S": "FICHA"}}}
+            if arranque:
+                kw["ExclusiveStartKey"] = arranque
+            res = ddb.scan(**kw)
+            for it in res.get("Items", []):
+                d = json.loads(it.get("dato", {}).get("S", "{}"))
+                p = {"id": it["pk"]["S"].split("#", 1)[-1],
+                     "nombre": d.get("nombre", ""),
+                     "tipo": d.get("tipo", "cliente"),
+                     "ambito": d.get("ambito") or {}}
+                if "cuadro" in d:
+                    p["cuadro"] = bool(d["cuadro"])
+                out.append(p)
+            arranque = res.get("LastEvaluatedKey")
+            if not arranque:
+                return out, None
+    except Exception as e:
+        return [], f"{type(e).__name__}: {e}"[:300]
+
+
+def junta_perfiles(del_fichero, de_la_consola):
+    """Una lista de perfiles a calcular, con las dos fuentes.
+
+    - Un perfil que esta en los dos sitios suma los ambitos: lo que diga la
+      consola se ANADE a lo del fichero, nunca lo quita. Asi el dia que se
+      despliega esto nadie pierde un centro porque la ficha de la consola
+      estuviera a medias.
+    - Un perfil que solo esta en la consola entra si tiene ambito. SIN ambito
+      NO entra: un ambito vacio es «todo el parque», y eso solo se declara en el
+      fichero, a proposito y a mano. Un perfil de cliente creado con el ambito
+      sin rellenar veria entonces los datos de todos los clientes.
+    - Un perfil que solo esta en el fichero se queda como esta.
+
+    Devuelve la lista y los que se han dejado fuera, para el resumen.
+    """
+    por_id = {}
+    for p in del_fichero:
+        por_id[p.get("id")] = dict(p, ambito=dict(p.get("ambito") or {}))
+    fuera = []
+    for c in de_la_consola:
+        amb_c = c.get("ambito") or {}
+        if c["id"] in por_id:
+            p = por_id[c["id"]]
+            if not tiene_ambito(p["ambito"]):
+                # El interno del fichero es «todo»: sumarle algo lo recortaria.
+                continue
+            for k in ("clientes", "centros", "delegaciones"):
+                ya = [str(x) for x in p["ambito"].get(k, [])]
+                ya += [str(x) for x in amb_c.get(k, []) if str(x) not in ya]
+                p["ambito"][k] = ya
+            if "cuadro" in c and "cuadro" not in p:
+                p["cuadro"] = c["cuadro"]
+        elif tiene_ambito(amb_c):
+            por_id[c["id"]] = c
+        else:
+            fuera.append(c["id"])
+    return list(por_id.values()), fuera
 
 
 def tiene_ambito(ambito):
@@ -859,8 +947,16 @@ def lambda_handler(event, context):
     hoy = datetime.date.today()
     dias = [hoy - datetime.timedelta(days=d) for d in range(1, DIAS + 1)]
 
-    perfiles = _json_de(CLAVE_PERFILES) or {"perfiles": [{"id": "interno", "ambito": {}}]}
-    acumuladores = [Acumulador(p, hoy) for p in perfiles["perfiles"]]
+    del_fichero = (_json_de(CLAVE_PERFILES) or {"perfiles": [{"id": "interno", "ambito": {}}]})["perfiles"]
+    de_la_consola, fallo_consola = perfiles_de_la_consola()
+    if fallo_consola:
+        print(f"AVISO: no se han podido leer los perfiles de la consola ({fallo_consola}). "
+              f"Se calculan solo los de {CLAVE_PERFILES}.")
+    perfiles, sin_ambito = junta_perfiles(del_fichero, de_la_consola)
+    for pid in sin_ambito:
+        print(f"AVISO: el perfil {pid} de la consola no tiene ambito y no se calcula. "
+              f"Ponle sus clientes o centros en la consola.")
+    acumuladores = [Acumulador(p, hoy) for p in perfiles]
 
     leidas = defaultdict(int)
     mapa = MapaCentros()
@@ -951,6 +1047,11 @@ def lambda_handler(event, context):
              "clientes_de_verdad": sorted(_cogidos[acu.perfil.get("id")][1])[:10]}
             for acu in acumuladores
         ],
+        # De donde ha salido la lista de perfiles. `consola.error` dice por que
+        # no se ha podido leer la tabla; `sin_ambito`, los perfiles de la
+        # consola que no se calculan porque no dicen de que cliente son.
+        "consola": {"leidos": len(de_la_consola), "error": fallo_consola,
+                    "sin_ambito": sin_ambito},
         "ficheros": escritos,
         # Que fuente de venta uso el cuadro y cuantas maquinas del censo tienen
         # venta. «visita_ventas» es la parcial: falta el informe de telemetria.
