@@ -29,6 +29,26 @@ centros hay, no de cuantas filas se han leido.
 Y el filtrado por ambito no duplica nada: una lista por comprension guarda
 REFERENCIAS a las mismas filas, 8 bytes cada una, no copias.
 
+LA HISTORIA NO SE RECALCULA CADA NOCHE. El panel sigue siendo la foto de los
+ultimos DIAS dias, y eso no cambia. Lo que se guarda ademas es la SERIE DIARIA
+(`serie.py`): una fila por dia y por perfil, hecha de contadores y de
+histogramas, para que cualquiera pueda pedir hoy, ayer, este mes, el mes pasado
+o un intervalo cualquiera desde el 1 de enero de 2025 y la cuenta sea una suma.
+
+La serie vive en `cabina/<perfil>/serie/<AAAA-MM>.json.gz`, un fichero por mes,
+y cada noche se FUSIONAN los dias que esta ejecucion ha leido dejando los demas
+como estaban. Por eso la noche no se encarece con la historia: lee los mismos
+120 dias de siempre. La historia anterior se rellena una vez, con el evento
+{"desde": ..., "hasta": ...}, que solo escribe serie y meses del cuadro —ni
+panel ni censo— y para a tiempo diciendo por donde seguir, igual que la
+extraccion.
+
+Eventos que entiende:
+  {}                                      la noche: panel, cuadro y serie de la ventana
+  {"desde": "2025-01-01",
+   "hasta": "2025-03-31"}                 relleno historico: solo serie y cuadro
+  {"dias": 7}                             (opcional) una ventana mas corta, para probar
+
 Variables de entorno:
   BUCKET       el mismo de la extraccion
   DIAS         (opcional) dias hacia atras que se agregan; por defecto 120
@@ -47,6 +67,8 @@ from collections import defaultdict
 import boto3
 
 import reglas as R
+import serie as S
+import cuadro as CU
 from cuadro import Cuadro
 
 s3 = boto3.client("s3")
@@ -153,6 +175,25 @@ def escribe(clave, obj):
     return clave
 
 
+def escribe_comprimido(clave, obj):
+    """Igual, pero comprimido. Para los ficheros de un mes, que son MB.
+
+    Un mes de venta de AIRBUS son unos tres megas de JSON y se queda en unos
+    cuatrocientos kilos. La API lo descomprime al servirlo —igual que ya hacia
+    con el panel—, asi que el navegador recibe lo mismo de siempre.
+    """
+    s3.put_object(
+        Bucket=BUCKET,
+        Key=clave,
+        Body=gzip.compress(
+            json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")),
+        ContentType="application/gzip",
+        CacheControl="max-age=300",
+        ServerSideEncryption="AES256",
+    )
+    return clave
+
+
 # ----------------------------------------------------------------------
 # filtrado por ambito
 # ----------------------------------------------------------------------
@@ -207,6 +248,12 @@ class MapaCentros:
         self.aprendidas = 0
         self.clientes = set()
         self.centros = {}       # num_centro -> nombre, para poder listarlos
+        self.num_de = {}        # nombre de centro -> num_centro
+        # La ficha de cada centro: nombre, cliente y delegacion. Es lo que deja
+        # filtrar la serie por cliente o por delegacion sumando centros (serie.py,
+        # PorCentro). Manda lo ultimo leido: un centro que cambia de cliente se
+        # reagrupa con la ficha de hoy.
+        self.fichas = {}
 
     def aprende(self, filas):
         """Se llama con las filas CRUDAS, antes de filtrar por ambito.
@@ -228,6 +275,17 @@ class MapaCentros:
                 self.clientes.add(quien.cliente)
             if quien.num_centro:
                 self.centros.setdefault(quien.num_centro, quien.centro)
+                if quien.centro:
+                    self.num_de.setdefault(quien.centro, quien.num_centro)
+            clave = quien.num_centro or self.num_de.get(quien.centro, quien.centro)
+            if clave:
+                ficha = self.fichas.setdefault(clave, {"nombre": "", "num": "", "cliente": "",
+                                                       "cod_cliente": "", "delegacion": ""})
+                for k, v_ in (("nombre", quien.centro), ("num", quien.num_centro),
+                              ("cliente", quien.cliente), ("cod_cliente", quien.cod_cliente),
+                              ("delegacion", str(R.v(f, "delegacion", "") or ""))):
+                    if v_:
+                        ficha[k] = str(v_)[:60]
             m = R.v(f, "matricula", "")
             if m and m not in self.por_matricula:
                 self.por_matricula[m] = quien
@@ -249,6 +307,16 @@ class MapaCentros:
 
     def centro_de(self, fila):
         return self.de_quien_es(fila).centro
+
+    def clave_centro(self, fila):
+        """La clave con la que la serie parte por centro: el numero si se sabe,
+        y si no el nombre. Es la misma que usa `lo_que_coge`."""
+        q = self.de_quien_es(fila)
+        return q.num_centro or self.num_de.get(q.centro, q.centro)
+
+    def fichas_de(self, claves):
+        """Las fichas de esos centros, para el indice de la serie de un perfil."""
+        return {c: dict(self.fichas.get(c) or {"nombre": c}) for c in claves}
 
 
 # ----------------------------------------------------------------------
@@ -923,29 +991,167 @@ def altas_desde_el_censo_anterior(acumuladores):
     return nuevos
 
 
-def escribe_cuadro(acu, periodo):
-    """Escribe el cuadro de un perfil: el indice y sus trozos de venta.
+def escribe_cuadro(acu, periodo, dias_leidos):
+    """Escribe el cuadro de un perfil: los meses leidos, fusionados, y el indice.
 
-    El trozo de un mes que ya salio de la ventana se queda en S3, y es a
-    proposito: borrarlo pediria `s3:DeleteObject` al rol, que hoy no lo tiene y
-    no lo necesita para nada mas. No se ve: la API solo sirve los trozos que
-    cita el indice de esta noche.
+    Solo se tocan los meses que el periodo leido alcanza. Los anteriores ya
+    estan en S3 de otra ejecucion y el indice los sigue citando con el resumen
+    que ya tenian: asi la historia se acumula sin releerla cada noche.
     """
     base = f"cabina/{acu.perfil['id']}/cuadro/"
-    ficheros = acu.cuadro.ficheros(acu.perfil, periodo)
-    for nombre, obj in ficheros.items():
-        escribe(base + nombre, obj)
-    v = ficheros["indice.json"]["ventas"]
-    return {"fuente": v["fuente"], "trozos": len(ficheros) - 1,
+    anterior = _json_de(base + "indice.json") or {}
+    lineas = {m["mes"]: m for m in anterior.get("meses", []) if m.get("mes")}
+    sin_sitio = []
+    for mes, nuevo in acu.cuadro.meses(periodo).items():
+        viejo = _json_de(f"{base}mes-{mes}.json.gz")
+        fichero = CU.fusiona_mes(viejo, nuevo, dias=dias_leidos)
+        if not CU.cabe_en_una_respuesta(fichero):
+            # Se escribe igual —el dato no se tira— y se dice: un mes que no
+            # cabe en una respuesta se ve en el indice, no con un 500.
+            sin_sitio.append(mes)
+        escribe_comprimido(f"{base}mes-{mes}.json.gz", fichero)
+        lineas[mes] = CU.resumen_mes(fichero)
+    indice = acu.cuadro.indice(acu.perfil, periodo, list(lineas.values()))
+    indice["rangos"] = {k: S.NOMBRES_RANGO[k] for k in S.RANGOS}
+    indice["primer_dia"] = S.PRIMER_DIA
+    if sin_sitio:
+        indice["_aviso_tamano"] = (
+            "Estos meses pasan del limite de una respuesta y la pagina puede no poder "
+            "bajarlos: " + ", ".join(sin_sitio))
+    escribe(base + "indice.json", indice)
+    v = indice["ventas"]
+    return {"fuente": v["fuente"], "meses": len(lineas),
+            "meses_escritos": sorted(acu.cuadro.meses(periodo)),
             "maquinas_censo": v["maquinas_censo"],
             "maquinas_censo_con_venta": v["maquinas_censo_con_venta"],
-            "visitas": len(ficheros["indice.json"]["visitas"]),
-            "incidencias": len(ficheros["indice.json"]["incidencias"])}
+            "sin_sitio": sin_sitio}
+
+
+def escribe_serie(perfil_id, filas, dias_leidos, filas_centros=None, mapa=None):
+    """Fusiona las filas de esta ejecucion en los meses de la serie, y el indice.
+
+    Un dia recalculado sustituye al que hubiera; los dias que esta ejecucion no
+    ha leido se quedan. El indice lleva la lista de meses con sus totales, los
+    tramos de los histogramas y los rangos con nombre, para que la pagina no
+    lleve ninguna copia de eso.
+    """
+    base = f"cabina/{perfil_id}/serie/"
+    anterior = _json_de(base + "indice.json") or {}
+    lineas = {m["mes"]: m for m in anterior.get("meses", []) if m.get("mes")}
+
+    por_mes = defaultdict(list)
+    for f in filas:
+        por_mes[f["f"][:7]].append(f)
+    for mes, nuevas in sorted(por_mes.items()):
+        viejo = _json_de(f"{base}{mes}.json.gz") or {}
+        fusion = S.fusiona_mes(viejo.get("filas"), nuevas)
+        escribe_comprimido(f"{base}{mes}.json.gz", {"mes": mes, "filas": fusion})
+        lineas[mes] = S.resumen_mes(mes, fusion)
+
+    # El mismo dia partido por centro, en su propio fichero por mes: quien no
+    # filtra no se lo baja. Se fusiona igual, por dias.
+    meses_centros = set(anterior.get("meses_centros") or [])
+    fichas = dict(anterior.get("centros") or {})
+    centros_mes = defaultdict(list)
+    for f in filas_centros or []:
+        centros_mes[f["f"][:7]].append(f)
+    for mes, nuevas in sorted(centros_mes.items()):
+        viejo = _json_de(f"{base}centros-{mes}.json.gz") or {}
+        fusion = S.fusiona_mes(viejo.get("filas"), nuevas)
+        escribe_comprimido(f"{base}centros-{mes}.json.gz", {"mes": mes, "filas": fusion})
+        meses_centros.add(mes)
+        if mapa is not None:
+            # La ficha de hoy manda: un centro que cambio de cliente se reagrupa.
+            fichas.update(mapa.fichas_de({c for x in fusion for c in x["centros"]}))
+
+    indice = {
+        "generado": datetime.datetime.utcnow().isoformat() + "Z",
+        "perfil": perfil_id,
+        "primer_dia": S.PRIMER_DIA,
+        "meses": sorted(lineas.values(), key=lambda x: x["mes"]),
+        "bordes": S.BORDES,
+        "rangos": {k: S.NOMBRES_RANGO[k] for k in S.RANGOS},
+        # Los meses que tienen el dia partido por centro, y la ficha de cada
+        # centro (nombre, cliente, delegacion) para filtrar sumando centros. La
+        # API quita la delegacion a los perfiles de cliente.
+        "meses_centros": sorted(meses_centros),
+        "centros": dict(sorted(fichas.items())),
+        "_nota": ("Un fichero por mes en serie/<AAAA-MM>.json. Cada fila es un dia y se "
+                  "suma; las medianas de un rango salen de los histogramas, con los "
+                  "tramos de «bordes»."),
+    }
+    escribe(base + "indice.json", indice)
+    return {"meses": len(lineas), "meses_escritos": sorted(por_mes), "dias": len(filas),
+            "centros": len(fichas)}
+
+
+# Que hace la serie diaria con las filas de cada fuente. El balance no esta a
+# proposito: es un cierre mensual, una foto, y una foto no se suma —el panel ya
+# se queda solo con la ultima—.
+SERIE_COME = {
+    "partes": "come_partes",
+    "lineas": "come_lineas",
+    "mov_maquina": "come_mov_maquina",
+    "recaudacion": "come_recaudacion",
+    "sat": "come_sat",
+    "sat_eventos": "come_sat_eventos",
+    "jornadas": "come_jornadas",
+    "telemetria": "come_ventas_telemetria",
+    "ventas_parte": "come_ventas_visita",
+}
+
+
+def come_serie(dia, nombre, filas):
+    metodo = SERIE_COME.get(nombre)
+    if metodo:
+        getattr(dia, metodo)(filas)
+        # El mismo dia partido por centro, para el filtro de delegacion, cliente
+        # y centro. Las jornadas no se parten: una ruta pasa por muchos centros.
+        partido = getattr(dia.por_centro, metodo, None) if dia.por_centro else None
+        # La venta del parte de un dia con telemetria no entra en el dia (ver
+        # Dia.come_ventas_visita), asi que tampoco en sus centros.
+        if metodo == "come_ventas_visita" and dia.venta_fuente == "telemetria":
+            partido = None
+        if partido:
+            partido(filas)
+
+
+def dias_a_agregar(hoy, event):
+    """Los dias de esta ejecucion, y si es un relleno historico.
+
+    De noche, la ventana de siempre hacia atras desde ayer. Con
+    {"desde": "2025-01-01", "hasta": "2025-03-31"}, ese rango del mas antiguo
+    al mas nuevo: si se acaba el tiempo, lo escrito queda seguido y basta con
+    continuar por donde se quedo.
+    """
+    e = event or {}
+    if e.get("desde"):
+        d0 = datetime.date.fromisoformat(str(e["desde"])[:10])
+        d1 = datetime.date.fromisoformat(str(e.get("hasta") or e["desde"])[:10])
+        if d1 < d0:
+            raise ValueError("'hasta' es anterior a 'desde'")
+        if d0 < datetime.date.fromisoformat(S.PRIMER_DIA):
+            raise ValueError(f"La historia empieza el {S.PRIMER_DIA} (serie.PRIMER_DIA)")
+        return [d0 + datetime.timedelta(days=i) for i in range((d1 - d0).days + 1)], True
+    n = int(e.get("dias") or DIAS)
+    return [hoy - datetime.timedelta(days=d) for d in range(1, n + 1)], False
+
+
+def _queda_tiempo(context, margen=60_000):
+    """Si da tiempo a leer otro dia y escribir lo que lleve.
+
+    El margen es generoso a proposito: lo que no puede pasar es morir DESPUES de
+    leer y ANTES de escribir, porque entonces el relleno no avanza y no se sabe.
+    """
+    if context is None or not hasattr(context, "get_remaining_time_in_millis"):
+        return True
+    return context.get_remaining_time_in_millis() > margen
 
 
 def lambda_handler(event, context):
+    event = event or {}
     hoy = datetime.date.today()
-    dias = [hoy - datetime.timedelta(days=d) for d in range(1, DIAS + 1)]
+    dias, historico = dias_a_agregar(hoy, event)
 
     del_fichero = (_json_de(CLAVE_PERFILES) or {"perfiles": [{"id": "interno", "ambito": {}}]})["perfiles"]
     de_la_consola, fallo_consola = perfiles_de_la_consola()
@@ -971,15 +1177,35 @@ def lambda_handler(event, context):
         mapa.aprende(censo)
         for acu in acumuladores:
             propias = [f for f in censo if en_ambito(f, acu.ambito, mapa)]
-            acu.come_instalaciones(propias)
+            # El bloque de instalaciones del panel es la foto de HOY: en un
+            # relleno historico no se calcula, porque no se escribe panel.
+            if not historico:
+                acu.come_instalaciones(propias)
             if acu.cuadro:
                 acu.cuadro.come_instalaciones(propias)
     del censo
+
+    # EL RECORRIDO VA POR DIAS, Y DENTRO DE CADA DIA POR INFORMES. Antes era al
+    # contrario. Se cambio para poder cerrar la fila de la serie de un dia en
+    # cuanto se acaba ese dia, en vez de tener los 120 dias de todos los
+    # informes a medias a la vez.
+    #
+    # El orden de FUENTES sigue mandando DENTRO de un dia, que es donde
+    # importaba: los tres informes con columna `centro` van antes que los que
+    # solo traen matricula, asi que el mapa ya conoce las maquinas cuando llegan
+    # las filas sin centro. Y la telemetria de un dia se lee antes que la venta
+    # del parte de ese dia, que es lo que evita contar la venta dos veces.
     con_cuadro = any(acu.cuadro for acu in acumuladores)
-    for nombre, destino, id_informe, metodo, metodo_cuadro in FUENTES:
-        if metodo is None and not con_cuadro:
-            continue
-        for dia in dias:
+    fuentes = [f for f in FUENTES if f[3] is not None or con_cuadro]
+    series, series_centros = defaultdict(list), defaultdict(list)
+    leidos, parado_en = [], None
+    for dia in dias:
+        if not _queda_tiempo(context):
+            parado_en = dia.isoformat()
+            print(f"PARO por tiempo antes de {parado_en}.")
+            break
+        del_dia = {acu.perfil["id"]: S.Dia(dia, mapa.clave_centro) for acu in acumuladores}
+        for nombre, destino, id_informe, metodo, metodo_cuadro in fuentes:
             filas = lee_dia(destino, id_informe, dia)
             if not filas:
                 continue
@@ -988,37 +1214,66 @@ def lambda_handler(event, context):
             # de todos, porque una maquina de AIRBUS se conoce igual leyendo el
             # informe completo.
             mapa.aprende(filas)
+            if nombre == "telemetria":
+                # Con el fichero ENTERO, antes de filtrar, y por lo mismo que en
+                # el cuadro: si solo se marcara cuando al perfil le tocan filas,
+                # un dia con telemetria pero sin venta suya se rellenaria con la
+                # venta del parte, que es parcial y se fecha otro dia.
+                for d in del_dia.values():
+                    d.hay_telemetria()
             for acu in acumuladores:
-                if metodo is None and not acu.cuadro:
-                    continue
-                if nombre == "telemetria":
+                if nombre == "telemetria" and acu.cuadro:
                     acu.cuadro.hay_telemetria(dia)
                 propias = [f for f in filas if en_ambito(f, acu.ambito, mapa)]
                 acu.filas_en_ambito += len(propias)
-                if propias and metodo:
+                if propias and metodo and not historico:
                     getattr(acu, metodo)(propias)
+                if propias:
+                    come_serie(del_dia[acu.perfil["id"]], nombre, propias)
                 if acu.cuadro and metodo_cuadro:
                     getattr(acu.cuadro, metodo_cuadro)(
                         *((propias, dia) if metodo_cuadro.startswith("come_ventas") else (propias,)))
             # El trozo se suelta aqui: en ningun momento hay mas de un informe
             # de un dia en memoria.
             del filas
+        leidos.append(dia)
+        for pid, d in del_dia.items():
+            # Un dia sin una sola fila no se escribe: ocuparia sitio y no dice
+            # nada que no diga su ausencia.
+            if not d.vacio():
+                series[pid].append(d.fila())
+                por_centro = d.por_centro.fila(d.fecha)
+                if por_centro["centros"]:
+                    series_centros[pid].append(por_centro)
 
-    periodo = {"desde": dias[-1].isoformat(), "hasta": dias[0].isoformat(), "dias": DIAS}
-    nuevos = altas_desde_el_censo_anterior(acumuladores)
-    escritos = [escribe(f"cabina/{acu.perfil['id']}/panel.json",
-                        acu.panel(hoy, periodo, nuevos.get(acu.perfil["id"], {})))
-                for acu in acumuladores]
-    cuadros = {}
+    dias_leidos = [d.isoformat() for d in leidos]
+    if not leidos:
+        leidos = [dias[0]]
+    periodo = {"desde": min(leidos).isoformat(), "hasta": max(leidos).isoformat(),
+               "dias": len(dias_leidos)}
+
+    escritos, cuadros = [], {}
+    if not historico:
+        nuevos = altas_desde_el_censo_anterior(acumuladores)
+        escritos = [escribe(f"cabina/{acu.perfil['id']}/panel.json",
+                            acu.panel(hoy, dict(periodo, dias=DIAS),
+                                      nuevos.get(acu.perfil["id"], {})))
+                    for acu in acumuladores]
     for acu in acumuladores:
         if acu.cuadro:
-            cuadros[acu.perfil["id"]] = escribe_cuadro(acu, periodo)
+            cuadros[acu.perfil["id"]] = escribe_cuadro(acu, periodo, dias_leidos)
+    series_escritas = {pid: escribe_serie(pid, filas, dias_leidos,
+                                          series_centros.get(pid, []), mapa)
+                       for pid, filas in series.items()}
 
-    escribe("cabina/_estado/carga.json", estado_de_la_carga(hoy))
+    if not historico:
+        escribe("cabina/_estado/carga.json", estado_de_la_carga(hoy))
     _cogidos = {acu.perfil.get("id"): lo_que_coge(acu.ambito, mapa) for acu in acumuladores}
     resumen = {
         "ejecucion": datetime.datetime.utcnow().isoformat() + "Z",
-        "dias": DIAS,
+        "modo": "historico" if historico else "nocturna",
+        "dias": len(dias_leidos),
+        "periodo": periodo,
         "filas_leidas": dict(leidas),
         "maquinas_con_centro": mapa.aprendidas,
         # Un solo cliente significa que VenCloud todavia cuelga todos los centros
@@ -1056,11 +1311,25 @@ def lambda_handler(event, context):
         # Que fuente de venta uso el cuadro y cuantas maquinas del censo tienen
         # venta. «visita_ventas» es la parcial: falta el informe de telemetria.
         "cuadros": cuadros,
+        # Los meses de la serie diaria que ha tocado esta ejecucion, por perfil.
+        "serie": series_escritas,
     }
+    if parado_en:
+        # Esto tiene que verse en la RESPUESTA, no solo en el registro: es la
+        # instruccion de como seguir, y quien lanza un relleno mira la respuesta.
+        resumen["incompleto"] = True
+        resumen["continuar_desde"] = parado_en
+        resumen["_siguiente"] = f'Relanza con {{"desde": "{parado_en}", "hasta": "..."}}'
     for p_ in resumen["perfiles"]:
         if p_["filas"] == 0 and p_["declara"]:
             print(f"AVISO: el perfil {p_['id']} se ha quedado SIN NINGUNA FILA. "
                   f"Declara {p_['declara']} y no encaja con ningun cliente ni centro leido.")
-    escribe(f"registro/agregados/anio={hoy.year}/mes={hoy.month:02d}/{hoy.isoformat()}.json", resumen)
+    if historico:
+        clave_registro = (f"registro/agregados/historico/"
+                          f"{periodo['desde']}_{periodo['hasta']}.json")
+    else:
+        clave_registro = (f"registro/agregados/anio={hoy.year}/mes={hoy.month:02d}/"
+                          f"{hoy.isoformat()}.json")
+    escribe(clave_registro, resumen)
     print(json.dumps(resumen, ensure_ascii=False))
     return resumen

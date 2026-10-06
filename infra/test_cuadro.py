@@ -146,18 +146,22 @@ comprueba("el dia con telemetria no suma la del parte",
 comprueba("el dia sin telemetria si", c.ventas[(ANTEAYER.isoformat(), "M2", "CAFE")], [4.0, 2.0])
 comprueba("la fuente sale mixta", c.fuente_ventas(), "mixta")
 
-print("\nLos ficheros")
-F = c.ficheros(PERFIL, PERIODO, generado="x")
-I = F["indice.json"]
-comprueba("indice y un trozo por mes con venta",
-          sorted(F), sorted(["indice.json"] + [f"ventas-{m}.json" for m in
-                                               sorted({AYER.isoformat()[:7], ANTEAYER.isoformat()[:7]})]))
-comprueba("el censo va primero y marcado", [m[0] for m in I["maquinas"] if m[4]], ["M1", "M2"])
-nombre_de = {i: m[0] for i, m in enumerate(I["maquinas"])}
-filas = [f for k, t in F.items() if k != "indice.json" for f in t["filas"]]
-comprueba("cada fila de venta cita maquina y articulo por posicion",
-          sorted((nombre_de[f[1]], I["articulos"][f[2]], f[3]) for f in filas),
-          [("M1", "AGUA", 3), ("M2", "CAFE", 4.0)])
+print("\nEl fichero de un mes se entiende solo")
+MESES = c.meses(PERIODO)
+I = c.indice(PERFIL, PERIODO, [C.resumen_mes(f) for f in MESES.values()], generado="x")
+comprueba("un fichero por mes con dato",
+          sorted(MESES), sorted({AYER.isoformat()[:7], ANTEAYER.isoformat()[:7]}))
+_mes_ayer = MESES[AYER.isoformat()[:7]]
+comprueba("el mes lleva sus propias maquinas y articulos",
+          (bool(_mes_ayer["maquinas"]), bool(_mes_ayer["articulos"])), (True, True))
+_filas = [(m["maquinas"][f[1]][0], m["articulos"][f[2]], f[3])
+          for m in MESES.values() for f in m["ventas"]]
+comprueba("cada fila cita maquina y articulo por posicion DENTRO de su mes",
+          sorted(_filas), [("M1", "AGUA", 3), ("M2", "CAFE", 4.0)])
+comprueba("el indice lleva el censo de hoy y no las filas",
+          ([x[0] for x in I["censo"]], "ventas" in I), (["M1", "M2"], True))
+comprueba("y la lista de meses con sus totales",
+          sorted(x["mes"] for x in I["meses"]), sorted(MESES))
 comprueba("la venta dice cuantas maquinas del censo tienen venta",
           (I["ventas"]["maquinas_censo"], I["ventas"]["maquinas_censo_con_venta"]), (2, 2))
 comprueba("los preventivos dicen que no hay fuente", (I["preventivos"], "preventivos" in I["_preventivos"]),
@@ -166,27 +170,65 @@ comprueba("la nota de la fuente avisa de que es parcial", "PARCIAL" in C.NOTA_FU
 
 print("\nFuera de la ventana no sale")
 c.come_partes([parte("M1", "2020-01-01 08:00:00")])
-comprueba("una visita de 2020 no entra", len(c.ficheros(PERFIL, PERIODO)["indice.json"]["visitas"]), 2)
+comprueba("una visita de 2020 no entra en ningun mes del periodo",
+          sum(len(m["visitas"]) for m in c.meses(PERIODO).values()), 2)
+comprueba("y su mes no se escribe", "2020-01" in c.meses(PERIODO), False)
 
-print("\nUn mes que no cabe en una respuesta se parte por dias")
-viejo = C.MAX_BYTES_TROZO
-C.MAX_BYTES_TROZO = 60
-grande = C.Cuadro()
-for d in range(1, 11):
-    grande.ventas[(f"2026-09-{d:02d}", "M1", "AGUA")] = [1, 0.6]
-G = grande.ficheros(PERFIL, {"desde": "2026-09-01", "hasta": "2026-09-30", "dias": 30})
-C.MAX_BYTES_TROZO = viejo
-partes = [k for k in G if k.startswith("ventas-")]
-comprueba("mas de un trozo", len(partes) > 1, True)
-comprueba("el indice los cita todos", sorted("ventas-" + t + ".json" for t in G["indice.json"]["trozos"]),
-          sorted(partes))
-comprueba("sin perder ni repetir un dia",
-          sorted(f[0] for k in partes for f in G[k]["filas"]), list(range(1, 11)))
-comprueba("y ningun dia partido entre dos trozos",
-          sum(len({f[0] for f in G[k]["filas"]}) for k in partes), 10)
+print("\nIda y vuelta: codificar y descodificar un mes no pierde nada")
+_d = C.descodifica_mes(_mes_ayer)
+_otra_vez = C.codifica_mes(_d["mes"], _d["ventas"], _d["visitas"], _d["incidencias"],
+                           ficha=lambda m: _d["fichas"].get(m, {}),
+                           en_censo=lambda m: bool(_d["fichas"].get(m, {}).get("en_censo")),
+                           fuente=_d["fuente"])
+comprueba("sale el mismo fichero", _otra_vez, _mes_ayer)
+comprueba("y la ficha conserva el centro",
+          _d["fichas"]["M1"]["centro"], "AIRBUS SAN PABLO SUR")
+
+print("\nFusionar: los dias que no se han leido se quedan")
+MES = "2025-03"
+viejo = C.codifica_mes(MES,
+                       [("2025-03-01", "V1", "AGUA", 1, 0.6), ("2025-03-20", "M1", "AGUA", 5, 3.0)],
+                       [("2025-03-01 08:00", "V1")],
+                       [("2025-03-01", "", "V1", "A-1", "AVERIAS TECNICAS", "T08", "Pendiente")],
+                       ficha=lambda m: {"centro": "AIRBUS VIEJO", "ubicacion": "Nave", "pdv": "P" + m},
+                       en_censo=lambda m: False, fuente="visita_ventas")
+nuevo = C.codifica_mes(MES, [("2025-03-20", "M1", "AGUA", 9, 5.4)], [], [],
+                       ficha=lambda m: {"centro": "AIRBUS SAN PABLO SUR", "ubicacion": "Comedor",
+                                        "pdv": "P" + m},
+                       en_censo=lambda m: True, fuente="visita_ventas")
+F = C.fusiona_mes(viejo, nuevo, dias=["2025-03-20"])
+_d = C.descodifica_mes(F)
+comprueba("el dia releido se sustituye, no se suma",
+          sorted((x[0], x[1], x[3]) for x in _d["ventas"]),
+          [("2025-03-01", "V1", 1), ("2025-03-20", "M1", 9)])
+comprueba("el dia que no se leyo sigue ahi, con su visita y su averia",
+          (len(_d["visitas"]), len(_d["incidencias"])), (1, 1))
+comprueba("una maquina retirada conserva su centro en el mes viejo",
+          _d["fichas"]["V1"]["centro"], "AIRBUS VIEJO")
+comprueba("y la que sigue, el de hoy", _d["fichas"]["M1"]["centro"], "AIRBUS SAN PABLO SUR")
+comprueba("sin mes previo, se queda el nuevo", C.fusiona_mes(None, nuevo), nuevo)
+comprueba("el resumen del mes cuenta lo fusionado",
+          (C.resumen_mes(F)["filas"], C.resumen_mes(F)["importe"]), (2, 6.0))
+
+print("\nUn mes que no cabe en una respuesta se dice, no se parte")
+_lim = C.MAX_BYTES_MES
+C.MAX_BYTES_MES = 60
+comprueba("no cabe", C.cabe_en_una_respuesta(nuevo), False)
+C.MAX_BYTES_MES = _lim
+comprueba("y con el limite de verdad si", C.cabe_en_una_respuesta(nuevo), True)
 
 # ----------------------------------------------------------------------
 print("\nLa Lambda: el cuadro es de los perfiles de cliente")
+
+
+def mes_de(pid, mes):
+    return json.loads(gzip.decompress(ALMACEN[f"cabina/{pid}/cuadro/mes-{mes}.json.gz"]))
+
+
+def venta_de(pid, indice):
+    """Lo facturado en todos los meses que cita el indice de ese perfil."""
+    return round(sum(f[4] for m in indice["meses"]
+                     for f in mes_de(pid, m["mes"])["ventas"]), 2)
 
 
 def pon(destino, id_informe, dia, filas):
@@ -207,22 +249,28 @@ pon("crudo/visita_ventas", "visita_ventas", AYER,
      {"matricula": "C1", "fecha_visita": f"{AYER} 09:00:00", "articulo": "AGUA", "num_total": 9,
       "imp_total": 9.0}])
 pon("crudo/sat_averias", "sat_averias", AYER, [tarea(1, "M1")])
-# Un trozo de un mes que ya salio de la ventana.
-ALMACEN["cabina/cli-x/cuadro/ventas-2020-01.json"] = b"{}"
+# Un mes de 2025 que se relleno otro dia y que esta noche no se mira.
+ALMACEN["cabina/cli-x/cuadro/indice.json"] = json.dumps({"meses": [
+    {"mes": "2025-03", "filas": 1, "importe": 7.0, "visitas": 0, "incidencias": 0}]}).encode()
+ALMACEN["cabina/cli-x/cuadro/mes-2025-03.json.gz"] = gzip.compress(json.dumps(
+    C.codifica_mes("2025-03", [("2025-03-11", "M1", "AGUA", 10, 7.0)], [], [],
+                   ficha=lambda m: {"centro": "AIRBUS SAN PABLO SUR"})).encode())
 
 ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
     {"id": "interno", "ambito": {}}, PERFIL]}).encode()
 res = L.lambda_handler({}, None)
 ix = json.loads(ALMACEN["cabina/cli-x/cuadro/indice.json"])
 comprueba("el perfil con cuadro tiene su indice", ix["perfil"], "cli-x")
+_mes_hoy = mes_de("cli-x", AYER.isoformat()[:7])
 comprueba("con su venta y nada de la de Consum",
-          sum(f[4] for t in ix["trozos"]
-              for f in json.loads(ALMACEN[f"cabina/cli-x/cuadro/ventas-{t}.json"])["filas"]), 1.2)
+          sum(f[4] for f in _mes_hoy["ventas"]), 1.2)
 comprueba("y la venta del parte, sin centro, sabe de que centro es",
-          ix["centros"][ix["maquinas"][0][1]], "AIRBUS SAN PABLO SUR")
-comprueba("visitas e incidencias del perfil", (len(ix["visitas"]), len(ix["incidencias"])), (1, 1))
-comprueba("el indice no cita el trozo viejo (la API solo sirve los que cita)",
-          "2020-01" in ix["trozos"], False)
+          _mes_hoy["centros"][_mes_hoy["maquinas"][0][1]], "AIRBUS SAN PABLO SUR")
+comprueba("visitas e incidencias del perfil",
+          (len(_mes_hoy["visitas"]), len(_mes_hoy["incidencias"])), (1, 1))
+comprueba("el mes de 2025 que no se ha mirado sigue en el indice",
+          [m["mes"] for m in ix["meses"] if m["mes"] == "2025-03"], ["2025-03"])
+comprueba("con su venta intacta", venta_de("cli-x", ix), round(7.0 + 1.2, 2))
 comprueba("el interno no tiene cuadro",
           [k for k in ALMACEN if k.startswith("cabina/interno/cuadro/")], [])
 comprueba("el resumen dice que fuente uso", res["cuadros"]["cli-x"]["fuente"], "visita_ventas")
@@ -263,17 +311,14 @@ res = L.lambda_handler({}, None)
 comprueba("el de la consola tiene su panel", json.loads(ALMACEN["cabina/cli-consum/panel.json"])["perfil"],
           "cli-consum")
 _ix = json.loads(ALMACEN["cabina/cli-consum/cuadro/indice.json"])
-comprueba("y su cuadro, con su venta y solo la suya",
-          sum(f[4] for t in _ix["trozos"]
-              for f in json.loads(ALMACEN[f"cabina/cli-consum/cuadro/ventas-{t}.json"])["filas"]), 9.0)
+comprueba("y su cuadro, con su venta y solo la suya", venta_de("cli-consum", _ix), 9.0)
 comprueba("uno sin ambito NO se calcula (veria todo el parque)",
           [k for k in ALMACEN if k.startswith("cabina/cli-vacio/")], [])
 comprueba("y el resumen lo dice", res["consola"]["sin_ambito"], ["cli-vacio"])
 comprueba("se han leido las cuatro fichas, por paginas", res["consola"]["leidos"], 4)
 _ix = json.loads(ALMACEN["cabina/cli-x/cuadro/indice.json"])
 comprueba("en un perfil de los dos sitios, la consola SUMA ambito al fichero",
-          sum(f[4] for t in _ix["trozos"]
-              for f in json.loads(ALMACEN[f"cabina/cli-x/cuadro/ventas-{t}.json"])["filas"]), 10.2)
+          venta_de("cli-x", _ix), 10.2)
 comprueba("y el interno sigue siendo todo: la consola no lo recorta",
           json.loads(ALMACEN["cabina/interno/panel.json"])["perfil"], "interno")
 _j, _ = L.junta_perfiles([{"id": "interno", "ambito": {}}], [CONSOLA["fichas"][3][1] | {"id": "interno"}])
