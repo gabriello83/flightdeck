@@ -1590,6 +1590,50 @@ where c.activo is true
 order by cli.codigo, cen.numcentro, pdv.codigo, m.codigo, c.etiqueta
 ```
 
+## M9 · EXT_AIRBUS_DEX  *(sin parámetros)*
+
+El **DEX** (EVA-DTS, como lo llama Nayax) de las máquinas de AIRBUS: la última auditoría que mandó
+cada una, **entera y en bruto**, en la columna `dex`. Ahí van, por selección, el precio configurado
+en la máquina, las ventas contadas y el dinero, y es contra lo que se revisan precios y cantidades
+en la visita. No es lo mismo que A12 (la venta a venta, [10](10-telemetria-un-dia.md)): A12 dice lo
+que se cobró en cada operación; el DEX dice **lo que la máquina tiene configurado y acumulado**.
+
+Sale una fila por máquina, también las que no tienen ninguna auditoría (`dex` vacío): que falte el
+dato se ve, no se esconde. La tabla es la de Nayax (`telemetry.nayaxtelemetryaudits`, sistema 40);
+una máquina de AIRBUS con otro sistema de telemetría saldrá con `dex` vacío. Alcance: los nueve
+centros de AIRBUS, para que el informe no pese lo que pesaría todo el parque con el texto entero.
+
+```sql
+select
+  cen.denomina                   as centro,
+  pdv.codigo                     as cod_pdv,
+  pdv.ubicacion                  as ubicacion,
+  m.codigo                       as matricula,
+  m.telemetria                   as telemetria,
+  au.id                          as id_audit,
+  cast(au.auditdatetime as text) as fecha_dex,
+  au.audittype                   as tipo_audit,
+  au.status                      as estado_audit,
+  au.nayaxdevicesn               as dispositivo,
+  au.auditevadts                 as dex
+from recursos.maquinas m
+join vending.pdvs pdv                   on pdv.maquinaid = m.id
+join comercial.clientescentros cen      on cen.id = pdv.clientecentroid
+left join (
+  select a.maquinaid as maquinaid, max(a.auditdatetime) as ultima
+  from telemetry.nayaxtelemetryaudits a
+  group by a.maquinaid
+) ult on ult.maquinaid = m.id
+left join telemetry.nayaxtelemetryaudits au
+       on au.maquinaid = m.id and au.auditdatetime = ult.ultima
+where upper(trim(cen.denomina)) like 'AIRBUS%'
+order by cen.denomina, pdv.codigo, m.codigo
+```
+
+Está sin probar contra VenCloud: las columnas salen de `estructura_columnas.xlsx`. Con el resultado
+se escribe el lector del DEX (precio por selección contra la tarifa de AIRBUS); no se escribe antes
+porque el formato del precio —céntimos o euros— depende de la propia máquina y no se adivina.
+
 ## M3 · EXT_MAESTRO_ALMACENES  *(sin parámetros)*
 
 ```sql

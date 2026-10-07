@@ -31,21 +31,27 @@ Como la tarifa es la misma para los tres, «iguales en los tres sitios» se cump
 lo que se comprueba es que **cada centro la cumpla**. Los canales que salgan con otro precio son los
 que hay que regenerar antes del 19.
 
-## DEX (la telemetría)
+## DEX (EVA-DTS, vía Nayax)
 
-El DEX es la telemetría: lo que la máquina **cobró de verdad** ([10](10-telemetria-un-dia.md)).
-Se saca con `A12 · EXT_TELEMETRIA_VENTAS` ([17](17-sql-extraccion-completa.md)), que todavía está
-**por crear** y por eso no está en S3. Para la revisión, lánzalo en VenCloud con una semana
-(≈125.000 filas de AIRBUS, cabe en un Excel) y contrástalo:
+El DEX es el dato EVA-DTS que la máquina manda por telemetría: precio configurado, ventas y dinero
+por selección. VenCloud lo guarda como texto en las tablas de auditoría
+(`telemetry.nayaxtelemetryaudits.auditevadts`). Se saca con **`M9 · EXT_AIRBUS_DEX`**
+([17](17-sql-extraccion-completa.md)): la última auditoría de cada máquina de AIRBUS, en bruto.
+
+**Pendiente:** crear M9 en VenCloud y pasarme el resultado y el número de informe. Con una auditoría
+real escribo el lector (precio por selección contra la tarifa, y las cantidades). No lo escribo a
+ciegas: el formato del precio en el EVA-DTS depende de la máquina.
+
+Aparte, y distinto, está **lo cobrado**: `A12 · EXT_TELEMETRIA_VENTAS`, venta a venta, todavía por
+crear. Con una semana se contrasta con la tarifa:
 
 ```sh
 python3 infra/airbus_tarifa.py planograma.csv recetas.csv --ventas telemetria.csv
 ```
 
-Sale, por máquina y artículo, cada precio cobrado que no es el de la tarifa y cuántas ventas fueron.
-Es el control de [19](19-precio-y-planograma.md): la tarifa es lo que **debe** cobrarse, el canal lo
-que hay guardado y el DEX lo que **se cobró**. La venta sin artículo (≈20 % en San Pablo y Tablada)
-se cuenta aparte: no se puede contrastar y no se adivina.
+La tarifa es lo que **debe** cobrarse, el canal lo que hay guardado, el DEX lo que la máquina tiene
+configurado y A12 lo que **se cobró** ([19](19-precio-y-planograma.md)). La venta sin artículo
+(≈20 % en San Pablo y Tablada) se cuenta aparte: no se puede contrastar y no se adivina.
 
 ## Dosificación del café
 

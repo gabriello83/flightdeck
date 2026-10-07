@@ -12,8 +12,8 @@ canales no la cumplen.
   bebidas.csv     (opcional) resultado de M2 · EXT_MAESTRO_RECETAS; sus cafes
                   (R01, R04...) se contrastan por `precio_venta`
 
-  --ventas        (opcional) la telemetria (el DEX), A12 · EXT_TELEMETRIA_VENTAS: lo que
-                  la maquina cobro de verdad, contra la tarifa
+  --ventas        (opcional) la venta de telemetria, A12 · EXT_TELEMETRIA_VENTAS: lo que
+                  la maquina cobro en cada operacion, contra la tarifa
 
 Salida: una linea por canal con problema, y el resumen por centro. Si un dato
 no esta, se dice: un articulo sin tarifa no se da por bueno ni por cero.
@@ -98,7 +98,7 @@ def contrasta_bebidas(recetas, tarifa):
 
 def contrasta_ventas(ventas, tarifa):
     """
-    La telemetria (DEX) contra la tarifa: lo cobrado, no lo guardado en el canal.
+    La venta de telemetria contra la tarifa: lo cobrado, no lo guardado en el canal.
     Devuelve (problemas, resumen). problemas = (centro, matricula, cod, articulo,
     precio_cobrado, tarifa, ventas, motivo), una fila por precio distinto cobrado.
     La venta sin articulo no se puede contrastar: se cuenta aparte, no se adivina.
@@ -162,7 +162,7 @@ def main(argv):
             print("  todos coinciden con la tarifa")
     if ventas:
         vp, vr = contrasta_ventas(list(csv.DictReader(open(ventas, encoding="utf-8-sig"))), tarifa)
-        print("\nTelemetria (DEX) contra la tarifa:")
+        print("\nVenta de telemetria contra la tarifa:")
         print("centro;maquina;cod_articulo;articulo;precio_cobrado;tarifa;ventas;motivo")
         for p in vp:
             print(";".join("" if x is None else str(x) for x in p))
