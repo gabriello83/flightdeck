@@ -603,6 +603,89 @@ order by t.fechaventa
 Si el validador dice que `t.id` no existe, cámbialo por `t.transactionid as id`: es la clave que
 se cruza con el banco en B5 y también es única por venta.
 
+## A13 · EXT_TELEMETRIA_AUDITS  ·  **por crear**
+
+El **DEX** (EVA-DTS, como lo llama Nayax) de **todas las máquinas y con histórico**: cada auditoría
+que mandó cada una, entera, en la columna `dex`. Va en la carga nocturna, filtrada por la fecha de la
+auditoría, y se acumula en S3 (`crudo/telemetria_audits`): AIRBUS, Consum o quien sea se filtra al
+leer, por `centro` o `cliente`.
+
+**Por qué con histórico y no «la última».** Los contadores del EVA-DTS son **acumulados**: la
+auditoría de hoy sólo dice cuánto lleva la máquina desde que se puso a cero. Lo que se vendió o se
+cobró **entre dos recaudaciones** es la diferencia entre la auditoría de esta visita y la anterior,
+y para eso hacen falta las dos. Sirve para dos controles:
+
+1. **Las ventas**: contadores y precio por selección, contra la venta de A11/A12.
+2. **El dinero de la bolsa**: el efectivo que la máquina dice haber recibido entre dos recaudaciones
+   contra lo que se contó en la bolsa. La cadena es `cod_bolsa` → B2 (`parte_id`) → la auditoría
+   con ese mismo `parte_id` (la que se toma al recaudar) → la auditoría anterior de la máquina
+   ([24](24-cadena-del-efectivo.md)).
+
+`parte_id` es 0 en las auditorías automáticas, que no pertenecen a ninguna visita; se bajan igual.
+
+Salen las cuatro tablas de auditoría que traen `maquinaid` —Nayax (`nayaxtelemetryaudits`, sistema
+40, el de AIRBUS), `telemetryaudits`, `generictelemetryaudits` y `meitelemetryaudits`—, con su
+`origen`. Las demás (Cogés, Atento, Matipay, Orain, Televend, Vendon, CasLab, Prodelfi, global, CPI)
+guardan la auditoría por dispositivo y no por máquina: **no están** y se dice, hasta que una sonda
+(como M6) diga cómo se enlazan. Una máquina cuya telemetría no sea una de las cuatro no sale.
+
+**Pesa**: es el texto entero de cada auditoría. Antes de activarlo en la carga nocturna, lánzalo un
+día suelto y mira filas y tamaño (`filas_mes` del manifiesto).
+
+```sql
+select
+  x.id                           as id,
+  x.origen                       as origen,
+  cast(x.fecha as text)          as fecha_dex,
+  x.tipo                         as tipo_audit,
+  x.estado                       as estado_audit,
+  x.parte_id                     as parte_id,
+  m.codigo                       as matricula,
+  m.telemetria                   as telemetria,
+  pdv.codigo                     as cod_pdv,
+  pdv.ubicacion                  as ubicacion,
+  cen.denomina                   as centro,
+  cli.codigo                     as cod_cliente,
+  cli.nombre                     as cliente,
+  x.dex                          as dex
+from (
+  select concat('nayax-', a.id) as id, 'nayax' as origen, a.auditdatetime as fecha,
+         a.audittype as tipo, a.status as estado, a.partevisitaid as parte_id,
+         a.maquinaid as maquinaid, a.auditevadts as dex
+  from telemetry.nayaxtelemetryaudits a
+  where a.auditdatetime >= '{0}' and a.auditdatetime <= '{1} 23:59:59'
+  union all
+  select concat('base-', b.id), 'base', b.auditdatetime,
+         b.audittype, b.status, b.partevisitaid,
+         b.maquinaid, b.auditevadts
+  from telemetry.telemetryaudits b
+  where b.auditdatetime >= '{0}' and b.auditdatetime <= '{1} 23:59:59'
+  union all
+  select concat('generic-', g.id), 'generic', g.auditdatetime,
+         g.audittype, g.status, g.partevisitaid,
+         g.maquinaid, g.auditevadts
+  from telemetry.generictelemetryaudits g
+  where g.auditdatetime >= '{0}' and g.auditdatetime <= '{1} 23:59:59'
+  union all
+  select concat('mei-', e.id), 'mei', e.auditdatetime,
+         e.audittype, e.status, e.partevisitaid,
+         e.maquinaid, e.auditevadts
+  from telemetry.meitelemetryaudits e
+  where e.auditdatetime >= '{0}' and e.auditdatetime <= '{1} 23:59:59'
+) x
+left join recursos.maquinas m           on m.id = x.maquinaid
+left join vending.pdvs pdv              on pdv.maquinaid = m.id
+left join comercial.clientescentros cen on cen.id = pdv.clientecentroid
+left join comercial.clientes cli        on cli.id = cen.clienteid
+order by x.fecha
+```
+
+Si una máquina tuviera dos puntos de venta, sus auditorías saldrían duplicadas: es la misma
+precaución que en A12, y se cuenta el `id`, no las filas. Está sin probar contra VenCloud: las
+columnas salen de `estructura_columnas.xlsx`. Con una auditoría real se escribe el lector (precio y
+contadores por selección, y el bloque de efectivo); no antes, porque el formato del precio y de los
+contadores depende de la máquina y no se adivina.
+
 ---
 
 # Tanda B · El dinero
@@ -1589,53 +1672,6 @@ left join stocks.articulos a          on a.id = c.articuloid
 where c.activo is true
 order by cli.codigo, cen.numcentro, pdv.codigo, m.codigo, c.etiqueta
 ```
-
-## M9 · EXT_MAESTRO_DEX  *(sin parámetros)*
-
-El **DEX** (EVA-DTS, como lo llama Nayax) de **todas las máquinas**: la última auditoría que mandó
-cada una, **entera y en bruto**, en la columna `dex`. Ahí van, por selección, el precio configurado
-en la máquina, las ventas contadas y el dinero, y es contra lo que se revisan precios y cantidades
-en la visita. No es lo mismo que A12 (la venta a venta, [10](10-telemetria-un-dia.md)): A12 dice lo
-que se cobró en cada operación; el DEX dice **lo que la máquina tiene configurado y acumulado**.
-
-Va en la carga nocturna y se queda en S3 (`maestros/dex`); AIRBUS, Consum o quien sea se filtra al
-leer, por `centro` o `cliente`. Sale una fila por máquina, también las que no tienen ninguna
-auditoría (`dex` vacío): que falte el dato se ve, no se esconde. La tabla es la de Nayax
-(`telemetry.nayaxtelemetryaudits`, sistema 40); una máquina con otra telemetría saldrá con `dex`
-vacío. **Pesa**: es el texto entero de una auditoría por máquina, de todo el parque.
-
-```sql
-select
-  cli.codigo                     as cod_cliente,
-  cli.nombre                     as cliente,
-  cen.denomina                   as centro,
-  pdv.codigo                     as cod_pdv,
-  pdv.ubicacion                  as ubicacion,
-  m.codigo                       as matricula,
-  m.telemetria                   as telemetria,
-  au.id                          as id_audit,
-  cast(au.auditdatetime as text) as fecha_dex,
-  au.audittype                   as tipo_audit,
-  au.status                      as estado_audit,
-  au.nayaxdevicesn               as dispositivo,
-  au.auditevadts                 as dex
-from recursos.maquinas m
-join vending.pdvs pdv                   on pdv.maquinaid = m.id
-left join comercial.clientescentros cen on cen.id = pdv.clientecentroid
-left join comercial.clientes cli        on cli.id = cen.clienteid
-left join (
-  select a.maquinaid as maquinaid, max(a.auditdatetime) as ultima
-  from telemetry.nayaxtelemetryaudits a
-  group by a.maquinaid
-) ult on ult.maquinaid = m.id
-left join telemetry.nayaxtelemetryaudits au
-       on au.maquinaid = m.id and au.auditdatetime = ult.ultima
-order by cli.codigo, cen.numcentro, pdv.codigo, m.codigo
-```
-
-Está sin probar contra VenCloud: las columnas salen de `estructura_columnas.xlsx`. Con el resultado
-se escribe el lector del DEX (precio por selección contra la tarifa de AIRBUS); no se escribe antes
-porque el formato del precio —céntimos o euros— depende de la propia máquina y no se adivina.
 
 ## M3 · EXT_MAESTRO_ALMACENES  *(sin parámetros)*
 

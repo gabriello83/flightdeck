@@ -34,13 +34,16 @@ que hay que regenerar antes del 19.
 ## DEX (EVA-DTS, vía Nayax)
 
 El DEX es el dato EVA-DTS que la máquina manda por telemetría: precio configurado, ventas y dinero
-por selección. VenCloud lo guarda como texto en las tablas de auditoría
-(`telemetry.nayaxtelemetryaudits.auditevadts`). Se saca con **`M9 · EXT_MAESTRO_DEX`**
-([17](17-sql-extraccion-completa.md)): la última auditoría de cada máquina del parque, en bruto, a S3 (`maestros/dex`); AIRBUS se filtra al leer.
+por selección, en contadores acumulados. VenCloud lo guarda como texto en las tablas de auditoría
+(`telemetry.nayaxtelemetryaudits.auditevadts` y tres más). En S3 **no está**: el manifiesto no lleva
+ningún informe de telemetría. Se saca con **`A13 · EXT_TELEMETRIA_AUDITS`**
+([17](17-sql-extraccion-completa.md)), todas las máquinas y con histórico, porque lo vendido o
+cobrado entre dos recaudaciones es la diferencia entre dos auditorías. AIRBUS se filtra al leer.
 
-**Pendiente:** crear M9 en VenCloud y pasarme el resultado y el número de informe. Con una auditoría
-real escribo el lector (precio por selección contra la tarifa, y las cantidades). No lo escribo a
-ciegas: el formato del precio en el EVA-DTS depende de la máquina.
+**Pendiente:** crear A13 en VenCloud, lanzarlo un día suelto para ver filas y tamaño, y pasarme el
+resultado y el número de informe. Con una auditoría real escribo el lector (precio por selección
+contra la tarifa, cantidades, y el efectivo contra la bolsa). No lo escribo a ciegas: el formato del
+precio en el EVA-DTS depende de la máquina.
 
 Aparte, y distinto, está **lo cobrado**: `A12 · EXT_TELEMETRIA_VENTAS`, venta a venta, todavía por
 crear. Con una semana se contrasta con la tarifa:
