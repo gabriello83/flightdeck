@@ -35,8 +35,8 @@ que hay que regenerar antes del 19.
 
 El DEX es el dato EVA-DTS que la máquina manda por telemetría: precio configurado, ventas y dinero
 por selección. VenCloud lo guarda como texto en las tablas de auditoría
-(`telemetry.nayaxtelemetryaudits.auditevadts`). Se saca con **`M9 · EXT_AIRBUS_DEX`**
-([17](17-sql-extraccion-completa.md)): la última auditoría de cada máquina de AIRBUS, en bruto.
+(`telemetry.nayaxtelemetryaudits.auditevadts`). Se saca con **`M9 · EXT_MAESTRO_DEX`**
+([17](17-sql-extraccion-completa.md)): la última auditoría de cada máquina del parque, en bruto, a S3 (`maestros/dex`); AIRBUS se filtra al leer.
 
 **Pendiente:** crear M9 en VenCloud y pasarme el resultado y el número de informe. Con una auditoría
 real escribo el lector (precio por selección contra la tarifa, y las cantidades). No lo escribo a

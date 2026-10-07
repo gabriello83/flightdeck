@@ -1590,21 +1590,24 @@ where c.activo is true
 order by cli.codigo, cen.numcentro, pdv.codigo, m.codigo, c.etiqueta
 ```
 
-## M9 · EXT_AIRBUS_DEX  *(sin parámetros)*
+## M9 · EXT_MAESTRO_DEX  *(sin parámetros)*
 
-El **DEX** (EVA-DTS, como lo llama Nayax) de las máquinas de AIRBUS: la última auditoría que mandó
+El **DEX** (EVA-DTS, como lo llama Nayax) de **todas las máquinas**: la última auditoría que mandó
 cada una, **entera y en bruto**, en la columna `dex`. Ahí van, por selección, el precio configurado
 en la máquina, las ventas contadas y el dinero, y es contra lo que se revisan precios y cantidades
 en la visita. No es lo mismo que A12 (la venta a venta, [10](10-telemetria-un-dia.md)): A12 dice lo
 que se cobró en cada operación; el DEX dice **lo que la máquina tiene configurado y acumulado**.
 
-Sale una fila por máquina, también las que no tienen ninguna auditoría (`dex` vacío): que falte el
-dato se ve, no se esconde. La tabla es la de Nayax (`telemetry.nayaxtelemetryaudits`, sistema 40);
-una máquina de AIRBUS con otro sistema de telemetría saldrá con `dex` vacío. Alcance: los nueve
-centros de AIRBUS, para que el informe no pese lo que pesaría todo el parque con el texto entero.
+Va en la carga nocturna y se queda en S3 (`maestros/dex`); AIRBUS, Consum o quien sea se filtra al
+leer, por `centro` o `cliente`. Sale una fila por máquina, también las que no tienen ninguna
+auditoría (`dex` vacío): que falte el dato se ve, no se esconde. La tabla es la de Nayax
+(`telemetry.nayaxtelemetryaudits`, sistema 40); una máquina con otra telemetría saldrá con `dex`
+vacío. **Pesa**: es el texto entero de una auditoría por máquina, de todo el parque.
 
 ```sql
 select
+  cli.codigo                     as cod_cliente,
+  cli.nombre                     as cliente,
   cen.denomina                   as centro,
   pdv.codigo                     as cod_pdv,
   pdv.ubicacion                  as ubicacion,
@@ -1618,7 +1621,8 @@ select
   au.auditevadts                 as dex
 from recursos.maquinas m
 join vending.pdvs pdv                   on pdv.maquinaid = m.id
-join comercial.clientescentros cen      on cen.id = pdv.clientecentroid
+left join comercial.clientescentros cen on cen.id = pdv.clientecentroid
+left join comercial.clientes cli        on cli.id = cen.clienteid
 left join (
   select a.maquinaid as maquinaid, max(a.auditdatetime) as ultima
   from telemetry.nayaxtelemetryaudits a
@@ -1626,8 +1630,7 @@ left join (
 ) ult on ult.maquinaid = m.id
 left join telemetry.nayaxtelemetryaudits au
        on au.maquinaid = m.id and au.auditdatetime = ult.ultima
-where upper(trim(cen.denomina)) like 'AIRBUS%'
-order by cen.denomina, pdv.codigo, m.codigo
+order by cli.codigo, cen.numcentro, pdv.codigo, m.codigo
 ```
 
 Está sin probar contra VenCloud: las columnas salen de `estructura_columnas.xlsx`. Con el resultado
