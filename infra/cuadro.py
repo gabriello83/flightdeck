@@ -88,6 +88,7 @@ class Cuadro:
         self.ventas = defaultdict(lambda: [0.0, 0.0])
         self.dias_telemetria = set()
         self.dias_visita = set()
+        self.ventas_imposibles = 0
         self.visitas = []
         self.incidencias = {}
 
@@ -129,6 +130,9 @@ class Cuadro:
             if not m:
                 continue
             self._ve(f)
+            if R.venta_imposible(1, R.v(f, "precio", 0)):
+                self.ventas_imposibles += 1
+                continue
             fecha = str(R.v(f, "fecha_venta", ""))[:10] or dia.isoformat()
             a = self.ventas[(fecha, m, _txt(R.v(f, "articulo", "Sin artículo")))]
             a[0] += 1
@@ -146,6 +150,10 @@ class Cuadro:
         for f in filas:
             m = _txt(R.v(f, "matricula", ""), 20)
             if not m or m == R.MATRICULA_FICTICIA:
+                continue
+            # Se aparta y se cuenta: ver reglas.LIMITE_PRECIO_UNIDAD.
+            if R.venta_imposible(R.v(f, "num_total", 0), R.v(f, "imp_total", 0)):
+                self.ventas_imposibles += 1
                 continue
             fecha = str(R.v(f, "fecha_visita", ""))[:10] or dia.isoformat()
             a = self.ventas[(fecha, m, _txt(R.v(f, "articulo", "Sin artículo")))]
@@ -271,6 +279,8 @@ class Cuadro:
                 "fuente": fuente,
                 "dias_telemetria": len(self.dias_telemetria),
                 "dias_visita": len(self.dias_visita),
+                # Lecturas apartadas por precio imposible (reglas.LIMITE_PRECIO_UNIDAD).
+                "lecturas_imposibles": self.ventas_imposibles,
                 "maquinas_censo": len(self.censo),
                 "maquinas_censo_con_venta": len(set(self.censo) & con_venta),
                 "_nota": NOTA_FUENTE.get(fuente, NOTA_FUENTE[None]),

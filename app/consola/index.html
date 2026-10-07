@@ -651,7 +651,7 @@ function vistaHistorico(){
     <div class="tabla"><table><thead><tr><th>Mes</th><th class="n">Días</th>
       <th class="n">Visitas</th><th class="n">Venta</th><th class="n">Tareas SAT</th></tr></thead><tbody>
     ${(SERIE.indice.meses||[]).slice().reverse().map(m=>`<tr>
-      <td><span class="cond">${esc(m.mes)}</span>${m.dias<20?' <span class="pill c">a medias</span>':""}</td>
+      <td><span class="cond">${esc(m.mes)}</span>${m.dias<20?' <span class="pill c">a medias</span>':""}${m.imposibles?` <span class="pill a" title="Lecturas de venta con un precio por unidad imposible: apartadas, no sumadas">${num(m.imposibles)} imposibles</span>`:""}</td>
       <td class="n" data-et="Días">${num(m.dias)}</td>
       <td class="n" data-et="Visitas">${num(m.visitas)}</td>
       <td class="n" data-et="Venta">${eur(m.importe)}</td>
@@ -679,7 +679,7 @@ function pintaCifrasPeriodo(){
       <div class="kpi"><div class="et">Visitas</div><div class="vl">${num(T.servicio.visitas)}</div>
         <div class="nt">de persona</div></div>
       <div class="kpi"><div class="et">Venta</div><div class="vl">${eur(T.venta.importe)}</div>
-        <div class="nt">${T.venta.fuentes.includes("visita_ventas")?"del parte: parcial":"telemetría"}</div></div>
+        <div class="nt">${T.venta.fuentes.includes("visita_ventas")?"del parte: parcial":"telemetría"}${T.venta.imposibles?` · ${num(T.venta.imposibles)} lecturas imposibles apartadas`:""}</div></div>
       <div class="kpi"><div class="et">Cargado</div><div class="vl">${eur(T.servicio.carga.valor)}</div>
         <div class="nt">${num(T.servicio.carga.unidades)} unidades</div></div>
       <div class="kpi"><div class="et">Merma</div>

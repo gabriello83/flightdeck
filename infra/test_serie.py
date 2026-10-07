@@ -153,6 +153,14 @@ v2.come_ventas_visita([{"matricula": "M1", "num_total": 50, "imp_total": 30.0},
 comprueba("sin telemetria si, y sin la matricula ficticia",
           (v2.fila()["venta"]["importe"], v2.fila()["venta"]["maquinas_dia"]), (30.0, 1))
 comprueba("y dice de donde sale", v2.fila()["venta"]["fuente"], "visita_ventas")
+v3 = S.Dia(AYER)
+v3.come_ventas_visita([{"matricula": "M1", "num_total": 50, "imp_total": 30.0},
+                       {"matricula": "15CE1015", "num_total": 262144, "imp_total": 171796070.4},
+                       {"matricula": "18CE1659", "num_total": 22, "imp_total": 2199.78}])
+comprueba("una lectura con precio imposible no suma",
+          (v3.fila()["venta"]["importe"], v3.fila()["venta"]["unidades"]), (30.0, 50.0))
+comprueba("pero se cuenta", v3.fila()["venta"]["imposibles"], 2)
+comprueba("y el mes lo dice", S.resumen_mes("2025-04", [v3.fila()])["imposibles"], 2)
 
 print("\nLos rangos con nombre")
 HOY_FIJO = datetime.date(2026, 3, 15)

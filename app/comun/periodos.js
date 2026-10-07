@@ -119,7 +119,7 @@
       dinero: { periodos: {} },
       sat: { tareas: 0, averias_tecnicas: 0, preventivos: 0, fallos_tecnicos: 0 },
       jornadas: { jornadas: 0, km_total: 0, temperatura_fuera: 0, gps: 0 },
-      venta: { unidades: 0, importe: 0, maquinas_dia_max: 0, fuentes: [] },
+      venta: { unidades: 0, importe: 0, maquinas_dia_max: 0, fuentes: [], imposibles: 0 },
       por_dia: []
     };
     let hmin = null, hcierres = null, hkm = null, htemp = null;
@@ -165,6 +165,7 @@
       t.venta.unidades += v.unidades || 0;
       t.venta.importe += v.importe || 0;
       t.venta.maquinas_dia_max = Math.max(t.venta.maquinas_dia_max, v.maquinas_dia || 0);
+      t.venta.imposibles += v.imposibles || 0;
       if (v.fuente) fuentes.add(v.fuente);
 
       t.por_dia.push({ f: f.f, visitas: s.visitas || 0, importe: v.importe || 0,

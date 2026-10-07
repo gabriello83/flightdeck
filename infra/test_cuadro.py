@@ -145,6 +145,12 @@ comprueba("el dia con telemetria no suma la del parte",
           c.ventas[(AYER.isoformat(), "M1", "AGUA")], [3, 1.7999999999999998])
 comprueba("el dia sin telemetria si", c.ventas[(ANTEAYER.isoformat(), "M2", "CAFE")], [4.0, 2.0])
 comprueba("la fuente sale mixta", c.fuente_ventas(), "mixta")
+_ci = C.Cuadro()
+_ci.come_ventas_visita([{"matricula": "18CE1659", "fecha_visita": f"{ANTEAYER} 09:00:00",
+                         "articulo": "Cappuccino descafeinado", "num_total": 22,
+                         "imp_total": 2199.78}], ANTEAYER)
+comprueba("una lectura a 99,99 la unidad no entra en el cuadro", dict(_ci.ventas), {})
+comprueba("pero se cuenta", _ci.ventas_imposibles, 1)
 
 print("\nEl fichero de un mes se entiende solo")
 MESES = c.meses(PERIODO)
