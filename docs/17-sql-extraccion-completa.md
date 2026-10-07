@@ -1554,18 +1554,21 @@ join stocks.articulos a on a.id = d.articuloid
 order by a.codigo, d.orden
 ```
 
-## M7 · EXT_AIRBUS_PLANOGRAMA  *(sin parámetros)*
+## M7 · EXT_MAESTRO_PLANOGRAMA  *(sin parámetros)*
 
-El planograma de los tres centros de Airbus Sevilla (Tablada, San Pablo Norte, San Pablo Sur),
-canal a canal y **sin tarifa**: qué lleva cada canal, a qué capacidad y con qué precio guardado.
-La tarifa definitiva de AIRBUS llega aparte, en `data/tarifa_airbus.csv`, y se contrasta con
-`infra/airbus_tarifa.py` ([49](49-revision-airbus-sevilla.md)).
+El planograma de **snack y bebida fría** (`maquinascanales`), canal a canal, de todo el parque. Es
+la otra mitad de M1, que sólo trae las máquinas calientes. Va en la carga nocturna y se queda en
+S3 (`maestros/planograma`), así que cualquier revisión —AIRBUS Sevilla, Consum— se saca de ahí y no
+pide un SQL nuevo: se filtra al leer, por `centro`.
 
 Sólo canales activos (`c.activo is true`, [19](19-precio-y-planograma.md)). `precio_canal_ef` es el
-valor almacenado en el canal, que puede estar viejo; es justo lo que se compara con la tarifa.
+valor almacenado en el canal, que puede estar viejo; la tarifa no va aquí, se contrasta aparte.
 
 ```sql
 select
+  c.id                           as id,
+  cli.codigo                     as cod_cliente,
+  cli.nombre                     as cliente,
   cen.denomina                   as centro,
   pdv.codigo                     as cod_pdv,
   pdv.ubicacion                  as ubicacion,
@@ -1577,13 +1580,14 @@ select
   a.codigo                       as cod_articulo,
   a.denomina                     as articulo,
   c.precioef                     as precio_canal_ef
-from recursos.maquinas m
-join vending.pdvs pdv                on pdv.maquinaid = m.id
-join comercial.clientescentros cen   on cen.id = pdv.clientecentroid
-join recursos.maquinascanales c      on c.maquinaid = m.id and c.activo is true
-left join stocks.articulos a         on a.id = c.articuloid
-where upper(trim(cen.denomina)) in ('AIRBUS TABLADA', 'AIRBUS SAN PABLO NORTE', 'AIRBUS SAN PABLO SUR')
-order by cen.denomina, pdv.codigo, m.codigo, c.etiqueta
+from recursos.maquinascanales c
+join recursos.maquinas m              on m.id = c.maquinaid
+left join vending.pdvs pdv            on pdv.maquinaid = m.id
+left join comercial.clientescentros cen on cen.id = pdv.clientecentroid
+left join comercial.clientes cli      on cli.id = cen.clienteid
+left join stocks.articulos a          on a.id = c.articuloid
+where c.activo is true
+order by cli.codigo, cen.numcentro, pdv.codigo, m.codigo, c.etiqueta
 ```
 
 ## M3 · EXT_MAESTRO_ALMACENES  *(sin parámetros)*

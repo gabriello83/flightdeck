@@ -7,7 +7,8 @@ canales no la cumplen.
 
   python3 infra/airbus_tarifa.py planograma.csv [bebidas.csv]
 
-  planograma.csv  resultado de M7 · EXT_AIRBUS_PLANOGRAMA
+  planograma.csv  M7 · EXT_MAESTRO_PLANOGRAMA (de S3, maestros/planograma); aqui
+                  se queda con los tres centros de AIRBUS Sevilla
   bebidas.csv     (opcional) resultado de M2 · EXT_MAESTRO_RECETAS; sus cafes
                   (R01, R04...) se contrastan por `precio_venta`
 
@@ -23,6 +24,7 @@ from decimal import Decimal
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 TARIFA = os.path.join(AQUI, "..", "data", "tarifa_airbus.csv")
+CENTROS = ("AIRBUS TABLADA", "AIRBUS SAN PABLO NORTE", "AIRBUS SAN PABLO SUR")
 
 
 def dec(txt):
@@ -49,6 +51,8 @@ def contrasta(canales, tarifa):
     usados = defaultdict(set)
     for c in canales:
         centro = c["centro"].strip().upper()
+        if centro not in CENTROS:
+            continue
         cod = (c.get("cod_articulo") or "").strip()
         precio = dec(c.get("precio_canal_ef"))
         r = resumen[centro]
