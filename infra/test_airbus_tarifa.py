@@ -36,13 +36,14 @@ print("\nEl planograma contra la tarifa")
 c = lambda cod, precio, centro="AIRBUS TABLADA": {
     "centro": centro, "matricula": "M1", "canal": "11", "cod_articulo": cod,
     "articulo": "x", "precio_canal_ef": precio}
-prob, res = at.contrasta([c("9354", "0,77"), c("9354", "0.82"), c("999", "1"), c("", "0")], t)
+prob, res = at.contrasta([c("9354", "0,77"), c("9354", "0.82"), c("999", "1"), c("", "0"), c("9354", "0")], t)
 r = res["AIRBUS TABLADA"]
 comprueba("uno bien", r["ok"] == 1)
 comprueba("uno con otro precio", r["distinto"] == 1)
+comprueba("uno a cero, aparte del distinto", r["a_cero"] == 1 and r["distinto"] == 1)
 comprueba("uno sin tarifa", r["sin_tarifa"] == 1)
 comprueba("uno sin articulo", r["sin_articulo"] == 1)
-comprueba("tres problemas en total", len(prob) == 3, str(len(prob)))
+comprueba("cuatro problemas en total", len(prob) == 4, str(len(prob)))
 comprueba("los centros no se mezclan",
           set(at.contrasta([c("9354", "0.77", "AIRBUS SAN PABLO SUR")], t)[1]) == {"AIRBUS SAN PABLO SUR"})
 

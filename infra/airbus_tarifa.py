@@ -47,7 +47,7 @@ def contrasta(canales, tarifa):
     cod, articulo, motivo, precio_canal, tarifa); resumen = {centro: {...}}.
     """
     problemas = []
-    resumen = defaultdict(lambda: {"canales": 0, "ok": 0, "distinto": 0, "sin_tarifa": 0, "sin_articulo": 0})
+    resumen = defaultdict(lambda: {"canales": 0, "ok": 0, "distinto": 0, "a_cero": 0, "sin_tarifa": 0, "sin_articulo": 0})
     usados = defaultdict(set)
     for c in canales:
         centro = c["centro"].strip().upper()
@@ -66,6 +66,9 @@ def contrasta(canales, tarifa):
         if cod not in tarifa:
             r["sin_tarifa"] += 1
             problemas.append(fila + ("el articulo no esta en la tarifa de AIRBUS", precio, None))
+        elif not precio:
+            r["a_cero"] += 1
+            problemas.append(fila + ("el canal no guarda precio (0)", precio, tarifa[cod]))
         elif precio != tarifa[cod]:
             r["distinto"] += 1
             problemas.append(fila + ("precio del canal distinto de la tarifa", precio, tarifa[cod]))
@@ -102,7 +105,7 @@ def main(argv):
         print(";".join("" if x is None else str(x) for x in p))
     print()
     for centro, r in sorted(resumen.items()):
-        print(f"{centro}: {r['canales']} canales · {r['ok']} bien · {r['distinto']} con otro precio · "
+        print(f"{centro}: {r['canales']} canales · {r['ok']} bien · {r['distinto']} con otro precio · {r['a_cero']} a cero · "
               f"{r['sin_tarifa']} sin tarifa · {r['sin_articulo']} sin articulo")
     if len(argv) > 2:
         recetas = list(csv.DictReader(open(argv[2], encoding="utf-8-sig")))
