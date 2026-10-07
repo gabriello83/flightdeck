@@ -1554,6 +1554,129 @@ join stocks.articulos a on a.id = d.articuloid
 order by a.codigo, d.orden
 ```
 
+## M7 · EXT_AIRBUS_PLANOGRAMA  *(sin parámetros)*
+
+El planograma de los tres centros de Airbus Sevilla (Tablada, San Pablo Norte, San Pablo Sur),
+canal a canal, con la tarifa que le corresponde. Es el informe que se pide antes de una revisión
+en sitio: qué lleva cada canal, a qué capacidad, y a qué precio **debe** cobrarse.
+
+Sólo canales activos (`c.activo is true`, [19](19-precio-y-planograma.md)). La tarifa se busca en
+`tarifasvendingproductos` del más concreto al más general: punto de venta, centro, cliente. Si no
+hay tarifa en ninguno, `tarifa_ef` sale **vacía**, no cero: «sin tarifa» es un dato, no un precio.
+`precio_canal_ef` es el valor almacenado en el canal y puede estar viejo; va aparte para verlo.
+
+```sql
+select
+  cen.denomina                   as centro,
+  pdv.codigo                     as cod_pdv,
+  pdv.ubicacion                  as ubicacion,
+  m.codigo                       as matricula,
+  c.etiqueta                     as canal,
+  c.capacmax                     as capacidad_max,
+  c.stockrecom                   as stock_recomendado,
+  c.cargaminima                  as carga_minima,
+  a.codigo                       as cod_articulo,
+  a.denomina                     as articulo,
+  c.precioef                     as precio_canal_ef,
+  coalesce(tp.precioef, tc.precioef, tl.precioef) as tarifa_ef,
+  case
+    when tp.precioef is not null then 'punto de venta'
+    when tc.precioef is not null then 'centro'
+    when tl.precioef is not null then 'cliente'
+    else 'sin tarifa'
+  end                            as nivel_tarifa
+from recursos.maquinas m
+join vending.pdvs pdv                on pdv.maquinaid = m.id
+join comercial.clientescentros cen   on cen.id = pdv.clientecentroid
+join recursos.maquinascanales c      on c.maquinaid = m.id and c.activo is true
+left join stocks.articulos a         on a.id = c.articuloid
+left join (
+  select pdvid as pdvid, articuloid as articuloid, precioef as precioef
+  from comercial.tarifasvendingproductos
+  where coalesce(pdvid, 0) <> 0
+) tp on tp.pdvid = pdv.id and tp.articuloid = c.articuloid
+left join (
+  select clientecentroid as centroid, articuloid as articuloid, precioef as precioef
+  from comercial.tarifasvendingproductos
+  where coalesce(pdvid, 0) = 0 and coalesce(clientecentroid, 0) <> 0
+) tc on tc.centroid = cen.id and tc.articuloid = c.articuloid
+left join (
+  select clienteid as clienteid, articuloid as articuloid, precioef as precioef
+  from comercial.tarifasvendingproductos
+  where coalesce(pdvid, 0) = 0 and coalesce(clientecentroid, 0) = 0 and coalesce(clienteid, 0) <> 0
+) tl on tl.clienteid = cen.clienteid and tl.articuloid = c.articuloid
+where upper(trim(cen.denomina)) in ('AIRBUS TABLADA', 'AIRBUS SAN PABLO NORTE', 'AIRBUS SAN PABLO SUR')
+order by cen.denomina, pdv.codigo, m.codigo, c.etiqueta
+```
+
+## M8 · EXT_AIRBUS_TARIFA_IGUAL  *(sin parámetros)*
+
+La comprobación de que la tarifa de AIRBUS es **la misma en los tres sitios**. Una fila por
+artículo, con la tarifa mínima y máxima que se le aplica en cada centro. `igual` vale `si` sólo si
+el mínimo y el máximo coinciden en los tres; `no` si hay diferencia entre centros o dentro de uno;
+`sin tarifa` si en algún centro el artículo está en un canal y no tiene tarifa.
+
+```sql
+select
+  x.cod_articulo as cod_articulo,
+  x.articulo     as articulo,
+  x.tab_min as tablada_min,   x.tab_max as tablada_max,   x.tab_canales as tablada_canales,
+  x.spn_min as sp_norte_min,  x.spn_max as sp_norte_max,  x.spn_canales as sp_norte_canales,
+  x.sps_min as sp_sur_min,    x.sps_max as sp_sur_max,    x.sps_canales as sp_sur_canales,
+  case
+    when x.sin_tarifa > 0 then 'sin tarifa'
+    when x.tab_min = x.tab_max and x.spn_min = x.spn_max and x.sps_min = x.sps_max
+         and x.tab_min = x.spn_min and x.tab_min = x.sps_min then 'si'
+    else 'no'
+  end            as igual
+from (
+  select
+    b.cod_articulo as cod_articulo,
+    b.articulo     as articulo,
+    min(case when b.centro = 'AIRBUS TABLADA' then b.tarifa end)          as tab_min,
+    max(case when b.centro = 'AIRBUS TABLADA' then b.tarifa end)          as tab_max,
+    sum(case when b.centro = 'AIRBUS TABLADA' then 1 else 0 end)          as tab_canales,
+    min(case when b.centro = 'AIRBUS SAN PABLO NORTE' then b.tarifa end)  as spn_min,
+    max(case when b.centro = 'AIRBUS SAN PABLO NORTE' then b.tarifa end)  as spn_max,
+    sum(case when b.centro = 'AIRBUS SAN PABLO NORTE' then 1 else 0 end)  as spn_canales,
+    min(case when b.centro = 'AIRBUS SAN PABLO SUR' then b.tarifa end)    as sps_min,
+    max(case when b.centro = 'AIRBUS SAN PABLO SUR' then b.tarifa end)    as sps_max,
+    sum(case when b.centro = 'AIRBUS SAN PABLO SUR' then 1 else 0 end)    as sps_canales,
+    sum(case when b.tarifa is null then 1 else 0 end)                     as sin_tarifa
+  from (
+    select
+      upper(trim(cen.denomina))      as centro,
+      a.codigo                       as cod_articulo,
+      a.denomina                     as articulo,
+      coalesce(tp.precioef, tc.precioef, tl.precioef) as tarifa
+from recursos.maquinas m
+join vending.pdvs pdv                on pdv.maquinaid = m.id
+join comercial.clientescentros cen   on cen.id = pdv.clientecentroid
+join recursos.maquinascanales c      on c.maquinaid = m.id and c.activo is true
+left join stocks.articulos a         on a.id = c.articuloid
+left join (
+  select pdvid as pdvid, articuloid as articuloid, precioef as precioef
+  from comercial.tarifasvendingproductos
+  where coalesce(pdvid, 0) <> 0
+) tp on tp.pdvid = pdv.id and tp.articuloid = c.articuloid
+left join (
+  select clientecentroid as centroid, articuloid as articuloid, precioef as precioef
+  from comercial.tarifasvendingproductos
+  where coalesce(pdvid, 0) = 0 and coalesce(clientecentroid, 0) <> 0
+) tc on tc.centroid = cen.id and tc.articuloid = c.articuloid
+left join (
+  select clienteid as clienteid, articuloid as articuloid, precioef as precioef
+  from comercial.tarifasvendingproductos
+  where coalesce(pdvid, 0) = 0 and coalesce(clientecentroid, 0) = 0 and coalesce(clienteid, 0) <> 0
+) tl on tl.clienteid = cen.clienteid and tl.articuloid = c.articuloid
+where upper(trim(cen.denomina)) in ('AIRBUS TABLADA', 'AIRBUS SAN PABLO NORTE', 'AIRBUS SAN PABLO SUR')
+      and c.articuloid is not null
+  ) b
+  group by b.cod_articulo, b.articulo
+) x
+order by x.articulo
+```
+
 ## M3 · EXT_MAESTRO_ALMACENES  *(sin parámetros)*
 
 ```sql
