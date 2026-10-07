@@ -194,6 +194,18 @@ comprueba("763 nunca inventariadas", c["nunca"], 763)
 comprueba("8,6 % en norma", c["pct_en_norma"], 8.6)
 
 # ----------------------------------------------------------------------
+print("\nVenta con precio imposible: se aparta")
+# Las dos de verdad, del relleno de 2025 (ver reglas.LIMITE_PRECIO_UNIDAD).
+comprueba("el contador desbordado de la 15CE1015",
+          R.venta_imposible(262144, 171796070.4), True)
+comprueba("el cappuccino a 99,99 de la 18CE1659", R.venta_imposible(22, 2199.78), True)
+comprueba("una lata a 0,90 no", R.venta_imposible(25662, 23095.8), False)
+comprueba("un cafe a 0,80 no", R.venta_imposible(446, 356.8), False)
+comprueba("un bocadillo caro, a 5 EUR, tampoco", R.venta_imposible(3, 15.0), False)
+comprueba("una venta de telemetria de 655,35 si", R.venta_imposible(1, 655.35), True)
+comprueba("cero unidades y cero euros no es imposible", R.venta_imposible(0, 0), False)
+
+# ----------------------------------------------------------------------
 print()
 if fallos:
     print(f"{len(fallos)} PRUEBAS FALLIDAS: {', '.join(fallos)}")

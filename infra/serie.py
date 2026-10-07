@@ -176,7 +176,7 @@ class Dia:
                  "periodos", "sat_tareas", "sat_averias", "sat_preventivos",
                  "sat_fallos", "sat_apertura", "sat_cierre", "jornadas",
                  "km", "temperaturas", "con_gps", "venta_unidades",
-                 "venta_importe", "venta_maquinas", "venta_fuente")
+                 "venta_importe", "venta_maquinas", "venta_fuente", "venta_imposibles")
 
     def __init__(self, fecha, centro_de=None):
         self.fecha = fecha.isoformat() if hasattr(fecha, "isoformat") else str(fecha)[:10]
@@ -200,6 +200,7 @@ class Dia:
         self.venta_unidades = self.venta_importe = 0.0
         self.venta_maquinas = set()
         self.venta_fuente = None
+        self.venta_imposibles = 0
 
     # ------------------------------------------------------------- servicio
     def come_partes(self, filas):
@@ -294,6 +295,9 @@ class Dia:
     def come_ventas_telemetria(self, filas):
         self.venta_fuente = "telemetria"
         for f in filas:
+            if R.venta_imposible(1, R.v(f, "precio", 0)):
+                self.venta_imposibles += 1
+                continue
             self.venta_unidades += 1
             self.venta_importe += float(R.v(f, "precio", 0) or 0)
             m = R.v(f, "matricula", "")
@@ -313,6 +317,10 @@ class Dia:
         for f in filas:
             m = R.v(f, "matricula", "")
             if m == R.MATRICULA_FICTICIA:
+                continue
+            # Se aparta y se cuenta: ver reglas.LIMITE_PRECIO_UNIDAD.
+            if R.venta_imposible(R.v(f, "num_total", 0), R.v(f, "imp_total", 0)):
+                self.venta_imposibles += 1
                 continue
             self.venta_unidades += float(R.v(f, "num_total", 0) or 0)
             self.venta_importe += float(R.v(f, "imp_total", 0) or 0)
@@ -394,6 +402,8 @@ class Dia:
                 "importe": round(self.venta_importe, 2),
                 "maquinas_dia": len(self.venta_maquinas),
                 "fuente": self.venta_fuente,
+                # Lecturas apartadas por precio imposible. Se dicen, no se esconden.
+                "imposibles": self.venta_imposibles,
             },
         }
 
@@ -601,7 +611,8 @@ def suma_filas(filas):
         "dinero": {"periodos": {}},
         "sat": {"tareas": 0, "averias_tecnicas": 0, "preventivos": 0, "fallos_tecnicos": 0},
         "jornadas": {"jornadas": 0, "km_total": 0.0, "temperatura_fuera": 0, "gps": 0},
-        "venta": {"unidades": 0.0, "importe": 0.0, "maquinas_dia_max": 0, "fuentes": []},
+        "venta": {"unidades": 0.0, "importe": 0.0, "maquinas_dia_max": 0, "fuentes": [],
+                  "imposibles": 0},
         "por_dia": [],
     }
     hmin = hcierres = hkm = htemp = None
@@ -649,6 +660,7 @@ def suma_filas(filas):
         out["venta"]["importe"] = round(out["venta"]["importe"] + ve.get("importe", 0), 2)
         out["venta"]["maquinas_dia_max"] = max(out["venta"]["maquinas_dia_max"],
                                                ve.get("maquinas_dia", 0))
+        out["venta"]["imposibles"] += ve.get("imposibles", 0)
         if ve.get("fuente"):
             fuentes.add(ve["fuente"])
 
@@ -772,4 +784,5 @@ def resumen_mes(mes, filas):
         "importe": totales.get("venta", {}).get("importe", 0),
         "tareas": totales.get("sat", {}).get("tareas", 0),
         "carga": totales.get("servicio", {}).get("carga", {}).get("valor", 0),
+        "imposibles": totales.get("venta", {}).get("imposibles", 0),
     }

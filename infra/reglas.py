@@ -144,6 +144,29 @@ def efectivo_en_cajon(filas_monbil):
 LIMITE_FILA_RECAUDACION = 100_000.0
 
 
+# Una unidad de vending cuesta entre 0,40 y 5 EUR. En los 3,6 millones de filas
+# de venta del parte de 2025-2026 no hay ni una entre 10 y 99 EUR la unidad, y
+# por encima solo hay dos cosas, las dos rotas:
+#   · 915 lecturas de un «Cappuccino descafeinado» de la 18CE1659 a 99,99 EUR la
+#     unidad, de febrero de 2025 a abril de 2026: un precio de relleno. Suman
+#     1,4 millones de euros que no existen.
+#   · una lectura de la 15CE1015 el 29-abr-2025 con 262.144 unidades (2^18) a
+#     655,35 EUR (0xFFFF centimos): un contador desbordado. 171,8 millones.
+# Por encima de esto, la fila se aparta y se cuenta, como la recaudacion rota.
+LIMITE_PRECIO_UNIDAD = 20.0
+
+
+def venta_imposible(unidades, importe):
+    """Una lectura de venta cuyo precio por unidad no puede ser de vending."""
+    try:
+        unidades, importe = float(unidades or 0), float(importe or 0)
+    except (TypeError, ValueError):
+        return False
+    if unidades <= 0:
+        return importe > LIMITE_PRECIO_UNIDAD
+    return importe / unidades > LIMITE_PRECIO_UNIDAD
+
+
 def recaudacion_del_periodo(filas, anio, mes):
     """prefacrecauda se agrupa por anho/mes, nunca por `fecha`.
 

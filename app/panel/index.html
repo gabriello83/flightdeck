@@ -1190,6 +1190,8 @@ function notaDelPeriodo(T, lugar){
     + (T.filtrado ? ". Las jornadas no se pueden partir por centro y no salen; la merma por "
         + "artículo, las máquinas reincidentes, el inventario y las instalaciones son de todo el "
         + "ámbito y de la ventana. Los totales y las medias son exactos." : "")
+    + (T.venta && T.venta.imposibles ? `. ${T.venta.imposibles} ${T.venta.imposibles===1?"lectura":"lecturas"} `
+        + "de venta con un precio imposible se han apartado y no suman" : "")
     + (T.filtrado ? "" : ". Lo que no se puede partir por días —reparto por centro, merma por artículo, máquinas "
     + "reincidentes, inventario e instalaciones— sigue siendo la foto de la ventana. Las medianas "
     + "de un rango son aproximadas; los totales y las medias, exactos.");
