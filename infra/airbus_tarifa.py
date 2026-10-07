@@ -5,12 +5,15 @@ La tarifa es una sola (data/tarifa_airbus.csv) y vale para los tres centros:
 Tablada, San Pablo Norte y San Pablo Sur. Aqui se mira, centro a centro, que
 canales no la cumplen.
 
-  python3 infra/airbus_tarifa.py planograma.csv [bebidas.csv]
+  python3 infra/airbus_tarifa.py planograma.csv [bebidas.csv] [--ventas telemetria.csv]
 
   planograma.csv  M7 · EXT_MAESTRO_PLANOGRAMA (de S3, maestros/planograma); aqui
                   se queda con los tres centros de AIRBUS Sevilla
   bebidas.csv     (opcional) resultado de M2 · EXT_MAESTRO_RECETAS; sus cafes
                   (R01, R04...) se contrastan por `precio_venta`
+
+  --ventas        (opcional) la telemetria (el DEX), A12 · EXT_TELEMETRIA_VENTAS: lo que
+                  la maquina cobro de verdad, contra la tarifa
 
 Salida: una linea por canal con problema, y el resumen por centro. Si un dato
 no esta, se dice: un articulo sin tarifa no se da por bueno ni por cero.
@@ -93,7 +96,47 @@ def contrasta_bebidas(recetas, tarifa):
     return problemas, faltan
 
 
+def contrasta_ventas(ventas, tarifa):
+    """
+    La telemetria (DEX) contra la tarifa: lo cobrado, no lo guardado en el canal.
+    Devuelve (problemas, resumen). problemas = (centro, matricula, cod, articulo,
+    precio_cobrado, tarifa, ventas, motivo), una fila por precio distinto cobrado.
+    La venta sin articulo no se puede contrastar: se cuenta aparte, no se adivina.
+    """
+    grupos = defaultdict(int)
+    resumen = defaultdict(lambda: {"ventas": 0, "ok": 0, "distinto": 0, "sin_tarifa": 0, "sin_articulo": 0})
+    nombres = {}
+    for v in ventas:
+        centro = v["centro"].strip().upper()
+        if centro not in CENTROS:
+            continue
+        r = resumen[centro]
+        r["ventas"] += 1
+        cod = (v.get("cod_articulo") or "").strip()
+        if not cod:
+            r["sin_articulo"] += 1
+            continue
+        precio = dec(v.get("precio"))
+        nombres[cod] = v.get("articulo", "")
+        if cod not in tarifa:
+            r["sin_tarifa"] += 1
+            grupos[(centro, v.get("matricula", ""), cod, precio, "el articulo no esta en la tarifa")] += 1
+        elif precio != tarifa[cod]:
+            r["distinto"] += 1
+            grupos[(centro, v.get("matricula", ""), cod, precio, "cobrado distinto de la tarifa")] += 1
+        else:
+            r["ok"] += 1
+    problemas = [(c, m, cod, nombres[cod], precio, tarifa.get(cod), n, motivo)
+                 for (c, m, cod, precio, motivo), n in sorted(grupos.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2]))]
+    return problemas, dict(resumen)
+
+
 def main(argv):
+    ventas = None
+    if "--ventas" in argv:
+        i = argv.index("--ventas")
+        ventas = argv[i + 1]
+        argv = argv[:i] + argv[i + 2:]
     if len(argv) < 2:
         print(__doc__)
         return 2
@@ -117,6 +160,16 @@ def main(argv):
             print(f"  sin precio en M2: {', '.join(faltan)}")
         if not pb and not faltan:
             print("  todos coinciden con la tarifa")
+    if ventas:
+        vp, vr = contrasta_ventas(list(csv.DictReader(open(ventas, encoding="utf-8-sig"))), tarifa)
+        print("\nTelemetria (DEX) contra la tarifa:")
+        print("centro;maquina;cod_articulo;articulo;precio_cobrado;tarifa;ventas;motivo")
+        for p in vp:
+            print(";".join("" if x is None else str(x) for x in p))
+        for centro, r in sorted(vr.items()):
+            print(f"{centro}: {r['ventas']} ventas · {r['ok']} al precio de la tarifa · {r['distinto']} a otro precio · "
+                  f"{r['sin_tarifa']} sin tarifa · {r['sin_articulo']} sin articulo (no se pueden contrastar)")
+        problemas = problemas or vp
     return 1 if problemas else 0
 
 

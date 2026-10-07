@@ -31,6 +31,22 @@ Como la tarifa es la misma para los tres, «iguales en los tres sitios» se cump
 lo que se comprueba es que **cada centro la cumpla**. Los canales que salgan con otro precio son los
 que hay que regenerar antes del 19.
 
+## DEX (la telemetría)
+
+El DEX es la telemetría: lo que la máquina **cobró de verdad** ([10](10-telemetria-un-dia.md)).
+Se saca con `A12 · EXT_TELEMETRIA_VENTAS` ([17](17-sql-extraccion-completa.md)), que todavía está
+**por crear** y por eso no está en S3. Para la revisión, lánzalo en VenCloud con una semana
+(≈125.000 filas de AIRBUS, cabe en un Excel) y contrástalo:
+
+```sh
+python3 infra/airbus_tarifa.py planograma.csv recetas.csv --ventas telemetria.csv
+```
+
+Sale, por máquina y artículo, cada precio cobrado que no es el de la tarifa y cuántas ventas fueron.
+Es el control de [19](19-precio-y-planograma.md): la tarifa es lo que **debe** cobrarse, el canal lo
+que hay guardado y el DEX lo que **se cobró**. La venta sin artículo (≈20 % en San Pablo y Tablada)
+se cuenta aparte: no se puede contrastar y no se adivina.
+
 ## Dosificación del café
 
 `M2` da la dosis de la receta (p. ej. 8 g de grano) y `M1 · EXT_MAESTRO_CARRILES`
@@ -38,9 +54,6 @@ que hay que regenerar antes del 19.
 
 ## Lo que no está, y se dice
 
-- **DEX.** Llega a VenCloud, pero este repositorio no tiene ninguna tabla ni columna de DEX
-  modelada: ni `estructura_columnas.xlsx` ni los informes extraídos la recogen. No se ha inventado
-  ninguna. Hace falta una sonda (como M6) que localice dónde se guarda, o un ejemplo del dato.
 - **Dosificación real de la máquina.** Lo que tiene configurado cada máquina no está en la base: se
   contrasta en la visita, contra la receta de M2.
 - **Accesos y autorizaciones** (tres personas y el vehículo del correo): son gestión con Airbus, no

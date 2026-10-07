@@ -55,6 +55,20 @@ pb, faltan = at.contrasta_bebidas(
 comprueba("R04 con otro precio se marca", [p[0] for p in pb] == ["R04"], str(pb))
 comprueba("los cafes que M2 no trae se dicen", "R10" in faltan and "R01" not in faltan)
 
+print("\nLa telemetria (DEX)")
+v = lambda cod, precio, centro="AIRBUS TABLADA", mat="M1": {
+    "centro": centro, "matricula": mat, "cod_articulo": cod, "articulo": "x", "precio": precio}
+vp, vr = at.contrasta_ventas(
+    [v("9354", "0.77"), v("9354", "0.82"), v("9354", "0.82"), v("999", "1"), v("", "0.5"),
+     v("9354", "0.82", "AIRBUS GETAFE")], t)
+r = vr["AIRBUS TABLADA"]
+comprueba("una al precio de la tarifa", r["ok"] == 1)
+comprueba("dos cobradas a otro precio", r["distinto"] == 2)
+comprueba("se agrupan: 2 ventas, una fila", [p[6] for p in vp if p[7].startswith("cobrado")] == [2], str(vp))
+comprueba("una sin tarifa", r["sin_tarifa"] == 1)
+comprueba("la sin articulo se cuenta, no se contrasta", r["sin_articulo"] == 1)
+comprueba("otros centros fuera", "AIRBUS GETAFE" not in vr)
+
 print()
 if fallos:
     print(f"{len(fallos)} PRUEBAS FALLIDAS")
