@@ -1111,8 +1111,10 @@ async function arrancaPeriodo(){
   }
   const hoy = new Date();
   const conHistorico = (indice.meses||[]).length > 0;
+  /* «La ventana» va la primera del menú: es la foto de siempre, sin rango. */
   SELECTOR = Periodos.montaSelector($("#selectorPeriodo"), {
     hoy, primerDia: SERIE.primerDia(), inicial: null,
+    extra: {clave:"ventana", nombre:"La ventana", alElegir: ()=>{ RANGO = null; recalcula(hoy); }},
     alCambiar: ({desde, hasta}) => { RANGO = {desde, hasta}; recalcula(hoy); }
   });
   /* El filtro de lugar: delegación (sólo Serunion), cliente y centro. Sale del
@@ -1121,21 +1123,6 @@ async function arrancaPeriodo(){
   Periodos.montaFiltroLugar($("#filtroLugar"), {
     fichas: SERIE.fichas(), filtros: SERIE.filtros(),
     alCambiar: (sel, quiere, etiqueta) => { LUGAR = {quiere, etiqueta}; recalcula(hoy); }
-  });
-  /* Un botón más, el primero, para volver a la foto de la ventana. */
-  const volver = document.createElement("button");
-  volver.type = "button";
-  volver.className = "btn periodo-chip activo";
-  volver.textContent = "La ventana";
-  volver.addEventListener("click", ()=>{
-    RANGO = null;
-    volver.classList.add("activo");
-    recalcula(hoy);
-  });
-  const chips = $("#selectorPeriodo").querySelector(".periodo-chips");
-  chips.insertBefore(volver, chips.firstChild);
-  chips.addEventListener("click", e=>{
-    if(e.target !== volver) volver.classList.remove("activo");
   });
   if(!conHistorico){
     $("#notaPeriodo").textContent = "Todavía no hay ningún mes en el histórico: se rellena una "
