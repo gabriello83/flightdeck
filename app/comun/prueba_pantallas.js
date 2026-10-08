@@ -341,6 +341,36 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('una tabla con sus centros', porCentro.includes('CONSUM MURCIA') && porCentro.includes('AIRBUS GETAFE')
       && !porCentro.includes('SAN PABLO'), porCentro.slice(0, 300));
     comprueba_que('y la suma de los dos dias de esos centros', porCentro.includes('82'), porCentro.slice(0, 300));
+
+    // El ambito del perfil sugiere lo que hay en los datos mientras se escribe.
+    await pagina.click('#pestanas button[data-s="perfiles"]');
+    await pagina.click('[data-ed="cli-airbus"]');
+    comprueba_que('el centro ya puesto se lee por su nombre',
+      (await pagina.textContent('#rCentros')).includes('500092 AIRBUS SAN PABLO SUR'), await pagina.textContent('#rCentros'));
+    await pagina.click('#fClientes');
+    await pagina.keyboard.type('c');
+    comprueba('una letra y salen los clientes que la llevan, el que empieza por ella primero (AIRBUS por su codigo C7)',
+      await pagina.$$eval('#fClientesLista li span:first-child', x => x.map(l => l.textContent)), ['CONSUM', 'AIRBUS']);
+    await pagina.keyboard.press('Backspace');
+    await pagina.keyboard.type('air');
+    comprueba('y filtra mientras se escribe',
+      await pagina.$$eval('#fClientesLista li span:first-child', x => x.map(l => l.textContent)), ['AIRBUS']);
+    await pagina.keyboard.press('Enter');
+    comprueba('Intro lo pone sin guardar el perfil', [await pagina.inputValue('#fClientes'), await pagina.isVisible('#dlg')],
+      ['AIRBUS, ', true]);
+    comprueba_que('y dice con cuantos centros encaja', (await pagina.textContent('#rClientes')).includes('AIRBUS: 2 centros'));
+    await pagina.click('#fCentros');
+    await pagina.keyboard.press('End');
+    await pagina.keyboard.type(', geta');
+    await pagina.click('#fCentrosLista li:has-text("AIRBUS GETAFE")');
+    comprueba('el centro se busca por nombre y se guarda su numero', await pagina.inputValue('#fCentros'), '500092, 500100, ');
+    await pagina.click('#fDelegaciones');
+    await pagina.keyboard.type('zz');
+    comprueba_que('lo que no esta en los datos se dice', await pagina.isVisible('#fDelegacionesLista li.nada')
+      && (await pagina.getAttribute('#rDelegaciones', 'class')).includes('mal'));
+    await pagina.keyboard.press('Escape');
+    comprueba('Escape cierra la lista y no el dialogo',
+      [await pagina.isVisible('#fDelegacionesLista'), await pagina.isVisible('#dlg')], [false, true]);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
