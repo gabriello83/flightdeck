@@ -114,12 +114,17 @@ ninguno de los dos ficheros por separado.
 No hay **Hoy**: la carga va de noche y trae hasta ayer, así que ese botón sólo podía enseñar un día
 vacío. Se quitó el 8-oct-2026. La página tampoco lo pinta si un índice escrito antes aún lo nombra.
 
+Los rangos van en un **menú desplegable** («Periodo»), no en una fila de botones (8-oct-2026, a
+petición de Gabriele): siete botones ocupaban media cabecera y en el móvil dos líneas. Unas fechas
+puestas a mano salen en el menú como «Fechas a medida», salvo que caigan justo en un rango, que
+entonces sale con su nombre. Lo monta `app/comun/periodos.js`, igual en las tres pantallas.
+
 Un mes se baja **una vez por visita**: cambiar de rango dentro de un mes ya bajado no pide nada al
 servidor, y un intervalo largo sólo pide los meses que le falten.
 
 ### En el panel de cliente
 
-El panel arranca como siempre, en la foto de la ventana, con un botón para volver a ella. Al elegir
+El panel arranca como siempre, en la foto de la ventana, que es la primera entrada del menú («La ventana») para volver a ella. Al elegir
 un periodo, las cifras de tiempo se recalculan de la serie y **lo que no se puede partir por días
 sigue siendo la foto de la ventana, y se dice arriba**: el reparto por centro, la merma por
 artículo, las máquinas reincidentes, el inventario y las instalaciones. Esa es la deuda que queda

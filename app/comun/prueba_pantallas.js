@@ -270,15 +270,20 @@ const servidor = http.createServer((pet, res) => {
   {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones' };
     const { pagina, errores } = await abre('/panel/');
-    await pagina.waitForSelector('.periodo-chip');
+    await pagina.waitForSelector('.periodo-menu');
     // La serie de prueba aun nombra «hoy», como un indice escrito antes de
-    // quitarlo: el boton no debe salir, porque hoy nunca tiene dato.
-    comprueba('sin boton de hoy', await pagina.locator('.periodo-chip[data-rango="hoy"]').count(), 0);
+    // quitarlo: no debe salir en el menu, porque hoy nunca tiene dato.
+    comprueba('sin hoy en el menu', await pagina.locator('.periodo-menu option[value="hoy"]').count(), 0);
+    comprueba('los periodos van en un menu, no en botones',
+      await pagina.locator('.selector-periodo button:not(.periodo-aplicar)').count(), 0);
+    comprueba('con la ventana la primera y los rangos detras',
+      await pagina.$$eval('.periodo-menu option:not([disabled])', x => x.map(o => o.value)),
+      ['ventana', 'ayer', 'semana', 'mes', 'mes_pasado', '30dias', 'anio', 'todo']);
     const visitasVentana = await pagina.textContent('#kpis .kpi .vl');
     comprueba('arranca en la foto de la ventana', visitasVentana.trim(), '999');
-    comprueba_que('con el boton de volver a ella', await pagina.isVisible('text=La ventana'));
+    comprueba('y el menu dice que es la ventana', await pagina.inputValue('.periodo-menu'), 'ventana');
 
-    await pagina.click('.periodo-chip[data-rango="mes_pasado"]');
+    await pagina.selectOption('.periodo-menu', 'mes_pasado');
     await pagina.waitForFunction(() => !document.querySelector('#kpis .kpi .vl').textContent.includes('999'));
     comprueba_que('al elegir «mes pasado» cambian las cifras',
       (await pagina.textContent('#kpis .kpi .vl')).trim() !== '999');
@@ -295,11 +300,16 @@ const servidor = http.createServer((pet, res) => {
     comprueba('suma los dos dias de marzo de 2025',
       (await pagina.textContent('#kpis .kpi .vl')).trim(), '10');
     comprueba_que('pidiendo su mes al servidor', pedidos.includes('/api/serie?mes=2025-03'));
+    comprueba('y el menu dice que son fechas a medida', await pagina.inputValue('.periodo-menu'), 'intervalo');
 
-    await pagina.click('.periodo-chip[data-rango="ayer"]');
+    await pagina.selectOption('.periodo-menu', 'ventana');
+    await pagina.waitForFunction(() => document.querySelector('#kpis .kpi .vl').textContent.includes('999'));
+    comprueba('volver a la ventana desde el menu', (await pagina.textContent('#kpis .kpi .vl')).trim(), '999');
+
+    await pagina.selectOption('.periodo-menu', 'ayer');
     await pagina.waitForTimeout(400);
     const antes = pedidos.length;
-    await pagina.click('.periodo-chip[data-rango="mes"]');
+    await pagina.selectOption('.periodo-menu', 'mes');
     await pagina.waitForTimeout(400);
     comprueba_que('un mes ya bajado no se vuelve a pedir',
       pedidos.slice(antes).filter(x => x.startsWith('/api/serie?')).length === 0,
@@ -314,7 +324,7 @@ const servidor = http.createServer((pet, res) => {
     comprueba('y solo ve sus centros',
       await pagina.$$eval('#filtroLugar select[data-dim="centro"] option', x => x.map(o => o.value)),
       ['', '500100', '500092']);
-    await pagina.click('.periodo-chip[data-rango="mes_pasado"]');
+    await pagina.selectOption('.periodo-menu', 'mes_pasado');
     await pagina.waitForTimeout(300);
     await pagina.selectOption('#filtroLugar select[data-dim="centro"]', '500100');
     await pagina.waitForFunction(() => document.querySelector('#notaPeriodo').textContent.includes('AIRBUS GETAFE'));
@@ -324,7 +334,7 @@ const servidor = http.createServer((pet, res) => {
     await pagina.waitForFunction(() => document.querySelector('#kpis .kpi .vl').textContent.trim() === '7');
     comprueba('quitar el filtro vuelve al total', (await pagina.textContent('#kpis .kpi .vl')).trim(), '7');
 
-    await pagina.click('text=La ventana');
+    await pagina.selectOption('.periodo-menu', 'ventana');
     await pagina.waitForFunction(() => document.querySelector('#kpis .kpi .vl').textContent.includes('999'));
     comprueba('se puede volver a la ventana',
       (await pagina.textContent('#kpis .kpi .vl')).trim(), '999');
@@ -345,7 +355,7 @@ const servidor = http.createServer((pet, res) => {
       (await pagina.textContent('#cifrasPeriodo')).includes('1 día'));
     comprueba_que('y la tabla de meses dice lo que hay cargado',
       (await pagina.textContent('body')).includes('2025-03'));
-    await pagina.click('.periodo-chip[data-rango="mes_pasado"]');
+    await pagina.selectOption('.periodo-menu', 'mes_pasado');
     await pagina.waitForTimeout(400);
     await pagina.fill('.periodo-intervalo input[type=date]', '2025-03-01');
     await pagina.fill('.periodo-intervalo input[type=date] ~ label + input', '2025-03-11');

@@ -37,7 +37,7 @@
 
   // El orden en que se ofrecen. Los dos primeros son los que se miran a diario.
   // No hay «hoy»: la carga trae hasta ayer y hoy siempre saldria vacio. Un
-  // indice viejo que aun lo nombre no pinta el boton, porque aqui no existe.
+  // indice viejo que aun lo nombre no lo saca en el menu, porque aqui no existe.
   const ORDEN = ["ayer", "semana", "mes", "mes_pasado", "30dias", "anio", "todo"];
 
   const PRIMER_DIA = "2025-01-01";
@@ -456,7 +456,7 @@
   };
 
   // ------------------------------------------------------------- el selector
-  /* Pinta los botones de rango y las dos fechas, y llama a `alCambiar` con
+  /* Pinta el menu de rangos y las dos fechas, y llama a `alCambiar` con
      {nombre, desde, hasta} cada vez. No pide nada: quien lo use decide si eso
      es una suma de la serie, un filtro local o las dos cosas.
 
@@ -469,26 +469,53 @@
     const primerDia = o.primerDia || PRIMER_DIA;
     const nombres = (o.rangos || ORDEN).filter(n => RANGOS[n]);
     const estado = { nombre: o.inicial || "mes", desde: null, hasta: null };
+    if (o.inicial === null) estado.nombre = o.extra ? o.extra.clave : "";
 
     contenedor.innerHTML = "";
     contenedor.classList.add("selector-periodo");
 
-    const chips = document.createElement("div");
-    chips.className = "periodo-chips";
-    chips.setAttribute("role", "group");
-    chips.setAttribute("aria-label", "Periodo");
-    const botones = new Map();
-    for (const n of nombres) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "btn periodo-chip";
-      b.dataset.rango = n;
-      b.textContent = RANGOS[n].nombre;
-      b.addEventListener("click", () => elige(n));
-      chips.appendChild(b);
-      botones.set(n, b);
-    }
-    contenedor.appendChild(chips);
+    // Los periodos van en un menu desplegable, no en una fila de botones: siete
+    // botones a la vista ocupaban media cabecera y en el movil dos lineas. Un
+    // <select> nativo se abre como lista en el telefono y se maneja con teclado.
+    const etiq = document.createElement("label");
+    etiq.className = "periodo-menu-etiqueta";
+    etiq.textContent = "Periodo";
+    const menu = document.createElement("select");
+    menu.className = "periodo-menu";
+    menu.id = "pdMenu" + Math.random().toString(36).slice(2, 7);
+    etiq.htmlFor = menu.id;
+    const opcion = (valor, texto) => {
+      const x = document.createElement("option");
+      x.value = valor; x.textContent = texto;
+      menu.appendChild(x);
+      return x;
+    };
+    // `extra` es una entrada propia de la pagina que va la primera (el panel
+    // pone «La ventana»): no es un rango de fechas, asi que no avisa con
+    // alCambiar sino con su propio alElegir.
+    const extra = o.extra || null;
+    if (extra) opcion(extra.clave, extra.nombre);
+    // Sin nada elegido —arranque con inicial:null y sin extra— el menu no
+    // puede fingir un periodo que no se esta viendo.
+    const nada = extra ? null : opcion("", "Elige un periodo");
+    if (nada) nada.disabled = true;
+    for (const n of nombres) opcion(n, RANGOS[n].nombre).dataset.rango = n;
+    // Unas fechas puestas a mano no son ninguno de los rangos: se dice.
+    const aMano = opcion("intervalo", "Fechas a medida");
+    aMano.disabled = true;
+    menu.addEventListener("change", () => {
+      const v = menu.value;
+      if (extra && v === extra.clave) {
+        estado.nombre = extra.clave; estado.desde = null; estado.hasta = null;
+        pinta();
+        if (extra.alElegir) extra.alElegir();
+      } else if (RANGOS[v]) elige(v);
+    });
+    const envoltorio = document.createElement("div");
+    envoltorio.className = "periodo-elige";
+    envoltorio.appendChild(etiq);
+    envoltorio.appendChild(menu);
+    contenedor.appendChild(envoltorio);
 
     const caja = document.createElement("div");
     caja.className = "periodo-intervalo";
@@ -506,11 +533,8 @@
     const sello = caja.querySelector(".periodo-sello");
 
     function pinta() {
-      botones.forEach((b, n) => {
-        const activo = n === estado.nombre;
-        b.classList.toggle("activo", activo);
-        b.setAttribute("aria-pressed", activo ? "true" : "false");
-      });
+      menu.value = RANGOS[estado.nombre] || estado.nombre === "intervalo" ||
+        (extra && estado.nombre === extra.clave) ? estado.nombre : "";
       eDesde.value = estado.desde || "";
       eHasta.value = estado.hasta || "";
       sello.textContent = estado.desde ? etiqueta(estado.desde, estado.hasta) : "";
@@ -541,13 +565,26 @@
       if (ev.key === "Enter") { ev.preventDefault(); aplica(); }
     }));
 
+    // Unas fechas que caen justo en un rango del menu se ensenan con su nombre:
+    // volver a la pestana con «Este mes» puesto no debe decir «a medida». Un
+    // rango que acaba hoy vale tambien recortado a ayer: es lo que hace el
+    // cuadro, porque la carga trae hasta ayer.
+    const ayer = iso(suma(hoy, -1));
+    function nombreDe(desde, hasta) {
+      return nombres.find(n => {
+        const [d, h] = rango(n, hoy, primerDia);
+        return d === desde && (h === hasta || (h === iso(hoy) && hasta === ayer));
+      }) || "intervalo";
+    }
+
     const api = {
       estado: () => Object.assign({}, estado),
       elige,
-      pon(desde, hasta) { estado.nombre = "intervalo"; estado.desde = desde; estado.hasta = hasta; avisa(); },
+      pon(desde, hasta) { estado.nombre = nombreDe(desde, hasta); estado.desde = desde; estado.hasta = hasta; avisa(); },
       // Sin avisar: para que la pagina ensene donde esta sin provocar otra carga.
       muestra(desde, hasta, nombre) {
-        estado.nombre = nombre || "intervalo"; estado.desde = desde; estado.hasta = hasta; pinta();
+        estado.nombre = nombre && nombre !== "intervalo" ? nombre : nombreDe(desde, hasta);
+        estado.desde = desde; estado.hasta = hasta; pinta();
       }
     };
     if (o.inicial !== null) elige(estado.nombre);
@@ -562,21 +599,28 @@
      apuntan. */
   const ESTILO = `
 .selector-periodo{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin:0 0 14px}
-.periodo-chips{display:flex;flex-wrap:wrap;gap:6px}
-.periodo-chip{font-size:13px;padding:5px 11px}
-.periodo-chip.activo{background:var(--pd-acento,#2a78d6);border-color:var(--pd-acento,#2a78d6);color:#fff}
+.periodo-elige{display:flex;gap:6px;align-items:center;font-size:13px}
+.periodo-menu-etiqueta{color:var(--pd-apagado,#52514e)}
+.periodo-menu{font:inherit;font-weight:600;padding:5px 8px;min-width:170px;cursor:pointer;
+  border:1px solid var(--pd-borde,#cdccc5);border-radius:6px;
+  background:var(--pd-fondo,#fff);color:inherit}
+.periodo-menu:focus-visible{outline:2px solid var(--pd-acento,#2a78d6);outline-offset:1px}
 .periodo-intervalo{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px}
 .periodo-intervalo label{color:var(--pd-apagado,#52514e);margin-left:4px}
 .periodo-intervalo input[type=date]{font:inherit;padding:4px 6px;
   border:1px solid var(--pd-borde,#cdccc5);border-radius:6px;
   background:var(--pd-fondo,#fff);color:inherit}
 .periodo-sello{color:var(--pd-apagado,#52514e)}
+/* Contra las reglas generales de cada pagina (la consola pone label en bloque
+   e input/select a todo el ancho): el selector va en linea en las tres. */
+.selector-periodo label{display:inline;margin:0 0 0 4px;font-weight:400}
+.selector-periodo input[type=date],.selector-periodo select{width:auto}
 .filtro-lugar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;margin:0 0 14px}
 .filtro-lugar label{color:var(--pd-apagado,#52514e);margin-left:4px}
 .filtro-lugar select{font:inherit;padding:4px 6px;max-width:260px;
   border:1px solid var(--pd-borde,#cdccc5);border-radius:6px;
   background:var(--pd-fondo,#fff);color:inherit}
-@media (max-width:700px){.selector-periodo{gap:8px}.periodo-chip{font-size:12px;padding:4px 9px}}
+@media (max-width:700px){.selector-periodo{gap:8px}.periodo-elige{width:100%}.selector-periodo .periodo-menu{flex:1}}
 `;
 
   function ponEstilo(documento) {
