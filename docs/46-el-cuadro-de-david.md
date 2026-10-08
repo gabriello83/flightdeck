@@ -56,9 +56,10 @@ EXT_TELEMETRIA_VENTAS** (`docs/17`). Está escrito y la Lambda ya lo lee si exis
 (`crudo/telemetria_ventas/`); falta crearlo en VenCloud. El día que haya telemetría, la del parte
 deja de usarse ese día —serían las mismas ventas dos veces— y el aviso desaparece solo.
 
-**No se ha añadido al manifiesto todavía, a propósito**: la extracción se niega a arrancar si un
-informe no tiene número (`lambda_extraccion.manifiesto`), así que meterlo sin número pararía la
-carga de todas las noches.
+**8-oct-2026: creado en VenCloud como informe 179** (`A12_EXT_TELEMETRIA_VENTAS`) y añadido al
+manifiesto. La muestra del 7-oct trae 63.660 ventas de todo el parque, `id` único por fila, un
+20,7 % sin artículo; de AIRBUS (por número de centro) 18.346 ventas en 531 máquinas en un solo
+día, contra las 353 de 564 que da el parte en todo el mes.
 
 ### Preventivos: no hay de dónde leerlos
 
@@ -139,8 +140,8 @@ Ficheros en `paquetes/` y la página en `app/cuadro/`. En orden:
 
 ## Lo que falta
 
-- **A12 · EXT_TELEMETRIA_VENTAS** en VenCloud, su número en el manifiesto (con sus pruebas) y el
-  manifiesto subido a `config/`. Con eso la venta es completa y el aviso se va.
+- **El relleno de la telemetría hacia atrás** (informe 179): hasta entonces, los días anteriores
+  al 8-oct-2026 siguen con la venta del parte y su aviso.
 - **Preventivos**: saber de qué pantalla los exporta David.
 - **ITC** sale «sin coordenadas» en el mapa: el mapa de David sólo sitúa los centros que conocía, y
   no se inventa una posición.

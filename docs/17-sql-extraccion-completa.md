@@ -561,7 +561,7 @@ left join stocks.articulos a  on a.id = v.articuloid
 where p.fechaini >= '{0}' and p.fechaini <= '{1} 23:59:59'
 ```
 
-## A12 · EXT_TELEMETRIA_VENTAS  ·  **por crear**
+## A12 · EXT_TELEMETRIA_VENTAS  ·  **informe 179**
 
 La venta de telemetría, **venta a venta y con su fecha**. Es la hoja «Ventas» del cuadro de David
 ([46-el-cuadro-de-david.md](46-el-cuadro-de-david.md)) y la única fuente de venta que cubre todas
@@ -1614,7 +1614,7 @@ Cuando tengas los informes creados y sepas su número, esto es lo que va en la v
   "visita_devoluciones":{"informe":"NNN","fechas":"ayer","ruta":"restringido/devoluciones"},
   "visita_ventas":     {"informe":"NNN","fechas":"ayer","ruta":"crudo/visita_ventas"},
 
-  "telemetria_ventas": {"informe":"NNN","fechas":"ayer","ruta":"crudo/telemetria_ventas"},
+  "telemetria_ventas": {"informe":"179","fechas":"ayer","ruta":"crudo/telemetria_ventas"},
 
   "dinero_bolsas":     {"informe":"NNN","fechas":"ayer","ruta":"crudo/dinero_bolsas"},
   "dinero_bolsas_det": {"informe":"NNN","fechas":"ayer","ruta":"crudo/dinero_bolsas_det"},

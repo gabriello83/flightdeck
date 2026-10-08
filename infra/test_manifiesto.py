@@ -33,11 +33,11 @@ def comprueba(que, obtenido, esperado):
 
 # ----------------------------------------------------------------------
 print("\nForma del manifiesto")
-comprueba("31 informes", len(INFS), 31)
+comprueba("32 informes", len(INFS), 32)
 comprueba("ventana de reproceso de 3 dias", M["ventana_reproceso_dias"], 3)
-comprueba("ids sin repetir", len({i["id"] for i in INFS}), 31)
-comprueba("nombres sin repetir", len({i["nombre"] for i in INFS}), 31)
-comprueba("destinos sin repetir", len({i["destino"] for i in INFS}), 31)
+comprueba("ids sin repetir", len({i["id"] for i in INFS}), 32)
+comprueba("nombres sin repetir", len({i["nombre"] for i in INFS}), 32)
+comprueba("destinos sin repetir", len({i["destino"] for i in INFS}), 32)
 comprueba("todos los nombres empiezan por EXT_",
           all(i["nombre"].startswith("EXT_") for i in INFS), True)
 
@@ -64,7 +64,7 @@ incoherentes = [i["id"] for i in INFS
                 if (i["clave_fecha"] == "ninguna") != i["destino"].startswith("maestros/")]
 comprueba("coherentes", incoherentes, [])
 comprueba("9 maestros", sum(1 for i in INFS if i["clave_fecha"] == "ninguna"), 9)
-comprueba("22 incrementales", sum(1 for i in INFS if i["clave_fecha"] != "ninguna"), 22)
+comprueba("23 incrementales", sum(1 for i in INFS if i["clave_fecha"] != "ninguna"), 23)
 
 print("\nLos destinos")
 raros = [i["destino"] for i in INFS if not i["destino"].startswith(PREFIJOS)]
@@ -94,7 +94,7 @@ print("\nLa extraccion arrancaria")
 # Es la misma condicion que mira lambda_extraccion.manifiesto(): si falta un
 # numero, se niega a empezar en vez de bajar el informe equivocado en silencio.
 comprueba("no hay nada que la detenga", len(sin), 0)
-print(f"        30 informes, numeros {min(nums)}–{max(nums)}, "
+print(f"        {len(INFS)} informes, numeros {min(nums)}–{max(nums)}, "
       f"{sum(i.get('filas_mes') or 0 for i in INFS):,} filas al mes")
 
 print()
