@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(aws lambda invoke --function-name digivend-agregados:*)",
+      "Bash(aws lambda invoke --function-name digivend-extraccion:*)"
+    ]
+  }
+}
