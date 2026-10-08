@@ -441,8 +441,11 @@ def fusiona_mes(viejo, nuevo, dias=None):
 
     fichas = dict(v["fichas"])
     fichas.update(n["fichas"])        # lo de hoy manda: una maquina se muda
-    fuentes = {x for x in (v.get("fuente"), n.get("fuente")) if x}
-    fuente = n.get("fuente") or v.get("fuente")
+    # La fuente vieja solo cuenta si queda alguna venta vieja: un mes releido
+    # entero con telemetria es de telemetria, no «mixto» por lo que habia antes.
+    quedan_viejas = any(f[0] not in tocados for f in v["ventas"])
+    fuentes = {x for x in (v.get("fuente") if quedan_viejas else None, n.get("fuente")) if x}
+    fuente = n.get("fuente") or (v.get("fuente") if quedan_viejas else None)
     if len(fuentes) > 1:
         fuente = "mixta"
     return codifica_mes(n["mes"] or v["mes"], ventas, visitas, incid,

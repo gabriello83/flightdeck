@@ -213,6 +213,14 @@ comprueba("una maquina retirada conserva su centro en el mes viejo",
           _d["fichas"]["V1"]["centro"], "AIRBUS VIEJO")
 comprueba("y la que sigue, el de hoy", _d["fichas"]["M1"]["centro"], "AIRBUS SAN PABLO SUR")
 comprueba("sin mes previo, se queda el nuevo", C.fusiona_mes(None, nuevo), nuevo)
+_tele = C.codifica_mes(MES, [("2025-03-01", "V1", "AGUA", 2, 1.2), ("2025-03-20", "M1", "AGUA", 9, 5.4)],
+                      [], [], ficha=lambda m: {"centro": "AIRBUS SAN PABLO SUR"},
+                      en_censo=lambda m: True, fuente="telemetria")
+comprueba("un mes con parte y telemetria es mixto",
+          C.descodifica_mes(C.fusiona_mes(viejo, _tele, dias=["2025-03-20"]))["fuente"], "mixta")
+comprueba("releido entero con telemetria ya no es mixto",
+          C.descodifica_mes(C.fusiona_mes(viejo, _tele, dias=["2025-03-01", "2025-03-20"]))["fuente"],
+          "telemetria")
 comprueba("el resumen del mes cuenta lo fusionado",
           (C.resumen_mes(F)["filas"], C.resumen_mes(F)["importe"]), (2, 6.0))
 

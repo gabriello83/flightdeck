@@ -173,7 +173,8 @@ const INDICE_CUADRO = {
   meses: Object.keys(CUADRO).sort().map(m => ({
     mes: m, filas: CUADRO[m].ventas.length, unidades: 10, importe: 3.2 * CUADRO[m].ventas.length / 2,
     visitas: CUADRO[m].visitas.length, incidencias: CUADRO[m].incidencias.length,
-    maquinas_con_venta: 2, fuente: 'visita_ventas', bytes: 1000
+    // El mes de hoy ya con telemetria; los viejos, con la venta parcial del parte.
+    maquinas_con_venta: 2, fuente: m === MES_HOY ? 'telemetria' : 'visita_ventas', bytes: 1000
   })),
   ventas: { fuente: 'visita_ventas', dias_telemetria: 0, dias_visita: 3, maquinas_censo: 2, maquinas_censo_con_venta: 2, _nota: 'parcial' },
   preventivos: null, _preventivos: 'no hay fuente'
@@ -268,6 +269,8 @@ const servidor = http.createServer((pet, res) => {
       (await pagina.textContent('#notaPeriodo')).includes('reparto por centro'));
 
     // Marzo de 2025: un mes que hay que bajar.
+    comprueba_que('un mes con telemetria no lleva el aviso de venta parcial', !(await pagina.isVisible('#salesNotice')));
+
     await pagina.fill('.periodo-intervalo input[type=date]', '2025-03-01');
     await pagina.fill('.periodo-intervalo input[type=date] ~ label + input', '2025-03-31');
     await pagina.click('.periodo-aplicar');
@@ -402,6 +405,7 @@ const servidor = http.createServer((pet, res) => {
     await pagina.click('.periodo-aplicar');
     await pagina.waitForFunction(() => document.querySelector('#dateFrom').value === '2025-03-01');
     comprueba_que('elegir marzo de 2025 baja su mes', pedidos.includes('/api/cuadro?mes=2025-03'));
+    comprueba_que('y marzo de 2025, con la venta del parte, si lo lleva', await pagina.isVisible('#salesNotice'));
     comprueba('y mueve las fechas del filtro cruzado',
       [await pagina.inputValue('#dateFrom'), await pagina.inputValue('#dateTo')],
       ['2025-03-01', '2025-03-31']);
