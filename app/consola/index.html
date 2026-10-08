@@ -111,6 +111,19 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--s1);outline-offs
 .marcas .porque{font-size:11.5px;color:var(--tinta-3);text-decoration:none}
 .pista{font-size:12px;color:var(--tinta-3);margin:4px 0 0}
 .pista.mal{color:var(--grave)}
+/* Las sugerencias del ámbito: una lista bajo la casilla que filtra mientras se
+   escribe. Hecha aquí y no con <datalist> porque la casilla lleva varios valores
+   separados por comas y <datalist> sólo sabe completar la casilla entera. */
+.sug{position:relative}
+.sug-lista{position:absolute;left:0;right:0;top:100%;z-index:5;margin:4px 0 0;padding:4px;list-style:none;
+  background:var(--tarjeta);border:1px solid var(--borde-fuerte);border-radius:8px;
+  box-shadow:0 6px 20px rgba(0,0,0,.18);max-height:240px;overflow-y:auto}
+.sug-lista li{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13.5px}
+.sug-lista li .det{color:var(--tinta-3);font-size:12px;white-space:nowrap}
+.sug-lista li[aria-selected="true"]{background:var(--s1);color:#fff}
+.sug-lista li[aria-selected="true"] .det{color:#fff}
+.sug-lista li.nada{cursor:default;color:var(--tinta-3)}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
 .kpi{background:var(--fondo);border:1px solid var(--borde);border-radius:10px;padding:11px 13px}
 .kpi .et{font-size:12px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
@@ -420,17 +433,20 @@ function formPerfil(pid){
     </div>
     <div class="campo">
       <label for="fClientes">Ámbito · clientes</label>
-      <input id="fClientes" value="${esc((amb.clientes||[]).join(", "))}" placeholder="AIRBUS">
-      <p class="pista">Separados por comas. Con esto basta: esa noche se le calcula su panel. Vacíos los tres, no se calcula ninguno (el «todo el parque» del interno sólo se da en config/perfiles.json).</p>
+      <div class="sug"><input id="fClientes" value="${esc((amb.clientes||[]).join(", "))}" placeholder="AIRBUS"></div>
+      <p class="pista" id="rClientes"></p>
+      <p class="pista">Separados por comas; al escribir salen los que hay en los datos. Con esto basta: esa noche se le calcula su panel. Vacíos los tres, no se calcula ninguno (el «todo el parque» del interno sólo se da en config/perfiles.json).</p>
     </div>
     <div class="fila">
       <div class="campo">
         <label for="fCentros">Ámbito · centros</label>
-        <input id="fCentros" value="${esc((amb.centros||[]).join(", "))}">
+        <div class="sug"><input id="fCentros" value="${esc((amb.centros||[]).join(", "))}" placeholder="nombre o número"></div>
+        <p class="pista" id="rCentros"></p>
       </div>
       <div class="campo">
         <label for="fDelegaciones">Ámbito · delegaciones</label>
-        <input id="fDelegaciones" value="${esc((amb.delegaciones||[]).join(", "))}">
+        <div class="sug"><input id="fDelegaciones" value="${esc((amb.delegaciones||[]).join(", "))}"></div>
+        <p class="pista" id="rDelegaciones"></p>
       </div>
     </div>
     <div class="campo">
@@ -474,6 +490,182 @@ function formPerfil(pid){
   const repinta = () => pintaCasillas(p);
   $("#fTipo").addEventListener("change", repinta);
   repinta();
+  montaAmbito();
+}
+
+/* ---------- el ámbito, con sugerencias ----------
+   Los nombres salen de las fichas de centro del histórico (nombre, número,
+   cliente y delegación de cada centro, tal como los escribe la carga desde
+   VenCloud), que la consola ya tiene en memoria. No se pide nada más.
+
+   Lo que se escribe en cada casilla es lo que luego compara en_ambito()
+   (infra/lambda_agregados.py):
+   - clientes: el nombre del cliente. Allí basta con que sea un trozo del nombre
+     del cliente o del centro, y por eso se deja el nombre y no el código: el
+     nombre recoge también los centros que VenCloud aún no ha reasignado.
+   - centros: el NÚMERO de centro. Allí el centro tiene que ser exacto, y el
+     número no cambia cuando cambia el nombre (pasó con AIRBUS SAN PABLO). En la
+     lista se busca y se ve por nombre; debajo de la casilla se lee qué centro es
+     cada número.
+   - delegaciones: el nombre, que es lo único que hay.
+   Debajo de cada casilla se dice con cuántos centros de los datos encaja cada
+   valor, y en rojo el que no encaja con ninguno: un ámbito mal escrito no da
+   error, da un panel vacío. */
+const normal = s => String(s==null?"":s).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().trim();
+
+function opcionesAmbito(){
+  const fichas = SERIE ? SERIE.fichas() : {};
+  const clientes = new Map(), delegaciones = new Map(), centros = [];
+  for(const k in fichas){
+    const f = fichas[k] || {};
+    const n = f.num || k, nombre = f.nombre || k;
+    centros.push({valor: n, texto: nombre, detalle: [f.num ? "nº "+f.num : "", f.cliente].filter(Boolean).join(" · "),
+                  buscar: normal(nombre + " " + n)});
+    if(f.cliente){
+      const c = clientes.get(f.cliente) || {valor: f.cliente, texto: f.cliente, n: 0, cods: new Set()};
+      c.n++; if(f.cod_cliente) c.cods.add(f.cod_cliente);
+      clientes.set(f.cliente, c);
+    }
+    if(f.delegacion){
+      const d = delegaciones.get(f.delegacion) || {valor: f.delegacion, texto: f.delegacion, n: 0};
+      d.n++; delegaciones.set(f.delegacion, d);
+    }
+  }
+  const centrosDe = n => `${num(n)} ${n===1?"centro":"centros"}`;
+  return {
+    fichas,
+    clientes: [...clientes.values()].map(c=>({valor: c.valor, texto: c.texto, detalle: centrosDe(c.n),
+                                             buscar: normal(c.texto + " " + [...c.cods].join(" "))})),
+    centros,
+    delegaciones: [...delegaciones.values()].map(d=>({valor: d.valor, texto: d.texto, detalle: centrosDe(d.n),
+                                                     buscar: normal(d.texto)})),
+  };
+}
+
+/* Con cuántos centros de los datos encaja cada valor escrito, con la misma
+   regla que en_ambito(). */
+function encajes(dim, valor, fichas){
+  const v = String(valor), V = normal(valor);
+  let n = 0, nombre = "";
+  for(const k in fichas){
+    const f = fichas[k] || {};
+    let si = false;
+    if(dim === "clientes") si = (f.cod_cliente && v === f.cod_cliente) || normal(f.nombre).includes(V) || normal(f.cliente).includes(V);
+    else if(dim === "centros"){ si = v === (f.num || k) || v === f.nombre; if(si) nombre = f.nombre || ""; }
+    else si = v === f.delegacion;
+    if(si) n++;
+  }
+  return {n, nombre};
+}
+
+function montaAmbito(){
+  const ops = opcionesAmbito();
+  const hay = Object.keys(ops.fichas).length > 0;
+  [["clientes","#fClientes","#rClientes"], ["centros","#fCentros","#rCentros"],
+   ["delegaciones","#fDelegaciones","#rDelegaciones"]].forEach(([dim, idIn, idRes])=>{
+    const input = $(idIn), res = $(idRes);
+    const explica = () => {
+      if(!hay){
+        res.className = "pista";
+        res.textContent = dim === "clientes" ? "Sin el histórico cargado no hay nombres que sugerir: se escriben a mano." : "";
+        return;
+      }
+      const vals = input.value.split(",").map(x=>x.trim()).filter(Boolean);
+      let mal = false;
+      res.textContent = vals.map(v=>{
+        const e = encajes(dim, v, ops.fichas);
+        if(!e.n){ mal = true; return `${v}: ningún centro en los datos`; }
+        if(dim === "centros") return e.nombre && e.nombre !== v ? `${v} ${e.nombre}` : v;
+        return `${v}: ${num(e.n)} ${e.n===1?"centro":"centros"}`;
+      }).join(" · ");
+      res.className = "pista" + (mal ? " mal" : "");
+    };
+    if(hay) sugiere(input, ops[dim], explica);
+    input.addEventListener("input", explica);
+    explica();
+  });
+}
+
+/* Una casilla con varios valores separados por comas que, en cuanto se escribe
+   una letra, saca debajo los que encajan con el trozo en el que está el cursor.
+   Flechas para moverse, Intro o un clic para elegir, Escape para cerrar. Lo que
+   se escribe a mano sigue valiendo: la lista ayuda, no obliga. */
+function sugiere(input, opciones, alElegir){
+  const lista = document.createElement("ul");
+  lista.className = "sug-lista"; lista.id = input.id + "Lista";
+  lista.setAttribute("role","listbox"); lista.hidden = true;
+  input.after(lista);
+  input.setAttribute("role","combobox");
+  input.setAttribute("aria-autocomplete","list");
+  input.setAttribute("aria-controls", lista.id);
+  input.setAttribute("aria-expanded","false");
+  input.autocomplete = "off";
+  let vistas = [], activa = -1;
+
+  const trozo = () => {
+    const v = input.value, cur = input.selectionStart == null ? v.length : input.selectionStart;
+    const ini = v.lastIndexOf(",", cur - 1) + 1;
+    let fin = v.indexOf(",", cur); if(fin < 0) fin = v.length;
+    return {ini, fin, texto: v.slice(ini, fin).trim()};
+  };
+  const cierra = () => {
+    lista.hidden = true; vistas = []; activa = -1;
+    input.setAttribute("aria-expanded","false"); input.removeAttribute("aria-activedescendant");
+  };
+  const marca = i => {
+    activa = i;
+    lista.querySelectorAll("li[role=option]").forEach((li, j)=>li.setAttribute("aria-selected", j===i ? "true" : "false"));
+    const li = lista.children[i];
+    if(li){ input.setAttribute("aria-activedescendant", li.id); li.scrollIntoView({block:"nearest"}); }
+  };
+  const abre = () => {
+    const t = trozo(), q = normal(t.texto);
+    if(!q){ cierra(); return; }
+    const puestos = new Set(input.value.split(",").map(normal));
+    puestos.delete(q);
+    const peso = o => { const T = normal(o.texto);
+      return T.startsWith(q) ? 0 : (" " + T).includes(" " + q) ? 1 : o.buscar.includes(q) ? 2 : -1; };
+    vistas = opciones.map(o=>[peso(o), o]).filter(([p,o])=>p >= 0 && !puestos.has(normal(o.valor)))
+      .sort((a,b)=>a[0]-b[0] || a[1].texto.localeCompare(b[1].texto, "es")).slice(0, 50).map(x=>x[1]);
+    lista.innerHTML = vistas.length
+      ? vistas.map((o,i)=>`<li role="option" id="${lista.id}-${i}" aria-selected="false"><span>${esc(o.texto)}</span><span class="det">${esc(o.detalle||"")}</span></li>`).join("")
+      : `<li class="nada">Ninguno en los datos empieza ni contiene «${esc(t.texto)}»</li>`;
+    lista.hidden = false; input.setAttribute("aria-expanded","true");
+    if(vistas.length) marca(0); else activa = -1;
+  };
+  const elige = o => {
+    const t = trozo(), v = input.value;
+    const antes = v.slice(0, t.ini).replace(/\s*$/, "");
+    const despues = v.slice(t.fin).replace(/^,?\s*/, "");
+    const cabeza = (antes ? antes + " " : "") + o.valor + ", ";
+    input.value = cabeza + despues;
+    input.setSelectionRange(cabeza.length, cabeza.length);
+    cierra();
+    if(alElegir) alElegir();
+  };
+
+  input.addEventListener("input", abre);
+  input.addEventListener("click", ()=>{ if(!lista.hidden) abre(); });
+  input.addEventListener("blur", cierra);
+  input.addEventListener("keydown", e=>{
+    if(e.key === "ArrowDown" || e.key === "ArrowUp"){
+      if(lista.hidden){ abre(); }
+      else if(vistas.length){ marca((activa + (e.key === "ArrowDown" ? 1 : vistas.length - 1)) % vistas.length); }
+      e.preventDefault();
+    }else if(e.key === "Enter" && !lista.hidden && activa >= 0){
+      /* Sin esto, Intro guardaría el perfil a medio escribir. */
+      e.preventDefault(); elige(vistas[activa]);
+    }else if(e.key === "Escape" && !lista.hidden){
+      /* Y sin esto, Escape cerraría el diálogo entero. */
+      e.preventDefault(); e.stopPropagation(); cierra();
+    }
+  });
+  /* mousedown y no click: con click, el blur de la casilla cierra la lista antes. */
+  lista.addEventListener("mousedown", e=>{
+    e.preventDefault();
+    const li = e.target.closest("li[role=option]");
+    if(li) elige(vistas[[...lista.children].indexOf(li)]);
+  });
 }
 
 function pintaCasillas(p){

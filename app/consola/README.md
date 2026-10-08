@@ -50,6 +50,20 @@ es una **escritura en el ERP**, y hasta tener el endpoint y el permiso confirmad
 llamada: la petición se queda en la cola, visible, con quién la pidió y cuándo. Lo contrario sería
 que alguien creyera haber abierto un parte que no existe.
 
+## El ámbito sugiere lo que hay en los datos
+
+En las tres casillas del ámbito, con la primera letra sale debajo una lista de lo que hay en
+los datos y se va filtrando mientras se escribe (sin distinguir mayúsculas ni tildes). Flechas
+para moverse, Intro o clic para elegir, Escape para cerrar la lista sin cerrar el diálogo. Lo
+escrito a mano sigue valiendo.
+
+Los nombres salen de las fichas de centro del histórico, que la consola ya tiene en memoria: no
+hay ninguna llamada nueva. **Los centros se buscan por nombre pero se guarda su número**, porque
+`en_ambito()` exige el centro exacto y el número no cambia cuando VenCloud renombra un centro;
+los clientes se guardan por nombre, que allí basta con ser un trozo. Debajo de cada casilla se
+lee con cuántos centros encaja cada valor (y qué centro es cada número), y en rojo el que no
+encaja con ninguno: un ámbito mal escrito no da error, da un panel vacío.
+
 ## Comprobado en Chromium
 
 Claro, oscuro y móvil. El alta de usuario, el guardado de configuración sobreviviendo a una
