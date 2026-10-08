@@ -677,6 +677,11 @@
       const mesesHay = (indice.meses || []).map(m => m.mes).sort();
       output.minDate = mesesHay.length ? `${mesesHay[0]}-01` : (allDates[0] || '');
       output.maxDate = mesesHay.length ? finDeMes(mesesHay[mesesHay.length - 1]) : (allDates.at(-1) || '');
+      // Los datos llegan cerrados hasta el dia anterior al calculo. Lo que va
+      // despues de ese dia no es un dia sin venta: es un dia que no ha
+      // llegado, y pintarlo a cero seria ensenar un cero que no es un cero.
+      const ultimoCerrado = diaAnterior((indice.generado || '').slice(0, 10));
+      if (ultimoCerrado && output.maxDate > ultimoCerrado) output.maxDate = ultimoCerrado;
       output.defaultFrom = salesDates[0] || allDates[0] || output.minDate;
       output.defaultTo = salesDates.at(-1) || allDates.at(-1) || output.maxDate;
       output.centers = [...new Set([...allRows.map(row => row.center), ...output.machineCensus.map(row => row.center)])].sort();
@@ -694,6 +699,16 @@
       return output;
     }
 
+    function diaAnterior(dia) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return '';
+      const d = new Date(`${dia}T12:00:00`);
+      d.setDate(d.getDate() - 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    // Un «hasta» nunca pasa del ultimo dia con datos (ver modelFromCuadro).
+    function topeHasta(dia) {
+      return dia && model && model.maxDate && dia > model.maxDate ? model.maxDate : dia;
+    }
     function finDeMes(mes) {
       const [a, m] = mes.split('-').map(Number);
       return `${mes}-${String(new Date(a, m, 0).getDate()).padStart(2, '0')}`;
@@ -801,7 +816,7 @@
       const selectedMonth=state.month?monthBounds(state.month):null;
       const monthFrom=selectedMonth?(state.from&&state.from>selectedMonth[0]?state.from:selectedMonth[0]):'';
       const monthTo=selectedMonth?(state.to&&state.to<selectedMonth[1]?state.to:selectedMonth[1]):'';
-      return [state.day||monthFrom||state.from||model.minDate,state.day||monthTo||state.to||model.maxDate];
+      return [state.day||monthFrom||state.from||model.minDate,topeHasta(state.day||monthTo||state.to||model.maxDate)];
     }
     function activePeriodMonths() {
       const [from,to]=activeDateBounds();
@@ -882,7 +897,7 @@
       const monthFrom=selectedMonth?(state.from&&state.from>selectedMonth[0]?state.from:selectedMonth[0]):'';
       const monthTo=selectedMonth?(state.to&&state.to<selectedMonth[1]?state.to:selectedMonth[1]):'';
       const rangeFrom = state.day || monthFrom || state.from || availableDates[0] || model.minDate;
-      const rangeTo = state.day || monthTo || state.to || availableDates.at(-1) || model.maxDate;
+      const rangeTo = topeHasta(state.day || monthTo || state.to || availableDates.at(-1) || model.maxDate);
       const periods = monthly ? monthRange(rangeFrom,rangeTo) : dateRange(rangeFrom, rangeTo);
       if (!periods.length) { target.innerHTML = '<div class="chart-empty">No hay datos para este filtro.</div>'; return; }
       const periodKey = row => monthly ? row.date.slice(0,7) : row.date;
@@ -1523,11 +1538,13 @@
       const selector = Periodos.montaSelector(caja, {
         primerDia: INDICE.primer_dia || Periodos.PRIMER_DIA,
         inicial: null,
-        alCambiar: async ({ desde, hasta }) => {
+        alCambiar: async ({ nombre, desde, hasta }) => {
           try {
             const built = await cargaMeses(desde, hasta);
             setupModel(built, false);
-            state.from = desde; state.to = hasta; state.day = ''; state.month = '';
+            const tope = topeHasta(hasta);
+            if (tope !== hasta) selector.muestra(desde, tope, nombre);
+            state.from = desde; state.to = tope; state.day = ''; state.month = '';
             syncControls();
             renderAll();
             describeData(INDICE, built);
@@ -1544,6 +1561,7 @@
         if (!state.from || !state.to) return;
         const built = await cargaMeses(state.from, state.to);
         setupModel(built, false);
+        state.to = topeHasta(state.to);
         syncControls();
         renderAll();
         selector.muestra(state.from, state.to, 'intervalo');
@@ -1633,8 +1651,9 @@
         const built = await cargaMeses(desde, hasta);
         describeData(INDICE, built);
         setupModel(built, true);
-        if (desde) { state.from = desde; state.to = hasta; syncControls(); renderAll(); }
-        montaSelectorPeriodo(desde, hasta);
+        const tope = topeHasta(hasta) < desde ? hasta : topeHasta(hasta);
+        if (desde) { state.from = desde; state.to = tope; syncControls(); renderAll(); }
+        montaSelectorPeriodo(desde, tope);
         await montaFiltroLugar();
       } catch (error) {
         console.error(error);
