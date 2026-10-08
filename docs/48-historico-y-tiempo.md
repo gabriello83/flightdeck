@@ -102,7 +102,6 @@ ninguno de los dos ficheros por separado.
 
 | rango | qué es |
 |---|---|
-| Hoy | el día de hoy. Puede estar vacío: la carga va de noche y trae hasta ayer |
 | Ayer | el último día con dato normalmente |
 | Esta semana | del lunes a hoy |
 | Este mes | del día 1 a hoy |
@@ -111,6 +110,9 @@ ninguno de los dos ficheros por separado.
 | Este año | del 1 de enero a hoy |
 | Todo el histórico | desde el 1 de enero de 2025 |
 | Intervalo | dos fechas, acotadas entre el primer día con historia y hoy |
+
+No hay **Hoy**: la carga va de noche y trae hasta ayer, así que ese botón sólo podía enseñar un día
+vacío. Se quitó el 8-oct-2026. La página tampoco lo pinta si un índice escrito antes aún lo nombra.
 
 Un mes se baja **una vez por visita**: cambiar de rango dentro de un mes ya bajado no pide nada al
 servidor, y un intervalo largo sólo pide los meses que le falten.

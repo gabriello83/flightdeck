@@ -710,17 +710,15 @@ def rango(nombre, hoy=None):
     """Los rangos con nombre que ofrece la pagina, resueltos a dos fechas.
 
     Estan aqui, en Python, aunque los pinte el navegador: asi el mismo nombre
-    significa lo mismo en la pagina, en el asistente y en una prueba. «hoy»
-    puede no tener dato todavia —la carga va de noche y trae hasta ayer—, y eso
-    lo dice la pagina, no se corrige aqui: una fila que no esta se ve vacia, y
-    una fecha movida en silencio no se ve.
+    significa lo mismo en la pagina, en el asistente y en una prueba. No hay
+    «hoy»: la carga va de noche y trae hasta ayer, asi que hoy siempre estaria
+    vacio. Se quito el 8-oct-2026 para que nadie pulse un boton que sólo puede
+    enseñar ceros.
     """
     hoy = hoy or datetime.date.today()
     ayer = hoy - datetime.timedelta(days=1)
     primero = hoy.replace(day=1)
     fin_mes_pasado = primero - datetime.timedelta(days=1)
-    if nombre == "hoy":
-        return hoy.isoformat(), hoy.isoformat()
     if nombre == "ayer":
         return ayer.isoformat(), ayer.isoformat()
     if nombre == "semana":            # lunes a hoy
@@ -738,12 +736,11 @@ def rango(nombre, hoy=None):
     raise ValueError(f"No existe el rango «{nombre}»")
 
 
-RANGOS = ("hoy", "ayer", "semana", "mes", "mes_pasado", "30dias", "anio", "todo")
+RANGOS = ("ayer", "semana", "mes", "mes_pasado", "30dias", "anio", "todo")
 
 # El nombre que lee una persona. Va al indice para que la pagina no lleve su
 # propia lista y se queden distintas.
 NOMBRES_RANGO = {
-    "hoy": "Hoy",
     "ayer": "Ayer",
     "semana": "Esta semana",
     "mes": "Este mes",
