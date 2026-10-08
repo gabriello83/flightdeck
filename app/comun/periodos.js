@@ -25,7 +25,6 @@
   // Si se toca uno, se toca el otro: el indice de la serie trae la lista de
   // nombres y aqui estan las fechas.
   const RANGOS = {
-    hoy:        { nombre: "Hoy",               calcula: h => [iso(h), iso(h)] },
     ayer:       { nombre: "Ayer",              calcula: h => [iso(suma(h, -1)), iso(suma(h, -1))] },
     semana:     { nombre: "Esta semana",       calcula: h => [iso(suma(h, -((h.getDay() + 6) % 7))), iso(h)] },
     mes:        { nombre: "Este mes",          calcula: h => [iso(new Date(h.getFullYear(), h.getMonth(), 1)), iso(h)] },
@@ -37,7 +36,9 @@
   };
 
   // El orden en que se ofrecen. Los dos primeros son los que se miran a diario.
-  const ORDEN = ["hoy", "ayer", "semana", "mes", "mes_pasado", "30dias", "anio", "todo"];
+  // No hay «hoy»: la carga trae hasta ayer y hoy siempre saldria vacio. Un
+  // indice viejo que aun lo nombre no pinta el boton, porque aqui no existe.
+  const ORDEN = ["ayer", "semana", "mes", "mes_pasado", "30dias", "anio", "todo"];
 
   const PRIMER_DIA = "2025-01-01";
 

@@ -164,7 +164,7 @@ comprueba("y el mes lo dice", S.resumen_mes("2025-04", [v3.fila()])["imposibles"
 
 print("\nLos rangos con nombre")
 HOY_FIJO = datetime.date(2026, 3, 15)
-comprueba("hoy", S.rango("hoy", HOY_FIJO), ("2026-03-15", "2026-03-15"))
+comprueba("no hay rango «hoy»: la carga trae hasta ayer", "hoy" in S.RANGOS or "hoy" in S.NOMBRES_RANGO, False)
 comprueba("ayer", S.rango("ayer", HOY_FIJO), ("2026-03-14", "2026-03-14"))
 comprueba("este mes", S.rango("mes", HOY_FIJO), ("2026-03-01", "2026-03-15"))
 comprueba("el mes pasado, entero", S.rango("mes_pasado", HOY_FIJO), ("2026-02-01", "2026-02-28"))

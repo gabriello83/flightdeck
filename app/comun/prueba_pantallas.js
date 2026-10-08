@@ -253,6 +253,9 @@ const servidor = http.createServer((pet, res) => {
   {
     const { pagina, errores } = await abre('/panel/');
     await pagina.waitForSelector('.periodo-chip');
+    // La serie de prueba aun nombra «hoy», como un indice escrito antes de
+    // quitarlo: el boton no debe salir, porque hoy nunca tiene dato.
+    comprueba('sin boton de hoy', await pagina.locator('.periodo-chip[data-rango="hoy"]').count(), 0);
     const visitasVentana = await pagina.textContent('#kpis .kpi .vl');
     comprueba('arranca en la foto de la ventana', visitasVentana.trim(), '999');
     comprueba_que('con el boton de volver a ella', await pagina.isVisible('text=La ventana'));
