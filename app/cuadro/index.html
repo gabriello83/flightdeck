@@ -180,7 +180,7 @@
     .filters { margin-top: 18px; padding: 16px 18px; border-radius: var(--radius); box-shadow: 0 8px 26px rgba(0,32,91,.05); }
     .filter-head { justify-content: space-between; gap: 14px; margin-bottom: 13px; }
     .filter-head strong { font-size: 13px; }
-    .filter-grid { display: grid; grid-template-columns: .8fr .8fr 1.05fr 1.35fr 1.65fr 1.2fr auto; gap: 10px; align-items: end; }
+    .filter-grid { display: grid; grid-template-columns: 1.05fr 1.35fr 1.65fr 1.2fr auto; gap: 10px; align-items: end; }
     .field { min-width: 0; }
     .field label, .field-label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
     .field input, .field select {
@@ -425,9 +425,9 @@
       <!-- Cliente y, para Serunion, delegación. Eligen los centros del filtro
            de abajo: el cuadro ya filtraba por centro y esto sólo lo rellena. -->
       <div id="filtroLugar" hidden></div>
+      <!-- Sin Desde/Hasta propios: las fechas las pone el selector de arriba y
+           tenerlas dos veces solo servia para que no cuadrasen. -->
       <div class="filter-grid">
-        <div class="field"><label for="dateFrom">Desde</label><input type="date" id="dateFrom"></div>
-        <div class="field"><label for="dateTo">Hasta</label><input type="date" id="dateTo"></div>
         <div class="field"><span class="field-label" id="centerFilterLabel">Centro</span><details id="centerFilter" class="multi-select"><summary aria-labelledby="centerFilterLabel centerFilterText"><span id="centerFilterText">Todos los centros</span></summary><div class="multi-popup"></div></details></div>
         <div class="field"><span class="field-label" id="locationFilterLabel">Ubicación</span><details id="locationFilter" class="multi-select"><summary aria-labelledby="locationFilterLabel locationFilterText"><span id="locationFilterText">Todas las ubicaciones</span></summary><div class="multi-popup"></div></details></div>
         <div class="field"><span class="field-label" id="machineFilterLabel">Máquina / PDV</span><details id="machineFilter" class="multi-select"><summary aria-labelledby="machineFilterLabel machineFilterText"><span id="machineFilterText">Todas las máquinas</span></summary><div class="multi-popup"></div></details></div>
@@ -1333,8 +1333,6 @@
       return validSelected;
     }
     function syncControls() {
-      $('#dateFrom').value=state.from;
-      $('#dateTo').value=state.to;
       fillMultiSelect($('#centerFilter'),model.centers,'Todos los centros',state.centers,value=>model.centerLabels.get(value)||value,()=>{
         const centers=readMultiSelect($('#centerFilter'));
         refreshLocationFilter(centers,readMultiSelect($('#locationFilter')));
@@ -1348,19 +1346,18 @@
       model=builtModel;
       if(reset) { state={from:model.defaultFrom,to:model.defaultTo,centers:[],locations:[],machines:[],articles:[],operation:'',day:'',month:''}; trendMode='day'; }
       syncControls();
-      $('#dateFrom').min=model.minDate; $('#dateFrom').max=model.maxDate;
-      $('#dateTo').min=model.minDate; $('#dateTo').max=model.maxDate;
       renderAll();
     }
 
     $('#applyFilters').addEventListener('click',()=>{
-      state.from=$('#dateFrom').value; state.to=$('#dateTo').value; state.centers=readMultiSelect($('#centerFilter')); state.locations=readMultiSelect($('#locationFilter')); state.machines=readMultiSelect($('#machineFilter')); state.articles=readMultiSelect($('#articleFilter')); state.day=''; state.month='';
-      if(state.from&&state.to&&state.from>state.to) [state.from,state.to]=[state.to,state.from];
+      state.centers=readMultiSelect($('#centerFilter')); state.locations=readMultiSelect($('#locationFilter')); state.machines=readMultiSelect($('#machineFilter')); state.articles=readMultiSelect($('#articleFilter')); state.day=''; state.month='';
       document.querySelectorAll('.multi-select').forEach(element=>element.open=false);
       syncControls();
       renderAll();
     });
-    $('#resetFilters').addEventListener('click',()=>{state={from:model.defaultFrom,to:model.defaultTo,centers:[],locations:[],machines:[],articles:[],operation:'',day:'',month:''};syncControls();renderAll();});
+    // Limpia los filtros cruzados y deja el periodo: ese lo lleva el selector
+    // de arriba, y borrarlo desde aqui lo dejaria ensenando otras fechas.
+    $('#resetFilters').addEventListener('click',()=>{state={from:state.from,to:state.to,centers:[],locations:[],machines:[],articles:[],operation:'',day:'',month:''};syncControls();renderAll();});
     globalThis.addEventListener?.('resize',()=>document.querySelectorAll('.audit-table').forEach(limitAuditTableRows));
     document.addEventListener('click',event=>document.querySelectorAll('.multi-select[open]').forEach(element=>{if(!element.contains(event.target)) element.open=false;}));
     document.addEventListener('keydown',event=>{if(event.key==='Escape') document.querySelectorAll('.multi-select[open]').forEach(element=>{element.open=false;element.querySelector('summary').focus();});});
@@ -1581,18 +1578,6 @@
         }
       });
       if (desde) selector.muestra(desde, hasta, 'intervalo');
-      // Y al reves: si alguien escribe las fechas a mano en el filtro cruzado,
-      // hay que bajar los meses de esas fechas o no veria nada.
-      $('#applyFilters').addEventListener('click', async () => {
-        if (!state.from || !state.to) return;
-        const built = await cargaMeses(state.from, state.to);
-        setupModel(built, false);
-        state.to = topeHasta(state.to);
-        syncControls();
-        renderAll();
-        describeData(INDICE, built);
-        selector.muestra(state.from, state.to, 'intervalo');
-      });
     }
     /* Cliente y delegación. La ficha de cada centro viene del índice de la
        serie (/api/serie), que ya trae el ámbito del perfil y, a un cliente, sin

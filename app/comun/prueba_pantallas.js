@@ -426,25 +426,34 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('arranca en el ultimo mes con dato, no en la historia entera',
       pedidos.includes(`/api/cuadro?mes=${MES_HOY}`) && !pedidos.includes('/api/cuadro?mes=2025-03'),
       JSON.stringify(pedidos.filter(x => x.startsWith('/api/cuadro'))));
-    comprueba_que('y las fechas del filtro son las de ese mes',
-      (await pagina.inputValue('#dateFrom')).startsWith(MES_HOY));
+    comprueba_que('y las fechas del periodo son las de ese mes',
+      (await pagina.inputValue('.periodo-intervalo input[type=date]')).startsWith(MES_HOY));
+    comprueba('el filtro cruzado no repite Desde y Hasta',
+      await pagina.locator('.filter-grid input[type=date]').count(), 0);
     // Los datos llegan hasta ayer: el resto del mes no son dias a cero, son
     // dias que no han llegado, y ni el filtro ni el grafico deben pintarlos.
     if (iso(AYER).startsWith(MES_HOY)) {
-      comprueba('el hasta se queda en ayer, no en el fin de mes', await pagina.inputValue('#dateTo'), iso(AYER));
+      comprueba('el hasta se queda en ayer, no en el fin de mes', await pagina.inputValue('.periodo-intervalo input[type=date] ~ label + input'), iso(AYER));
       const ultimaEtiqueta = await pagina.evaluate(() => [...document.querySelectorAll('#trendChart text')].map(t => t.textContent).filter(t => /^\d\d\/\d\d$/.test(t)).pop());
       comprueba('y el grafico acaba en ayer', ultimaEtiqueta, `${iso(AYER).slice(8, 10)}/${iso(AYER).slice(5, 7)}`);
     }
 
     await pagina.fill('.periodo-intervalo input[type=date]', '2025-03-01');
     await pagina.fill('.periodo-intervalo input[type=date] ~ label + input', '2025-03-31');
+    const marzo = pagina.waitForResponse(r => r.url().includes('/api/cuadro?mes=2025-03'));
     await pagina.click('.periodo-aplicar');
-    await pagina.waitForFunction(() => document.querySelector('#dateFrom').value === '2025-03-01');
+    await marzo;
+    await pagina.waitForTimeout(400);
     comprueba_que('elegir marzo de 2025 baja su mes', pedidos.includes('/api/cuadro?mes=2025-03'));
     comprueba_que('y marzo de 2025, con la venta del parte, si lo lleva', await pagina.isVisible('#salesNotice'));
-    comprueba('y mueve las fechas del filtro cruzado',
-      [await pagina.inputValue('#dateFrom'), await pagina.inputValue('#dateTo')],
+    comprueba('y el periodo se queda en marzo',
+      [await pagina.inputValue('.periodo-intervalo input[type=date]'),
+       await pagina.inputValue('.periodo-intervalo input[type=date] ~ label + input')],
       ['2025-03-01', '2025-03-31']);
+    await pagina.click('#resetFilters');
+    await pagina.waitForTimeout(300);
+    comprueba('limpiar los filtros cruzados no toca el periodo',
+      await pagina.inputValue('.periodo-intervalo input[type=date]'), '2025-03-01');
     comprueba_que('el cliente con un solo cliente no ve filtro de lugar en el cuadro',
       !(await pagina.isVisible('#filtroLugar select')));
     const tabla = await pagina.textContent('#visitLogTable');
