@@ -52,9 +52,13 @@ PANEL_AIRBUS = {
     "inventario": {"cumplimiento": {"pct_en_norma": 8.6}, "existencias": {"A": 500000}},
 }
 PANEL_INTERNO = dict(PANEL_AIRBUS, servicio={"visitas": 99999, "coste_servicio": {"coste": 1.0}})
+# Un perfil de operaciones con su propio panel. Un cliente ya no tiene panel
+# (docs/49): el recorte del panel se prueba con este.
+PANEL_OPE = dict(PANEL_AIRBUS, servicio={"visitas": 2222, "coste_servicio": {"coste": 5.0}})
 
 falsos.pon_panel("cli-airbus", PANEL_AIRBUS)
 falsos.pon_panel("interno", PANEL_INTERNO)
+falsos.pon_panel("ope-sur", PANEL_OPE)
 
 pon_fila("PERFIL#cli-airbus", {
     "nombre": "AIRBUS", "tipo": "cliente",
@@ -65,6 +69,13 @@ pon_fila("PERFIL#cli-airbus", {
     "reglas_negocio": {"umbral_rentabilidad_mes": 350},
 })
 pon_fila("PERFIL#interno", {"nombre": "Serunion", "tipo": "admin", "sesiones": [], "permisos": {}})
+pon_fila("PERFIL#ope-sur", {
+    "nombre": "Operaciones Sur", "tipo": "operaciones",
+    "ambito": {"clientes": [], "centros": [], "delegaciones": ["SEVILLA"]},
+    "sesiones": ["resumen", "venta_consumo", "disponibilidad"], "permisos": {},
+})
+pon_fila("USUARIO#olga@serunion.es", {"nombre": "Olga", "perfil_id": "ope-sur", "estado": "activo"})
+falsos.USUARIOS_COG["olga@serunion.es"] = {"clave": "ClaveDeOlga12", "temporal": False}
 
 pon_fila("USUARIO#ana@airbus.com", {"nombre": "Ana", "perfil_id": "cli-airbus",
                                     "estado": "activo", "asistente": True})
@@ -137,22 +148,31 @@ comprueba("403, no 200",
           llama("POST", "/api/acceso", {"correo": "huerfano@x.com", "clave": "ClaveLarga123"})["statusCode"], 403)
 
 # ----------------------------------------------------------------------
-print("\nEl cliente ve su panel, recortado")
+print("\nUn cliente solo tiene el cuadro: del panel no le llega nada")
+# Tiene marcadas tres sesiones del panel, pero ya son de «operaciones».
 p = cuerpo_de(llama("GET", "/api/panel", cookie=COOKIE_ANA))
-comprueba("sus visitas", p["servicio"]["visitas"], 1107)
+comprueba("ninguna sesion del panel", p["sesiones"], [])
+comprueba("ni servicio", "servicio" in p, False)
+comprueba("ni dinero", "dinero" in p, False)
+comprueba("ni sat", "sat" in p, False)
+
+print("\nOperaciones ve su panel, recortado")
+COOKIE_OLGA = cookie_de(llama("POST", "/api/acceso", {"correo": "olga@serunion.es", "clave": "ClaveDeOlga12"}))
+p = cuerpo_de(llama("GET", "/api/panel", cookie=COOKIE_OLGA))
+comprueba("sus visitas", p["servicio"]["visitas"], 2222)
 comprueba("sin el coste de servicio", "coste_servicio" in p["servicio"], False)
 comprueba("sin inventario", "inventario" in p, False)
 comprueba("tres sesiones", len(p["sesiones"]), 3)
 
 print("\nY no hay forma de pedir el panel de otro")
 # Los tres intentos evidentes: por query, por cuerpo y con barra de mas.
-ajeno = cuerpo_de(llama("GET", "/api/panel", cookie=COOKIE_ANA, query={"perfil": "interno"}))
-comprueba("la query no se mira", ajeno["servicio"]["visitas"], 1107)
+ajeno = cuerpo_de(llama("GET", "/api/panel", cookie=COOKIE_OLGA, query={"perfil": "interno"}))
+comprueba("la query no se mira", ajeno["servicio"]["visitas"], 2222)
 comprueba("no las 99.999 del interno", ajeno["servicio"]["visitas"] != 99999, True)
-por_cuerpo = cuerpo_de(llama("GET", "/api/panel", {"perfil_id": "interno"}, cookie=COOKIE_ANA))
-comprueba("el cuerpo tampoco", por_cuerpo["servicio"]["visitas"], 1107)
+por_cuerpo = cuerpo_de(llama("GET", "/api/panel", {"perfil_id": "interno"}, cookie=COOKIE_OLGA))
+comprueba("el cuerpo tampoco", por_cuerpo["servicio"]["visitas"], 2222)
 comprueba("y una barra de mas no cambia de ruta",
-          cuerpo_de(llama("GET", "/api/panel/", cookie=COOKIE_ANA))["servicio"]["visitas"], 1107)
+          cuerpo_de(llama("GET", "/api/panel/", cookie=COOKIE_OLGA))["servicio"]["visitas"], 2222)
 
 print("\nEl techo se aplica al servir")
 yo = cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))
@@ -287,11 +307,17 @@ comprueba("es la misma lista que evalua la Lambda de alarmas", len(cat), len(_ca
 
 print("\nEl cuadro de mando: solo con su sesion, y solo el de su perfil")
 falsos.OBJETOS["cabina/cli-airbus/cuadro/indice.json"] = json.dumps(
-    {"perfil": "cli-airbus", "meses": [{"mes": "2026-09"}],
-     "censo": [["24SE1983", 0, "Comedor", "S1"]]}).encode()
+    {"perfil": "cli-airbus",
+     "meses": [{"mes": "2026-09", "filas": 1, "unidades": 2, "importe": 1.3, "visitas": 1,
+                "incidencias": 1, "maquinas_con_venta": 1, "fuente": "telemetria"}],
+     "censo": [["24SE1983", 0, "Comedor", "S1"]],
+     "ventas": {"fuente": "telemetria"}}).encode()
 # Comprimido, como lo escriben los agregados: la API lo descomprime al servirlo.
 falsos.OBJETOS["cabina/cli-airbus/cuadro/mes-2026-09.json.gz"] = gzip.compress(json.dumps(
-    {"mes": "2026-09", "ventas": [[1, 0, 0, 2, 1.3]]}).encode())
+    {"mes": "2026-09", "maquinas": [["24SE1983", 0, "Comedor", "S1", 1]],
+     "articulos": ["AGUA"], "ventas": [[1, 0, 0, 2, 1.3]],
+     "visitas": [["2026-09-01 08:00", 0]],
+     "incidencias": [["2026-09-02", "", 0, 7, "Averia", "TECNICO", "Finalizado"]]}).encode())
 falsos.OBJETOS["cabina/interno/cuadro/indice.json"] = json.dumps(
     {"perfil": "interno", "meses": [{"mes": "2026-09"}]}).encode()
 # Una usuaria nueva: a estas alturas a Ana ya la han bloqueado mas arriba.
@@ -321,6 +347,41 @@ comprueba("el catalogo de sesiones lo ofrece a la consola",
           "cuadro" in cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))["catalogo_sesiones"], True)
 comprueba("y /api/yo dice que lo tiene",
           "cuadro" in cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))["sesiones"], True)
+
+print("\nLas partes del cuadro que ve cada cliente")
+_yo = cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))
+comprueba("de serie las ve todas", len(_yo["cuadro"]["secciones"]), len(L.A.SECCIONES_CUADRO))
+comprueba("y le llegan los tres flujos", _yo["cuadro"]["flujos"], ["ventas", "visitas", "incidencias"])
+_pf = cuerpo_de(llama("GET", "/api/admin/perfiles", cookie=COOKIE_JEFE))
+comprueba("la consola recibe el catalogo de partes",
+          _pf["catalogo_cuadro"]["articulos"], {"nombre": "Mix de artículos", "flujos": ["ventas"]})
+# Se le quita todo lo que necesita la venta.
+_sin_venta = [k for k, v in L.A.SECCIONES_CUADRO.items() if "ventas" in v[1]]
+llama("POST", "/api/admin/perfiles",
+      dict(_perfil_airbus, perfil_id="cli-airbus", sesiones=["cuadro"],
+           cuadro_ocultas=_sin_venta + ["no-existe"]), cookie=COOKIE_JEFE)
+comprueba("se guardan las que se quitan, sin las que no existen",
+          L.lee("PERFIL#cli-airbus")["cuadro_ocultas"], _sin_venta)
+_yo = cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))
+comprueba("/api/yo ya no las ofrece",
+          [s for s in _sin_venta if s in _yo["cuadro"]["secciones"]], [])
+comprueba("y dice que la venta no le llega", _yo["cuadro"]["flujos"], ["visitas", "incidencias"])
+_ix = cuerpo_de(llama("GET", "/api/cuadro", cookie=COOKIE_ANA))
+comprueba("el indice sale sin la cabecera de la venta", "ventas" in _ix, False)
+comprueba("y sin el importe de cada mes", sorted(_ix["meses"][0]), ["incidencias", "mes", "visitas"])
+comprueba("pero con el censo, que no es venta", _ix["censo"], [["24SE1983", 0, "Comedor", "S1"]])
+_m = cuerpo_de(llama("GET", "/api/cuadro", cookie=COOKIE_ANA, query={"mes": "2026-09"}))
+comprueba("el mes sale sin la venta", ("ventas" in _m, "articulos" in _m), (False, False))
+comprueba("con sus visitas e incidencias", (len(_m["visitas"]), len(_m["incidencias"])), (1, 1))
+comprueba("y con sus maquinas", len(_m["maquinas"]), 1)
+llama("POST", "/api/admin/perfiles",
+      dict(_perfil_airbus, perfil_id="cli-airbus", sesiones=["cuadro"],
+           cuadro_ocultas=["listado_visitas"]), cookie=COOKIE_JEFE)
+comprueba("quitar una parte cuyo flujo usa otra no quita el dato",
+          cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))["cuadro"]["flujos"],
+          ["ventas", "visitas", "incidencias"])
+pon_fila("PERFIL#cli-airbus", dict(_perfil_airbus, sesiones=["resumen", "cuadro"]))
+
 del falsos.OBJETOS["cabina/cli-airbus/cuadro/indice.json"]
 comprueba("sin calcular todavia, 503",
           llama("GET", "/api/cuadro", cookie=COOKIE_ANA)["statusCode"], 503)
@@ -345,19 +406,30 @@ falsos.OBJETOS["cabina/cli-airbus/serie/2025-03.json.gz"] = gzip.compress(json.d
          "venta": {"importe": 7.0}}]}).encode())
 falsos.OBJETOS["cabina/interno/serie/indice.json"] = json.dumps(
     {"perfil": "interno", "meses": [{"mes": "2025-03"}]}).encode()
+# La misma fila para el perfil de operaciones, que es quien tiene panel.
+falsos.OBJETOS["cabina/ope-sur/serie/indice.json"] = json.dumps(
+    {"perfil": "ope-sur", "meses": [{"mes": "2025-03"}]}).encode()
+falsos.OBJETOS["cabina/ope-sur/serie/2025-03.json.gz"] = \
+    falsos.OBJETOS["cabina/cli-airbus/serie/2025-03.json.gz"]
 _ix = llama("GET", "/api/serie", cookie=COOKIE_ANA)
 comprueba("el indice es el de su perfil", cuerpo_de(_ix)["perfil"], "cli-airbus")
 comprueba("y dice desde cuando hay historia", cuerpo_de(_ix)["primer_dia"], "2025-01-01")
 pon_fila("PERFIL#cli-airbus", dict(_perfil_airbus, sesiones=["resumen", "cuadro"]))
 _f = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"mes": "2025-03"}))["filas"][0]
+comprueba("un cliente, aunque tenga «resumen» marcado, solo recibe la fecha",
+          sorted(_f), ["f"])
+_ope = {"nombre": "Operaciones Sur", "tipo": "operaciones", "ambito": {"delegaciones": ["SEVILLA"]},
+        "sesiones": ["resumen"], "permisos": {}}
+pon_fila("PERFIL#ope-sur", _ope)
+_f = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_OLGA, query={"mes": "2025-03"}))["filas"][0]
 comprueba("la fila lleva su fecha y sus visitas", (_f["f"], _f["servicio"]["visitas"]),
           ("2025-03-11", 3))
 comprueba("con «resumen» ve servicio y dinero", sorted(k for k in _f if k != "f"),
           ["dinero", "servicio", "venta"])
 comprueba("el coste de servicio NO sale: es interno",
           "coste_servicio" in _f["servicio"], False)
-pon_fila("PERFIL#cli-airbus", dict(_perfil_airbus, sesiones=["servicio", "cuadro"]))
-_f = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"mes": "2025-03"}))["filas"][0]
+pon_fila("PERFIL#ope-sur", dict(_ope, sesiones=["servicio"]))
+_f = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_OLGA, query={"mes": "2025-03"}))["filas"][0]
 comprueba("un perfil que solo ve «servicio» no ve el dinero dia a dia",
           sorted(k for k in _f if k != "f"), ["servicio"])
 comprueba("ni la venta, que es facturacion", "venta" in _f, False)
@@ -371,7 +443,7 @@ comprueba("y la query no cambia de perfil",
 print("\nEl filtro por delegacion, cliente y centro")
 _ficha = {"nombre": "AIRBUS GETAFE", "num": "1001", "cliente": "AIRBUS OPERATIONS SL",
           "cod_cliente": "C7", "delegacion": "MADRID"}
-for _pid in ("cli-airbus", "interno"):
+for _pid in ("cli-airbus", "interno", "ope-sur"):
     falsos.OBJETOS[f"cabina/{_pid}/serie/indice.json"] = json.dumps(
         {"perfil": _pid, "meses": [{"mes": "2025-03"}], "meses_centros": ["2025-03"],
          "centros": {"1001": _ficha}}).encode()
@@ -389,6 +461,9 @@ _ixj = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_JEFE))
 comprueba("el interno si ve la delegacion", _ixj["centros"]["1001"]["delegacion"], "MADRID")
 comprueba("y puede filtrar por ella", _ixj["filtros"], ["delegacion", "cliente", "centro"])
 _c = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_ANA, query={"centros": "2025-03"}))
+comprueba("al cliente, el mes por centro le llega sin ningun bloque",
+          _c["filas"][0]["centros"].get("1001", {}), {})
+_c = cuerpo_de(llama("GET", "/api/serie", cookie=COOKIE_OLGA, query={"centros": "2025-03"}))
 _c1 = _c["filas"][0]["centros"]["1001"]
 comprueba("el mes por centro sale recortado como la fila del dia", sorted(_c1), ["servicio"])
 comprueba("sin el coste de servicio", "coste_servicio" in _c1["servicio"], False)

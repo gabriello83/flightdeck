@@ -31,13 +31,18 @@ def nivel_de(tipo):
 # las sesiones del catalogo (docs/39, mas el cuadro de mando de docs/46)
 # ----------------------------------------------------------------------
 # id: (nombre, tipo minimo, bloques del panel que necesita)
+#
+# Un perfil de cliente solo tiene el cuadro de mando (docs/49). Las sesiones
+# del panel que antes eran de cliente piden ahora «operaciones»: asi el techo
+# de siempre se lo quita, en la API y en la consola a la vez, sin una regla
+# aparte que mantener.
 SESIONES = {
-    "resumen":          ("Resumen",                        "cliente",     ("servicio", "dinero")),
-    "venta_consumo":    ("Venta y consumo",                "cliente",     ("dinero",)),
-    "servicio":         ("Servicio recibido",              "cliente",     ("servicio",)),
-    "disponibilidad":   ("Disponibilidad",                 "cliente",     ("sat",)),
-    "surtido":          ("Surtido y planograma",           "cliente",     ("surtido",)),
-    "calidad":          ("Calidad y seguridad alimentaria","cliente",     ("servicio", "jornadas")),
+    "resumen":          ("Resumen",                        "operaciones", ("servicio", "dinero")),
+    "venta_consumo":    ("Venta y consumo",                "operaciones", ("dinero",)),
+    "servicio":         ("Servicio recibido",              "operaciones", ("servicio",)),
+    "disponibilidad":   ("Disponibilidad",                 "operaciones", ("sat",)),
+    "surtido":          ("Surtido y planograma",           "operaciones", ("surtido",)),
+    "calidad":          ("Calidad y seguridad alimentaria","operaciones", ("servicio", "jornadas")),
     "rutas":            ("Rutas y jornada",                "operaciones", ("jornadas", "servicio")),
     "efectivo":         ("Recaudacion y efectivo",         "operaciones", ("dinero",)),
     "stock":            ("Stock y merma",                  "operaciones", ("servicio", "inventario")),
@@ -53,6 +58,96 @@ SESIONES = {
     # va en su propia carpeta, cabina/<perfil>/cuadro/, y lo sirve /api/cuadro.
     "cuadro":           ("Cuadro de mando",                "cliente",     ()),
 }
+
+
+# ----------------------------------------------------------------------
+# las secciones del cuadro de mando (docs/49)
+# ----------------------------------------------------------------------
+# id: (nombre, flujos del cuadro que necesita). En el orden de la pagina.
+#
+# El cuadro lleva tres flujos de datos: la venta, las visitas y las
+# incidencias. Una seccion que mezcla varios (los indicadores, la evolucion,
+# el mapa, el rendimiento por maquina, las conclusiones) los pide todos: con
+# uno de menos ensenaria ceros que no son ceros. El servidor sirve la UNION de
+# los flujos de las secciones que el perfil ve, y nada mas; lo que no hace
+# falta no llega al navegador, igual que con el panel.
+TODOS_FLUJOS = ("ventas", "visitas", "incidencias")
+SECCIONES_CUADRO = {
+    "indicadores":       ("Indicadores",                        TODOS_FLUJOS),
+    "evolucion":         ("Evolución diaria",                   TODOS_FLUJOS),
+    "mapa":              ("Mapa de centros",                    TODOS_FLUJOS),
+    "visitas_maquina":   ("Visitas realizadas por máquina",     ("visitas",)),
+    "articulos":         ("Mix de artículos",                   ("ventas",)),
+    "incid_operacion":   ("Incidencias por operación",          ("incidencias",)),
+    "rendimiento":       ("Rendimiento por máquina",            TODOS_FLUJOS),
+    "detalle_incid":     ("Detalle de incidencias",             ("incidencias",)),
+    "sin_venta":         ("Máquinas sin venta",                 ("ventas",)),
+    "venta_baja":        ("Máquinas con venta baja",            ("ventas",)),
+    "maquinas_centro":   ("Máquinas por centro",                ("ventas",)),
+    "listado_visitas":   ("Listado de visitas",                 ("visitas",)),
+    "preventivos":       ("Mantenimientos preventivos",         ()),
+    "conclusiones":      ("Conclusiones",                       TODOS_FLUJOS),
+}
+
+
+def secciones_cuadro(perfil):
+    """Las secciones del cuadro que ve este perfil, en el orden de la pagina.
+
+    El perfil guarda las que se le QUITAN (`cuadro_ocultas`), no las que ve:
+    asi una seccion nueva sale a todos sin tener que tocar cada perfil, que es
+    lo que se pidio («todas puestas de serie»).
+    """
+    ocultas = set(perfil.get("cuadro_ocultas") or [])
+    return [s for s in SECCIONES_CUADRO if s not in ocultas]
+
+
+def flujos_cuadro(perfil):
+    """Los flujos de datos que hacen falta para las secciones que ve."""
+    pedidos = {f for s in secciones_cuadro(perfil) for f in SECCIONES_CUADRO[s][1]}
+    return [f for f in TODOS_FLUJOS if f in pedidos]
+
+
+# Lo que cada flujo pone en el indice (por mes y en cabecera) y en un mes.
+_CAMPOS_MES_INDICE = {
+    "ventas": ("filas", "unidades", "importe", "maquinas_con_venta", "fuente"),
+    "visitas": ("visitas",),
+    "incidencias": ("incidencias",),
+}
+_CAMPOS_MES = {
+    "ventas": ("ventas", "articulos", "_columnas", "maquinas_con_venta", "fuente"),
+    "visitas": ("visitas", "_visitas"),
+    "incidencias": ("incidencias", "_incidencias"),
+}
+
+
+def recorta_cuadro_indice(indice, perfil):
+    """El indice del cuadro sin los totales de los flujos que no ve."""
+    fuera = [f for f in TODOS_FLUJOS if f not in flujos_cuadro(perfil)]
+    if not fuera:
+        return indice
+    out = dict(indice)
+    out["meses"] = []
+    for m in indice.get("meses") or []:
+        m = dict(m)
+        for f in fuera:
+            for campo in _CAMPOS_MES_INDICE[f]:
+                m.pop(campo, None)
+        out["meses"].append(m)
+    if "ventas" in fuera:
+        out.pop("ventas", None)
+    return out
+
+
+def recorta_cuadro_mes(mes, perfil):
+    """Un mes del cuadro sin las filas de los flujos que no ve."""
+    fuera = [f for f in TODOS_FLUJOS if f not in flujos_cuadro(perfil)]
+    if not fuera:
+        return mes
+    out = dict(mes)
+    for f in fuera:
+        for campo in _CAMPOS_MES[f]:
+            out.pop(campo, None)
+    return out
 
 
 def sesiones_de(tipo, concedidas):

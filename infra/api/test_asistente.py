@@ -86,9 +86,11 @@ PANEL = {
     "inventario": {"cumplimiento": {"pct_en_norma": 8.6}, "existencias": {"A": 500000}},
 }
 
+# De operaciones: un cliente ya no tiene panel (docs/49), y el asistente
+# contesta con el panel. El recorte del coste es el mismo, por debajo de direccion.
 falsos.pon_panel("cli-airbus", PANEL)
 falsos.pon_fila("PERFIL#cli-airbus", {
-    "nombre": "AIRBUS", "tipo": "cliente",
+    "nombre": "AIRBUS", "tipo": "operaciones",
     "ambito": {"clientes": ["AIRBUS"], "centros": ["AIRBUS GETAFE"], "delegaciones": []},
     "sesiones": ["resumen", "disponibilidad"],
     "permisos": {"asistente": True},
@@ -172,11 +174,11 @@ comprueba("403", r["statusCode"], 403)
 comprueba("y dice que es global", "plataforma" in json.loads(r["body"])["error"], True)
 falsos.pon_fila("CONFIG", {"asistente_global": True}, "GLOBAL")
 
-falsos.pon_fila("PERFIL#cli-airbus", {"nombre": "AIRBUS", "tipo": "cliente",
+falsos.pon_fila("PERFIL#cli-airbus", {"nombre": "AIRBUS", "tipo": "operaciones",
                                       "sesiones": ["resumen"], "permisos": {"asistente": False}})
 comprueba("perfil sin asistente, 403", pregunta("hola", COOKIE)["statusCode"], 403)
 falsos.pon_fila("PERFIL#cli-airbus", {
-    "nombre": "AIRBUS", "tipo": "cliente",
+    "nombre": "AIRBUS", "tipo": "operaciones",
     "ambito": {"clientes": ["AIRBUS"], "centros": ["AIRBUS GETAFE"], "delegaciones": []},
     "sesiones": ["resumen", "disponibilidad"], "permisos": {"asistente": True}})
 falsos.pon_fila("USUARIO#ana@airbus.com", {"nombre": "Ana", "perfil_id": "cli-airbus",

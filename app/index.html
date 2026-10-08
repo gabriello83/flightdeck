@@ -151,10 +151,12 @@ async function aDondeVa(){
   const r = await fetch("/api/yo", {credentials: "same-origin"});
   if(!r.ok) return "/panel/";
   const yo = await r.json();
-  /* El administrador va a su consola; quien tiene el cuadro de mando, al
-     cuadro (es lo que AIRBUS ya conoce: el de David); el resto, al panel. Quien
-     decide es la API: la pagina solo obedece a lo que le diga el perfil. */
+  /* El administrador va a su consola; un cliente, siempre al cuadro, que es lo
+     unico que tiene (docs/49); quien mas tenga el cuadro, tambien; el resto, al
+     panel. Quien decide es la API: la pagina solo obedece a lo que le diga el
+     perfil. */
   if(yo.tipo === "admin") return "/consola/";
+  if(yo.tipo === "cliente") return "/cuadro/";
   return (yo.sesiones || []).includes("cuadro") ? "/cuadro/" : "/panel/";
 }
 
