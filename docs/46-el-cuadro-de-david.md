@@ -101,6 +101,10 @@ perfil de la sesión, como el panel; lo único que se pide es el trozo, y sólo 
 abrirlo. Pide la sesión **«Cuadro de mando»** (`autorizacion.SESIONES["cuadro"]`), que el
 administrador marca en la consola como cualquier otra.
 
+El cuadro arranca en el último mes con dato y **no pasa del día anterior al cálculo**
+(`generado`): los datos llegan cerrados hasta ayer, y el resto del mes no son días sin venta, son
+días que no han llegado. Ni el filtro ni la evolución diaria los pintan a cero.
+
 Quien tiene esa sesión entra directo al cuadro al iniciar sesión; desde el cuadro hay un botón al
 panel de servicio y desde el panel otro al cuadro.
 

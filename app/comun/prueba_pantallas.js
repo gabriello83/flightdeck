@@ -356,6 +356,13 @@ const servidor = http.createServer((pet, res) => {
       JSON.stringify(pedidos.filter(x => x.startsWith('/api/cuadro'))));
     comprueba_que('y las fechas del filtro son las de ese mes',
       (await pagina.inputValue('#dateFrom')).startsWith(MES_HOY));
+    // Los datos llegan hasta ayer: el resto del mes no son dias a cero, son
+    // dias que no han llegado, y ni el filtro ni el grafico deben pintarlos.
+    if (iso(AYER).startsWith(MES_HOY)) {
+      comprueba('el hasta se queda en ayer, no en el fin de mes', await pagina.inputValue('#dateTo'), iso(AYER));
+      const ultimaEtiqueta = await pagina.evaluate(() => [...document.querySelectorAll('#trendChart text')].map(t => t.textContent).filter(t => /^\d\d\/\d\d$/.test(t)).pop());
+      comprueba('y el grafico acaba en ayer', ultimaEtiqueta, `${iso(AYER).slice(8, 10)}/${iso(AYER).slice(5, 7)}`);
+    }
 
     await pagina.fill('.periodo-intervalo input[type=date]', '2025-03-01');
     await pagina.fill('.periodo-intervalo input[type=date] ~ label + input', '2025-03-31');

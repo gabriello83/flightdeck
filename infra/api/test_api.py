@@ -195,8 +195,11 @@ print("\nEl administrador")
 COOKIE_JEFE = cookie_de(llama("POST", "/api/acceso",
                               {"correo": "jefe@serunion.es", "clave": "OtraClaveLarga1"}))
 comprueba("ve los usuarios", llama("GET", "/api/admin/usuarios", cookie=COOKIE_JEFE)["statusCode"], 200)
-comprueba("ve las 18 sesiones",
-          len(cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_JEFE))["sesiones"]), 18)
+# Las 18 del catalogo menos el cuadro: el perfil interno no lo calcula, y
+# ofrecerlo era mandarle a una pagina que dice que no se ha calculado.
+_yo_jefe = cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_JEFE))["sesiones"]
+comprueba("ve las 17 sesiones que tienen dato", len(_yo_jefe), 17)
+comprueba("y el cuadro no, porque su perfil no lo tiene", "cuadro" in _yo_jefe, False)
 
 alta = llama("POST", "/api/admin/usuarios",
              {"correo": "Pepe@Airbus.com", "nombre": "Pepe", "perfil_id": "cli-airbus",
@@ -320,6 +323,12 @@ comprueba("y /api/yo dice que lo tiene",
           "cuadro" in cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))["sesiones"], True)
 del falsos.OBJETOS["cabina/cli-airbus/cuadro/indice.json"]
 comprueba("sin calcular todavia, 503",
+          llama("GET", "/api/cuadro", cookie=COOKIE_ANA)["statusCode"], 503)
+# El administrador del perfil interno tiene todas las sesiones sin concederlas,
+# pero el interno no calcula cuadro: el boton llevaba a «no se ha calculado».
+comprueba("sin cuadro calculado, /api/yo no lo ofrece",
+          "cuadro" in cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))["sesiones"], False)
+comprueba("aunque la sesion siga concedida",
           llama("GET", "/api/cuadro", cookie=COOKIE_ANA)["statusCode"], 503)
 
 print("\nEl historico: el indice de meses, y un mes recortado como el panel")

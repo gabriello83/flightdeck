@@ -114,7 +114,7 @@ def encamina(evento, metodo, ruta):
             "tipo": perfil.get("tipo", "cliente"),
             "perfil": perfil.get("nombre") or perfil.get("perfil_id", ""),
             "perfil_id": perfil.get("perfil_id", ""),
-            "sesiones": A.sesiones_de(perfil.get("tipo", "cliente"), perfil.get("sesiones", [])),
+            "sesiones": sesiones_visibles(perfil),
             "catalogo_sesiones": {k: v[0] for k, v in A.SESIONES.items()},
             "permisos": permisos,
             "asistente": {"habilitado": ok_ia, "motivo": motivo},
@@ -254,6 +254,33 @@ def _mes_valido(indice, mes):
     if str(mes) not in meses:
         raise ValueError("Ese mes no existe en este cuadro.")
     return str(mes)
+
+
+def _hay_cuadro(perfil_id):
+    """Si el cuadro de este perfil esta calculado: una cabecera, nada mas."""
+    if not perfil_id:
+        return False
+    try:
+        s3.head_object(Bucket=BUCKET, Key=f"cabina/{perfil_id}/cuadro/indice.json")
+        return True
+    except Exception:
+        return False
+
+
+def sesiones_visibles(perfil):
+    """Las sesiones que se ensenan, sin el cuadro si el perfil no lo tiene.
+
+    El administrador ve todas las sesiones sin que nadie se las conceda, y el
+    cuadro solo se calcula para los perfiles de cliente (los que tienen
+    ambito). Con el perfil interno, el boton «Cuadro de mando» llevaba a una
+    pagina que decia que no se habia calculado, y la entrada le mandaba alli
+    a quien lo tuviera. Lo que no existe no se ofrece. /api/cuadro sigue
+    contestando 503 a quien lo pida a mano.
+    """
+    sesiones = A.sesiones_de(perfil.get("tipo", "cliente"), perfil.get("sesiones", []))
+    if "cuadro" in sesiones and not _hay_cuadro(perfil.get("perfil_id", "")):
+        sesiones.remove("cuadro")
+    return sesiones
 
 
 def cuadro(perfil_id, mes=None):
