@@ -1518,6 +1518,10 @@
     async function cargaMeses(desde, hasta) {
       const hay = (INDICE.meses || []).map(m => m.mes);
       const quiere = (desde && hasta ? Periodos.meses(desde, hasta) : hay).filter(m => hay.includes(m));
+      // De donde sale la venta de ESTE periodo, no la de la ultima noche: un
+      // mes rellenado con telemetria es completo y uno con el parte, no.
+      const fuentes = (INDICE.meses || []).filter(m => quiere.includes(m.mes)).map(m => m.fuente);
+      salesSource = { fuente: !fuentes.length ? null : fuentes.every(f => f === 'telemetria') ? 'telemetria' : 'parcial' };
       const faltan = quiere.filter(m => !MESES.has(m));
       if (faltan.length) {
         setLoading(true, `Cargando la venta (${faltan.length} ${faltan.length === 1 ? 'mes' : 'meses'})…`);
@@ -1567,6 +1571,7 @@
         state.to = topeHasta(state.to);
         syncControls();
         renderAll();
+        describeData(INDICE, built);
         selector.muestra(state.from, state.to, 'intervalo');
       });
     }
@@ -1617,16 +1622,17 @@
       $('#dataStatusTitle').textContent = salesPartial() ? 'Datos de VenCloud · venta parcial' : 'Datos de VenCloud';
       $('#dataStatusText').textContent = `${totals}${generated ? ` · calculado el ${generated.toLocaleString('es-ES')}` : ''}. Servidos desde este mismo dominio.`;
       const notice = $('#salesNotice');
+      notice.hidden = !salesPartial();
       if (salesPartial()) {
-        const v = indice.ventas || {};
+        const censo = new Set(built.machineCensus.map(row => row.machine));
+        const conVenta = new Set(built.sales.map(row => row.machine).filter(m => censo.has(m)));
         // El texto es de la pagina, no el _nota del servidor: aquel es para
         // nosotros (cita informes y documentos) y esto lo lee el cliente.
-        notice.innerHTML = '<strong>La venta de este cuadro está incompleta.</strong> '
-          + 'Sale de la lectura que se hace en cada visita, no de la telemetría: sólo aparecen las máquinas que se leen al visitarlas, '
+        notice.innerHTML = '<strong>La venta de este periodo está incompleta.</strong> '
+          + 'Una parte sale de la lectura que se hace en cada visita, no de la telemetría: sólo aparecen las máquinas que se leen al visitarlas, '
           + 'y la venta se fecha el día de la lectura, no el de la venta. '
-          + `En este periodo tienen venta ${fmtInteger.format(v.maquinas_censo_con_venta || 0)} de ${fmtInteger.format(v.maquinas_censo || 0)} máquinas instaladas, `
+          + `En este periodo tienen venta ${fmtInteger.format(conVenta.size)} de ${fmtInteger.format(censo.size)} máquinas instaladas, `
           + 'así que una máquina «sin dato de venta» puede estar vendiendo. Visitas e incidencias sí están completas.';
-        notice.hidden = false;
       }
     }
     (async function start() {
@@ -1641,7 +1647,6 @@
         $('#panelBtn').hidden = !(yo.sesiones || []).some(sesion => sesion !== 'cuadro');
 
         INDICE = await getJson('/api/cuadro');
-        salesSource = INDICE.ventas || salesSource;
         preventivesNote = INDICE.preventivos ? '' : 'Los mantenimientos preventivos todavía no se reciben de VenCloud. En cuanto lleguen, aparecerán aquí.';
         // Se arranca en el ultimo mes con dato, no en la historia entera: son
         // veintitantos meses de venta por dia, maquina y articulo, y bajarlos

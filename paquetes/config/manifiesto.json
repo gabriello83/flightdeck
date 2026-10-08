@@ -78,6 +78,14 @@
       "filas_mes": 188000
     },
     {
+      "id": "telemetria_ventas",
+      "nombre": "A12_EXT_TELEMETRIA_VENTAS",
+      "informe": 179,
+      "clave_fecha": "propia",
+      "destino": "crudo/telemetria_ventas",
+      "filas_mes": 1900000
+    },
+    {
       "id": "recaudacion",
       "nombre": "EXT_DINERO_RECAUDACION",
       "informe": 132,
