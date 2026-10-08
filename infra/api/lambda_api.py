@@ -116,6 +116,9 @@ def encamina(evento, metodo, ruta):
             "perfil_id": perfil.get("perfil_id", ""),
             "sesiones": sesiones_visibles(perfil),
             "catalogo_sesiones": {k: v[0] for k, v in A.SESIONES.items()},
+            # Que partes del cuadro ve, y que datos le llegan para ellas.
+            "cuadro": {"secciones": A.secciones_cuadro(perfil),
+                       "flujos": A.flujos_cuadro(perfil)},
             "permisos": permisos,
             "asistente": {"habilitado": ok_ia, "motivo": motivo},
             "umbral": perfil.get("reglas_negocio", {}).get(
@@ -139,8 +142,7 @@ def encamina(evento, metodo, ruta):
         # Se mira si el parametro VIENE, no si trae algo: con `or`, un mes vacio
         # se colaba como «dame el indice» en vez de darse por no valido.
         # «trozo» es el nombre que uso la version de meses troceados.
-        return cuadro(perfil.get("perfil_id", ""),
-                      q["mes"] if "mes" in q else q.get("trozo"))
+        return cuadro(perfil, q["mes"] if "mes" in q else q.get("trozo"))
 
     # La serie diaria: el indice de meses, o un mes. Es lo que permite pedir hoy,
     # ayer, este mes, el mes pasado o un intervalo cualquiera desde 2025 sin que
@@ -283,9 +285,16 @@ def sesiones_visibles(perfil):
     return sesiones
 
 
-def cuadro(perfil_id, mes=None):
-    """El indice del cuadro, o el fichero de un mes."""
-    base = f"cabina/{perfil_id}/cuadro/"
+def cuadro(perfil, mes=None):
+    """El indice del cuadro, o el fichero de un mes, con lo que el perfil ve.
+
+    Si el perfil ve todas las secciones, el fichero sale tal cual, sin leerlo
+    como JSON. Si se le ha quitado alguna, se quitan del fichero los flujos
+    que ya no necesita (docs/49): ocultar la seccion en la pagina no basta,
+    porque el dato seguiria llegando al navegador.
+    """
+    base = f"cabina/{perfil.get('perfil_id', '')}/cuadro/"
+    entero = A.flujos_cuadro(perfil) == list(A.TODOS_FLUJOS)
     try:
         indice = _crudo(base + "indice.json")
     except Exception:
@@ -293,8 +302,13 @@ def cuadro(perfil_id, mes=None):
                        "_nota": "Lo escriben los agregados (4:45) para cada perfil de "
                                 "cliente con ambito."})
     if mes is None:
-        return _como_json(indice)
-    return _como_json(_crudo(f"{base}mes-{_mes_valido(indice, mes)}.json.gz"))
+        if entero:
+            return _como_json(indice)
+        return r(200, A.recorta_cuadro_indice(json.loads(indice), perfil))
+    fichero = _crudo(f"{base}mes-{_mes_valido(indice, mes)}.json.gz")
+    if entero:
+        return _como_json(fichero)
+    return r(200, A.recorta_cuadro_mes(json.loads(fichero), perfil))
 
 
 def serie(perfil, mes=None):
@@ -593,6 +607,9 @@ def administra(evento, metodo, ruta, admin):
         return r(200, {
             "perfiles": [dict(p, panel=_hay_panel(p.get("_id", ""))) for p in lista("PERFIL#")],
             "catalogo_sesiones": {k: {"nombre": v[0], "minimo": v[1]} for k, v in A.SESIONES.items()},
+            # Las partes del cuadro, para las casillas de «Qué ve en el cuadro».
+            "catalogo_cuadro": {k: {"nombre": v[0], "flujos": list(v[1])}
+                                for k, v in A.SECCIONES_CUADRO.items()},
             # El techo se envia para que el panel de admin pueda avisar de que
             # un permiso marcado no va a tener efecto en ese tipo de perfil.
             "techo": {k: sorted(v) for k, v in A.TECHO.items()},
@@ -616,6 +633,9 @@ def administra(evento, metodo, ruta, admin):
                        for k in ("clientes", "centros", "delegaciones")},
             "sesiones": [s for s in (d.get("sesiones") or []) if s in A.SESIONES],
             "paneles": [str(x)[:40] for x in (d.get("paneles") or [])][:64],
+            # Las partes del cuadro que se le QUITAN; vacio = las ve todas.
+            "cuadro_ocultas": [s for s in (d.get("cuadro_ocultas") or [])
+                               if s in A.SECCIONES_CUADRO],
             # Se guarda lo que marque el admin; el techo se aplica al servir.
             "permisos": {k: bool(v) for k, v in (d.get("permisos") or {}).items()},
             "reglas_negocio": d.get("reglas_negocio") or {},

@@ -141,8 +141,11 @@ const API = {
   '/api/admin/usuarios': { usuarios: [{ _id: 'eva@airbus.com', nombre: 'Eva', perfil_id: 'cli-airbus', estado: 'activo' }] },
   '/api/admin/perfiles': {
     perfiles: [{ _id: 'cli-airbus', nombre: 'AIRBUS', tipo: 'cliente', ambito: { centros: ['500092'] }, sesiones: ['resumen'], permisos: {}, panel: { existe: true, calculado: new Date().toISOString() } }],
-    catalogo_sesiones: { resumen: { nombre: 'Resumen', minimo: 'cliente' } },
-    techo: { cliente: ['ver'] }, niveles: { cliente: 0, admin: 3 }, implicitos: { cliente: ['ver'] }
+    catalogo_sesiones: { resumen: { nombre: 'Resumen', minimo: 'operaciones' }, cuadro: { nombre: 'Cuadro de mando', minimo: 'cliente' } },
+    catalogo_cuadro: { indicadores: { nombre: 'Indicadores', flujos: ['ventas', 'visitas', 'incidencias'] },
+                       articulos: { nombre: 'Mix de artículos', flujos: ['ventas'] },
+                       listado_visitas: { nombre: 'Listado de visitas', flujos: ['visitas'] } },
+    techo: { cliente: ['ver'] }, niveles: { cliente: 0, operaciones: 1, admin: 3 }, implicitos: { cliente: ['ver'] }
   },
   '/api/admin/config': { asistente_global: true, limite_preguntas_dia: 40, umbral_rentabilidad_mes: 350 },
   '/api/admin/telefonos': { telefonos: [] },
@@ -189,8 +192,9 @@ const servidor = http.createServer((pet, res) => {
     pedidos.push(u.pathname + (u.search || ''));
     if (u.pathname === '/api/serie') {
       const mes = u.searchParams.get('mes');
+      // El ambito es del perfil; la delegacion se le quita solo al cliente.
       const interno = API['/api/yo'].tipo !== 'cliente';
-      const suyos = k => interno || k !== '600';
+      const suyos = k => API['/api/yo'].perfil_id === 'interno' || k !== '600';
       const cm = u.searchParams.get('centros');
       if (cm !== null) {
         if (!SERIE[cm]) { res.writeHead(400); return res.end('{"error":"mes"}'); }
@@ -213,9 +217,12 @@ const servidor = http.createServer((pet, res) => {
     }
     if (u.pathname === '/api/cuadro') {
       const mes = u.searchParams.get('mes');
-      if (!mes) return json(INDICE_CUADRO);
+      // Como la API: sin venta en los flujos del perfil, la venta no sale.
+      const conVenta = !API['/api/yo'].cuadro || API['/api/yo'].cuadro.flujos.includes('ventas');
+      const sinVenta = o => { const c = { ...o }; ['ventas', 'articulos', '_columnas', 'fuente', 'maquinas_con_venta'].forEach(k => delete c[k]); return c; };
+      if (!mes) return json(conVenta ? INDICE_CUADRO : { ...sinVenta(INDICE_CUADRO), meses: INDICE_CUADRO.meses.map(m => ({ mes: m.mes, visitas: m.visitas, incidencias: m.incidencias })) });
       if (!CUADRO[mes]) { res.writeHead(400); return res.end('{"error":"mes"}'); }
-      return json(CUADRO[mes]);
+      return json(conVenta ? CUADRO[mes] : sinVenta(CUADRO[mes]));
     }
     if (API[u.pathname]) return json(API[u.pathname]);
     res.writeHead(404); return res.end('{"error":"no existe"}');
@@ -249,9 +256,19 @@ const servidor = http.createServer((pet, res) => {
     return { pagina, errores };
   }
 
-  // ------------------------------------------------------- el panel de cliente
-  console.log('\nEl panel de cliente');
+  // ------------------------------------------------- un cliente, al cuadro
+  console.log('\nUn cliente solo tiene el cuadro');
   {
+    const { pagina } = await abre('/panel/');
+    await pagina.waitForURL('**/cuadro/');
+    comprueba_que('si abre el panel, acaba en el cuadro', pagina.url().endsWith('/cuadro/'), pagina.url());
+    await pagina.close();
+  }
+
+  // -------------------------------------------- el panel, desde operaciones
+  console.log('\nEl panel de operaciones');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones' };
     const { pagina, errores } = await abre('/panel/');
     await pagina.waitForSelector('.periodo-menu');
     // La serie de prueba aun nombra «hoy», como un indice escrito antes de
@@ -299,9 +316,9 @@ const servidor = http.createServer((pet, res) => {
       JSON.stringify(pedidos.slice(antes)));
 
     console.log('  · el filtro de lugar');
-    comprueba_que('el cliente tiene filtro de centro', await pagina.isVisible('#filtroLugar select[data-dim="centro"]'));
-    comprueba('pero no de delegacion, que es interna',
-      await pagina.$$eval('#filtroLugar select[data-dim="delegacion"]', x => x.length), 0);
+    comprueba_que('tiene filtro de centro', await pagina.isVisible('#filtroLugar select[data-dim="centro"]'));
+    comprueba('y de delegacion, que es de Serunion',
+      await pagina.$$eval('#filtroLugar select[data-dim="delegacion"]', x => x.length), 1);
     comprueba('ni de cliente: solo tiene uno',
       await pagina.$$eval('#filtroLugar select[data-dim="cliente"]', x => x.length), 0);
     comprueba('y solo ve sus centros',
@@ -323,6 +340,7 @@ const servidor = http.createServer((pet, res) => {
       (await pagina.textContent('#kpis .kpi .vl')).trim(), '999');
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente' };
   }
 
   // ------------------------------------------------------------- la consola
@@ -387,6 +405,14 @@ const servidor = http.createServer((pet, res) => {
     await pagina.keyboard.press('Escape');
     comprueba('Escape cierra la lista y no el dialogo',
       [await pagina.isVisible('#fDelegacionesLista'), await pagina.isVisible('#dlg')], [false, true]);
+    console.log('  · que parte del cuadro ve');
+    comprueba('a un cliente, el panel le sale tachado',
+      await pagina.$$eval('#cajaSesiones input[value="resumen"]', x => x[0].disabled), true);
+    comprueba_que('sin el cuadro marcado no hay partes que elegir', !(await pagina.isVisible('#campoCuadro')));
+    await pagina.check('#cajaSesiones input[value="cuadro"]');
+    comprueba('al marcarlo salen todas, puestas',
+      await pagina.$$eval('#cajaCuadro input', x => x.map(i => [i.value, i.checked])),
+      [['indicadores', true], ['articulos', true], ['listado_visitas', true]]);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
@@ -425,6 +451,29 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('la tabla de visitas ensena las de marzo de 2025', tabla.includes('2025'), tabla.slice(0, 120));
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
+  }
+
+  console.log('\nEl cuadro, con solo algunas partes');
+  {
+    const visitasEincid = ['visitas_maquina', 'incid_operacion', 'detalle_incid', 'listado_visitas', 'preventivos'];
+    API['/api/yo'] = { ...API['/api/yo'], cuadro: { secciones: visitasEincid, flujos: ['visitas', 'incidencias'] } };
+    const { pagina, errores } = await abre('/cuadro/');
+    await pagina.waitForSelector('#visitLogTable table');
+    comprueba('sin indicadores, ni evolucion, ni mix, ni conclusiones',
+      [await pagina.isVisible('#kpiGrid'), await pagina.isVisible('#trendChart'),
+       await pagina.isVisible('#productTable'), await pagina.isVisible('#insightGrid')], [false, false, false, false]);
+    comprueba('con sus visitas e incidencias',
+      [await pagina.isVisible('#visitTable'), await pagina.isVisible('#operationTable'),
+       await pagina.isVisible('#visitLogTable'), await pagina.isVisible('#issueTable')], [true, true, true, true]);
+    comprueba_que('la fila de tres que pierde una reparte el ancho entre dos',
+      await pagina.$eval('#visitTable', n => n.closest('.dashboard-grid').classList.contains('recortada')));
+    comprueba('sin venta no hay aviso de venta parcial, ni filtro de articulo, ni enlace de fuentes',
+      [await pagina.isVisible('#salesNotice'), await pagina.isVisible('#articleField'), await pagina.isVisible('#footerCoverage')],
+      [false, false, false]);
+    comprueba_que('y no se le pidio nada de venta', !pedidos.some(x => x.includes('ventas')));
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+    delete API['/api/yo'].cuadro;
   }
 
   console.log('\nEl cuadro, visto desde Serunion');

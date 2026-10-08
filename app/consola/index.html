@@ -234,7 +234,7 @@ function avisa(t, bien){
 }
 
 /* ---------- estado ---------- */
-let YO=null, USUARIOS=[], PERFILES=[], SESIONES={}, TECHO={}, NIVELES={}, IMPLICITOS={},
+let YO=null, USUARIOS=[], PERFILES=[], SESIONES={}, TECHO={}, NIVELES={}, IMPLICITOS={}, PARTES_CUADRO={},
     CONFIG={}, TELEFONOS=[], COLA=[], CARGA=null, SECCION="usuarios", guardando=null;
 /* El histórico: la serie diaria del perfil de la sesión y lo último que se
    sumó. Se queda en memoria para que volver a esta pestaña no vuelva a pedirlo. */
@@ -452,6 +452,13 @@ function formPerfil(pid){
     <div class="campo">
       <label>Sesiones que ve</label>
       <div class="marcas" id="cajaSesiones"></div>
+      <p class="pista">Un perfil de cliente sólo tiene el cuadro de mando; el panel es de operaciones para arriba.</p>
+    </div>
+    <div class="campo" id="campoCuadro">
+      <label>Qué ve en el cuadro de mando</label>
+      <div class="marcas" id="cajaCuadro"></div>
+      <p class="pista">Todas puestas de serie. Lo que se quita no se le enseña ni le llega: si ninguna parte
+        que le quede usa la venta (o las visitas, o las incidencias), ese dato no sale del servidor.</p>
     </div>
     <div class="campo">
       <label>Permisos</label>
@@ -469,6 +476,9 @@ function formPerfil(pid){
     html, async ()=>{
       const lista = id => $(id).value.split(",").map(x=>x.trim()).filter(Boolean);
       const sesiones = [...document.querySelectorAll("#cajaSesiones input:checked")].map(i=>i.value);
+      /* Se guardan las partes que se le QUITAN: una parte nueva del cuadro le
+         saldrá sin tener que volver a editar el perfil. */
+      const cuadro_ocultas = [...document.querySelectorAll("#cajaCuadro input:not(:checked)")].map(i=>i.value);
       const permisos = {};
       document.querySelectorAll("#cajaPermisos input").forEach(i=>{ permisos[i.value] = i.checked; });
       const umbral = $("#fUmbral").value;
@@ -477,7 +487,7 @@ function formPerfil(pid){
         nombre: $("#fNombreP").value.trim(),
         tipo: $("#fTipo").value,
         ambito: {clientes: lista("#fClientes"), centros: lista("#fCentros"), delegaciones: lista("#fDelegaciones")},
-        sesiones, permisos,
+        sesiones, permisos, cuadro_ocultas,
         reglas_negocio: umbral ? {umbral_rentabilidad_mes: Number(umbral)} : {},
       });
       avisa(res.ignorados && res.ignorados.length
@@ -490,6 +500,7 @@ function formPerfil(pid){
   const repinta = () => pintaCasillas(p);
   $("#fTipo").addEventListener("change", repinta);
   repinta();
+  pintaCuadro(p);
   montaAmbito();
 }
 
@@ -668,10 +679,27 @@ function sugiere(input, opciones, alElegir){
   });
 }
 
+/* Las partes del cuadro, en el orden de la página. Sólo se enseñan si el perfil
+   tiene marcada la sesión «Cuadro de mando»: sin ella no hay nada que elegir. */
+function pintaCuadro(p){
+  const ocultas = new Set((p && p.cuadro_ocultas) || []);
+  $("#cajaCuadro").innerHTML = Object.entries(PARTES_CUADRO).map(([id,c])=>`<label>
+      <input type="checkbox" value="${esc(id)}" ${ocultas.has(id)?"":"checked"}>
+      <span>${esc(c.nombre)}</span></label>`).join("");
+  const mira = () => {
+    const conCuadro = !!document.querySelector('#cajaSesiones input[value="cuadro"]:checked');
+    $("#campoCuadro").hidden = !conCuadro;
+  };
+  $("#cajaSesiones").addEventListener("change", mira);
+  $("#fTipo").addEventListener("change", mira);
+  mira();
+}
+
 function pintaCasillas(p){
   const tipo = $("#fTipo").value;
   const nivel = NIVELES[tipo] != null ? NIVELES[tipo] : 0;
-  const puestas = new Set(p ? (p.sesiones||[]) : []);
+  /* Un perfil de cliente nuevo trae marcado el cuadro: es lo único que puede tener. */
+  const puestas = new Set(p ? (p.sesiones||[]) : (tipo==="cliente" ? ["cuadro"] : []));
   $("#cajaSesiones").innerHTML = Object.entries(SESIONES).map(([id,s])=>{
     const alcanza = (NIVELES[s.minimo] != null ? NIVELES[s.minimo] : 0) <= nivel;
     return `<label class="${alcanza?"":"fuera"}">
@@ -1059,6 +1087,7 @@ async function carga(){
   USUARIOS = us.usuarios || [];
   PERFILES = pf.perfiles || [];
   SESIONES = pf.catalogo_sesiones || {};
+  PARTES_CUADRO = pf.catalogo_cuadro || {};
   TECHO = pf.techo || {};
   NIVELES = pf.niveles || {};
   IMPLICITOS = pf.implicitos || {};

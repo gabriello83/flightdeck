@@ -322,6 +322,12 @@
     .spinner { width: 34px; height: 34px; margin: 0 auto 14px; border: 3px solid rgba(255,255,255,.25); border-top-color: white; border-radius: 50%; animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Una fila a la que el perfil le ha quitado alguna parte (docs/49): las que
+       quedan se reparten el ancho, sin dejar el hueco de la que falta. */
+    .shell [hidden] { display: none !important; }
+    .shell .dashboard-grid.recortada { grid-template-columns: repeat(var(--partes, 1), minmax(0, 1fr)); }
+    .shell .dashboard-grid.recortada > * { grid-column: auto !important; }
+
     @media (max-width: 1180px) {
       .filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .kpi-grid { grid-template-columns: repeat(3, 1fr); }
@@ -343,6 +349,7 @@
       .dashboard-grid.triple > :last-child { grid-column: auto; }
       .dashboard-grid.machine-audit { grid-template-columns: 1fr; }
       .dashboard-grid.machine-audit > :first-child { grid-column: auto; }
+      .shell .dashboard-grid.recortada { grid-template-columns: 1fr; }
       .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       #articleFilter .multi-popup { left: 0; right: auto; }
       .kpi-grid { grid-template-columns: repeat(2, 1fr); }
@@ -424,7 +431,7 @@
         <div class="field"><span class="field-label" id="centerFilterLabel">Centro</span><details id="centerFilter" class="multi-select"><summary aria-labelledby="centerFilterLabel centerFilterText"><span id="centerFilterText">Todos los centros</span></summary><div class="multi-popup"></div></details></div>
         <div class="field"><span class="field-label" id="locationFilterLabel">Ubicación</span><details id="locationFilter" class="multi-select"><summary aria-labelledby="locationFilterLabel locationFilterText"><span id="locationFilterText">Todas las ubicaciones</span></summary><div class="multi-popup"></div></details></div>
         <div class="field"><span class="field-label" id="machineFilterLabel">Máquina / PDV</span><details id="machineFilter" class="multi-select"><summary aria-labelledby="machineFilterLabel machineFilterText"><span id="machineFilterText">Todas las máquinas</span></summary><div class="multi-popup"></div></details></div>
-        <div class="field"><span class="field-label" id="articleFilterLabel">Artículo</span><details id="articleFilter" class="multi-select"><summary aria-labelledby="articleFilterLabel articleFilterText"><span id="articleFilterText">Todos los artículos</span></summary><div class="multi-popup"></div></details></div>
+        <div class="field" id="articleField"><span class="field-label" id="articleFilterLabel">Artículo</span><details id="articleFilter" class="multi-select"><summary aria-labelledby="articleFilterLabel articleFilterText"><span id="articleFilterText">Todos los artículos</span></summary><div class="multi-popup"></div></details></div>
         <button type="button" class="btn primary" id="applyFilters">Aplicar</button>
       </div>
       <div class="filter-chips" id="filterChips" aria-live="polite"></div>
@@ -529,7 +536,13 @@
     // Lo que dice el servidor de la venta. Si no es telemetria, la venta es
     // parcial y una maquina sin venta puede ser una maquina sin DATO de venta.
     let salesSource = { fuente: null, _nota: '' };
-    const salesPartial = () => salesSource.fuente !== 'telemetria';
+    // Las partes del cuadro que ve este perfil y los datos que le llegan para
+    // ellas (docs/49). Los decide la API con el perfil de la sesion; aqui solo
+    // se esconde lo que no ve. De serie, todo.
+    let SECCIONES = null;
+    let FLUJOS = new Set(['ventas', 'visitas', 'incidencias']);
+    const ve = seccion => !SECCIONES || SECCIONES.has(seccion);
+    const salesPartial = () => FLUJOS.has('ventas') && salesSource.fuente !== 'telemetria';
     const noSalesWord = () => salesPartial() ? 'sin dato de venta' : 'sin venta';
 
     function normalizeText(value) {
@@ -1256,22 +1269,26 @@
     }
     function renderAll() {
       const data=filteredData();
-      renderKpis(data);
-      renderTrend(data);
-      renderMap(data);
-      renderVisitTable(data);
-      renderProductTable(data);
-      renderOperationTable(data);
-      renderTables(data);
-      renderMachineAuditTables(data);
-      renderOperationalHistory(data);
-      renderInsights(data);
+      // Lo que el perfil no ve no se pinta: ni hace falta, ni tiene sus datos.
+      if(ve('indicadores')) renderKpis(data);
+      if(ve('evolucion')) renderTrend(data);
+      if(ve('mapa')) renderMap(data);
+      if(ve('visitas_maquina')) renderVisitTable(data);
+      if(ve('articulos')) renderProductTable(data);
+      if(ve('incid_operacion')) renderOperationTable(data);
+      if(ve('rendimiento')||ve('detalle_incid')) renderTables(data);
+      if(ve('sin_venta')||ve('venta_baja')||ve('maquinas_centro')) renderMachineAuditTables(data);
+      if(ve('listado_visitas')||ve('preventivos')) renderOperationalHistory(data);
+      if(ve('conclusiones')) renderInsights(data);
       renderChips();
       enableTableSorting();
       const [effectiveFrom,effectiveTo]=activeDateBounds();
       $('#periodStamp').textContent=formatActivePeriod(effectiveFrom,effectiveTo);
       const salesMachines=unique(model.sales,row=>`${row.center}|${row.machine}`), visitMachines=unique(model.visits,row=>`${row.center}|${row.machine}`);
       const linked=[...salesMachines].filter(key=>visitMachines.has(key)).length;
+      // El enlace de fuentes cruza venta y visitas: sin una de las dos no hay
+      // nada que decir, y un «0 de 0» seria un cero que no es un cero.
+      $('#footerCoverage').hidden=!(FLUJOS.has('ventas')&&FLUJOS.has('visitas'));
       $('#footerCoverage').textContent=`Enlace de fuentes: ${linked} de ${salesMachines.size} máquinas con venta tienen visitas (${fmtDecimal.format(percent(linked,salesMachines.size))}%).`;
     }
 
@@ -1472,11 +1489,12 @@
     }
     function createExportWorkbook(data) {
       const rows=buildExportRows(data), created=new Date().toISOString();
+      // Solo las hojas de los datos que este perfil recibe.
       const sheets=[
-        ['Ventas',worksheetXml(['Centro','Máquina','Ubicación','Fecha','Artículo','Unidades','Importe'],rows.sales,[25,16,38,13,40,12,14],[3],[5],[6])],
-        ['Visitas',worksheetXml(['Centro','Máquina','Ubicación','Fecha','Nº visitas','ID visita','PDV','Hora','Ruta','Empleado','Vehículo','Cliente'],rows.visits,[25,16,38,13,13,14,14,10,42,30,16,24],[3],[4])],
-        ['Averías',worksheetXml(['Centro','Máquina','Ubicación','Fecha','Nº incidencia','Categoría','Operación','Estado','Técnico'],rows.incidents,[25,16,38,13,15,25,42,20,24],[3],[])]
-      ];
+        FLUJOS.has('ventas')&&['Ventas',worksheetXml(['Centro','Máquina','Ubicación','Fecha','Artículo','Unidades','Importe'],rows.sales,[25,16,38,13,40,12,14],[3],[5],[6])],
+        FLUJOS.has('visitas')&&['Visitas',worksheetXml(['Centro','Máquina','Ubicación','Fecha','Nº visitas','ID visita','PDV','Hora','Ruta','Empleado','Vehículo','Cliente'],rows.visits,[25,16,38,13,13,14,14,10,42,30,16,24],[3],[4])],
+        FLUJOS.has('incidencias')&&['Averías',worksheetXml(['Centro','Máquina','Ubicación','Fecha','Nº incidencia','Categoría','Operación','Estado','Técnico'],rows.incidents,[25,16,38,13,15,25,42,20,24],[3],[])]
+      ].filter(Boolean);
       const contentTypes=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_,index)=>`<Override PartName="/xl/worksheets/sheet${index+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
       const rootRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`;
       const workbook=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView/></bookViews><sheets>${sheets.map(([name],index)=>`<sheet name="${xmlEscape(name)}" sheetId="${index+1}" r:id="rId${index+1}"/>`).join('')}</sheets><calcPr calcId="191029"/></workbook>`;
@@ -1496,7 +1514,8 @@
         const monthFrom=selectedMonth?(state.from&&state.from>selectedMonth[0]?state.from:selectedMonth[0]):'', monthTo=selectedMonth?(state.to&&state.to<selectedMonth[1]?state.to:selectedMonth[1]):'';
         const from=state.day||monthFrom||state.from||model.minDate||'sin_fecha', to=state.day||monthTo||state.to||model.maxDate||'sin_fecha';
         downloadBlob(createExportWorkbook(data),`Informe_Vending_${from}_${to}.xlsx`);
-        showToast(`Excel exportado: ${fmtInteger.format(rows.sales.length)} ventas · ${fmtInteger.format(rows.visits.length)} visitas · ${fmtInteger.format(rows.incidents.length)} averías.`);
+        const partes=[FLUJOS.has('ventas')&&`${fmtInteger.format(rows.sales.length)} ventas`,FLUJOS.has('visitas')&&`${fmtInteger.format(rows.visits.length)} visitas`,FLUJOS.has('incidencias')&&`${fmtInteger.format(rows.incidents.length)} averías`].filter(Boolean);
+        showToast(`Excel exportado: ${partes.join(' · ')}.`);
       } catch(error) { console.error(error); showToast('No se pudo generar el Excel.'); }
     });
     // ------------------------------------------------------------------ arranque
@@ -1604,6 +1623,32 @@
         }
       });
     }
+    /* Esconde las partes que el perfil no ve. Cada parte es la tarjeta que
+       contiene su tabla o su grafico; una fila que se queda sin ninguna se
+       esconde entera, y una que pierde alguna reparte el ancho entre las que
+       quedan. Devuelve si queda alguna parte que ensenar. */
+    const PARTE = { indicadores: '#kpiGrid', evolucion: '#trendChart', mapa: '#mapChart',
+      visitas_maquina: '#visitTable', articulos: '#productTable', incid_operacion: '#operationTable',
+      rendimiento: '#machineTable', detalle_incid: '#issueTable', sin_venta: '#noSalesTable',
+      venta_baja: '#lowSalesTable', maquinas_centro: '#centerMachinesTable',
+      listado_visitas: '#visitLogTable', preventivos: '#preventiveTable', conclusiones: '#insightGrid' };
+    function aplicaSecciones() {
+      for (const [seccion, sel] of Object.entries(PARTE)) {
+        const nodo = $(sel);
+        if (!nodo) continue;
+        const caja = sel === '#kpiGrid' ? nodo : sel === '#insightGrid' ? nodo.closest('section') : nodo.closest('article');
+        caja.hidden = !ve(seccion);
+      }
+      document.querySelectorAll('.dashboard-grid').forEach(fila => {
+        const partes = [...fila.children], quedan = partes.filter(p => !p.hidden).length;
+        fila.hidden = quedan === 0;
+        fila.classList.toggle('recortada', quedan > 0 && quedan < partes.length);
+        fila.style.setProperty('--partes', String(quedan || 1));
+      });
+      // Sin venta no hay artículos por los que filtrar.
+      $('#articleField').hidden = !FLUJOS.has('ventas');
+      return Object.keys(PARTE).some(ve);
+    }
     function bootMessage(text, isError=false) {
       const main=$('main.shell');
       main.innerHTML=`<div class="boot${isError?' error':''}" role="status">${escapeHtml(text)}</div>`;
@@ -1618,7 +1663,9 @@
     }
     function describeData(indice, built) {
       const generated = indice.generado ? new Date(indice.generado) : null;
-      const totals = `${fmtInteger.format(built.machineCensus.length)} máquinas · ${fmtInteger.format(built.visits.length)} visitas · ${fmtInteger.format(built.incidents.length)} incidencias`;
+      const totals = [`${fmtInteger.format(built.machineCensus.length)} máquinas`,
+        FLUJOS.has('visitas') && `${fmtInteger.format(built.visits.length)} visitas`,
+        FLUJOS.has('incidencias') && `${fmtInteger.format(built.incidents.length)} incidencias`].filter(Boolean).join(' · ');
       $('#dataStatusTitle').textContent = salesPartial() ? 'Datos de VenCloud · venta parcial' : 'Datos de VenCloud';
       $('#dataStatusText').textContent = `${totals}${generated ? ` · calculado el ${generated.toLocaleString('es-ES')}` : ''}. Servidos desde este mismo dominio.`;
       const notice = $('#salesNotice');
@@ -1639,7 +1686,17 @@
       setLoading(true, 'Cargando datos…');
       try {
         const yo = await getJson('/api/yo');
-        if (!(yo.sesiones || []).includes('cuadro')) { location.href = '/panel/'; return; }
+        if (!(yo.sesiones || []).includes('cuadro')) {
+          // Un cliente solo tiene el cuadro: mandarle al panel seria mandarle a
+          // una pantalla vacia. Se le dice que es lo que pasa.
+          if (yo.tipo === 'cliente') { bootMessage('Tu perfil todavía no tiene el cuadro de mando activado. Pídeselo a Serunion Vending.'); return; }
+          location.href = '/panel/'; return;
+        }
+        if (yo.cuadro) {
+          SECCIONES = new Set(yo.cuadro.secciones || []);
+          FLUJOS = new Set(yo.cuadro.flujos || []);
+        }
+        if (!aplicaSecciones()) { bootMessage('Tu perfil no tiene ninguna parte del cuadro de mando activada. Pídeselo a Serunion Vending.'); return; }
         $('#sessionWho').textContent = `${yo.nombre || yo.correo || ''}${yo.perfil ? ' · ' + yo.perfil : ''}`;
         document.title = `${yo.perfil ? yo.perfil + ' · ' : ''}Cuadro de mando · digivend`;
         if (normalizeText(yo.perfil).includes('AIRBUS')) $('#brandLogo').hidden = false;

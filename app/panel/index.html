@@ -1192,6 +1192,9 @@ function notaDelPeriodo(T, lugar){
   if(r.status === 401){ location.href = "/"; return; }
   if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
   YO = await r.json();
+  /* Un cliente solo tiene el cuadro de mando (docs/49). La API ya no le da
+     ningun bloque del panel; esto solo le ahorra una pantalla vacia. */
+  if(YO.tipo === "cliente"){ location.replace("/cuadro/"); return; }
 
   $("#titular").textContent = YO.perfil || "Panel";
   $("#quien").textContent = (YO.nombre || YO.correo) + " · Serunion Vending";
