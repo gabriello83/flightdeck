@@ -10,6 +10,7 @@ caza antes.
 """
 
 import json
+import re
 import sys
 from collections import Counter
 
@@ -38,8 +39,10 @@ comprueba("ventana de reproceso de 3 dias", M["ventana_reproceso_dias"], 3)
 comprueba("ids sin repetir", len({i["id"] for i in INFS}), 32)
 comprueba("nombres sin repetir", len({i["nombre"] for i in INFS}), 32)
 comprueba("destinos sin repetir", len({i["destino"] for i in INFS}), 32)
-comprueba("todos los nombres empiezan por EXT_",
-          all(i["nombre"].startswith("EXT_") for i in INFS), True)
+# El nombre es el de VenCloud. Los nuevos llevan delante su codigo de docs/17
+# (A12_EXT_...), como los pone Gabriele alli; la carga los pide por numero.
+comprueba("todos los nombres son EXT_..., con o sin su codigo delante",
+          all(re.fullmatch(r"([A-Z]\d+_)?EXT_[A-Z0-9_]+", i["nombre"]) for i in INFS), True)
 
 print("\nLos numeros de informe")
 sin = [i["nombre"] for i in INFS if not i.get("informe")]

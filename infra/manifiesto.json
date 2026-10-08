@@ -79,7 +79,7 @@
     },
     {
       "id": "telemetria_ventas",
-      "nombre": "EXT_TELEMETRIA_VENTAS",
+      "nombre": "A12_EXT_TELEMETRIA_VENTAS",
       "informe": 179,
       "clave_fecha": "propia",
       "destino": "crudo/telemetria_ventas",

@@ -56,7 +56,7 @@ EXT_TELEMETRIA_VENTAS** (`docs/17`). Está escrito y la Lambda ya lo lee si exis
 (`crudo/telemetria_ventas/`); falta crearlo en VenCloud. El día que haya telemetría, la del parte
 deja de usarse ese día —serían las mismas ventas dos veces— y el aviso desaparece solo.
 
-**8-oct-2026: creado en VenCloud como informe 179** (`A12_EXT_TELEMETRIA_VENTAS`) y añadido al
+**8-oct-2026: creado en VenCloud como informe 179** y añadido con ese nombre al
 manifiesto. La muestra del 7-oct trae 63.660 ventas de todo el parque, `id` único por fila, un
 20,7 % sin artículo; de AIRBUS (por número de centro) 18.346 ventas en 531 máquinas en un solo
 día, contra las 353 de 564 que da el parte en todo el mes.
