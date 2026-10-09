@@ -376,43 +376,84 @@ const servidor = http.createServer((pet, res) => {
       && !porCentro.includes('SAN PABLO'), porCentro.slice(0, 300));
     comprueba_que('y la suma de los dos dias de esos centros', porCentro.includes('82'), porCentro.slice(0, 300));
 
-    // El ambito del perfil sugiere lo que hay en los datos mientras se escribe.
+    // El ambito del perfil se elige de una lista, varios a la vez.
     await pagina.click('#pestanas button[data-s="perfiles"]');
     await pagina.click('[data-ed="cli-airbus"]');
-    comprueba_que('el centro ya puesto se lee por su nombre',
-      (await pagina.textContent('#rCentros')).includes('500092 AIRBUS SAN PABLO SUR'), await pagina.textContent('#rCentros'));
+    const fichasDe = id => pagina.$$eval(`#${id} .elegido > span`, x => x.map(s => s.textContent));
+    const listaDe = id => pagina.$$eval(`#${id}Lista li[role=option]`, x => x.map(l => [l.querySelector('.txt').textContent, l.getAttribute('aria-selected') === 'true']));
+    comprueba('el centro ya puesto sale por su nombre, con su cliente elegido',
+      [await fichasDe('mClientes'), await fichasDe('mCentros')], [['AIRBUS'], ['AIRBUS SAN PABLO SUR']]);
+    comprueba_que('debajo, el numero que se guarda y cuantos de sus centros lleva',
+      (await pagina.textContent('#rCentros')).includes('500092')
+      && (await pagina.textContent('#rClientes')).includes('AIRBUS: 1 de sus 2 centros'), await pagina.textContent('#rClientes'));
+    console.log('  · un perfil de cliente');
+    comprueba('no tiene delegaciones ni sesiones que elegir, y si las partes del cuadro',
+      [await pagina.isVisible('#campoDelegaciones'), await pagina.isVisible('#campoSesiones'), await pagina.isVisible('#campoCuadro')],
+      [false, false, true]);
     await pagina.click('#fClientes');
+    comprueba('al entrar salen todos los clientes, con el suyo marcado',
+      await listaDe('fClientes'), [['AIRBUS', true], ['CONSUM', false]]);
     await pagina.keyboard.type('c');
-    comprueba('una letra y salen los clientes que la llevan, el que empieza por ella primero (AIRBUS por su codigo C7)',
-      await pagina.$$eval('#fClientesLista li span:first-child', x => x.map(l => l.textContent)), ['CONSUM', 'AIRBUS']);
-    await pagina.keyboard.press('Backspace');
-    await pagina.keyboard.type('air');
-    comprueba('y filtra mientras se escribe',
-      await pagina.$$eval('#fClientesLista li span:first-child', x => x.map(l => l.textContent)), ['AIRBUS']);
+    comprueba('una letra y salen los que la llevan, el que empieza por ella primero (AIRBUS por su codigo C7)',
+      (await listaDe('fClientes')).map(x => x[0]), ['CONSUM', 'AIRBUS']);
     await pagina.keyboard.press('Enter');
-    comprueba('Intro lo pone sin guardar el perfil', [await pagina.inputValue('#fClientes'), await pagina.isVisible('#dlg')],
-      ['AIRBUS, ', true]);
-    comprueba_que('y dice con cuantos centros encaja', (await pagina.textContent('#rClientes')).includes('AIRBUS: 2 centros'));
+    comprueba('Intro lo elige sin guardar el perfil, y la lista sigue abierta',
+      [await fichasDe('mClientes'), await pagina.isVisible('#dlg'), await pagina.isVisible('#fClientesLista')],
+      [['AIRBUS', 'CONSUM'], true, true]);
+    await pagina.fill('#fClientes', '');
     await pagina.click('#fCentros');
-    await pagina.keyboard.press('End');
-    await pagina.keyboard.type(', geta');
+    comprueba('los centros son los de los clientes elegidos',
+      (await listaDe('fCentros')).map(x => x[0]), ['AIRBUS GETAFE', 'AIRBUS SAN PABLO SUR', 'CONSUM MURCIA']);
+    await pagina.keyboard.type('geta');
     await pagina.click('#fCentrosLista li:has-text("AIRBUS GETAFE")');
-    comprueba('el centro se busca por nombre y se guarda su numero', await pagina.inputValue('#fCentros'), '500092, 500100, ');
-    await pagina.click('#fDelegaciones');
-    await pagina.keyboard.type('zz');
-    comprueba_que('lo que no esta en los datos se dice', await pagina.isVisible('#fDelegacionesLista li.nada')
-      && (await pagina.getAttribute('#rDelegaciones', 'class')).includes('mal'));
+    await pagina.fill('#fCentros', '');
+    await pagina.click('#fCentrosLista li:has-text("CONSUM MURCIA")');
+    comprueba('se buscan por nombre y se eligen varios', await fichasDe('mCentros'),
+      ['AIRBUS SAN PABLO SUR', 'AIRBUS GETAFE', 'CONSUM MURCIA']);
+    await pagina.click('#mClientes .elegido:has-text("CONSUM") button');
+    comprueba('quitado un cliente, se van sus centros', await fichasDe('mCentros'), ['AIRBUS SAN PABLO SUR', 'AIRBUS GETAFE']);
+    await pagina.click('#fCentros');
+    comprueba('y ya no salen en la lista', (await listaDe('fCentros')).map(x => x[0]), ['AIRBUS GETAFE', 'AIRBUS SAN PABLO SUR']);
     await pagina.keyboard.press('Escape');
     comprueba('Escape cierra la lista y no el dialogo',
-      [await pagina.isVisible('#fDelegacionesLista'), await pagina.isVisible('#dlg')], [false, true]);
-    console.log('  · que parte del cuadro ve');
-    comprueba('a un cliente, el panel le sale tachado',
-      await pagina.$$eval('#cajaSesiones input[value="resumen"]', x => x[0].disabled), true);
+      [await pagina.isVisible('#fCentrosLista'), await pagina.isVisible('#dlg')], [false, true]);
+    const guardado = () => new Promise(r => pagina.on('request', q => {
+      if (q.method() === 'POST' && q.url().endsWith('/api/admin/perfiles')) r(JSON.parse(q.postData()));
+    }));
+    let envio = guardado();
+    await pagina.click('#bGuardar');
+    let cuerpo = await envio;
+    comprueba('se guarda: el cliente con centros marcados, solo sus centros; y solo el cuadro',
+      [cuerpo.ambito, cuerpo.sesiones],
+      [{ clientes: [], centros: ['500092', '500100'], delegaciones: [] }, ['cuadro']]);
+
+    console.log('  · un perfil de operaciones');
+    await pagina.waitForSelector('[data-ed="cli-airbus"]');
+    await pagina.click('[data-ed="cli-airbus"]');
+    await pagina.selectOption('#fTipo', 'operaciones');
+    comprueba('tiene delegaciones y sesiones',
+      [await pagina.isVisible('#campoDelegaciones'), await pagina.isVisible('#campoSesiones')], [true, true]);
+    await pagina.click('#mClientes .elegido button');
+    await pagina.click('#fClientes');
+    await pagina.click('#fClientesLista li:has-text("CONSUM")');
+    await pagina.click('#fDelegaciones');
+    await pagina.keyboard.type('zz');
+    comprueba_que('lo que no esta en los datos se dice', await pagina.isVisible('#fDelegacionesLista li.nada'));
+    await pagina.fill('#fDelegaciones', 'mad');
+    await pagina.keyboard.press('Enter');
+    comprueba_que('y lo elegido dice con cuantos centros encaja',
+      (await pagina.textContent('#rDelegaciones')).includes('MADRID: 2 centros')
+      && (await pagina.textContent('#rClientes')).includes('CONSUM: entero, 1 centro'), await pagina.textContent('#rClientes'));
     comprueba_que('sin el cuadro marcado no hay partes que elegir', !(await pagina.isVisible('#campoCuadro')));
     await pagina.check('#cajaSesiones input[value="cuadro"]');
     comprueba('al marcarlo salen todas, puestas',
       await pagina.$$eval('#cajaCuadro input', x => x.map(i => [i.value, i.checked])),
       [['indicadores', true], ['articulos', true], ['listado_visitas', true]]);
+    envio = guardado();
+    await pagina.click('#bGuardar');
+    cuerpo = await envio;
+    comprueba('se guarda el cliente entero y la delegacion', [cuerpo.ambito, cuerpo.sesiones],
+      [{ clientes: ['CONSUM'], centros: [], delegaciones: ['MADRID'] }, ['resumen', 'cuadro']]);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
