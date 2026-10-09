@@ -111,18 +111,33 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--s1);outline-offs
 .marcas .porque{font-size:11.5px;color:var(--tinta-3);text-decoration:none}
 .pista{font-size:12px;color:var(--tinta-3);margin:4px 0 0}
 .pista.mal{color:var(--grave)}
-/* Las sugerencias del ámbito: una lista bajo la casilla que filtra mientras se
-   escribe. Hecha aquí y no con <datalist> porque la casilla lleva varios valores
-   separados por comas y <datalist> sólo sabe completar la casilla entera. */
-.sug{position:relative}
+/* El ámbito se elige de una lista, varios a la vez: lo elegido queda arriba
+   como fichas con su ×, y la lista se queda abierta para seguir marcando. Hecho
+   aquí y no con <select multiple> porque ése no busca mientras se escribe, y con
+   mil centros sin buscar no se encuentra nada. */
+.multi{position:relative}
+.multi-caja{display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-height:38px;padding:4px 6px;cursor:text;
+  background:var(--fondo);border:1px solid var(--borde-fuerte);border-radius:8px}
+.multi-caja:focus-within{outline:2px solid var(--s1);outline-offset:1px;border-color:var(--s1)}
+.multi-caja input{flex:1;min-width:110px;width:auto;border:0;padding:4px;background:transparent}
+.multi-caja input:focus{outline:none}
+.elegido{display:inline-flex;align-items:center;gap:2px;max-width:100%;padding:2px 2px 2px 9px;
+  border-radius:999px;background:var(--borde);font-size:13px;line-height:1.5;color:var(--tinta)}
+.elegido>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.elegido.suelto{background:transparent;border:1px dashed var(--borde-fuerte)}
+.elegido.suelto.mal{border-color:var(--grave);color:var(--grave)}
+.elegido button{border:0;background:none;cursor:pointer;color:var(--tinta-2);font:inherit;font-size:15px;
+  line-height:1;padding:1px 6px;border-radius:999px}
+.elegido button:hover{background:var(--borde-fuerte);color:var(--tinta)}
 .sug-lista{position:absolute;left:0;right:0;top:100%;z-index:5;margin:4px 0 0;padding:4px;list-style:none;
   background:var(--tarjeta);border:1px solid var(--borde-fuerte);border-radius:8px;
-  box-shadow:0 6px 20px rgba(0,0,0,.18);max-height:240px;overflow-y:auto}
-.sug-lista li{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
-  padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13.5px}
+  box-shadow:0 6px 20px rgba(0,0,0,.18);max-height:260px;overflow-y:auto}
+.sug-lista li{display:flex;align-items:baseline;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13.5px}
+.sug-lista li .tic{flex:0 0 14px;color:var(--s1);font-weight:700}
+.sug-lista li .txt{flex:1}
 .sug-lista li .det{color:var(--tinta-3);font-size:12px;white-space:nowrap}
-.sug-lista li[aria-selected="true"]{background:var(--s1);color:#fff}
-.sug-lista li[aria-selected="true"] .det{color:#fff}
+.sug-lista li.activa{background:var(--s1);color:#fff}
+.sug-lista li.activa .det,.sug-lista li.activa .tic{color:#fff}
 .sug-lista li.nada{cursor:default;color:var(--tinta-3)}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
 .kpi{background:var(--fondo);border:1px solid var(--borde);border-radius:10px;padding:11px 13px}
@@ -433,26 +448,28 @@ function formPerfil(pid){
     </div>
     <div class="campo">
       <label for="fClientes">Ámbito · clientes</label>
-      <div class="sug"><input id="fClientes" value="${esc((amb.clientes||[]).join(", "))}" placeholder="AIRBUS"></div>
+      <div class="multi" id="mClientes"></div>
       <p class="pista" id="rClientes"></p>
-      <p class="pista">Separados por comas; al escribir salen los que hay en los datos. Con esto basta: esa noche se le calcula su panel. Vacíos los tres, no se calcula ninguno (el «todo el parque» del interno sólo se da en config/perfiles.json).</p>
     </div>
     <div class="fila">
       <div class="campo">
         <label for="fCentros">Ámbito · centros</label>
-        <div class="sug"><input id="fCentros" value="${esc((amb.centros||[]).join(", "))}" placeholder="nombre o número"></div>
+        <div class="multi" id="mCentros"></div>
         <p class="pista" id="rCentros"></p>
       </div>
-      <div class="campo">
+      <div class="campo" id="campoDelegaciones">
         <label for="fDelegaciones">Ámbito · delegaciones</label>
-        <div class="sug"><input id="fDelegaciones" value="${esc((amb.delegaciones||[]).join(", "))}"></div>
+        <div class="multi" id="mDelegaciones"></div>
         <p class="pista" id="rDelegaciones"></p>
       </div>
     </div>
-    <div class="campo">
+    <p class="pista">Se elige de la lista, varios a la vez. Un cliente sin centros marcados entra entero;
+      si le marcas centros, entran sólo esos. Con esto basta: esa noche se le calcula su panel. Vacío
+      todo, no se calcula ninguno (el «todo el parque» del interno sólo se da en config/perfiles.json).</p>
+    <div class="campo" id="campoSesiones">
       <label>Sesiones que ve</label>
       <div class="marcas" id="cajaSesiones"></div>
-      <p class="pista">Un perfil de cliente sólo tiene el cuadro de mando; el panel es de operaciones para arriba.</p>
+      <p class="pista">El panel es de operaciones para arriba.</p>
     </div>
     <div class="campo" id="campoCuadro">
       <label>Qué ve en el cuadro de mando</label>
@@ -474,8 +491,11 @@ function formPerfil(pid){
   abreDlg(p ? "Editar perfil" : "Nuevo perfil",
     "El ámbito se aplica al calcular, no al servir: su panel se escribe ya con sus centros y ningún otro.",
     html, async ()=>{
-      const lista = id => $(id).value.split(",").map(x=>x.trim()).filter(Boolean);
-      const sesiones = [...document.querySelectorAll("#cajaSesiones input:checked")].map(i=>i.value);
+      const esCliente = $("#fTipo").value === "cliente";
+      /* Un cliente sólo tiene el cuadro de mando, y lo tiene siempre: por eso
+         no se le enseñan las sesiones. */
+      const sesiones = esCliente ? ["cuadro"]
+        : [...document.querySelectorAll("#cajaSesiones input:checked")].map(i=>i.value);
       /* Se guardan las partes que se le QUITAN: una parte nueva del cuadro le
          saldrá sin tener que volver a editar el perfil. */
       const cuadro_ocultas = [...document.querySelectorAll("#cajaCuadro input:not(:checked)")].map(i=>i.value);
@@ -486,7 +506,7 @@ function formPerfil(pid){
         perfil_id: p ? p._id : $("#fPid").value.trim(),
         nombre: $("#fNombreP").value.trim(),
         tipo: $("#fTipo").value,
-        ambito: {clientes: lista("#fClientes"), centros: lista("#fCentros"), delegaciones: lista("#fDelegaciones")},
+        ambito: ambito(esCliente),
         sesiones, permisos, cuadro_ocultas,
         reglas_negocio: umbral ? {umbral_rentabilidad_mes: Number(umbral)} : {},
       });
@@ -497,41 +517,55 @@ function formPerfil(pid){
     });
   /* Las casillas se repintan al cambiar el tipo: lo que un cliente no puede
      tener tiene que verse tachado en el momento, no al guardar. */
-  const repinta = () => pintaCasillas(p);
+  const repinta = () => {
+    pintaCasillas(p);
+    const esCliente = $("#fTipo").value === "cliente";
+    $("#campoSesiones").hidden = esCliente;
+    $("#campoDelegaciones").hidden = esCliente;
+  };
   $("#fTipo").addEventListener("change", repinta);
   repinta();
   pintaCuadro(p);
-  montaAmbito();
+  const ambito = montaAmbito(p);
 }
 
-/* ---------- el ámbito, con sugerencias ----------
+/* ---------- el ámbito, elegido de una lista ----------
    Los nombres salen de las fichas de centro del histórico (nombre, número,
    cliente y delegación de cada centro, tal como los escribe la carga desde
    VenCloud), que la consola ya tiene en memoria. No se pide nada más.
 
-   Lo que se escribe en cada casilla es lo que luego compara en_ambito()
-   (infra/lambda_agregados.py):
+   Las tres casillas son de selección múltiple y se eligen de la lista, enteros:
+   «SERUNION, SA» es un cliente, no dos. Y van encadenadas: con clientes
+   elegidos, la lista de centros sólo trae los de esos clientes.
+
+   Lo que se guarda es lo que luego compara en_ambito() (infra/lambda_agregados.py),
+   y allí el ámbito SUMA: basta con encajar en uno. Por eso un cliente al que se
+   le marcan centros no se guarda como cliente, sino sólo sus centros: guardado
+   entero, se llevaría todos los demás. Un cliente sin centros marcados sí entra
+   entero.
    - clientes: el nombre del cliente. Allí basta con que sea un trozo del nombre
      del cliente o del centro, y por eso se deja el nombre y no el código: el
      nombre recoge también los centros que VenCloud aún no ha reasignado.
    - centros: el NÚMERO de centro. Allí el centro tiene que ser exacto, y el
      número no cambia cuando cambia el nombre (pasó con AIRBUS SAN PABLO). En la
-     lista se busca y se ve por nombre; debajo de la casilla se lee qué centro es
-     cada número.
-   - delegaciones: el nombre, que es lo único que hay.
-   Debajo de cada casilla se dice con cuántos centros de los datos encaja cada
-   valor, y en rojo el que no encaja con ninguno: un ámbito mal escrito no da
-   error, da un panel vacío. */
-const normal = s => String(s==null?"":s).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().trim();
+     lista y en las fichas se ve por nombre; debajo se lee qué números se guardan.
+   - delegaciones: el nombre, que es lo único que hay. Un perfil de cliente no
+     lleva: es de quien mira la operación, no de quien la recibe.
+   Lo que un perfil ya tenía escrito a mano y no es un nombre de la lista (el
+   «AIRBUS» de cli-airbus, que en VenCloud cuelga de «SERUNION, SA») se respeta:
+   sale como ficha de borde discontinuo, se guarda igual y se puede quitar. */
+const normal = s => String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().trim();
 
-function opcionesAmbito(){
+function datosAmbito(){
   const fichas = SERIE ? SERIE.fichas() : {};
-  const clientes = new Map(), delegaciones = new Map(), centros = [];
+  const porNum = {}, clientes = new Map(), delegaciones = new Map(), centros = [];
   for(const k in fichas){
     const f = fichas[k] || {};
-    const n = f.num || k, nombre = f.nombre || k;
-    centros.push({valor: n, texto: nombre, detalle: [f.num ? "nº "+f.num : "", f.cliente].filter(Boolean).join(" · "),
-                  buscar: normal(nombre + " " + n)});
+    const n = String(f.num || k), nombre = f.nombre || k;
+    porNum[n] = f;
+    centros.push({valor: n, texto: nombre, cliente: f.cliente || "",
+                  detalle: [f.num ? "nº "+f.num : "", f.cliente].filter(Boolean).join(" · "),
+                  buscar: normal(nombre + " " + n + " " + (f.cliente || ""))});
     if(f.cliente){
       const c = clientes.get(f.cliente) || {valor: f.cliente, texto: f.cliente, n: 0, cods: new Set()};
       c.n++; if(f.cod_cliente) c.cods.add(f.cod_cliente);
@@ -543,81 +577,135 @@ function opcionesAmbito(){
     }
   }
   const centrosDe = n => `${num(n)} ${n===1?"centro":"centros"}`;
+  const orden = (a,b) => a.texto.localeCompare(b.texto, "es");
   return {
-    fichas,
-    clientes: [...clientes.values()].map(c=>({valor: c.valor, texto: c.texto, detalle: centrosDe(c.n),
-                                             buscar: normal(c.texto + " " + [...c.cods].join(" "))})),
-    centros,
+    fichas, porNum, hay: centros.length > 0,
+    clientes: [...clientes.values()].map(c=>({valor: c.valor, texto: c.texto, n: c.n, detalle: centrosDe(c.n),
+                                             buscar: normal(c.texto + " " + [...c.cods].join(" "))})).sort(orden),
+    centros: centros.sort(orden),
     delegaciones: [...delegaciones.values()].map(d=>({valor: d.valor, texto: d.texto, detalle: centrosDe(d.n),
-                                                     buscar: normal(d.texto)})),
+                                                     buscar: normal(d.texto)})).sort(orden),
   };
 }
 
-/* Con cuántos centros de los datos encaja cada valor escrito, con la misma
-   regla que en_ambito(). */
-function encajes(dim, valor, fichas){
+/* La regla de en_ambito() para un valor y una ficha. */
+function encaja(dim, valor, k, f){
   const v = String(valor), V = normal(valor);
-  let n = 0, nombre = "";
-  for(const k in fichas){
-    const f = fichas[k] || {};
-    let si = false;
-    if(dim === "clientes") si = (f.cod_cliente && v === f.cod_cliente) || normal(f.nombre).includes(V) || normal(f.cliente).includes(V);
-    else if(dim === "centros"){ si = v === (f.num || k) || v === f.nombre; if(si) nombre = f.nombre || ""; }
-    else si = v === f.delegacion;
-    if(si) n++;
+  if(dim === "clientes") return !!((f.cod_cliente && v === f.cod_cliente) || normal(f.nombre).includes(V) || normal(f.cliente).includes(V));
+  if(dim === "centros") return v === String(f.num || k) || v === f.nombre;
+  return v === f.delegacion;
+}
+const cuantos = (dim, valor, fichas) => Object.keys(fichas).filter(k=>encaja(dim, valor, k, fichas[k] || {})).length;
+
+/* Monta las tres casillas con lo que el perfil ya tiene y devuelve con qué leer
+   el ámbito a guardar. */
+function montaAmbito(p){
+  const D = datosAmbito();
+  const amb = (p && p.ambito) || {};
+  const reales = new Map(D.clientes.map(c=>[c.valor, c]));
+  const centros0 = (amb.centros || []).map(String);
+  /* El cliente de cada centro guardado se enseña elegido: es de donde salió. */
+  const clientes0 = (amb.clientes || []).map(String);
+  for(const n of centros0){
+    const f = D.porNum[n];
+    if(f && f.cliente && !clientes0.includes(f.cliente)) clientes0.push(f.cliente);
   }
-  return {n, nombre};
-}
+  const clienteDe = n => (D.porNum[n] || {}).cliente;
+  const delCliente = (c, o) => reales.has(c) ? o.cliente === c : encaja("clientes", c, o.valor, D.porNum[o.valor] || {});
+  const centrosPosibles = () => {
+    const cs = mCl.valores();
+    return cs.length ? D.centros.filter(o=>cs.some(c=>delCliente(c, o))) : D.centros;
+  };
+  const sinDatos = "ningún centro en los datos";
 
-function montaAmbito(){
-  const ops = opcionesAmbito();
-  const hay = Object.keys(ops.fichas).length > 0;
-  [["clientes","#fClientes","#rClientes"], ["centros","#fCentros","#rCentros"],
-   ["delegaciones","#fDelegaciones","#rDelegaciones"]].forEach(([dim, idIn, idRes])=>{
-    const input = $(idIn), res = $(idRes);
-    const explica = () => {
-      if(!hay){
-        res.className = "pista";
-        res.textContent = dim === "clientes" ? "Sin el histórico cargado no hay nombres que sugerir: se escriben a mano." : "";
-        return;
+  const explica = () => {
+    const rCl = $("#rClientes"), rCe = $("#rCentros"), rDe = $("#rDelegaciones");
+    if(!D.hay){
+      rCl.className = "pista";
+      rCl.textContent = "Sin el histórico cargado no hay lista de la que elegir: se escribe a mano y se pone con Intro.";
+      rCe.textContent = rDe.textContent = "";
+      return;
+    }
+    const ce = mCe.valores();
+    let mal = false;
+    rCl.textContent = mCl.valores().map(c=>{
+      const r = reales.get(c);
+      if(r){
+        const k = ce.filter(n=>clienteDe(n) === c).length;
+        return k ? `${c}: ${num(k)} de sus ${num(r.n)} centros` : `${c}: entero, ${num(r.n)} ${r.n===1?"centro":"centros"}`;
       }
-      const vals = input.value.split(",").map(x=>x.trim()).filter(Boolean);
-      let mal = false;
-      res.textContent = vals.map(v=>{
-        const e = encajes(dim, v, ops.fichas);
-        if(!e.n){ mal = true; return `${v}: ningún centro en los datos`; }
-        if(dim === "centros") return e.nombre && e.nombre !== v ? `${v} ${e.nombre}` : v;
-        return `${v}: ${num(e.n)} ${e.n===1?"centro":"centros"}`;
-      }).join(" · ");
-      res.className = "pista" + (mal ? " mal" : "");
+      const n = cuantos("clientes", c, D.fichas);
+      if(!n){ mal = true; return `${c}: ${sinDatos}`; }
+      return `${c}: escrito a mano, encaja por nombre con ${num(n)} ${n===1?"centro":"centros"}`;
+    }).join(" · ");
+    rCl.className = "pista" + (mal ? " mal" : "");
+    mal = false;
+    const fuera = ce.filter(n=>!D.porNum[n] && !cuantos("centros", n, D.fichas));
+    if(fuera.length) mal = true;
+    rCe.textContent = ce.length ? `Se guardan por número: ${ce.join(" · ")}` + (fuera.length ? `. Sin centro en los datos: ${fuera.join(", ")}` : "") : "";
+    rCe.className = "pista" + (mal ? " mal" : "");
+    mal = false;
+    rDe.textContent = mDe.valores().map(d=>{
+      const n = cuantos("delegaciones", d, D.fichas);
+      if(!n){ mal = true; return `${d}: ${sinDatos}`; }
+      return `${d}: ${num(n)} ${n===1?"centro":"centros"}`;
+    }).join(" · ");
+    rDe.className = "pista" + (mal ? " mal" : "");
+  };
+
+  const mCl = multiple($("#mClientes"), {id: "fClientes", todas: D.clientes, opciones: () => D.clientes,
+    valores: clientes0, manual: !D.hay, placeholder: D.hay ? "Buscar cliente…" : "AIRBUS",
+    /* Quitado un cliente, se van con él los centros suyos que estaban marcados. */
+    alCambiar: () => { const ok = new Set(centrosPosibles().map(o=>o.valor));
+                       mCe.filtra(n => !D.porNum[n] || ok.has(n)); explica(); }});
+  const mCe = multiple($("#mCentros"), {id: "fCentros", todas: D.centros, opciones: centrosPosibles,
+    valores: centros0, manual: !D.hay, placeholder: "nombre o número", alCambiar: () => explica()});
+  const mDe = multiple($("#mDelegaciones"), {id: "fDelegaciones", todas: D.delegaciones, opciones: () => D.delegaciones,
+    valores: (amb.delegaciones || []).map(String), manual: !D.hay, placeholder: D.hay ? "Buscar delegación…" : "", alCambiar: () => explica()});
+  explica();
+
+  return esCliente => {
+    const ce = mCe.valores();
+    return {
+      clientes: mCl.valores().filter(c=>!reales.has(c) || !ce.some(n=>clienteDe(n) === c)),
+      centros: ce,
+      delegaciones: esCliente ? [] : mDe.valores(),
     };
-    if(hay) sugiere(input, ops[dim], explica);
-    input.addEventListener("input", explica);
-    explica();
-  });
+  };
 }
 
-/* Una casilla con varios valores separados por comas que, en cuanto se escribe
-   una letra, saca debajo los que encajan con el trozo en el que está el cursor.
-   Flechas para moverse, Intro o un clic para elegir, Escape para cerrar. Lo que
-   se escribe a mano sigue valiendo: la lista ayuda, no obliga. */
-function sugiere(input, opciones, alElegir){
-  const lista = document.createElement("ul");
-  lista.className = "sug-lista"; lista.id = input.id + "Lista";
-  lista.setAttribute("role","listbox"); lista.hidden = true;
-  input.after(lista);
+/* Una casilla de selección múltiple: arriba las fichas de lo elegido, cada una
+   con su ×; al entrar o al escribir, debajo la lista de lo que encaja, con una
+   marca en lo que ya está elegido. Un clic (o Intro) pone o quita, y la lista
+   se queda abierta para seguir eligiendo. Flechas para moverse, Escape para
+   cerrar, y la tecla de borrar con la casilla vacía quita la última ficha.
+   Con `manual` (sin datos de los que sacar la lista) Intro pone lo escrito. */
+function multiple(cont, o){
+  let sel = [...new Set(o.valores || [])];
+  const todas = new Map(o.todas.map(x=>[x.valor, x]));
+  const MAX = 100;
+  cont.innerHTML = `<div class="multi-caja"><input id="${o.id}"></div>
+    <ul class="sug-lista" id="${o.id}Lista" role="listbox" aria-multiselectable="true" hidden></ul>`;
+  const caja = cont.firstElementChild, input = caja.querySelector("input"), lista = cont.querySelector("ul");
   input.setAttribute("role","combobox");
   input.setAttribute("aria-autocomplete","list");
   input.setAttribute("aria-controls", lista.id);
   input.setAttribute("aria-expanded","false");
   input.autocomplete = "off";
+  input.placeholder = o.placeholder || "";
   let vistas = [], activa = -1;
 
-  const trozo = () => {
-    const v = input.value, cur = input.selectionStart == null ? v.length : input.selectionStart;
-    const ini = v.lastIndexOf(",", cur - 1) + 1;
-    let fin = v.indexOf(",", cur); if(fin < 0) fin = v.length;
-    return {ini, fin, texto: v.slice(ini, fin).trim()};
+  const fichas = () => {
+    caja.querySelectorAll(".elegido").forEach(x=>x.remove());
+    for(const v of sel){
+      const op = todas.get(v);
+      const s = document.createElement("span");
+      s.className = "elegido" + (op ? "" : " suelto");
+      s.title = op ? (op.detalle || op.texto) : "Escrito a mano: no es un nombre de la lista";
+      s.innerHTML = `<span>${esc(op ? op.texto : v)}</span><button type="button" aria-label="Quitar ${esc(op ? op.texto : v)}">×</button>`;
+      s.querySelector("button").dataset.v = v;
+      caja.insertBefore(s, input);
+    }
   };
   const cierra = () => {
     lista.hidden = true; vistas = []; activa = -1;
@@ -625,58 +713,75 @@ function sugiere(input, opciones, alElegir){
   };
   const marca = i => {
     activa = i;
-    lista.querySelectorAll("li[role=option]").forEach((li, j)=>li.setAttribute("aria-selected", j===i ? "true" : "false"));
-    const li = lista.children[i];
+    lista.querySelectorAll("li[role=option]").forEach((li, j)=>li.classList.toggle("activa", j===i));
+    const li = lista.querySelectorAll("li[role=option]")[i];
     if(li){ input.setAttribute("aria-activedescendant", li.id); li.scrollIntoView({block:"nearest"}); }
   };
-  const abre = () => {
-    const t = trozo(), q = normal(t.texto);
-    if(!q){ cierra(); return; }
-    const puestos = new Set(input.value.split(",").map(normal));
-    puestos.delete(q);
-    const peso = o => { const T = normal(o.texto);
-      return T.startsWith(q) ? 0 : (" " + T).includes(" " + q) ? 1 : o.buscar.includes(q) ? 2 : -1; };
-    vistas = opciones.map(o=>[peso(o), o]).filter(([p,o])=>p >= 0 && !puestos.has(normal(o.valor)))
-      .sort((a,b)=>a[0]-b[0] || a[1].texto.localeCompare(b[1].texto, "es")).slice(0, 50).map(x=>x[1]);
-    lista.innerHTML = vistas.length
-      ? vistas.map((o,i)=>`<li role="option" id="${lista.id}-${i}" aria-selected="false"><span>${esc(o.texto)}</span><span class="det">${esc(o.detalle||"")}</span></li>`).join("")
-      : `<li class="nada">Ninguno en los datos empieza ni contiene «${esc(t.texto)}»</li>`;
+  const abre = (quedarse) => {
+    const q = normal(input.value);
+    const peso = x => { if(!q) return 0; const T = normal(x.texto);
+      return T.startsWith(q) ? 0 : (" " + T).includes(" " + q) ? 1 : x.buscar.includes(q) ? 2 : -1; };
+    const todasV = o.opciones().map(x=>[peso(x), x]).filter(([p])=>p >= 0)
+      .sort((a,b)=>a[0]-b[0] || a[1].texto.localeCompare(b[1].texto, "es")).map(x=>x[1]);
+    vistas = todasV.slice(0, MAX);
+    const puestos = new Set(sel);
+    let html = vistas.map((x,i)=>{ const si = puestos.has(x.valor);
+      return `<li role="option" id="${lista.id}-${i}" aria-selected="${si}"><span class="tic">${si?"✓":""}</span><span class="txt">${esc(x.texto)}</span><span class="det">${esc(x.detalle||"")}</span></li>`; }).join("");
+    if(todasV.length > MAX) html += `<li class="nada">Y ${num(todasV.length - MAX)} más: escribe para afinar.</li>`;
+    if(!todasV.length) html = o.manual
+      ? (input.value.trim() ? `<li class="nada">Intro para poner «${esc(input.value.trim())}».</li>` : "")
+      : `<li class="nada">${q ? `Ninguno en los datos empieza ni contiene «${esc(input.value.trim())}»` : "No hay ninguno que elegir"}</li>`;
+    if(!html){ cierra(); return; }
+    lista.innerHTML = html;
     lista.hidden = false; input.setAttribute("aria-expanded","true");
-    if(vistas.length) marca(0); else activa = -1;
+    if(vistas.length) marca(quedarse && activa >= 0 ? Math.min(activa, vistas.length - 1) : 0); else activa = -1;
   };
-  const elige = o => {
-    const t = trozo(), v = input.value;
-    const antes = v.slice(0, t.ini).replace(/\s*$/, "");
-    const despues = v.slice(t.fin).replace(/^,?\s*/, "");
-    const cabeza = (antes ? antes + " " : "") + o.valor + ", ";
-    input.value = cabeza + despues;
-    input.setSelectionRange(cabeza.length, cabeza.length);
-    cierra();
-    if(alElegir) alElegir();
+  const cambio = () => {
+    fichas();
+    if(!lista.hidden) abre(true);
+    if(o.alCambiar) o.alCambiar();
   };
+  const alterna = v => { sel = sel.includes(v) ? sel.filter(x=>x!==v) : sel.concat([v]); cambio(); };
 
-  input.addEventListener("input", abre);
-  input.addEventListener("click", ()=>{ if(!lista.hidden) abre(); });
+  input.addEventListener("focus", ()=>abre());
+  input.addEventListener("input", ()=>abre());
   input.addEventListener("blur", cierra);
+  caja.addEventListener("mousedown", e=>{
+    const b = e.target.closest("button[data-v]");
+    if(b){ e.preventDefault(); alterna(b.dataset.v); return; }
+    if(e.target !== input){ e.preventDefault(); input.focus(); }
+  });
   input.addEventListener("keydown", e=>{
     if(e.key === "ArrowDown" || e.key === "ArrowUp"){
       if(lista.hidden){ abre(); }
       else if(vistas.length){ marca((activa + (e.key === "ArrowDown" ? 1 : vistas.length - 1)) % vistas.length); }
       e.preventDefault();
-    }else if(e.key === "Enter" && !lista.hidden && activa >= 0){
-      /* Sin esto, Intro guardaría el perfil a medio escribir. */
-      e.preventDefault(); elige(vistas[activa]);
+    }else if(e.key === "Enter"){
+      /* Sin esto, Intro guardaría el perfil a medio hacer. */
+      e.preventDefault();
+      if(!lista.hidden && activa >= 0) alterna(vistas[activa].valor);
+      else if(o.manual && input.value.trim()){
+        const v = input.value.trim(); input.value = "";
+        if(!sel.includes(v)) alterna(v); else abre();
+      }
     }else if(e.key === "Escape" && !lista.hidden){
       /* Y sin esto, Escape cerraría el diálogo entero. */
       e.preventDefault(); e.stopPropagation(); cierra();
+    }else if(e.key === "Backspace" && !input.value && sel.length){
+      alterna(sel[sel.length - 1]);
     }
   });
   /* mousedown y no click: con click, el blur de la casilla cierra la lista antes. */
   lista.addEventListener("mousedown", e=>{
     e.preventDefault();
     const li = e.target.closest("li[role=option]");
-    if(li) elige(vistas[[...lista.children].indexOf(li)]);
+    if(li) alterna(vistas[[...lista.querySelectorAll("li[role=option]")].indexOf(li)].valor);
   });
+  fichas();
+  return {
+    valores: () => sel.slice(),
+    filtra: fn => { const n = sel.length; sel = sel.filter(fn); if(sel.length !== n) cambio(); },
+  };
 }
 
 /* Las partes del cuadro, en el orden de la página. Sólo se enseñan si el perfil
@@ -687,7 +792,8 @@ function pintaCuadro(p){
       <input type="checkbox" value="${esc(id)}" ${ocultas.has(id)?"":"checked"}>
       <span>${esc(c.nombre)}</span></label>`).join("");
   const mira = () => {
-    const conCuadro = !!document.querySelector('#cajaSesiones input[value="cuadro"]:checked');
+    const conCuadro = $("#fTipo").value === "cliente"
+      || !!document.querySelector('#cajaSesiones input[value="cuadro"]:checked');
     $("#campoCuadro").hidden = !conCuadro;
   };
   $("#cajaSesiones").addEventListener("change", mira);

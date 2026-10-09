@@ -50,19 +50,29 @@ es una **escritura en el ERP**, y hasta tener el endpoint y el permiso confirmad
 llamada: la petición se queda en la cola, visible, con quién la pidió y cuándo. Lo contrario sería
 que alguien creyera haber abierto un parte que no existe.
 
-## El ámbito sugiere lo que hay en los datos
+## El ámbito se elige de una lista
 
-En las tres casillas del ámbito, con la primera letra sale debajo una lista de lo que hay en
-los datos y se va filtrando mientras se escribe (sin distinguir mayúsculas ni tildes). Flechas
-para moverse, Intro o clic para elegir, Escape para cerrar la lista sin cerrar el diálogo. Lo
-escrito a mano sigue valiendo.
+Las tres casillas del ámbito son de **selección múltiple**: al entrar sale la lista de lo que
+hay en los datos, se filtra mientras se escribe (sin distinguir mayúsculas ni tildes) y un clic
+o Intro pone o quita, con la lista abierta para seguir eligiendo. Lo elegido queda arriba como
+fichas con su ×. Cada nombre es un elemento entero: «SERUNION, SA» es un cliente, no dos.
+
+Van **encadenadas**: con clientes elegidos, la lista de centros sólo trae los de esos clientes, y
+al quitar un cliente se van sus centros. Un cliente sin centros marcados entra entero; **si se le
+marcan centros, se guardan sólo sus centros y no el cliente**, porque `en_ambito()` suma y el
+cliente guardado se llevaría todos los demás.
+
+Un perfil de **cliente** no tiene casilla de delegaciones ni «Sesiones que ve»: sólo tiene el
+cuadro de mando, y se le guarda siempre.
 
 Los nombres salen de las fichas de centro del histórico, que la consola ya tiene en memoria: no
-hay ninguna llamada nueva. **Los centros se buscan por nombre pero se guarda su número**, porque
+hay ninguna llamada nueva. **Los centros se ven por nombre pero se guarda su número**, porque
 `en_ambito()` exige el centro exacto y el número no cambia cuando VenCloud renombra un centro;
-los clientes se guardan por nombre, que allí basta con ser un trozo. Debajo de cada casilla se
-lee con cuántos centros encaja cada valor (y qué centro es cada número), y en rojo el que no
-encaja con ninguno: un ámbito mal escrito no da error, da un panel vacío.
+los clientes se guardan por nombre, que allí basta con ser un trozo. Lo que un perfil tenía
+escrito a mano y no es un nombre de la lista (el «AIRBUS» de cli-airbus, que en VenCloud cuelga
+de «SERUNION, SA») sale con borde discontinuo, se guarda igual y se puede quitar. Debajo de cada
+casilla se lee qué lleva cada cliente y qué números se guardan, y en rojo lo que no encaja con
+ningún centro: un ámbito mal escrito no da error, da un panel vacío.
 
 ## Comprobado en Chromium
 
