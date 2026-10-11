@@ -42,8 +42,12 @@ DE DONDE SALE CADA HOJA DE DAVID
   Visitas      visita_cabecera, solo visitas de persona (reglas.visitas_reales).
   Averias      sat_averias, series A y E: David mete las dos («Reponer
                distribuidor automatico» es serie E y esta en su hoja).
-  Preventivos  NO HAY FUENTE. Los «Mantenimiento preventivo» de David no estan
-               en ningun informe que extraigamos. Se dice, no se rellena.
+  Preventivos  sat_averias tambien: las tareas con una operacion de preventivo
+               (reglas.es_operacion_preventiva), que se registran como Solicitud
+               especial desde el 5 de octubre de 2026. Viajan en las mismas filas
+               que las averias y la PAGINA las separa, asi que los meses ya
+               escritos no hay que recalcularlos. Los de antes de esa fecha (el
+               Excel de David, ene-sep 2026) no estan en VenCloud (docs/50).
 
 Sin dependencias: se prueba con `python3 infra/test_cuadro.py`.
 """
@@ -285,9 +289,10 @@ class Cuadro:
                 "maquinas_censo_con_venta": len(set(self.censo) & con_venta),
                 "_nota": NOTA_FUENTE.get(fuente, NOTA_FUENTE[None]),
             },
-            "preventivos": None,
-            "_preventivos": ("Los mantenimientos preventivos del cuadro de David no estan en "
-                             "ningun informe que se extraiga de VenCloud. No se rellenan."),
+            "preventivos": {"fuente": "sat_averias"},
+            "_preventivos": ("Los preventivos son las tareas de SAT con una operacion de "
+                             "preventivo. Van en las filas de incidencias y la pagina las "
+                             "aparta. Los que no se registraron en la SAT no estan."),
         }
 
 

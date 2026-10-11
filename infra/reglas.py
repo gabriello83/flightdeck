@@ -9,6 +9,7 @@ Sin dependencias: se importa igual desde Lambda que desde una prueba local.
 """
 
 import statistics
+import unicodedata
 
 # El centinela de "nunca" en este modelo. No es nulo: es una fecha.
 NUNCA = "1900-01-01"
@@ -243,6 +244,22 @@ def es_averia_tecnica(tarea):
 def es_preventivo(tarea):
     """tipo_tarea separa averia (A) de preventivo (E)."""
     return v(tarea, "tipo_tarea") == "E"
+
+
+def es_operacion_preventiva(operacion):
+    """Un mantenimiento preventivo de verdad, mirado por la OPERACION.
+
+    No vale `es_preventivo`: la serie E tambien es «Reponer distribuidor
+    automatico», «Devolucion dinero in situ» o «Cambio de planograma» (docs/46).
+    Los preventivos son la operacion 8888888 «Preventivo Electrodomesticos
+    Airbus (Interno)», que los tecnicos registran como Solicitud especial desde
+    el 5 de octubre de 2026 (docs/50). Se mira el nombre, sin acentos, para que
+    una operacion de preventivo nueva entre sola. La pagina del cuadro tiene la
+    misma regla en `isPreventiveOperation`.
+    """
+    texto = unicodedata.normalize("NFD", str(operacion or ""))
+    texto = "".join(c for c in texto if unicodedata.category(c) != "Mn").upper()
+    return "PREVENTIV" in texto
 
 
 # ----------------------------------------------------------------------

@@ -503,7 +503,7 @@
         <div class="table-wrap compact-table audit-table" id="visitLogTable"></div>
       </article>
       <article class="panel">
-        <div class="panel-head"><div><h2 class="panel-title">Mantenimientos preventivos</h2><p class="panel-subtitle" id="preventiveSubtitle">Fecha, centro, máquina, ubicación, técnico y estado</p></div></div>
+        <div class="panel-head"><div><h2 class="panel-title">Mantenimientos preventivos</h2><p class="panel-subtitle" id="preventiveSubtitle">Fecha, centro, máquina, ubicación, tarea y estado</p></div></div>
         <div class="table-wrap compact-table audit-table" id="preventiveTable"><div class="audit-empty">Sin datos de mantenimiento preventivo.</div></div>
       </article>
     </section>
@@ -555,6 +555,10 @@
         'PRODUCTO CADUCADO', 'CALIDAD NO CONFORME', 'INSTALAR CABLE DEX', 'ERROR DEX'
       ].some(term => operation.includes(term));
     }
+    // Un preventivo es una tarea de SAT con una operacion de preventivo. La
+    // misma regla que reglas.es_operacion_preventiva: no vale la serie E, que
+    // tambien es reposicion y devoluciones.
+    function isPreventiveOperation(value) { return normalizeText(value).includes('PREVENTIV'); }
     function centerKey(value) { return normalizeText(value).replace(/^AIRBUS\s+/, ''); }
     function machineKey(value) { return normalizeText(value).replace(/[^A-Z0-9]/g, ''); }
     function centerLabel(value) {
@@ -675,7 +679,14 @@
         }
         for (const [alta, fin, m, numero, categoria, operacion, estado] of mes.incidencias || []) {
           const maq = maquinas[m];
-          if (!maq || isExcludedIncidentOperation(operacion)) continue;
+          if (!maq) continue;
+          // Viajan en las mismas filas que las averias; aqui se apartan para
+          // que no cuenten como averia y salgan en su tabla.
+          if (isPreventiveOperation(operacion)) {
+            output.preventives.push({ center: maq.center, machine: maq.machine, date: alta, number: numero, location: maq.location, operation: operacion, status: estado || 'Sin estado' });
+            continue;
+          }
+          if (isExcludedIncidentOperation(operacion)) continue;
           output.incidents.push({ center: maq.center, machine: maq.machine, date: alta, received: alta, number: numero, location: maq.location, category: categoria || 'Sin categoría', operation: operacion, status: estado || 'Sin estado', closed: fin || '', technician: '' });
         }
       }
@@ -1177,7 +1188,7 @@
         return;
       }
       $('#preventiveSubtitle').textContent=`${fmtInteger.format(preventives.length)} mantenimientos · de más reciente a más antiguo`;
-      preventiveTable.innerHTML=preventives.length?`<table><colgroup><col style="width:14%"><col style="width:20%"><col style="width:15%"><col style="width:22%"><col style="width:19%"><col style="width:10%"></colgroup><thead><tr><th>Fecha</th><th>Centro</th><th>Máquina</th><th>Ubicación</th><th>Realizada por</th><th>Estado</th></tr></thead><tbody>${preventives.map(item=>`${rowStart(item)}<td>${formatTableDate(item.date)}</td>${centerCell(item.center)}<td><strong>${escapeHtml(item.machine)}</strong></td>${locationCell(item)}<td><span class="truncate" title="${escapeHtml(item.performedBy||'—')}">${escapeHtml(item.performedBy||'—')}</span></td><td><span class="status ${normalizeText(item.status).includes('FINALIZADO')?'':'pending'}" title="${escapeHtml(item.status)}">${escapeHtml(item.status)}</span></td></tr>`).join('')}</tbody></table>`:'<div class="audit-empty">No hay mantenimientos preventivos para este filtro.</div>';
+      preventiveTable.innerHTML=preventives.length?`<table><colgroup><col style="width:13%"><col style="width:22%"><col style="width:14%"><col style="width:24%"><col style="width:13%"><col style="width:14%"></colgroup><thead><tr><th>Fecha</th><th>Centro</th><th>Máquina</th><th>Ubicación</th><th>Nº tarea</th><th>Estado</th></tr></thead><tbody>${preventives.map(item=>`${rowStart(item)}<td>${formatTableDate(item.date)}</td>${centerCell(item.center)}<td><strong>${escapeHtml(item.machine)}</strong></td>${locationCell(item)}<td><span class="truncate" title="${escapeHtml(item.operation||'')}">${escapeHtml(item.number||'—')}</span></td><td><span class="status ${normalizeText(item.status).includes('FINALIZADO')?'':'pending'}" title="${escapeHtml(item.status)}">${escapeHtml(item.status)}</span></td></tr>`).join('')}</tbody></table>`:'<div class="audit-empty">No hay mantenimientos preventivos registrados en la SAT para este filtro.</div>';
       [visitLog,preventiveTable].forEach(bindAuditTable);
     }
 

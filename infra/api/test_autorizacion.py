@@ -153,9 +153,10 @@ _solo_visitas = dict(CLIENTE, cuadro_ocultas=[k for k, v in A.SECCIONES_CUADRO.i
                                               if v[1] != ("visitas",)])
 comprueba("con solo las de visitas, solo el flujo de visitas",
           A.flujos_cuadro(_solo_visitas), ["visitas"])
-comprueba("los preventivos no piden ningun flujo",
+# Los preventivos son tareas de SAT y viajan en las filas de incidencias.
+comprueba("los preventivos piden el flujo de incidencias",
           A.flujos_cuadro(dict(CLIENTE, cuadro_ocultas=[k for k in A.SECCIONES_CUADRO
-                                                        if k != "preventivos"])), [])
+                                                        if k != "preventivos"])), ["incidencias"])
 _MES = {"mes": "2026-09", "maquinas": [["M1", 0]], "articulos": ["AGUA"],
         "ventas": [[1, 0, 0, 2, 1.3]], "visitas": [["2026-09-01 08:00", 0]],
         "incidencias": [["2026-09-02", "", 0, 7, "A", "B", "C"]], "fuente": "telemetria"}
