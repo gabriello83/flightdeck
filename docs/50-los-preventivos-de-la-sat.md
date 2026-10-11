@@ -38,7 +38,13 @@ preventivos de octubre **sumaban averías** a AIRBUS.
 - Si un periodo no tiene ninguno, la tabla dice «No hay mantenimientos preventivos registrados en la
   SAT para este filtro»: es lo que se sabe, no que no se hicieran.
 
-## Lo que no cambia
+## El panel interno, igual
 
-El indicador `sat.preventivos` del panel interno sigue contando la serie E. Está mal por lo mismo, pero
-es otra página y otro número; se deja para cuando se pida.
+El indicador «Preventivos» del panel (`sat.preventivos`, en `panel.json` y en la serie diaria) contaba
+**toda la serie E**. Ahora cuenta por la operación, con la misma regla. La función de la serie E pasa a
+llamarse `es_solicitud_especial`, que es lo que es, y se sigue usando para apartar esas tareas de las
+averías técnicas y de los fallos: esas dos cifras no cambian.
+
+La serie diaria (`serie/`) ya escrita lleva la cuenta vieja. La noche reescribe solo los días que lee;
+para corregir la historia hay que relanzar `digivend-agregados` con `{"desde","hasta"}` por trimestres,
+como en docs/48. Antes de octubre de 2026 el número correcto es prácticamente cero.

@@ -241,15 +241,21 @@ def es_averia_tecnica(tarea):
     return v(tarea, "categoria") == "AVERIAS TECNICAS"
 
 
-def es_preventivo(tarea):
-    """tipo_tarea separa averia (A) de preventivo (E)."""
+def es_solicitud_especial(tarea):
+    """Serie E: solicitud especial, no averia. NO es «preventivo».
+
+    Se llamo `es_preventivo` hasta docs/50, y el panel contaba como preventivos
+    todas las de serie E: reposiciones del distribuidor, devoluciones, cambios
+    de planograma... (docs/46). Sirve para apartarlas de las averias; los
+    preventivos de verdad se cuentan con `es_operacion_preventiva`.
+    """
     return v(tarea, "tipo_tarea") == "E"
 
 
 def es_operacion_preventiva(operacion):
     """Un mantenimiento preventivo de verdad, mirado por la OPERACION.
 
-    No vale `es_preventivo`: la serie E tambien es «Reponer distribuidor
+    No vale la serie E (`es_solicitud_especial`): tambien es «Reponer distribuidor
     automatico», «Devolucion dinero in situ» o «Cambio de planograma» (docs/46).
     Los preventivos son la operacion 8888888 «Preventivo Electrodomesticos
     Airbus (Interno)», que los tecnicos registran como Solicitud especial desde
