@@ -128,8 +128,18 @@ tareas = (
 comprueba("27.543 tareas en total", len(tareas), 27543)
 comprueba("21.046 sobre maquinas reales", len(R.tareas_de_maquina(tareas)), 21046)
 comprueba("6.400 averias tecnicas de tipo A",
-          sum(1 for t in tareas if R.es_averia_tecnica(t) and not R.es_preventivo(t)), 6400)
-comprueba("389 preventivos", sum(1 for t in tareas if R.es_preventivo(t)), 389)
+          sum(1 for t in tareas if R.es_averia_tecnica(t) and not R.es_solicitud_especial(t)), 6400)
+comprueba("389 solicitudes especiales (serie E)", sum(1 for t in tareas if R.es_solicitud_especial(t)), 389)
+comprueba("y ninguna es preventivo: no llevan operacion de preventivo",
+          sum(1 for t in tareas if R.es_operacion_preventiva(R.v(t, "operacion", ""))), 0)
+
+# El preventivo de verdad va por la operacion: la serie E tambien es reposicion
+# y devoluciones (docs/46, docs/50).
+comprueba("la operacion de preventivo de AIRBUS es preventiva",
+          R.es_operacion_preventiva("Preventivo Electrodomésticos Airbus (Interno)"), True)
+comprueba("reponer el distribuidor no lo es, aunque sea serie E",
+          R.es_operacion_preventiva("Reponer distribuidor automatico"), False)
+comprueba("sin operacion no lo es", R.es_operacion_preventiva(None), False)
 
 # ----------------------------------------------------------------------
 print("\nEl catalogo de SAT: se clasifica por operacion, no por categoria")

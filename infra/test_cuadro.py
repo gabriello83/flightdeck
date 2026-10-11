@@ -170,8 +170,8 @@ comprueba("y la lista de meses con sus totales",
           sorted(x["mes"] for x in I["meses"]), sorted(MESES))
 comprueba("la venta dice cuantas maquinas del censo tienen venta",
           (I["ventas"]["maquinas_censo"], I["ventas"]["maquinas_censo_con_venta"]), (2, 2))
-comprueba("los preventivos dicen que no hay fuente", (I["preventivos"], "preventivos" in I["_preventivos"]),
-          (None, True))
+comprueba("los preventivos dicen de donde salen", (I["preventivos"], "preventivo" in I["_preventivos"]),
+          ({"fuente": "sat_averias"}, True))
 comprueba("la nota de la fuente avisa de que es parcial", "PARCIAL" in C.NOTA_FUENTE["visita_ventas"], True)
 
 print("\nFuera de la ventana no sale")

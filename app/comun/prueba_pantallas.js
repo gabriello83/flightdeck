@@ -162,7 +162,9 @@ function mesCuadro(mes, dias) {
     _columnas: ['dia', 'maquina', 'articulo', 'unidades', 'importe'],
     ventas: dias.flatMap(d => [[d, 0, 0, 3, 1.8], [d, 1, 1, 2, 1.4]]),
     visitas: dias.map(d => [`${mes}-${String(d).padStart(2, '0')} 08:15`, 0]),
-    incidencias: dias.map(d => [`${mes}-${String(d).padStart(2, '0')}`, '', 0, `A-${d}`, 'AVERIAS TECNICAS', 'TECNICO - No enfría', 'Finalizado']),
+    // Una averia por dia y un preventivo: viajan juntos y la pagina los aparta.
+    incidencias: [...dias.map(d => [`${mes}-${String(d).padStart(2, '0')}`, '', 0, `A-${d}`, 'AVERIAS TECNICAS', 'TECNICO - No enfría', 'Finalizado']),
+      [`${mes}-${String(dias[0]).padStart(2, '0')}`, '', 1, 'E-11887', 'Solicitudes internas', 'Preventivo Electrodomésticos Airbus (Interno)', 'Finalizado']],
     fuente: 'visita_ventas', maquinas_con_venta: 2
   };
 }
@@ -180,7 +182,7 @@ const INDICE_CUADRO = {
     maquinas_con_venta: 2, fuente: m === MES_HOY ? 'telemetria' : 'visita_ventas', bytes: 1000
   })),
   ventas: { fuente: 'visita_ventas', dias_telemetria: 0, dias_visita: 3, maquinas_censo: 2, maquinas_censo_con_venta: 2, _nota: 'parcial' },
-  preventivos: null, _preventivos: 'no hay fuente'
+  preventivos: { fuente: 'sat_averias' }, _preventivos: 'las tareas de SAT con operacion de preventivo'
 };
 
 const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8' };
@@ -499,6 +501,10 @@ const servidor = http.createServer((pet, res) => {
       !(await pagina.isVisible('#filtroLugar select')));
     const tabla = await pagina.textContent('#visitLogTable');
     comprueba_que('la tabla de visitas ensena las de marzo de 2025', tabla.includes('2025'), tabla.slice(0, 120));
+    const preventivos = await pagina.textContent('#preventiveTable');
+    comprueba_que('el preventivo de la SAT sale en su tabla', preventivos.includes('E-11887'), preventivos.slice(0, 120));
+    const averias = (await pagina.textContent('#operationTable')) + (await pagina.textContent('#issueTable'));
+    comprueba_que('y no como averia', averias.includes('No enfría') && !averias.includes('Preventivo'), averias.slice(0, 160));
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
   }

@@ -103,7 +103,10 @@ pon("crudo/recaudacion", "recaudacion", AYER,
 pon("crudo/sat_averias", "sat_averias", AYER,
     [{"matricula": "00SE0000", "categoria": "ATENCION AL CLIENTE", "tipo_tarea": "A", "centro": "AIRBUS GETAFE"}] * 40
     + [{"matricula": "A1", "categoria": "AVERIAS TECNICAS", "tipo_tarea": "A", "centro": "AIRBUS GETAFE"}] * 12
-    + [{"matricula": "A1", "categoria": "AVERIAS TECNICAS", "tipo_tarea": "E", "centro": "AIRBUS GETAFE"}] * 3)
+    + [{"matricula": "A1", "categoria": "AVERIAS TECNICAS", "tipo_tarea": "E", "centro": "AIRBUS GETAFE"}] * 3
+    # El preventivo de verdad: serie E con operacion de preventivo (docs/50).
+    + [{"matricula": "A1", "categoria": "Solicitudes internas", "tipo_tarea": "E", "centro": "AIRBUS GETAFE",
+        "operacion": "Preventivo Electrodomésticos Airbus (Interno)"}] * 2)
 
 pon("crudo/sat_eventos", "sat_eventos", AYER,
     [{"averia_id": 1, "estado": 0, "fecha": f"{AYER}T08:00:00", "matricula": "A1"},
@@ -266,10 +269,11 @@ comprueba("efectivo ciego de enero", enero["efectivo_sin_telemetria"], 200.0)
 comprueba("100 % ciego", enero["pct_ciego"], 100.0)
 
 print("\nSAT: fuera la matricula ficticia")
-comprueba("55 tareas leidas", airbus["sat"]["tareas_con_ficticia"], 55)
-comprueba("15 sobre maquinas reales", airbus["sat"]["tareas"], 15)
-comprueba("12 averias tecnicas", airbus["sat"]["averias_tecnicas"], 12)
-comprueba("3 preventivos", airbus["sat"]["preventivos"], 3)
+comprueba("57 tareas leidas", airbus["sat"]["tareas_con_ficticia"], 57)
+comprueba("17 sobre maquinas reales", airbus["sat"]["tareas"], 17)
+comprueba("12 averias tecnicas: la serie E no cuenta", airbus["sat"]["averias_tecnicas"], 12)
+comprueba("2 preventivos: los de operacion de preventivo, no toda la serie E",
+          airbus["sat"]["preventivos"], 2)
 comprueba("6 h de cierre", airbus["sat"]["horas_cierre"]["mediana"], 6.0)
 
 print("\nJornadas: temperatura, km y GPS (solo en el panel interno)")
@@ -486,7 +490,7 @@ comprueba("un centro", len(pc), 1)
 comprueba("se llama como en VenCloud", pc[0]["centro"], "AIRBUS GETAFE")
 comprueba("con sus 100 visitas", pc[0]["visitas"], 100)
 comprueba("y una maquina", pc[0]["maquinas"], 1)
-comprueba("15 tareas de SAT", pc[0]["tareas_sat"], 15)
+comprueba("17 tareas de SAT", pc[0]["tareas_sat"], 17)
 comprueba("7 minutos de media", pc[0]["min_medio"], 7.0)
 comprueba("el interno ve los dos centros", len(interno["servicio"]["por_centro"]), 2)
 comprueba("ordenados por visitas", interno["servicio"]["por_centro"][0]["visitas"], 100)
@@ -494,7 +498,7 @@ comprueba("ordenados por visitas", interno["servicio"]["por_centro"][0]["visitas
 print("\nUna maquina reincidente dice de que centro es")
 rein = airbus["sat"]["reincidentes"]
 comprueba("A1 reincide", rein[0]["m"], "A1")
-comprueba("con 15 tareas", rein[0]["n"], 15)
+comprueba("con 17 tareas", rein[0]["n"], 17)
 comprueba("y su centro delante", rein[0]["c"], "AIRBUS GETAFE")
 
 print("\nInventario y existencias: solo el ultimo cierre, nunca la suma")

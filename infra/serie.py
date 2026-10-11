@@ -243,11 +243,12 @@ class Dia:
     def come_sat(self, filas):
         for t in R.tareas_de_maquina(filas):
             self.sat_tareas += 1
-            if R.es_preventivo(t):
+            # El preventivo, por la operacion (docs/50); la serie E entera no lo es.
+            if R.es_operacion_preventiva(R.v(t, "operacion", "")):
                 self.sat_preventivos += 1
-            elif R.es_averia_tecnica(t):
+            if R.es_averia_tecnica(t) and not R.es_solicitud_especial(t):
                 self.sat_averias += 1
-            if R.es_fallo_tecnico(t) and not R.es_preventivo(t):
+            if R.es_fallo_tecnico(t) and not R.es_solicitud_especial(t):
                 self.sat_fallos += 1
 
     def come_sat_eventos(self, filas):

@@ -85,7 +85,7 @@ SECCIONES_CUADRO = {
     "venta_baja":        ("Máquinas con venta baja",            ("ventas",)),
     "maquinas_centro":   ("Máquinas por centro",                ("ventas",)),
     "listado_visitas":   ("Listado de visitas",                 ("visitas",)),
-    "preventivos":       ("Mantenimientos preventivos",         ()),
+    "preventivos":       ("Mantenimientos preventivos",         ("incidencias",)),
     "conclusiones":      ("Conclusiones",                       TODOS_FLUJOS),
 }
 
