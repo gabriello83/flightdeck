@@ -88,8 +88,9 @@ CLAVE_CENSO_ANTERIOR = "cabina/_censo/anterior.json"
 # El maestro de rutas: lo unico que dice de que delegacion es cada almacen
 # (informe general operativo, docs/51).
 CLAVE_RUTAS = os.environ.get("RUTAS", "maestros/rutas/m_rutas.json.gz")
-# El plan de visitas de cada dia (D12, docs/17). Hasta que el informe exista
-# en VenCloud y en el manifiesto no hay fichero, y el cuadrado de rutas lo dice.
+# El plan de visitas de cada dia (D12, informe 184 de VenCloud, docs/17). Un dia
+# sin fichero (los anteriores al 13-oct-2026) no tiene plan, y el cuadrado de
+# rutas lo dice.
 PLAN_VISITAS = ("crudo/rutas_plan_visitas", "rutas_plan_visitas")
 
 # Que informe alimenta que bloque, y EN QUE ORDEN SE LEE.
