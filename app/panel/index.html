@@ -166,6 +166,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
       <span id="quien"></span>
     </div>
     <div class="acciones">
+      <button class="btn" id="bOperativo" type="button" hidden>Informe general</button>
       <button class="btn" id="bCuadro" type="button" hidden>Cuadro de mando</button>
       <button class="btn" id="bPreguntar" type="button" hidden>Preguntar</button>
       <button class="btn" id="bAvisos" type="button" hidden>Avisos</button>
@@ -1227,6 +1228,16 @@ function notaDelPeriodo(T, lugar){
   if((YO.sesiones||[]).includes("cuadro")) $("#bCuadro").hidden = false;
   $("#bCuadro").addEventListener("click", ()=>{ location.href = "/cuadro/"; });
 
+  /* Desde el informe general operativo se llega con ?ver=<sesion>#<panel>:
+     la seccion que toca, ya filtrada, y el panel a la vista. Una sesion que
+     este perfil no tiene se ignora: se queda en «Todo». */
+  if(YO.tipo !== "cliente"){
+    $("#bOperativo").hidden = false;
+    $("#bOperativo").addEventListener("click", ()=>{ location.href = "/operativo/"; });
+  }
+  const ver = new URLSearchParams(location.search).get("ver");
+  if(ver && (YO.sesiones||[]).includes(ver)) FILTRO = ver;
+
   PANEL_VENTANA = PANEL;
   PANELES = definePaneles(PANEL, YO);
   pintaKpis();
@@ -1243,6 +1254,10 @@ function notaDelPeriodo(T, lugar){
     + " Donde no hay medición, la cifra no aparece en vez de estimarse.";
   $("#pie").hidden = false;
   pintaTodo();
+  $("#bOrden").hidden = !(FILTRO==="todo" && YO.permisos && YO.permisos.reordenar);
+  const ancla = decodeURIComponent(location.hash.slice(1));
+  const destino = ancla && [...document.querySelectorAll("#rejilla .panel")].find(x => x.dataset.id === ancla);
+  if(destino) destino.scrollIntoView({block:"start"});
   addEventListener("resize", ()=>{ clearTimeout(window._rz); window._rz=setTimeout(pintaTodo,200); });
 })();
 </script>

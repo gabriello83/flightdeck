@@ -317,6 +317,49 @@ def recorta_dia(fila, perfil):
 
 
 # ----------------------------------------------------------------------
+# el informe general operativo (docs/51)
+# ----------------------------------------------------------------------
+# Que bloque del panel pide cada cuadrado, en el orden de la pagina. Es la
+# misma tijera que el panel y la serie: un perfil que no ve la SAT en el panel
+# tampoco ve aqui el cuadrado de averias. Los almacenes son nuestro stock
+# (`inventario.existencias`, CAMPOS_INTERNOS): solo direccion y administracion.
+CUADRADOS = (
+    ("rutas", "servicio"),
+    ("averias", "sat"),
+    ("almacenes", "inventario"),
+    ("furgonetas", "servicio"),
+    ("pdvs", "instalaciones"),
+    ("ventas", "dinero"),
+    ("reposiciones", "servicio"),
+    ("telemetria", "instalaciones"),
+)
+
+
+def cuadrados_de(perfil):
+    """Los cuadrados que ve este perfil, en el orden de la pagina."""
+    necesarios = bloques_de(perfil)
+    tipo = perfil.get("tipo", "cliente")
+    out = [c for c, bloque in CUADRADOS if bloque in necesarios]
+    if nivel_de(tipo) < NIVEL["direccion"] and "almacenes" in out:
+        out.remove("almacenes")
+    return out
+
+
+def recorta_operativo(datos, perfil):
+    """El fichero del informe operativo con los cuadrados que el perfil ve.
+
+    Lo que no ve no sale de aqui: ni en el dia, ni en la foto.
+    """
+    ve = cuadrados_de(perfil)
+    out = {k: datos.get(k) for k in ("generado", "ultimo_dia", "umbrales", "_nota")}
+    out["cuadrados"] = ve
+    out["dias"] = {f: {c: v for c, v in (d or {}).items() if c in ve}
+                   for f, d in (datos.get("dias") or {}).items()}
+    out["foto"] = {c: v for c, v in (datos.get("foto") or {}).items() if c in ve}
+    return out
+
+
+# ----------------------------------------------------------------------
 # lo que el asistente puede responder
 # ----------------------------------------------------------------------
 def contexto_asistente(panel_recortado, perfil):

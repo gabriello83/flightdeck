@@ -153,6 +153,19 @@ def encamina(evento, metodo, ruta):
             return serie_centros(perfil, q["centros"])
         return serie(perfil, q.get("mes"))
 
+    # El informe general operativo (docs/51): los cuadrados de los ultimos dias.
+    # Como el panel, el fichero es el del perfil de la sesion y no hay nada que
+    # pedir: ni perfil ni dia. La pagina elige el dia entre los que llegan.
+    if ruta == "/api/operativo" and metodo == "GET":
+        if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
+            raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
+        try:
+            datos = json.loads(_crudo(f"cabina/{perfil.get('perfil_id', '')}/operativo.json"))
+        except Exception:
+            return r(503, {"error": "El informe operativo todavia no se ha calculado.",
+                           "_nota": "Lo escriben los agregados cada noche (4:45)."})
+        return r(200, A.recorta_operativo(datos, perfil))
+
     # El orden lo elige el usuario y se guarda en el SERVIDOR: asi lo encuentra
     # igual desde otro ordenador. El navegador no es el sitio donde vive.
     if ruta == "/api/orden":

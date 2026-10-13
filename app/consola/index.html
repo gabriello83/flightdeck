@@ -162,6 +162,7 @@ footer.pie{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px so
   <header class="top">
     <div class="marca"><b>Consola</b><span id="quien"></span></div>
     <div class="acciones">
+      <button class="btn" id="bOperativo" type="button">Informe general</button>
       <button class="btn" id="bPanel" type="button">Panel</button>
       <button class="btn" id="bAvisos" type="button">Avisos</button>
       <button class="btn" id="bTema" type="button">Modo oscuro</button>
@@ -224,6 +225,7 @@ function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
     document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
   });
 })();
+$("#bOperativo").addEventListener("click", ()=>{ location.href="/operativo/"; });
 $("#bPanel").addEventListener("click", ()=>{ location.href="/panel/"; });
 $("#bAvisos").addEventListener("click", ()=>{ location.href="/avisos/"; });
 $("#bSalir").addEventListener("click", async ()=>{
