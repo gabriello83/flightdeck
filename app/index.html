@@ -152,12 +152,13 @@ async function aDondeVa(){
   if(!r.ok) return "/panel/";
   const yo = await r.json();
   /* El administrador va a su consola; un cliente, siempre al cuadro, que es lo
-     unico que tiene (docs/49); quien mas tenga el cuadro, tambien; el resto, al
-     panel. Quien decide es la API: la pagina solo obedece a lo que le diga el
-     perfil. */
+     unico que tiene (docs/49); el resto, al informe general operativo. Quien
+     decide es la API: la pagina solo obedece a lo que le diga el perfil. */
   if(yo.tipo === "admin") return "/consola/";
   if(yo.tipo === "cliente") return "/cuadro/";
-  return (yo.sesiones || []).includes("cuadro") ? "/cuadro/" : "/panel/";
+  /* Operaciones y direccion empiezan en el informe general operativo, con el
+     dia de ayer (docs/51); de ahi, cada cuadrado lleva a su seccion. */
+  return "/operativo/";
 }
 
 $("#form").addEventListener("submit", async e => {

@@ -1355,6 +1355,42 @@ left join stocks.articulos a  on a.id = mt.recambioid
 where t.fecha >= '{0}' and t.fecha <= '{1} 23:59:59'
 ```
 
+## D12 · EXT_RUTAS_PLAN_VISITAS
+
+El plan de visitas de cada día (`vending.planvisitas`): qué punto de venta tocaba visitar y en
+qué ruta. Es lo que mide el cuadrado de **Rutas** del informe general operativo (docs/51): visitas
+hechas contra visitas previstas. Los `join` cuelgan del plan, no del parte, para que una visita
+prevista y no hecha conserve su punto de venta y su centro (el fallo del informe 44, docs/04).
+
+```sql
+select
+  pv.id         as id,
+  cast(pv.fecha as text) as fecha,
+  r.codigo      as cod_ruta,
+  r.denomina    as ruta,
+  del.nombre    as delegacion,
+  pdv.codigo    as cod_pdv,
+  m.codigo      as matricula,
+  cen.numcentro as num_centro,
+  cen.denomina  as centro,
+  cli.codigo    as cod_cliente,
+  cli.nombre    as cliente
+from vending.planvisitas pv
+left join vending.rutas r               on r.id   = pv.rutaid
+left join general.delegaciones del      on del.id = r.delegacionid
+left join vending.pdvs pdv              on pdv.id = pv.pdvid
+left join recursos.maquinas m           on m.id   = pdv.maquinaid
+left join comercial.clientescentros cen on cen.id = pdv.clientecentroid
+left join comercial.clientes cli        on cli.id = cen.clienteid
+where pv.fecha >= '{0}' and pv.fecha <= '{1} 23:59:59'
+order by pv.fecha, r.codigo
+```
+
+Parámetros: **FECHA DESDE (Orden 0)** y **FECHA HASTA (Orden 1)**, tipo Fecha. Al manifiesto entra
+con `"id": "rutas_plan_visitas"`, `"clave_fecha": "propia"` y `"destino": "crudo/rutas_plan_visitas"`;
+ese destino es el que lee la Lambda de agregados. Si VenCloud rechaza `pv.id`, se quita esa línea:
+la cuenta va por punto de venta y no lo necesita.
+
 ## D11 · EXT_SAT_CATALOGO  *(sin parámetros)*  ·  **probado**
 
 **101 operaciones y 6 categorías.** Las dos sondas confirmaron las doce columnas que había

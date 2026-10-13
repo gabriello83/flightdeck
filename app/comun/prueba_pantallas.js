@@ -137,6 +137,31 @@ const API = {
       { mes: MES_HOY, dias: 1, visitas: 2, importe: 50, tareas: 2, carga: 100 }
     ]
   },
+  // El informe general operativo (docs/51), con la forma que escribe
+  // infra/operativo.py ya recortada por la API: un dia con todo y uno sin plan.
+  '/api/operativo': {
+    generado: new Date().toISOString(), ultimo_dia: iso(AYER), umbrales: { verde: 95, amarillo: 75 },
+    cuadrados: ['rutas', 'averias', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria'],
+    dias: {
+      [iso(AYER)]: {
+        rutas: { previstas: 400, hechas: 350, pct: 87.5, color: 'amarillo', visitas: 1100, fuera_de_plan: 12 },
+        averias: { cerradas: 43, a_tiempo: 30, pct: 69.8, color: 'rojo', horas: 24, sin_tarea: 2 },
+        furgonetas: { activas: 40, visitas: 1100, visitas_sin_vehiculo: 110 },
+        ventas: { importe: 49859.02, unidades: 54119, maquinas: 1893, fuente: 'telemetria', imposibles: 0 },
+        reposiciones: { unidades: 52168, por_clase: [{ clase: 'Snack', unidades: 30340 }, { clase: 'Bebida fría', unidades: 19448 }], consumibles: 88124, valor: 27616 },
+        telemetria: { auditables: 2253, con_dex: 2200, pct: 97.6, color: 'verde' }
+      },
+      '2026-10-01': {
+        rutas: { sin_dato: 'Falta el plan de visitas.', visitas: 900 },
+        averias: { sin_dato: 'Ese día no se cerró ninguna avería.', cerradas: 0, sin_tarea: 0 },
+        furgonetas: { activas: 30, visitas: 900, visitas_sin_vehiculo: 0 },
+        ventas: { sin_dato: 'Ese día no llegó venta.' },
+        reposiciones: { unidades: 0, por_clase: [], consumibles: 0, valor: 0 },
+        telemetria: { auditables: 2253, con_dex: 900, pct: 39.9, color: 'rojo' }
+      }
+    },
+    foto: { pdvs: { activos: 3195, maquinas: 3165 }, almacenes: { valor: 502429.74, periodo: '2026-09', por_almacen: [{ almacen: 'A', delegacion: '', valor: 1 }] } }
+  },
   '/api/estado-carga': { ultima_carga: new Date().toISOString(), dias_pedidos: [iso(AYER)], descargas_ok: 75, descargas_fallidas: 0, bytes: 12345678, filas_por_informe: { visita_cabecera: 1000 }, errores: [], retraso_dias: 0 },
   '/api/admin/usuarios': { usuarios: [{ _id: 'eva@airbus.com', nombre: 'Eva', perfil_id: 'cli-airbus', estado: 'activo' }] },
   '/api/admin/perfiles': {
@@ -254,8 +279,11 @@ const servidor = http.createServer((pet, res) => {
     const errores = [];
     pagina.on('pageerror', e => errores.push(String(e)));
     pagina.on('console', m => { if (m.type() === 'error') errores.push(m.text()); });
+    // Un solo origen (CLAUDE.md): cualquier peticion a otro dominio se apunta.
+    const fuera = [];
+    pagina.on('request', q => { if (!q.url().startsWith(base) && !q.url().startsWith('data:')) fuera.push(q.url()); });
     await pagina.goto(base + ruta, { waitUntil: 'networkidle' });
-    return { pagina, errores };
+    return { pagina, errores, fuera };
   }
 
   // ------------------------------------------------- un cliente, al cuadro
@@ -549,9 +577,45 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
+  console.log('\nEl informe general operativo');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno',
+      sesiones: ['resumen', 'venta_consumo', 'disponibilidad', 'instalaciones'],
+      catalogo_sesiones: { resumen: 'Resumen', venta_consumo: 'Venta y consumo', disponibilidad: 'Disponibilidad', instalaciones: 'Instalaciones y altas' } };
+    const { pagina, errores, fuera } = await abre('/operativo/');
+    await pagina.waitForSelector('#cuadros .cuadro');
+    comprueba('arranca en ayer', await pagina.inputValue('#dia'), iso(AYER));
+    comprueba('los ocho cuadrados, en su orden',
+      await pagina.$$eval('#cuadros .cuadro', x => x.map(c => c.dataset.id)),
+      ['rutas', 'averias', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria']);
+    comprueba('el semaforo: rutas al 87,5 % en amarillo, averias en rojo, telemetria en verde',
+      await pagina.$$eval('#cuadros .cuadro', x => x.filter(c => ['rutas', 'averias', 'telemetria'].includes(c.dataset.id))
+        .map(c => ['verde', 'amarillo', 'rojo'].find(k => c.classList.contains(k)))),
+      ['amarillo', 'rojo', 'verde']);
+    comprueba('rutas lleva a su seccion del panel',
+      await pagina.getAttribute('.cuadro[data-id="rutas"]', 'href'), '/panel/?ver=resumen#visitas_dia');
+    comprueba_que('almacenes no tiene seccion todavia, y lo dice',
+      (await pagina.evaluate(() => document.querySelector('.cuadro[data-id="almacenes"]').tagName)) === 'DIV'
+      && (await pagina.textContent('.cuadro[data-id="almacenes"]')).includes('Sin sección todavía'));
+    await pagina.selectOption('#dia', '2026-10-01');
+    comprueba_que('un dia sin plan dice el motivo, no un cero',
+      (await pagina.textContent('.cuadro[data-id="rutas"]')).includes('Falta el plan de visitas'));
+    comprueba('y ese cuadrado no lleva color de semaforo',
+      await pagina.$eval('.cuadro[data-id="rutas"]', c => c.classList.contains('sin')), true);
+    await pagina.selectOption('#dia', iso(AYER));
+    await Promise.all([pagina.waitForURL('**/panel/**'), pagina.click('.cuadro[data-id="averias"]')]);
+    await pagina.waitForSelector('#rejilla .panel');
+    comprueba('al pulsar averias, el panel abre filtrado en su seccion',
+      await pagina.$$eval('#filtros button[aria-pressed="true"]', x => x.map(b => b.dataset.f)), ['disponibilidad']);
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
   await navegador.close();
   servidor.close();
   console.log();
   if (fallos) { console.log(`${fallos} PRUEBAS FALLIDAS`); process.exit(1); }
-  console.log('Las tres pantallas estan bien.');
+  console.log('Las pantallas estan bien.');
 })().catch(e => { console.error(e); process.exit(1); });

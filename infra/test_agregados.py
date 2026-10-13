@@ -198,6 +198,13 @@ ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"] = gzip.compress(json.d
      "telemetria": 40, "dispositivo_telemetria": ""},
 ]).encode())
 
+# El plan de visitas de ayer (D12): un punto de venta de AIRBUS y uno de Consum.
+pon("crudo/rutas_plan_visitas", "rutas_plan_visitas", AYER,
+    [{"cod_pdv": "P1", "num_centro": "1001", "centro": "AIRBUS GETAFE", "cod_cliente": "C7",
+      "cliente": "AIRBUS OPERATIONS SL", "delegacion": "Madrid"},
+     {"cod_pdv": "Q1", "num_centro": "2002", "centro": "CONSUM MURCIA", "cod_cliente": "C9",
+      "cliente": "CONSUM S COOP V", "delegacion": "Levante - Murcia"}])
+
 ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
     {"id": "interno", "ambito": {}},
     {"id": "cli-airbus", "ambito": {"clientes": ["AIRBUS"], "centros": [], "delegaciones": []}},
@@ -221,6 +228,28 @@ airbus = json.loads(ALMACEN["cabina/cli-airbus/panel.json"])
 
 print("\nSe escriben los dos paneles")
 comprueba("dos ficheros", len(res["ficheros"]), 2)
+
+print("\nEl informe general operativo: un fichero por perfil, con su ambito")
+op_int = json.loads(ALMACEN["cabina/interno/operativo.json"])
+op_air = json.loads(ALMACEN["cabina/cli-airbus/operativo.json"])
+_ayer = AYER.isoformat()
+comprueba("arranca en ayer", op_air["ultimo_dia"], _ayer)
+comprueba("el interno tiene en el plan los dos puntos de venta",
+          op_int["dias"][_ayer]["rutas"]["previstas"], 2)
+comprueba("AIRBUS, solo el suyo", op_air["dias"][_ayer]["rutas"]["previstas"], 1)
+comprueba("el dia sin plan lo dice, no da cero",
+          "sin_dato" in op_air["dias"][(AYER - datetime.timedelta(days=1)).isoformat()]["rutas"], True)
+comprueba("almacenes: el ultimo cierre, no la suma de dos",
+          (op_int["foto"]["almacenes"]["valor"], op_int["foto"]["almacenes"]["periodo"]), (9000.0, "2026-09"))
+comprueba("AIRBUS no tiene almacenes, y se dice", "sin_dato" in op_air["foto"]["almacenes"], True)
+comprueba("AIRBUS no cuenta las maquinas de Consum como auditables",
+          op_air["dias"][_ayer]["telemetria"]["auditables"]
+          < op_int["dias"][_ayer]["telemetria"]["auditables"], True)
+comprueba("la reposicion de AIRBUS no lleva la de Consum",
+          op_air["dias"][_ayer]["reposiciones"]["unidades"]
+          < op_int["dias"][_ayer]["reposiciones"]["unidades"], True)
+comprueba("el resumen dice que cuadrados se quedaron sin dato",
+          "almacenes" not in res["operativo"]["interno"]["sin_dato"], True)
 
 print("\nInterno: ve los dos centros")
 comprueba("310 partes leidos", interno["servicio"]["partes_totales"], 310)

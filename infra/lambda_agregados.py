@@ -69,6 +69,7 @@ import boto3
 import reglas as R
 import serie as S
 import cuadro as CU
+import operativo as OP
 from cuadro import Cuadro
 
 s3 = boto3.client("s3")
@@ -84,6 +85,12 @@ TABLA = os.environ.get("TABLA", f"{_PREFIJO}-plataforma")
 CLAVE_CENSO = os.environ.get("CENSO", "maestros/instalaciones/m_instalaciones.json.gz")
 # Donde se guarda el censo de la ultima ejecucion, para saber que es nuevo.
 CLAVE_CENSO_ANTERIOR = "cabina/_censo/anterior.json"
+# El maestro de rutas: lo unico que dice de que delegacion es cada almacen
+# (informe general operativo, docs/51).
+CLAVE_RUTAS = os.environ.get("RUTAS", "maestros/rutas/m_rutas.json.gz")
+# El plan de visitas de cada dia (D12, docs/17). Hasta que el informe exista
+# en VenCloud y en el manifiesto no hay fichero, y el cuadrado de rutas lo dice.
+PLAN_VISITAS = ("crudo/rutas_plan_visitas", "rutas_plan_visitas")
 
 # Que informe alimenta que bloque, y EN QUE ORDEN SE LEE.
 #
@@ -1102,6 +1109,25 @@ SERIE_COME = {
 }
 
 
+def come_operativo(op, dia, nombre, filas, clase_de):
+    """Lo que hace el informe general operativo con las filas de una fuente.
+
+    Las averias se miran en TODA la ventana: una cerrada ayer pudo abrirse hace
+    un mes. Lo demas, solo en los dias que se publican.
+    """
+    if nombre == "sat":
+        op.come_sat(filas)
+    elif nombre == "sat_eventos":
+        op.come_sat_eventos(filas)
+    od = op.dia(dia)
+    if od is None:
+        return
+    if nombre == "partes":
+        od.come_partes(filas)
+    elif nombre == "lineas":
+        od.come_lineas(filas, clase_de)
+
+
 def come_serie(dia, nombre, filas):
     metodo = SERIE_COME.get(nombre)
     if metodo:
@@ -1164,6 +1190,11 @@ def lambda_handler(event, context):
         print(f"AVISO: el perfil {pid} de la consola no tiene ambito y no se calcula. "
               f"Ponle sus clientes o centros en la consola.")
     acumuladores = [Acumulador(p, hoy) for p in perfiles]
+    # El informe general operativo (docs/51): los ultimos dias, con su cifra tal
+    # cual. En un relleno historico no se escribe: el plan y el censo de hoy no
+    # describen un dia de enero de 2025.
+    publicar = [] if historico else dias[:OP.DIAS_NOCHE]
+    operativos = {acu.perfil["id"]: OP.Operativo(publicar) for acu in acumuladores}
 
     leidas = defaultdict(int)
     mapa = MapaCentros()
@@ -1176,14 +1207,20 @@ def lambda_handler(event, context):
     if censo:
         leidas["instalaciones"] = len(censo)
         mapa.aprende(censo)
+        # La clase de cada maquina, para repartir la reposicion por tipo.
+        clase_de = {R.v(f, "matricula", ""): R.v(f, "clase_pdv", None)
+                    for f in censo if R.v(f, "matricula", "")}
         for acu in acumuladores:
             propias = [f for f in censo if en_ambito(f, acu.ambito, mapa)]
             # El bloque de instalaciones del panel es la foto de HOY: en un
             # relleno historico no se calcula, porque no se escribe panel.
             if not historico:
                 acu.come_instalaciones(propias)
+                operativos[acu.perfil["id"]].come_censo(propias)
             if acu.cuadro:
                 acu.cuadro.come_instalaciones(propias)
+    else:
+        clase_de = {}
     del censo
 
     # EL RECORRIDO VA POR DIAS, Y DENTRO DE CADA DIA POR INFORMES. Antes era al
@@ -1225,8 +1262,15 @@ def lambda_handler(event, context):
             for acu in acumuladores:
                 if nombre == "telemetria" and acu.cuadro:
                     acu.cuadro.hay_telemetria(dia)
+                op = operativos[acu.perfil["id"]]
+                if nombre == "balance" and not historico:
+                    # Sin filtrar: las filas de almacen no traen centro, y de quien
+                    # es cada almacen lo decide OP.almacenes por su delegacion.
+                    op.come_balance(filas)
                 propias = [f for f in filas if en_ambito(f, acu.ambito, mapa)]
                 acu.filas_en_ambito += len(propias)
+                if propias and not historico:
+                    come_operativo(op, dia, nombre, propias, clase_de)
                 if propias and metodo and not historico:
                     getattr(acu, metodo)(propias)
                 if propias:
@@ -1238,6 +1282,16 @@ def lambda_handler(event, context):
             # de un dia en memoria.
             del filas
         leidos.append(dia)
+        for pid, op in operativos.items():
+            od = op.dia(dia)
+            if od is not None:
+                od.pon_venta(del_dia[pid])
+                # El plan del dia: con su ambito, que el plan si trae centro.
+                plan = _json_de(f"{PLAN_VISITAS[0]}/anio={dia.year}/mes={dia.month:02d}/"
+                                f"dia={dia.day:02d}/{PLAN_VISITAS[1]}.json.gz")
+                if plan is not None:
+                    acu = next(a for a in acumuladores if a.perfil["id"] == pid)
+                    od.come_plan([f for f in _filas(plan) if en_ambito(f, acu.ambito, mapa)])
         for pid, d in del_dia.items():
             # Un dia sin una sola fila no se escribe: ocuparia sitio y no dice
             # nada que no diga su ausencia.
@@ -1253,8 +1307,21 @@ def lambda_handler(event, context):
     periodo = {"desde": min(leidos).isoformat(), "hasta": max(leidos).isoformat(),
                "dias": len(dias_leidos)}
 
-    escritos, cuadros = [], {}
+    escritos, cuadros, resumen_operativo = [], {}, {}
     if not historico:
+        rutas = _filas(_json_de(CLAVE_RUTAS))
+        for acu in acumuladores:
+            op = operativos[acu.perfil["id"]]
+            op.pon_almacenes(OP.almacenes(op.balance, rutas, acu.ambito))
+            clave = f"cabina/{acu.perfil['id']}/operativo.json"
+            fichero = op.fichero(acu.perfil["id"], _json_de(clave))
+            escribe(clave, fichero)
+            # Lo que falta, a la vista en la respuesta: un cuadrado sin dato
+            # todos los dias es un informe que no llega, no un dia flojo.
+            ultimo = fichero["dias"].get(fichero["ultimo_dia"] or "", {})
+            resumen_operativo[acu.perfil["id"]] = {
+                "ultimo_dia": fichero["ultimo_dia"],
+                "sin_dato": sorted(k for k, v in ultimo.items() if "sin_dato" in v)}
         nuevos = altas_desde_el_censo_anterior(acumuladores)
         escritos = [escribe(f"cabina/{acu.perfil['id']}/panel.json",
                             acu.panel(hoy, dict(periodo, dias=DIAS),
@@ -1314,6 +1381,8 @@ def lambda_handler(event, context):
         "cuadros": cuadros,
         # Los meses de la serie diaria que ha tocado esta ejecucion, por perfil.
         "serie": series_escritas,
+        # El informe general operativo (docs/51): ultimo dia y cuadrados sin dato.
+        "operativo": resumen_operativo,
     }
     if parado_en:
         # Esto tiene que verse en la RESPUESTA, no solo en el registro: es la

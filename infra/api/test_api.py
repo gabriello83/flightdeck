@@ -481,6 +481,34 @@ del falsos.OBJETOS["cabina/cli-airbus/serie/indice.json"]
 comprueba("sin historico todavia, 503",
           llama("GET", "/api/serie", cookie=COOKIE_ANA)["statusCode"], 503)
 
+print("\nEl informe general operativo: los cuadrados que le tocan a cada perfil")
+_dia = {"rutas": {"pct": 90.0}, "averias": {"pct": 80.0}, "furgonetas": {"activas": 4},
+        "ventas": {"importe": 1000.0}, "reposiciones": {"unidades": 50}, "telemetria": {"pct": 70.0}}
+_op = {"generado": "x", "ultimo_dia": "2026-10-12", "umbrales": {"verde": 95, "amarillo": 75},
+       "dias": {"2026-10-12": _dia},
+       "foto": {"pdvs": {"activos": 9}, "almacenes": {"valor": 500000.0, "periodo": "2026-09"}}}
+falsos.OBJETOS["cabina/ope-sur/operativo.json"] = json.dumps(_op).encode()
+falsos.OBJETOS["cabina/interno/operativo.json"] = json.dumps(dict(_op, ultimo_dia="2026-10-11")).encode()
+# Mas arriba se le dejo a ope-sur solo «servicio»; aqui vuelve a sus tres sesiones.
+pon_fila("PERFIL#ope-sur", dict(_ope, sesiones=["resumen", "venta_consumo", "disponibilidad"]))
+comprueba("un cliente no lo tiene: solo el cuadro",
+          llama("GET", "/api/operativo", cookie=COOKIE_ANA)["statusCode"], 403)
+o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA))
+comprueba("operaciones: los de sus sesiones (servicio, dinero y sat)", o["cuadrados"],
+          ["rutas", "averias", "furgonetas", "ventas", "reposiciones"])
+comprueba("sin almacenes: es nuestro stock, solo direccion", "almacenes" in o["foto"], False)
+comprueba("ni telemetria ni puntos de venta, que piden instalaciones",
+          sorted(o["dias"]["2026-10-12"]), ["averias", "furgonetas", "reposiciones", "rutas", "ventas"])
+comprueba("y el fichero es el de su perfil, aunque pida otro",
+          cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA,
+                          query={"perfil": "interno"}))["ultimo_dia"], "2026-10-12")
+o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_JEFE))
+comprueba("el administrador ve los ocho", len(o["cuadrados"]), 8)
+comprueba("almacenes incluido", o["foto"]["almacenes"]["valor"], 500000.0)
+del falsos.OBJETOS["cabina/ope-sur/operativo.json"]
+comprueba("sin calcular todavia, 503",
+          llama("GET", "/api/operativo", cookie=COOKIE_OLGA)["statusCode"], 503)
+
 print("\nUna ruta que no existe")
 comprueba("404", llama("GET", "/api/loquesea", cookie=COOKIE_JEFE)["statusCode"], 404)
 

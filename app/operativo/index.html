@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Informe operativo · digivend</title>
+<!-- Un solo origen. Esta pagina habla con /api/* del mismo dominio y con nadie
+     mas: hay redes de cliente que cortan las paginas que llaman fuera. La
+     cabecera de verdad la pone CloudFront; esta va por si se abre suelta. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M3 3h4v4H3zm6 0h4v4H9zM3 9h4v4H3zm6 0h4v4H9z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6;
+  --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+  /* El semaforo. El amarillo lleva texto oscuro: con blanco no se lee. */
+  --verde:#15803d; --amarillo:#f2b705; --rojo:#c62828;
+  /* Los cuadrados sin semaforo, cada uno de su color. Ninguno es verde, ni
+     ambar ni rojo, para que no se confundan con un estado. */
+  --c-almacenes:#6d4fc2; --c-furgonetas:#1f6f8b; --c-pdvs:#2a62c9;
+  --c-ventas:#a63d84; --c-reposiciones:#4a5568;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --sombra:none;
+    --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
+    --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
+    --c-ventas:#9c3a7c; --c-reposiciones:#4b5563;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --sombra:none;
+  --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
+  --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
+  --c-ventas:#9c3a7c; --c-reposiciones:#4b5563;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1240px;margin:0 auto;padding:18px 16px 72px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+.marca{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn,a.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);text-decoration:none;
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
+button.btn:hover,a.btn:hover{border-color:var(--tinta-3)}
+.barra{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:16px 0 6px}
+.barra label{font-size:13px;color:var(--tinta-2);display:flex;align-items:center;gap:8px}
+.barra select{
+  font:inherit;font-size:14px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:5px 8px
+}
+.leyenda{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--tinta-2)}
+.leyenda i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.nota{
+  margin:12px 0 4px;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+.nota.mal{border-left-color:var(--rojo)}
+.cuadros{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-top:16px}
+.cuadro{
+  --fondo-c:var(--tarjeta); --tinta-c:#fff;
+  position:relative;display:flex;flex-direction:column;min-height:200px;
+  aspect-ratio:1/1;max-height:290px;
+  background:var(--fondo-c);color:var(--tinta-c);border-radius:14px;padding:16px 18px;
+  text-decoration:none;box-shadow:var(--sombra);overflow:hidden;
+  transition:transform .12s ease-out, box-shadow .12s ease-out;
+}
+a.cuadro:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.16)}
+a.cuadro:focus-visible{outline:3px solid var(--s1);outline-offset:3px}
+.cuadro .et{font-size:13px;font-weight:650;text-transform:uppercase;letter-spacing:.05em;opacity:.92}
+.cuadro .vl{
+  font-size:clamp(34px,5vw,46px);font-weight:700;letter-spacing:-.03em;line-height:1.05;
+  margin-top:auto;font-variant-numeric:tabular-nums;overflow-wrap:anywhere
+}
+.cuadro .sub{font-size:13.5px;line-height:1.4;margin-top:6px;opacity:.95;overflow-wrap:anywhere}
+.cuadro .pie{font-size:12px;margin-top:12px;opacity:.85;display:flex;justify-content:space-between;gap:8px}
+.cuadro .estado{
+  position:absolute;top:14px;right:14px;font-size:11.5px;font-weight:650;
+  padding:2px 9px;border-radius:999px;background:rgba(255,255,255,.22)
+}
+.cuadro.amarillo{--tinta-c:#1d1a10}
+.cuadro.amarillo .estado{background:rgba(0,0,0,.12)}
+.cuadro.sin{
+  --tinta-c:var(--tinta);background:var(--tarjeta);border:1px dashed var(--borde-fuerte);box-shadow:none
+}
+.cuadro.sin .vl{font-size:22px;color:var(--tinta-2);font-weight:600;letter-spacing:-.01em}
+.cuadro.sin .sub{color:var(--tinta-2)}
+footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+#cargando{padding:40px 0;color:var(--tinta-2)}
+@media (max-width:560px){
+  .cuadros{grid-template-columns:1fr 1fr;gap:10px}
+  .cuadro{aspect-ratio:auto;min-height:168px;padding:13px 13px}
+  .cuadro .vl{font-size:28px}
+  .cuadro .sub{font-size:12.5px}
+  .cuadro .estado{position:static;align-self:flex-start;margin-top:6px}
+  .cuadro .pie{justify-content:flex-end}
+  .cuadro .pie .foto{display:none}
+}
+@media (max-width:360px){ .cuadros{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="env">
+  <header class="top">
+    <div class="marca">
+      <b>Informe general operativo</b>
+      <span id="quien"></span>
+    </div>
+    <div class="acciones">
+      <a class="btn" href="/panel/" id="bPanel">Panel completo</a>
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn" id="bSalir" type="button">Salir</button>
+    </div>
+  </header>
+
+  <div class="barra" id="barra" hidden>
+    <label>Día <select id="dia"></select></label>
+    <div class="leyenda" aria-label="Colores">
+      <span><i style="background:var(--verde)"></i><span id="lVerde"></span></span>
+      <span><i style="background:var(--amarillo)"></i><span id="lAmarillo"></span></span>
+      <span><i style="background:var(--rojo)"></i><span id="lRojo"></span></span>
+    </div>
+  </div>
+
+  <div id="cargando">Cargando…</div>
+  <div class="nota" id="aviso" hidden></div>
+  <div class="cuadros" id="cuadros" hidden></div>
+
+  <footer id="pie" hidden></footer>
+</div>
+
+<script>
+/* ===================================================================
+   Informe general operativo · digivend.es  (docs/51)
+
+   Ocho cuadrados, cada uno con la cifra de un dia, que llevan a la seccion
+   del panel que les toca. Lo que llega ya viene recortado por la API: el
+   fichero es el del perfil de la sesion, con los cuadrados que sus sesiones
+   permiten. Esta pagina no decide quien ve que: solo dibuja.
+
+   Los colores de rutas, averias y telemetria son el semaforo; los demas
+   cuadrados llevan cada uno su color, que no es un estado. Un cuadrado sin
+   dato no sale en gris con un cero: sale con el motivo.
+   =================================================================== */
+const CLAVE_TEMA = "digivend.tema";
+const eur  = n => new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n||0);
+const num  = n => new Intl.NumberFormat("es-ES").format(Math.round(n||0));
+const pct  = n => new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(n||0) + " %";
+const esc  = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = s => document.querySelector(s);
+
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = $("#bTema");
+  const oscuro = () => document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const pinta = () => { b.textContent = oscuro() ? "Modo claro" : "Modo oscuro"; };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const n = oscuro() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+  });
+})();
+$("#bSalir").addEventListener("click", async ()=>{
+  try{ await fetch("/api/salir", {method:"POST", credentials:"same-origin"}); }catch(e){}
+  location.href = "/";
+});
+
+/* A donde lleva cada cuadrado: la sesion del panel y el panel dentro de ella.
+   Gabriele decidira en un segundo paso que se ve al pulsar cada uno; hasta
+   entonces, la seccion que ya existe. Almacenes y furgonetas no tienen todavia
+   ninguna seccion en el panel, y se dice en vez de llevar a cualquier sitio. */
+const DESTINO = {
+  rutas:        {sesion:"resumen",       panel:"visitas_dia"},
+  averias:      {sesion:"disponibilidad",panel:"sat"},
+  almacenes:    null,
+  furgonetas:   null,
+  pdvs:         {sesion:"instalaciones", panel:"censo"},
+  ventas:       {sesion:"venta_consumo", panel:"recaudacion"},
+  reposiciones: {sesion:"venta_consumo", panel:"carga"},
+  telemetria:   {sesion:"instalaciones", panel:"incidencias"},
+};
+const TITULO = {
+  rutas:"Rutas", averias:"Averías", almacenes:"Almacenes", furgonetas:"Furgonetas",
+  pdvs:"Puntos de venta activos", ventas:"Ventas", reposiciones:"Reposiciones", telemetria:"Telemetría",
+};
+
+let YO=null, DATOS=null;
+
+function fechaLarga(s){
+  const d = new Date(String(s)+"T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(s)
+    : d.toLocaleDateString("es-ES",{weekday:"long", day:"numeric", month:"long", year:"numeric"});
+}
+function isoLocal(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function mesLargo(p){
+  const d = new Date(String(p)+"-01T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(p) : d.toLocaleDateString("es-ES",{month:"long", year:"numeric"});
+}
+
+/* Lo que pinta cada cuadrado: valor, linea de debajo y, si lleva semaforo, su
+   porcentaje. `d` es el dia elegido; `f`, la foto de la noche. */
+function contenido(id, d, f){
+  const x = id==="pdvs" || id==="almacenes" ? f[id] : d[id];
+  if(!x) return null;
+  if(x.sin_dato) return {sin:x.sin_dato};
+  switch(id){
+    case "rutas": return {vl:pct(x.pct), pct:x.pct,
+      sub:`${num(x.hechas)} de ${num(x.previstas)} visitas previstas`
+        + (x.fuera_de_plan ? ` · ${num(x.fuera_de_plan)} fuera del plan` : "")};
+    case "averias": return {vl:pct(x.pct), pct:x.pct,
+      sub:`${num(x.a_tiempo)} de ${num(x.cerradas)} cerradas en menos de ${num(x.horas)} h`};
+    case "telemetria": return {vl:pct(x.pct), pct:x.pct,
+      sub:`${num(x.con_dex)} de ${num(x.auditables)} máquinas mandaron su lectura (DEX)`};
+    case "almacenes": return {vl:eur(x.valor),
+      sub:`Cierre de ${mesLargo(x.periodo)} · ${num((x.por_almacen||[]).length)} almacenes`};
+    case "furgonetas": return {vl:num(x.activas),
+      sub:`con visitas ese día · ${num(x.visitas)} visitas`
+        + (x.visitas_sin_vehiculo ? ` (${num(x.visitas_sin_vehiculo)} sin vehículo)` : "")};
+    case "pdvs": return {vl:num(x.activos), sub:`${num(x.maquinas)} máquinas instaladas`};
+    case "ventas": return {vl:eur(x.importe),
+      sub:`${num(x.unidades)} unidades · ${num(x.maquinas)} máquinas`
+        + (x.fuente==="telemetria" ? " · por telemetría" : x.fuente==="visita_ventas" ? " · del parte, parcial" : "")};
+    case "reposiciones": {
+      const partes = (x.por_clase||[]).slice(0,3).map(c=>`${c.clase} ${num(c.unidades)}`).join(" · ");
+      return {vl:num(x.unidades)+" ud",
+        sub:(partes || "Sin reposición de producto")
+          + (x.consumibles ? ` · y ${num(x.consumibles)} de carriles de café (café, azúcar, vasos)` : "")};
+    }
+  }
+  return null;
+}
+
+function semaforo(p){
+  const u = DATOS.umbrales || {verde:95, amarillo:75};
+  if(p==null) return null;
+  return p > u.verde ? "verde" : p >= u.amarillo ? "amarillo" : "rojo";
+}
+const ESTADO = {verde:"En objetivo", amarillo:"Vigilar", rojo:"Por debajo"};
+
+function pinta(){
+  const fecha = $("#dia").value;
+  const d = (DATOS.dias||{})[fecha] || {};
+  const f = DATOS.foto || {};
+  const ses = new Set(YO.sesiones||[]);
+  const cont = $("#cuadros");
+  cont.innerHTML = "";
+  (DATOS.cuadrados||[]).forEach(id=>{
+    const c = contenido(id, d, f);
+    if(!c) return;
+    const dest = DESTINO[id];
+    const va = dest && ses.has(dest.sesion);
+    const el = document.createElement(va ? "a" : "div");
+    el.className = "cuadro";
+    el.dataset.id = id;
+    if(va) el.href = `/panel/?ver=${encodeURIComponent(dest.sesion)}#${encodeURIComponent(dest.panel)}`;
+    const color = c.sin ? null : semaforo(c.pct);
+    if(c.sin) el.classList.add("sin");
+    else if(color){ el.classList.add(color); el.style.setProperty("--fondo-c", `var(--${color})`); }
+    else el.style.setProperty("--fondo-c", `var(--c-${id})`);
+    el.innerHTML = `<div class="et">${esc(TITULO[id])}</div>`
+      + (color ? `<span class="estado">${ESTADO[color]}</span>` : "")
+      + `<div class="vl">${c.sin ? "Sin dato" : c.vl}</div>`
+      + `<div class="sub">${esc(c.sin || c.sub)}</div>`
+      + `<div class="pie"><span class="foto">${id==="pdvs"||id==="almacenes" ? "foto de la última carga" : ""}</span>`
+      + `<span>${va ? "Ver sección →" : dest ? "" : "Sin sección todavía"}</span></div>`;
+    if(va) el.setAttribute("aria-label", `${TITULO[id]}: ${c.sin ? c.sin : c.vl}. Abrir la sección.`);
+    cont.appendChild(el);
+  });
+  if(!cont.children.length)
+    cont.innerHTML = `<p style="color:var(--tinta-2)">Este perfil no tiene ningún cuadrado concedido.</p>`;
+}
+
+function avisa(texto, mal){
+  const a = $("#aviso");
+  a.textContent = texto; a.hidden = !texto; a.classList.toggle("mal", !!mal);
+}
+
+(async function arranca(){
+  let r;
+  try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(r.status === 401){ location.href = "/"; return; }
+  if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
+  YO = await r.json();
+  /* Un cliente solo tiene el cuadro de mando (docs/49). */
+  if(YO.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  $("#quien").textContent = (YO.perfil ? YO.perfil + " · " : "") + (YO.nombre || YO.correo);
+  document.title = (YO.perfil ? YO.perfil + " · " : "") + "Informe operativo · digivend";
+
+  let ro;
+  try{ ro = await fetch("/api/operativo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(ro.status === 401){ location.href = "/"; return; }
+  $("#cargando").hidden = true;
+  if(!ro.ok){
+    let d={}; try{ d = await ro.json(); }catch(e){}
+    avisa(d.error || "El informe no está disponible ahora mismo.", true);
+    return;
+  }
+  DATOS = await ro.json();
+
+  const u = DATOS.umbrales || {verde:95, amarillo:75};
+  const n1 = n => new Intl.NumberFormat("es-ES").format(n);
+  $("#lVerde").textContent = `más del ${n1(u.verde)} %`;
+  $("#lAmarillo").textContent = `del ${n1(u.amarillo)} al ${n1(u.verde)} %`;
+  $("#lRojo").textContent = `menos del ${n1(u.amarillo)} %`;
+
+  const dias = Object.keys(DATOS.dias||{}).sort().reverse();
+  if(!dias.length){ avisa("Todavía no hay ningún día calculado.", true); return; }
+  $("#dia").innerHTML = dias.map(f=>`<option value="${esc(f)}">${esc(fechaLarga(f))}</option>`).join("");
+  /* Arranca en ayer. Si lo ultimo no es ayer, la carga de anoche no ha llegado
+     y se dice: no se ensena el dia anterior como si fuera el de ayer. */
+  const hoy = new Date(), ayer = isoLocal(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()-1));
+  $("#dia").value = dias.includes(ayer) ? ayer : dias[0];
+  if(!dias.includes(ayer))
+    avisa(`Todavía no hay datos de ayer: lo último calculado es del ${fechaLarga(dias[0])}.`, true);
+  $("#dia").addEventListener("change", pinta);
+  $("#barra").hidden = false;
+  $("#cuadros").hidden = false;
+  pinta();
+
+  const gen = DATOS.generado ? new Date(DATOS.generado) : null;
+  $("#pie").innerHTML = "Datos de VenCloud, filtrados por el ámbito de tu perfil y servidos desde este "
+    + "mismo dominio." + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "")
+    + " Puntos de venta y almacenes son la foto de esa noche; el valor de los almacenes es el del "
+    + "último cierre mensual de inventario. Donde no hay dato, se dice en vez de estimarse.";
+  $("#pie").hidden = false;
+})();
+</script>
+</body>
+</html>
