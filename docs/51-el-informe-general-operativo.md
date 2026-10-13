@@ -39,9 +39,13 @@ abierta antes de la ventana de 120 días no se puede medir y se cuenta aparte (`
 
 ## Lo que no se puede calcular todavía
 
-- **Rutas**: hace falta el plan de visitas, `vending.planvisitas`, que no se extrae. El SQL está
-  en docs/17, **D12 · EXT_RUTAS_PLAN_VISITAS**. Hasta que exista el informe en VenCloud y su número
-  en el manifiesto, el cuadrado dice «Sin dato» con el motivo. No se reconstruye el plan con los
+- **Rutas, antes del 13 de octubre de 2026**: el plan de visitas, `vending.planvisitas`, se
+  extrae desde esa noche con **D12 · EXT_RUTAS_PLAN_VISITAS** (docs/17), que en VenCloud es el
+  **informe 184**. Los días anteriores no tienen plan y el cuadrado dice «Sin dato» con el motivo.
+  Con el ejemplo del 9 de octubre sale un 70,2 % (869 de 1.238 puntos de venta previstos, y 196
+  visitas fuera de plan). Ojo al leerlo: ese día Cádiz y La Línea no tienen ningún parte de
+  persona y Oviedo hizo 7 visitas de las que solo una estaba en su plan; los tres usan terminal
+  (Gabriele, 13-oct), así que queda por explicar por qué el parte no llega a VenCloud. No se reconstruye el plan con los
   criterios de ruta (D3): 955 máquinas no tienen día marcado y los criterios «cada n días» no se
   pueden resolver sin el motor de VenCloud.
 - **Almacenes, valor de hoy**: VenCloud solo da un cierre al mes. Sumar los movimientos del mes

@@ -56,8 +56,8 @@ CLASES = {
     200: "Kiosko",
 }
 
-SIN_PLAN = ("Falta el plan de visitas: el informe D12 (docs/17) todavía no está "
-            "creado en VenCloud.")
+SIN_PLAN = ("No hay plan de visitas de este día: el informe D12 (VenCloud 184) "
+            "no lo trae.")
 
 
 def semaforo(pct):
