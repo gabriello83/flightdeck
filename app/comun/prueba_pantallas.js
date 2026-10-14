@@ -141,7 +141,7 @@ const API = {
   // infra/operativo.py ya recortada por la API: un dia con todo y uno sin plan.
   '/api/operativo': {
     generado: new Date().toISOString(), ultimo_dia: iso(AYER), umbrales: { verde: 95, amarillo: 75 },
-    cuadrados: ['rutas', 'averias', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria'],
+    cuadrados: ['rutas', 'averias', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas'],
     dias: {
       [iso(AYER)]: {
         rutas: { previstas: 400, hechas: 350, pct: 87.5, color: 'amarillo', visitas: 1100, fuera_de_plan: 12 },
@@ -160,7 +160,9 @@ const API = {
         telemetria: { auditables: 2253, con_dex: 900, pct: 39.9, color: 'rojo' }
       }
     },
-    foto: { pdvs: { activos: 3195, maquinas: 3165 }, almacenes: { valor: 502429.74, periodo: '2026-09', por_almacen: [{ almacen: 'A', delegacion: '', valor: 1 }] } }
+    foto: { pdvs: { activos: 3195, maquinas: 3165 },
+            tarifas: { pct: 81.3, color: 'amarillo', coinciden: 13, controlados: 16, sin_tarifa: 2, sin_dato_productos: 1, desde: '2026-04-14' },
+            almacenes: { valor: 502429.74, periodo: '2026-09', por_almacen: [{ almacen: 'A', delegacion: '', valor: 1 }] } }
   },
   '/api/estado-carga': { ultima_carga: new Date().toISOString(), dias_pedidos: [iso(AYER)], descargas_ok: 75, descargas_fallidas: 0, bytes: 12345678, filas_por_informe: { visita_cabecera: 1000 }, errores: [], retraso_dias: 0 },
   '/api/admin/usuarios': { usuarios: [{ _id: 'eva@airbus.com', nombre: 'Eva', perfil_id: 'cli-airbus', estado: 'activo' }] },
@@ -175,6 +177,43 @@ const API = {
   '/api/admin/config': { asistente_global: true, limite_preguntas_dia: 40, umbral_rentabilidad_mes: 350 },
   '/api/admin/telefonos': { telefonos: [] },
   '/api/admin/cola': { cola: [] }
+};
+
+// Tarifas (docs/52), con la forma que escribe infra/tarifas.py: dos
+// delegaciones, y en Cadiz un centro con un precio distinto y uno sin tarifa.
+const CENTRO_TARIFAS = {
+  num_centro: '114001', centro: 'HOSPITAL DE JEREZ', cliente: 'SERUNION, SA', cod_cliente: '10002',
+  delegacion: 'Andalucía - Cádiz',
+  filas: [
+    { matricula: '22SE1877', cod_pdv: 'S00741', ubicacion: 'Planta 2', cod_articulo: '9354', articulo: 'COCA COLA LATA 33CL',
+      ultima_carga: '2026-10-10', nivel: 'estandar', asignada: 'cliente', origen: 'tarifa', tarifa: 'ESTANDAR 2024', cambio_tarifa: '2026-01-02', desde: '2026-04-14',
+      medios: { ef: { tarifa: 1.2, venta: { precio: 1.3, fecha: '2026-10-13', fuente: 'telemetria' }, ok: false },
+                tc: { tarifa: 1.2, venta: { precio: 1.2, fecha: '2026-10-13', fuente: 'telemetria' }, ok: true } },
+      estado: 'no_coincide' },
+    { matricula: '22SE1877', cod_pdv: 'S00741', ubicacion: 'Planta 2', cod_articulo: '102411', articulo: 'ÑAMING ENSALADA <MIXTA> & CO',
+      ultima_carga: '2026-10-01', nivel: null, origen: null, tarifa: '', cambio_tarifa: '', desde: '2026-04-14',
+      medios: { ef: { venta: { precio: 2.3, fecha: '2026-10-12', fuente: 'audit' } } }, estado: 'sin_tarifa' },
+    { matricula: '22SE1878', cod_pdv: 'S00742', ubicacion: '', cod_articulo: '5322', articulo: 'AGUA 50CL',
+      ultima_carga: '2026-09-20', nivel: 'centro', origen: 'productos', tarifa: '', cambio_tarifa: '2026-10-05', desde: '2026-10-05',
+      medios: { ef: { tarifa: 0.9 } }, estado: 'sin_dato' },
+    { matricula: '22SE1878', cod_pdv: 'S00742', ubicacion: '', cod_articulo: '9355', articulo: 'FANTA',
+      ultima_carga: '2026-09-20', nivel: 'estandar', asignada: 'cliente', origen: 'tarifa', tarifa: 'ESTANDAR 2024', cambio_tarifa: '2026-01-02', desde: '2026-04-14',
+      medios: { ef: { tarifa: 1.2, venta: { precio: 1.2, fecha: '2026-10-11', fuente: 'telemetria' }, ok: true } }, estado: 'coincide' }
+  ]
+};
+const RESUMEN_TARIFAS = {
+  generado: new Date().toISOString(), desde: '2026-04-14', dias: 183,
+  total: { coincide: 13, no_coincide: 3, sin_tarifa: 2, sin_dato: 1, controlados: 16, pct: 81.3 },
+  provisional: 'El orden entre niveles es provisional.',
+  delegaciones: [
+    { delegacion: 'Andalucía - Cádiz', coincide: 1, no_coincide: 1, sin_tarifa: 1, sin_dato: 1, controlados: 2, pct: 50, color: 'rojo',
+      centros: [{ num_centro: '114001', centro: 'HOSPITAL DE JEREZ', cliente: 'SERUNION, SA', cod_cliente: '10002', maquinas: 2,
+        nivel: 'estandar', niveles: { estandar: 2, centro: 1 }, tarifas: [{ tarifa: 'ESTANDAR 2024 (asignada al cliente)', maquinas: 2 }],
+        coincide: 1, no_coincide: 1, sin_tarifa: 1, sin_dato: 1, controlados: 2, pct: 50, color: 'rojo' }] },
+    { delegacion: 'Madrid - Leganés', coincide: 12, no_coincide: 2, sin_tarifa: 1, sin_dato: 0, controlados: 14, pct: 85.7, color: 'amarillo',
+      centros: [{ num_centro: '500', centro: 'CENTRO 500', cliente: 'CLIENTE', cod_cliente: '1', maquinas: 5,
+        nivel: 'pdv', niveles: { pdv: 15 }, tarifas: [], coincide: 12, no_coincide: 2, sin_tarifa: 1, sin_dato: 0, controlados: 14, pct: 85.7, color: 'amarillo' }] }
+  ]
 };
 
 // El cuadro: el indice y un fichero por mes, con la forma que escribe cuadro.py.
@@ -250,6 +289,12 @@ const servidor = http.createServer((pet, res) => {
       if (!mes) return json(conVenta ? INDICE_CUADRO : { ...sinVenta(INDICE_CUADRO), meses: INDICE_CUADRO.meses.map(m => ({ mes: m.mes, visitas: m.visitas, incidencias: m.incidencias })) });
       if (!CUADRO[mes]) { res.writeHead(400); return res.end('{"error":"mes"}'); }
       return json(conVenta ? CUADRO[mes] : sinVenta(CUADRO[mes]));
+    }
+    if (u.pathname === '/api/tarifas') {
+      const c = u.searchParams.get('centro');
+      if (c === null) return json(RESUMEN_TARIFAS);
+      if (c !== CENTRO_TARIFAS.num_centro) { res.writeHead(400); return res.end('{"error":"Ese centro no está en las tarifas de este perfil."}'); }
+      return json(CENTRO_TARIFAS);
     }
     if (API[u.pathname]) return json(API[u.pathname]);
     res.writeHead(404); return res.end('{"error":"no existe"}');
@@ -585,9 +630,14 @@ const servidor = http.createServer((pet, res) => {
     const { pagina, errores, fuera } = await abre('/operativo/');
     await pagina.waitForSelector('#cuadros .cuadro');
     comprueba('arranca en ayer', await pagina.inputValue('#dia'), iso(AYER));
-    comprueba('los ocho cuadrados, en su orden',
+    comprueba('los nueve cuadrados, en su orden',
       await pagina.$$eval('#cuadros .cuadro', x => x.map(c => c.dataset.id)),
-      ['rutas', 'averias', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria']);
+      ['rutas', 'averias', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas']);
+    comprueba('tarifas al 81,3 % en amarillo y lleva a su pagina',
+      [await pagina.$eval('.cuadro[data-id="tarifas"]', c => c.classList.contains('amarillo')),
+       await pagina.getAttribute('.cuadro[data-id="tarifas"]', 'href')], [true, '/tarifas/']);
+    comprueba_que('y dice cuantos productos cobran su tarifa',
+      (await pagina.textContent('.cuadro[data-id="tarifas"]')).includes('13 de 16 productos'));
     comprueba('el semaforo: rutas al 87,5 % en amarillo, averias en rojo, telemetria en verde',
       await pagina.$$eval('#cuadros .cuadro', x => x.filter(c => ['rutas', 'averias', 'telemetria'].includes(c.dataset.id))
         .map(c => ['verde', 'amarillo', 'rojo'].find(k => c.classList.contains(k)))),
@@ -607,6 +657,46 @@ const servidor = http.createServer((pet, res) => {
     await pagina.waitForSelector('#rejilla .panel');
     comprueba('al pulsar averias, el panel abre filtrado en su seccion',
       await pagina.$$eval('#filtros button[aria-pressed="true"]', x => x.map(b => b.dataset.f)), ['disponibilidad']);
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nTarifas: delegaciones, centros, productos y el Excel del centro');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre('/tarifas/');
+    await pagina.waitForSelector('#cuadros .cuadro');
+    comprueba('un cuadrado por delegacion, con su semaforo',
+      await pagina.$$eval('#cuadros .cuadro', x => x.map(c => [c.dataset.deleg, ['verde', 'amarillo', 'rojo'].find(k => c.classList.contains(k))])),
+      [['Andalucía - Cádiz', 'rojo'], ['Madrid - Leganés', 'amarillo']]);
+    comprueba_que('el total arriba', (await pagina.textContent('.cifra')).includes('81,3'));
+    await pagina.click('#cuadros .cuadro[data-deleg="Andalucía - Cádiz"]');
+    await pagina.waitForSelector('table .pct');
+    comprueba('al pulsar la delegacion, sus centros', await pagina.$$eval('tbody tr td b', x => x.map(b => b.textContent)).then(x => x[0]), 'HOSPITAL DE JEREZ');
+    comprueba_que('con el nivel de sus tarifas', (await pagina.textContent('tbody')).includes('Estándar'));
+    await pagina.click('table .pct');
+    await pagina.waitForSelector('#filas tr');
+    comprueba_que('pide el centro al servidor', pedidos.includes('/api/tarifas?centro=114001'));
+    comprueba('arranca en las incidencias: precio distinto y sin tarifa',
+      await pagina.$$eval('#filas .etq', x => x.map(e => e.className.split(' ')[1])), ['no_coincide', 'sin_tarifa']);
+    comprueba_que('el precio cobrado distinto sale marcado', (await pagina.textContent('#filas .precios .mal')).includes('1,30'));
+    comprueba_que('el nombre del articulo va escapado', (await pagina.innerHTML('#filas')).includes('&lt;MIXTA&gt;'));
+    await pagina.click('.filtros button[data-f="todos"]');
+    comprueba('en «Todos», los cuatro', await pagina.locator('#filas tr').count(), 4);
+    const [descarga] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('el Excel lleva el centro en el nombre', /^tarifas_114001_HOSPITAL_DE_JEREZ_\d{4}-\d\d-\d\d\.xlsx$/.test(descarga.suggestedFilename()), descarga.suggestedFilename());
+    const bytes = fs.readFileSync(await descarga.path());
+    const texto = bytes.toString('utf8');
+    comprueba('es un zip', bytes.slice(0, 4).toString('hex'), '504b0304');
+    comprueba_que('con sus cuatro hojas', ['Resumen', 'Precio distinto', 'Sin tarifa', 'Sin venta electrónica'].every(h => texto.includes(`name="${h}"`)));
+    comprueba_que('la incidencia de precio: 1,20 de tarifa y 1,30 cobrado', texto.includes('<v>1.2</v>') && texto.includes('<v>1.3</v>'));
+    comprueba_que('el producto sin tarifa, con lo que cobra hoy', texto.includes('<v>2.3</v>'));
+    comprueba_que('y el texto escapado dentro del XML', texto.includes('ÑAMING ENSALADA &lt;MIXTA&gt; &amp; CO'));
+    await pagina.goBack();
+    await pagina.waitForSelector('table .pct');
+    comprueba_que('volver atras vuelve a la delegacion', (await pagina.textContent('nav.miga')).includes('Andalucía - Cádiz'));
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();

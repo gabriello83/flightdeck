@@ -296,12 +296,14 @@ ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [
 L.lambda_handler({}, None)
 comprueba("cli-y no tiene cuadro", [k for k in ALMACEN if k.startswith("cabina/cli-y/cuadro/")], [])
 
-print("\nSin ningun perfil de cliente, las fuentes de venta ni se leen")
+print("\nSin ningun perfil de cliente no hay cuadro, pero la venta se lee: la usan las tarifas")
 ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [{"id": "interno", "ambito": {}}]}).encode()
 LEIDAS.clear()
 L.lambda_handler({}, None)
-comprueba("no se lee visita_ventas", [k for k in LEIDAS if "visita_ventas" in k], [])
-comprueba("ni la telemetria", [k for k in LEIDAS if "telemetria_ventas" in k], [])
+comprueba("se lee visita_ventas (docs/52)", bool([k for k in LEIDAS if "visita_ventas" in k]), True)
+comprueba("y la telemetria", bool([k for k in LEIDAS if "telemetria_ventas" in k]), True)
+comprueba("pero el interno sigue sin cuadro",
+          [k for k in ALMACEN if k.startswith("cabina/interno/cuadro/")], [])
 
 print("\nEl perfiles.json de verdad: AIRBUS lo calcula sin ninguna marca, el interno no")
 _p = {x["id"]: x for x in json.load(open(AQUI + "/perfiles.json"))["perfiles"]}

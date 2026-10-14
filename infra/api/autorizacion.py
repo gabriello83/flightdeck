@@ -332,6 +332,9 @@ CUADRADOS = (
     ("ventas", "dinero"),
     ("reposiciones", "servicio"),
     ("telemetria", "instalaciones"),
+    # Tarifas contra venta real (docs/52): es configuracion de la maquina, como
+    # la tarifa que falta en el bloque de instalaciones.
+    ("tarifas", "instalaciones"),
 )
 
 

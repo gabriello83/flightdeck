@@ -503,11 +503,36 @@ comprueba("y el fichero es el de su perfil, aunque pida otro",
           cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA,
                           query={"perfil": "interno"}))["ultimo_dia"], "2026-10-12")
 o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_JEFE))
-comprueba("el administrador ve los ocho", len(o["cuadrados"]), 8)
+comprueba("el administrador ve los nueve, tarifas la ultima", (len(o["cuadrados"]), o["cuadrados"][-1]),
+          (9, "tarifas"))
 comprueba("almacenes incluido", o["foto"]["almacenes"]["valor"], 500000.0)
 del falsos.OBJETOS["cabina/ope-sur/operativo.json"]
 comprueba("sin calcular todavia, 503",
           llama("GET", "/api/operativo", cookie=COOKIE_OLGA)["statusCode"], 503)
+
+print("\nTarifas (docs/52): el resumen del perfil, y un centro solo si es suyo")
+import gzip as _gz  # noqa: E402
+_res = {"total": {"pct": 80.0}, "delegaciones": [{"delegacion": "Sevilla", "centros": [
+    {"num_centro": "500092", "centro": "AIRBUS SAN PABLO SUR"}]}]}
+falsos.OBJETOS["cabina/interno/tarifas/resumen.json.gz"] = _gz.compress(json.dumps(_res).encode())
+falsos.OBJETOS["cabina/interno/tarifas/centros/500092.json.gz"] = _gz.compress(
+    json.dumps({"num_centro": "500092", "filas": [1, 2]}).encode())
+falsos.OBJETOS["cabina/interno/tarifas/centros/600.json.gz"] = _gz.compress(
+    json.dumps({"num_centro": "600", "filas": [9]}).encode())   # uno viejo que ya no cita
+comprueba("un cliente no lo tiene", llama("GET", "/api/tarifas", cookie=COOKIE_ANA)["statusCode"], 403)
+comprueba("operaciones sin la sesion de instalaciones tampoco",
+          llama("GET", "/api/tarifas", cookie=COOKIE_OLGA)["statusCode"], 403)
+comprueba("el administrador, su resumen",
+          cuerpo_de(llama("GET", "/api/tarifas", cookie=COOKIE_JEFE))["total"]["pct"], 80.0)
+comprueba("y un centro que su resumen cita",
+          cuerpo_de(llama("GET", "/api/tarifas", cookie=COOKIE_JEFE, query={"centro": "500092"}))["filas"], [1, 2])
+comprueba("un centro que el resumen de esta noche no cita, no (aunque el fichero exista)",
+          llama("GET", "/api/tarifas", cookie=COOKIE_JEFE, query={"centro": "600"})["statusCode"], 400)
+comprueba("nada de rutas con barras",
+          llama("GET", "/api/tarifas", cookie=COOKIE_JEFE, query={"centro": "../ope-sur/x"})["statusCode"], 400)
+del falsos.OBJETOS["cabina/interno/tarifas/resumen.json.gz"]
+comprueba("sin calcular todavia, 503 con el motivo",
+          "EXT_TARIFAS" in cuerpo_de(llama("GET", "/api/tarifas", cookie=COOKIE_JEFE))["error"], True)
 
 print("\nUna ruta que no existe")
 comprueba("404", llama("GET", "/api/loquesea", cookie=COOKIE_JEFE)["statusCode"], 404)

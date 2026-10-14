@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarifas · digivend</title>
+<!-- Un solo origen. Esta pagina habla con /api/* del mismo dominio y con nadie
+     mas, y el Excel se hace aqui mismo (comun/xlsx.js): no hay libreria de fuera. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M3 3h4v4H3zm6 0h4v4H9zM3 9h4v4H3zm6 0h4v4H9z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6; --fila:#f0efeb;
+  --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+  --verde:#15803d; --amarillo:#f2b705; --rojo:#c62828;
+  --mal-fondo:#fbe3e1; --mal-tinta:#9b1c1c; --bien-tinta:#166534; --gris-fondo:#ecebe6;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --fila:#222220; --sombra:none;
+    --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
+    --mal-fondo:#3d1d1b; --mal-tinta:#f4a59e; --bien-tinta:#7fd89d; --gris-fondo:#262624;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --fila:#222220; --sombra:none;
+  --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
+  --mal-fondo:#3d1d1b; --mal-tinta:#f4a59e; --bien-tinta:#7fd89d; --gris-fondo:#262624;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1240px;margin:0 auto;padding:18px 16px 72px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+.marca{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn,a.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);text-decoration:none;
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
+button.btn:hover,a.btn:hover{border-color:var(--tinta-3)}
+button.btn.primario{background:var(--s1);border-color:var(--s1);color:#fff;font-weight:600}
+nav.miga{margin:16px 0 4px;font-size:14px;color:var(--tinta-2);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+nav.miga a{color:var(--s1);text-decoration:none}
+nav.miga a:hover{text-decoration:underline}
+nav.miga b{color:var(--tinta)}
+.nota{
+  margin:12px 0 4px;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+.nota.mal{border-left-color:var(--rojo)}
+.cifra{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:baseline;margin:14px 0 2px}
+.cifra .gr{font-size:34px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.cifra .ex{color:var(--tinta-2);font-size:14px}
+.cuadros{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-top:16px}
+.cuadro{
+  --fondo-c:var(--tarjeta); --tinta-c:#fff;
+  position:relative;display:flex;flex-direction:column;min-height:170px;
+  background:var(--fondo-c);color:var(--tinta-c);border-radius:14px;padding:15px 17px;
+  text-decoration:none;box-shadow:var(--sombra);overflow:hidden;border:0;font:inherit;text-align:left;cursor:pointer;
+  transition:transform .12s ease-out, box-shadow .12s ease-out;
+}
+.cuadro:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.16)}
+.cuadro:focus-visible{outline:3px solid var(--s1);outline-offset:3px}
+.cuadro .et{font-size:13px;font-weight:650;text-transform:uppercase;letter-spacing:.04em;opacity:.95;padding-right:70px}
+.cuadro .vl{font-size:38px;font-weight:700;letter-spacing:-.03em;line-height:1.05;margin-top:auto;font-variant-numeric:tabular-nums}
+.cuadro .sub{font-size:13px;line-height:1.4;margin-top:6px;opacity:.95}
+.cuadro .estado{position:absolute;top:13px;right:13px;font-size:11.5px;font-weight:650;padding:2px 9px;border-radius:999px;background:rgba(255,255,255,.22)}
+.cuadro.amarillo{--tinta-c:#1d1a10}
+.cuadro.amarillo .estado{background:rgba(0,0,0,.12)}
+.cuadro.sin{--tinta-c:var(--tinta);background:var(--tarjeta);border:1px dashed var(--borde-fuerte);box-shadow:none}
+.cuadro.sin .vl{font-size:22px;color:var(--tinta-2);font-weight:600}
+.cuadro.sin .sub{color:var(--tinta-2)}
+.tabla-env{margin-top:14px;overflow-x:auto;border:1px solid var(--borde);border-radius:10px;background:var(--tarjeta)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:8px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--borde)}
+th{font-size:12px;color:var(--tinta-2);font-weight:650;background:var(--fila);position:sticky;top:0;white-space:nowrap}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.pct{
+  font:inherit;font-weight:700;font-variant-numeric:tabular-nums;border:0;border-radius:999px;
+  padding:3px 11px;cursor:pointer;color:#fff;background:var(--tinta-3);white-space:nowrap
+}
+.pct.verde{background:var(--verde)} .pct.amarillo{background:var(--amarillo);color:#1d1a10} .pct.rojo{background:var(--rojo)}
+.pct.sin{background:var(--gris-fondo);color:var(--tinta-2);font-weight:600}
+.pct:focus-visible{outline:3px solid var(--s1);outline-offset:2px}
+.peq{color:var(--tinta-2);font-size:12px}
+.etq{display:inline-block;font-size:11.5px;font-weight:650;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.etq.coincide{color:var(--bien-tinta);background:transparent;border:1px solid currentColor}
+.etq.no_coincide{color:var(--mal-tinta);background:var(--mal-fondo)}
+.etq.sin_tarifa{color:#1d1a10;background:var(--amarillo)}
+.etq.sin_dato{color:var(--tinta-2);background:var(--gris-fondo)}
+.precios{display:grid;grid-template-columns:auto auto auto;gap:1px 10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.precios .m{color:var(--tinta-3);font-size:11.5px}
+.precios .mal{color:var(--mal-tinta);font-weight:700}
+.filtros{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.filtros button{font:inherit;font-size:13px;border:1px solid var(--borde-fuerte);background:var(--tarjeta);color:var(--tinta);border-radius:999px;padding:4px 12px;cursor:pointer}
+.filtros button[aria-pressed="true"]{background:var(--tinta);color:var(--fondo);border-color:var(--tinta)}
+.cab-centro{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-start;margin-top:10px}
+.cab-centro h2{margin:0;font-size:20px;letter-spacing:-.01em}
+footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+#cargando{padding:40px 0;color:var(--tinta-2)}
+@media (max-width:560px){
+  .cuadros{grid-template-columns:1fr 1fr;gap:10px}
+  .cuadro{min-height:150px;padding:12px 12px}
+  .cuadro .vl{font-size:28px}
+  .cuadro .et{padding-right:0}
+  .cuadro .estado{position:static;align-self:flex-start;margin-top:6px}
+  th,td{padding:7px 8px}
+  .oculta-movil{display:none}
+}
+@media (max-width:360px){ .cuadros{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="env">
+  <header class="top">
+    <div class="marca">
+      <b>Tarifas</b>
+      <span id="quien"></span>
+    </div>
+    <div class="acciones">
+      <a class="btn" href="/operativo/">Informe operativo</a>
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn" id="bSalir" type="button">Salir</button>
+    </div>
+  </header>
+
+  <nav class="miga" id="miga" aria-label="Dónde estás" hidden></nav>
+  <div id="cargando">Cargando…</div>
+  <div class="nota" id="aviso" hidden></div>
+  <main id="vista"></main>
+  <footer id="pie" hidden></footer>
+</div>
+
+<script src="/comun/xlsx.js"></script>
+<script>
+/* ===================================================================
+   Tarifas contra venta real · digivend.es  (docs/52)
+
+   Tres niveles: el total (con un cuadrado por delegacion), los centros de una
+   delegacion y los productos de un centro. Lo que llega ya es del perfil de la
+   sesion: la API no deja pedir otro. Esta pagina no calcula nada: dibuja lo que
+   escribio la noche, y hace el Excel del centro para su responsable.
+   =================================================================== */
+const CLAVE_TEMA = "digivend.tema";
+const num  = n => new Intl.NumberFormat("es-ES").format(Math.round(n||0));
+const pct  = n => new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(n||0) + " %";
+const eur  = n => n==null ? "—" : new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+const esc  = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = s => document.querySelector(s);
+
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = $("#bTema");
+  const oscuro = () => document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const pinta = () => { b.textContent = oscuro() ? "Modo claro" : "Modo oscuro"; };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const n = oscuro() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+  });
+})();
+$("#bSalir").addEventListener("click", async ()=>{
+  try{ await fetch("/api/salir", {method:"POST", credentials:"same-origin"}); }catch(e){}
+  location.href = "/";
+});
+
+/* Precio suelto en el punto de venta, el centro, el cliente o el grupo; o una
+   tarifa estandar (menu «Tarifas Vending Estándar» de VenCloud) asignada a uno
+   de ellos. */
+const NIVEL = {pdv:"Punto de venta", centro:"Centro", cliente:"Cliente", grupo:"Grupo de clientes", estandar:"Estándar", general:"General (sin asignar)"};
+const ASIGNADA = {pdv:"al punto de venta", centro:"al centro", cliente:"al cliente"};
+const ESTADO = {coincide:"Coincide", no_coincide:"Precio distinto", sin_tarifa:"Sin tarifa", sin_dato:"Sin venta electrónica"};
+const MEDIOS = [["ef","Efectivo"],["tp","Tarjeta privada"],["tc","Tarjeta crédito"]];
+const SEMAFORO = {verde:"En objetivo", amarillo:"Vigilar", rojo:"Por debajo"};
+let YO=null, RES=null;
+const CENTROS = {};   // num -> detalle ya pedido
+
+function fechaCorta(s){
+  const d = new Date(String(s).slice(0,10)+"T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(s||"") : d.toLocaleDateString("es-ES",{day:"numeric", month:"short", year:"numeric"});
+}
+function avisa(texto, mal){
+  const a = $("#aviso");
+  a.textContent = texto||""; a.hidden = !texto; a.classList.toggle("mal", !!mal);
+}
+function color(p){
+  const u = {verde:95, amarillo:75};
+  if(p==null) return null;
+  return p > u.verde ? "verde" : p >= u.amarillo ? "amarillo" : "rojo";
+}
+function lineaCuenta(x){
+  return `${num(x.coincide)} de ${num(x.controlados)} productos coinciden`
+    + (x.sin_tarifa ? ` · ${num(x.sin_tarifa)} sin tarifa` : "")
+    + (x.sin_dato ? ` · ${num(x.sin_dato)} sin venta electrónica` : "");
+}
+function nivelTexto(c){
+  const n = Object.entries(c.niveles||{}).sort((a,b)=>b[1]-a[1]);
+  if(!n.length) return `<span class="peq">Sin tarifa en ningún nivel</span>`;
+  return `<b>${esc(NIVEL[n[0][0]]||n[0][0])}</b>`
+    + (n.length>1 ? `<div class="peq">${n.map(([k,v])=>`${esc(NIVEL[k]||k)} ${num(v)}`).join(" · ")}</div>` : "")
+    + ((c.tarifas||[]).length ? `<div class="peq">${c.tarifas.slice(0,2).map(t=>esc(t.tarifa)).join(" · ")}</div>` : "");
+}
+function botonPct(c, d){
+  const col = color(c.pct);
+  return `<button class="pct ${col||"sin"}" type="button" data-centro="${esc(c.num_centro)}" data-deleg="${esc(d)}"`
+    + ` aria-label="${esc(c.centro)}: ${c.pct==null ? "sin productos que comprobar" : pct(c.pct)+" coinciden"}. Ver productos.">`
+    + `${c.pct==null ? "Sin dato" : pct(c.pct)}</button>`;
+}
+
+/* -------------------------------------------------------------- rutas */
+function ruta(){
+  const q = new URLSearchParams(location.hash.slice(1));
+  return {d:q.get("d"), c:q.get("c")};
+}
+function ir(d, c){
+  const q = new URLSearchParams();
+  if(d!=null) q.set("d", d);
+  if(c!=null) q.set("c", c);
+  location.hash = q.toString();
+}
+function miga(partes){
+  const m = $("#miga");
+  m.innerHTML = partes.map((p,i)=> i===partes.length-1 ? `<b>${esc(p.t)}</b>` : `<a href="${p.h}">${esc(p.t)}</a>`).join(" › ");
+  m.hidden = partes.length < 2;
+}
+const DELEGACIONES = () => RES.delegaciones||[];
+const unaSola = () => DELEGACIONES().length === 1;
+
+/* ------------------------------------------------------- vista total */
+function vistaTotal(){
+  const t = RES.total;
+  miga([{t:"Todas las delegaciones"}]);
+  const v = $("#vista");
+  v.innerHTML = `<div class="cifra"><span class="gr">${t.pct==null ? "Sin dato" : pct(t.pct)}</span>`
+    + `<span class="ex">${esc(lineaCuenta(t))}</span></div>`
+    + `<div class="cuadros" id="cuadros"></div>`;
+  const cont = $("#cuadros");
+  DELEGACIONES().forEach(d=>{
+    const col = color(d.pct);
+    const el = document.createElement("button");
+    el.type = "button"; el.className = "cuadro" + (col ? " "+col : " sin");
+    el.dataset.deleg = d.delegacion;
+    if(col) el.style.setProperty("--fondo-c", `var(--${col})`);
+    el.innerHTML = `<div class="et">${esc(d.delegacion)}</div>`
+      + (col ? `<span class="estado">${SEMAFORO[col]}</span>` : "")
+      + `<div class="vl">${d.pct==null ? "Sin dato" : pct(d.pct)}</div>`
+      + `<div class="sub">${esc(d.pct==null ? "Ningún producto con tarifa y venta electrónica" : lineaCuenta(d))}`
+      + ` · ${num((d.centros||[]).length)} ${(d.centros||[]).length===1 ? "centro" : "centros"}</div>`;
+    el.addEventListener("click", ()=>ir(d.delegacion));
+    cont.appendChild(el);
+  });
+}
+
+/* ------------------------------------------------- vista delegacion */
+function vistaDelegacion(nombre){
+  const d = DELEGACIONES().find(x=>x.delegacion===nombre);
+  if(!d){ ir(); return; }
+  miga(unaSola() ? [{t:d.delegacion}] : [{t:"Todas las delegaciones", h:"#"}, {t:d.delegacion}]);
+  const v = $("#vista");
+  v.innerHTML = `<div class="cifra"><span class="gr">${d.pct==null ? "Sin dato" : pct(d.pct)}</span>`
+    + `<span class="ex">${esc(lineaCuenta(d))}</span></div>`
+    + `<div class="tabla-env"><table><thead><tr><th>Centro</th><th class="oculta-movil">Cliente</th><th>Nivel de las tarifas</th>`
+    + `<th class="n">Coinciden</th><th class="n oculta-movil">Productos</th><th class="n oculta-movil">Sin tarifa</th>`
+    + `<th class="n oculta-movil">Sin venta electrónica</th></tr></thead><tbody>`
+    + d.centros.map(c=>`<tr><td><b>${esc(c.centro)}</b><div class="peq">${esc(c.num_centro)} · ${num(c.maquinas)} máquinas</div></td>`
+      + `<td class="oculta-movil">${esc(c.cliente)}</td><td>${nivelTexto(c)}</td>`
+      + `<td class="n">${botonPct(c, d.delegacion)}</td>`
+      + `<td class="n oculta-movil">${num(c.coincide)} de ${num(c.controlados)}</td>`
+      + `<td class="n oculta-movil">${num(c.sin_tarifa)}</td><td class="n oculta-movil">${num(c.sin_dato)}</td></tr>`).join("")
+    + `</tbody></table></div>`;
+  v.querySelectorAll(".pct").forEach(b=>b.addEventListener("click", ()=>ir(b.dataset.deleg, b.dataset.centro)));
+}
+
+/* ----------------------------------------------------- vista centro */
+let FILTRO = "incidencias";
+async function vistaCentro(nombreDeleg, numCentro){
+  const d = DELEGACIONES().find(x=>x.delegacion===nombreDeleg);
+  const c = d && d.centros.find(x=>String(x.num_centro)===String(numCentro));
+  if(!c){ ir(); return; }
+  miga([...(unaSola() ? [] : [{t:"Todas las delegaciones", h:"#"}]),
+        {t:d.delegacion, h:"#"+new URLSearchParams({d:d.delegacion}).toString()}, {t:c.centro}]);
+  const v = $("#vista");
+  v.innerHTML = `<p class="peq">Cargando los productos del centro…</p>`;
+  let det = CENTROS[numCentro];
+  if(!det){
+    try{
+      const r = await fetch(`/api/tarifas?centro=${encodeURIComponent(numCentro)}`, {credentials:"same-origin"});
+      if(r.status === 401){ location.href = "/"; return; }
+      if(!r.ok){ let e={}; try{ e = await r.json(); }catch(x){}
+        v.innerHTML = ""; avisa(e.error || "No se ha podido leer el centro.", true); return; }
+      det = CENTROS[numCentro] = await r.json();
+    }catch(e){ v.innerHTML = ""; avisa("No hay conexión con el servidor.", true); return; }
+  }
+  const cuenta = {incidencias:0, todos:det.filas.length, coincide:0, no_coincide:0, sin_tarifa:0, sin_dato:0};
+  det.filas.forEach(f=>{ cuenta[f.estado]++; if(f.estado==="no_coincide"||f.estado==="sin_tarifa") cuenta.incidencias++; });
+  const FILTROS = [["incidencias","Incidencias"],["no_coincide","Precio distinto"],["sin_tarifa","Sin tarifa"],
+                   ["sin_dato","Sin venta electrónica"],["coincide","Coinciden"],["todos","Todos"]];
+  v.innerHTML = `<div class="cab-centro"><div><h2>${esc(c.centro)}</h2>`
+    + `<div class="peq">${esc(c.cliente)} · centro ${esc(c.num_centro)} · ${num(c.maquinas)} máquinas · ${esc(d.delegacion)}</div>`
+    + `<div class="cifra"><span class="gr">${c.pct==null ? "Sin dato" : pct(c.pct)}</span><span class="ex">${esc(lineaCuenta(c))}</span></div>`
+    + `<div class="peq">Nivel de las tarifas: ${nivelTexto(c)}</div></div>`
+    + `<button class="btn primario" id="bExcel" type="button">Informe para la delegación (Excel)</button></div>`
+    + `<div class="filtros" role="group" aria-label="Qué productos ver">`
+    + FILTROS.map(([k,t])=>`<button type="button" data-f="${k}" aria-pressed="${k===FILTRO}">${t} (${num(cuenta[k])})</button>`).join("")
+    + `</div><div class="tabla-env"><table><thead><tr><th>Máquina</th><th>Producto</th>`
+    + `<th class="oculta-movil">Última carga</th><th class="oculta-movil">Nivel</th><th>Tarifa · cobrado</th><th>Estado</th></tr></thead>`
+    + `<tbody id="filas"></tbody></table></div>`;
+  const pinta = () => {
+    const filas = det.filas.filter(f => FILTRO==="todos" || f.estado===FILTRO
+      || (FILTRO==="incidencias" && (f.estado==="no_coincide"||f.estado==="sin_tarifa")));
+    $("#filas").innerHTML = filas.length ? filas.map(filaProducto).join("")
+      : `<tr><td colspan="6" class="peq">Ningún producto en este apartado.</td></tr>`;
+  };
+  v.querySelectorAll(".filtros button").forEach(b=>b.addEventListener("click", ()=>{
+    FILTRO = b.dataset.f;
+    v.querySelectorAll(".filtros button").forEach(x=>x.setAttribute("aria-pressed", String(x===b)));
+    pinta();
+  }));
+  $("#bExcel").addEventListener("click", ()=>excel(det, c));
+  pinta();
+}
+
+function filaProducto(f){
+  const precios = MEDIOS.map(([m,t])=>{
+    const x = (f.medios||{})[m];
+    if(!x) return "";
+    const venta = x.venta ? eur(x.venta.precio) : "—";
+    const mal = x.ok === false;
+    return `<span class="m">${t}</span><span>${x.tarifa!=null ? eur(x.tarifa) : (f.estado==="sin_tarifa" ? "sin tarifa" : "—")}</span>`
+      + `<span class="${mal ? "mal" : ""}" title="${x.venta ? esc(fechaCorta(x.venta.fecha)+" · "+(x.venta.fuente==="audit"?"audit de la visita":"telemetría")) : "sin venta electrónica desde el cambio"}">${venta}</span>`;
+  }).join("");
+  return `<tr><td><b>${esc(f.matricula)}</b><div class="peq">${esc(f.cod_pdv)}${f.ubicacion ? " · "+esc(f.ubicacion) : ""}</div></td>`
+    + `<td>${esc(f.articulo || f.cod_articulo)}<div class="peq">${esc(f.cod_articulo)}</div></td>`
+    + `<td class="oculta-movil">${esc(fechaCorta(f.ultima_carga))}</td>`
+    + `<td class="oculta-movil">${f.nivel ? esc(NIVEL[f.nivel]||f.nivel) : "—"}`
+    + `${f.tarifa ? `<div class="peq">${esc(f.tarifa)}${f.asignada ? " · asignada "+esc(ASIGNADA[f.asignada]||f.asignada) : ""}</div>` : ""}`
+    + `${f.cambio_tarifa ? `<div class="peq">cambio ${esc(fechaCorta(f.cambio_tarifa))}</div>` : ""}</td>`
+    + `<td>${precios ? `<div class="precios">${precios}</div>` : `<span class="peq">Sin venta electrónica</span>`}</td>`
+    + `<td><span class="etq ${f.estado}">${ESTADO[f.estado]}</span></td></tr>`;
+}
+
+/* ------------------------------------------------------ el Excel */
+function excel(det, c){
+  const hoy = new Date();
+  const fuente = v => v ? (v.fuente==="audit" ? "Audit de la visita" : "Telemetría") : "";
+  const cabecera = [`${c.centro} · tarifas contra venta real`,
+    `${c.cliente} · centro ${c.num_centro} · ${det.delegacion} · generado el ${hoy.toLocaleDateString("es-ES")}`];
+  const distintos = [], sinTarifa = [], sinVenta = [];
+  det.filas.forEach(f=>{
+    const base = [f.matricula, f.cod_pdv, f.ubicacion, f.cod_articulo, f.articulo];
+    if(f.estado==="no_coincide"){
+      MEDIOS.forEach(([m,t])=>{
+        const x = (f.medios||{})[m];
+        if(!x || x.ok!==false) return;
+        distintos.push([...base, t, x.tarifa, x.venta.precio, Math.round((x.venta.precio - x.tarifa)*100)/100,
+          x.venta.fecha, fuente(x.venta), NIVEL[f.nivel]||f.nivel||"",
+          f.tarifa ? f.tarifa + (f.asignada ? ` (asignada ${ASIGNADA[f.asignada]||f.asignada})` : "") : "", ""]);
+      });
+    } else if(f.estado==="sin_tarifa"){
+      const v = m => ((f.medios||{})[m]||{}).venta;
+      sinTarifa.push([...base, f.ultima_carga, v("ef") ? v("ef").precio : null, v("tp") ? v("tp").precio : null,
+        v("tc") ? v("tc").precio : null, null, null, null]);
+    } else if(f.estado==="sin_dato"){
+      sinVenta.push([...base, f.ultima_carga, NIVEL[f.nivel]||f.nivel||"", f.tarifa||"",
+        ((f.medios||{}).ef||{}).tarifa ?? null, f.cambio_tarifa]);
+    }
+  });
+  const ID = [{titulo:"Máquina",ancho:11},{titulo:"Punto de venta",ancho:11},{titulo:"Ubicación",ancho:20},
+              {titulo:"Cód. artículo",ancho:11},{titulo:"Artículo",ancho:34}];
+  const hojas = [
+    {nombre:"Resumen", titulo:cabecera, columnas:[{titulo:"Dato",ancho:44},{titulo:"Valor",ancho:30}], filas:[
+      ["Productos que coinciden con la tarifa", c.pct==null ? "Sin dato" : `${String(c.pct).replace(".",",")} %`],
+      ["Productos comprobados", c.controlados], ["Con precio distinto de la tarifa", c.no_coincide],
+      ["Sin tarifa (a rellenar)", c.sin_tarifa], ["Sin venta electrónica desde el último cambio", c.sin_dato],
+      ["Nivel de las tarifas", Object.entries(c.niveles||{}).map(([k,v])=>`${NIVEL[k]||k}: ${v}`).join(" · ")],
+      ["Tarifas asignadas", (c.tarifas||[]).map(t=>`${t.tarifa} (${t.maquinas} máq.)`).join(" · ")],
+      ["Productos que se miran", "Los repuestos en la máquina en los últimos seis meses"],
+      ["Venta que se compara", "La última cobrada por cada medio de pago después del último cambio de la tarifa, por telemetría o, si no hay, por el audit de la visita"],
+      ["Coincide", "El precio cobrado es exactamente el de la tarifa en cada medio de pago"]]},
+    {nombre:"Precio distinto", titulo:cabecera, filas:distintos,
+     columnas:[...ID,{titulo:"Medio de pago",ancho:15},{titulo:"Precio tarifa",ancho:11,euros:true},
+       {titulo:"Precio cobrado",ancho:11,euros:true},{titulo:"Diferencia",ancho:10,euros:true},
+       {titulo:"Fecha de la venta",ancho:12},{titulo:"Fuente",ancho:16},{titulo:"Nivel",ancho:14},
+       {titulo:"Tarifa",ancho:22},{titulo:"Comentario de la delegación",ancho:34}],
+     rellenar:[13], marcar:(f,i)=>i===7},
+    {nombre:"Sin tarifa", titulo:[...cabecera, "Rellenad las tres columnas amarillas con el precio que debe tener cada producto."],
+     filas:sinTarifa,
+     columnas:[...ID,{titulo:"Última carga",ancho:12},{titulo:"Cobra hoy en efectivo",ancho:12,euros:true},
+       {titulo:"Cobra hoy con tarjeta privada",ancho:12,euros:true},{titulo:"Cobra hoy con tarjeta de crédito",ancho:12,euros:true},
+       {titulo:"Precio efectivo",ancho:12,euros:true},{titulo:"Precio tarjeta privada",ancho:12,euros:true},
+       {titulo:"Precio tarjeta crédito",ancho:12,euros:true}],
+     rellenar:[9,10,11]},
+    {nombre:"Sin venta electrónica", titulo:[...cabecera, "Con tarifa, pero sin ninguna venta por telemetría ni audit desde el último cambio: no se han podido comprobar."],
+     filas:sinVenta,
+     columnas:[...ID,{titulo:"Última carga",ancho:12},{titulo:"Nivel",ancho:14},{titulo:"Tarifa",ancho:22},
+       {titulo:"Precio efectivo en tarifa",ancho:12,euros:true},{titulo:"Último cambio de tarifa",ancho:14}]}
+  ];
+  const limpio = s => String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,40);
+  XLSX.descarga(XLSX.libro(hojas), `tarifas_${c.num_centro}_${limpio(c.centro)}_${hoy.toISOString().slice(0,10)}.xlsx`);
+}
+
+function pinta(){
+  avisa("");
+  const {d, c} = ruta();
+  if(d && c) return vistaCentro(d, c);
+  if(d) return vistaDelegacion(d);
+  if(unaSola()) return vistaDelegacion(DELEGACIONES()[0].delegacion);
+  return vistaTotal();
+}
+
+(async function arranca(){
+  let r;
+  try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(r.status === 401){ location.href = "/"; return; }
+  if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
+  YO = await r.json();
+  if(YO.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  $("#quien").textContent = (YO.perfil ? YO.perfil + " · " : "") + (YO.nombre || YO.correo);
+
+  let rt;
+  try{ rt = await fetch("/api/tarifas", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(rt.status === 401){ location.href = "/"; return; }
+  $("#cargando").hidden = true;
+  if(!rt.ok){
+    let e={}; try{ e = await rt.json(); }catch(x){}
+    avisa(e.error || "Las tarifas no están disponibles ahora mismo.", true);
+    return;
+  }
+  RES = await rt.json();
+  if(!DELEGACIONES().length){ avisa("Este perfil no tiene ninguna máquina instalada con productos repuestos en seis meses.", true); return; }
+  window.addEventListener("hashchange", pinta);
+  pinta();
+
+  const gen = RES.generado ? new Date(RES.generado) : null;
+  $("#pie").innerHTML = `Se mira cada producto repuesto en su máquina desde el ${esc(fechaCorta(RES.desde))}, `
+    + "y se compara la última venta de cada medio de pago (telemetría o, si no hay, el audit de la visita) "
+    + "posterior al último cambio de la tarifa con el precio de la tarifa, exacto. Lo que no tiene tarifa o no "
+    + "tiene venta electrónica no entra en el porcentaje: se cuenta aparte. "
+    + esc(RES.provisional || "") + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
+  $("#pie").hidden = false;
+})();
+</script>
+</body>
+</html>
