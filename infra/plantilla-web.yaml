@@ -329,6 +329,12 @@ Resources:
             Effect: Allow
             Action: [s3:GetObject]
             Resource: !Sub "arn:${AWS::Partition}:s3:::${BucketDatos}/cabina/*"
+          # Los ficheros de telemetria que el administrador sube desde la consola
+          # (docs/52). Es lo unico que la web escribe en el bucket de datos.
+          - Sid: SoloLosFicherosDeTelemetria
+            Effect: Allow
+            Action: [s3:PutObject]
+            Resource: !Sub "arn:${AWS::Partition}:s3:::${BucketDatos}/externo/telemetria/*"
           - Sid: NuestroPoolDeUsuarios
             Effect: Allow
             Action: [cognito-idp:AdminInitiateAuth, cognito-idp:AdminCreateUser,
@@ -376,6 +382,11 @@ Resources:
               - Effect: Allow
                 Action: [s3:GetObject]
                 Resource: !Sub "arn:${AWS::Partition}:s3:::${BucketDatos}/cabina/*"
+              # Los ficheros de Nayax, Prodelfi y Nebula de la consola (docs/52).
+              # Solo esa carpeta: la API no puede escribir en ninguna otra.
+              - Effect: Allow
+                Action: [s3:PutObject]
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${BucketDatos}/externo/telemetria/*"
               # Los datos con nombre y DNI no se tocan desde la web. Nunca.
               - Effect: Deny
                 Action: [s3:GetObject]

@@ -213,6 +213,41 @@ comprueba("y no lleva TABLA en el entorno",
           "TABLA" not in ingesta["Agregados"]["Properties"]["Environment"]["Variables"],
           "actualizar la pila le pisaria el codigo con el marcador")
 
+# La API escribe en el bucket de datos (los ficheros de telemetria, docs/52), y
+# un PutObject sobre todo el bucket le dejaria pisar los paneles de cualquier
+# perfil. Solo en externo/telemetria/, en el rol y en la frontera.
+print("\nLa web solo escribe en externo/telemetria/")
+
+
+def _recursos_put(doc):
+    out = []
+
+    def anda(n):
+        if isinstance(n, dict):
+            acc = n.get("Action")
+            acc = [acc] if isinstance(acc, str) else (acc or [])
+            if "s3:PutObject" in acc and n.get("Effect", "Allow") == "Allow":
+                r_ = n.get("Resource")
+                out.extend(r_ if isinstance(r_, list) else [r_])
+            for v in n.values():
+                anda(v)
+        elif isinstance(n, list):
+            for v in n:
+                anda(v)
+    anda(doc)
+    return [str(x) for x in out]
+
+
+for nombre, doc in (("RolApi", recursos["RolApi"]["Properties"]),
+                    ("Frontera", recursos["Frontera"]["Properties"]["PolicyDocument"])):
+    rs = _recursos_put(doc)
+    comprueba(f"{nombre}: PutObject solo en externo/telemetria/*",
+              bool(rs) and all(x.endswith("${BucketDatos}/externo/telemetria/*") for x in rs),
+              f"lleva {rs}")
+for nombre in ("RolAlarmas", "RolAsistente"):
+    comprueba(f"{nombre} no escribe en el bucket",
+              not _recursos_put(recursos[nombre]["Properties"]), "no le hace falta")
+
 print()
 if fallos:
     print(f"{len(fallos)} PRUEBAS FALLIDAS: {', '.join(fallos[:6])}"

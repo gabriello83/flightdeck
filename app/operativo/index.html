@@ -233,7 +233,14 @@ function contenido(id, d, f){
         + (x.fuera_de_plan ? ` · ${num(x.fuera_de_plan)} fuera del plan` : "")};
     case "averias": return {vl:pct(x.pct), pct:x.pct,
       sub:`${num(x.a_tiempo)} de ${num(x.cerradas)} cerradas en menos de ${num(x.horas)} h`};
-    case "telemetria": return {vl:pct(x.pct), pct:x.pct,
+    case "telemetria":
+      /* Con los ficheros de Nayax, Prodelfi y Nebula (docs/52): de las que
+         tienen telemetria, cuantas mandaron venta y cuantas DEX a VenCloud. */
+      if(x.fuente==="ficheros") return {vl:pct(x.pct), pct:x.pct,
+        sub: x.principal==="dex"
+          ? `${num(x.con_dex)} de ${num(x.maquinas)} máquinas con telemetría mandaron su DEX · venta ${pct(x.pct_venta)}`
+          : `${num(x.con_venta)} de ${num(x.maquinas)} máquinas con telemetría mandaron venta · DEX ${pct(x.pct_dex)}`};
+      return {vl:pct(x.pct), pct:x.pct,
       sub:`${num(x.con_dex)} de ${num(x.auditables)} máquinas mandaron su lectura (DEX)`};
     case "almacenes": return {vl:eur(x.valor),
       sub:`Cierre de ${mesLargo(x.periodo)} · ${num((x.por_almacen||[]).length)} almacenes`};
@@ -272,11 +279,15 @@ function pinta(){
     const c = contenido(id, d, f);
     if(!c) return;
     const dest = DESTINO[id];
-    const va = dest && ses.has(dest.sesion);
+    /* La telemetria cruzada con los ficheros tiene pagina propia, con las
+       maquinas que no transmiten (docs/52). */
+    const propia = id==="telemetria" && f.telemetria
+      ? `/telemetria/?dia=${encodeURIComponent(fecha)}` : null;
+    const va = propia || (dest && ses.has(dest.sesion));
     const el = document.createElement(va ? "a" : "div");
     el.className = "cuadro";
     el.dataset.id = id;
-    if(va) el.href = `/panel/?ver=${encodeURIComponent(dest.sesion)}#${encodeURIComponent(dest.panel)}`;
+    if(va) el.href = propia || `/panel/?ver=${encodeURIComponent(dest.sesion)}#${encodeURIComponent(dest.panel)}`;
     const color = c.sin ? null : semaforo(c.pct);
     if(c.sin) el.classList.add("sin");
     else if(color){ el.classList.add(color); el.style.setProperty("--fondo-c", `var(--${color})`); }

@@ -301,7 +301,13 @@ ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [{"id": "interno", "am
 LEIDAS.clear()
 L.lambda_handler({}, None)
 comprueba("no se lee visita_ventas", [k for k in LEIDAS if "visita_ventas" in k], [])
-comprueba("ni la telemetria", [k for k in LEIDAS if "telemetria_ventas" in k], [])
+# La telemetria si: el informe operativo cuenta que maquinas mandaron venta
+# (docs/52). En un relleno historico, donde no hay informe, tampoco se lee.
+comprueba("la telemetria si, que la quiere el informe operativo",
+          bool([k for k in LEIDAS if "telemetria_ventas" in k]), True)
+LEIDAS.clear()
+L.lambda_handler({"desde": AYER.isoformat(), "hasta": AYER.isoformat()}, None)
+comprueba("en un relleno historico, ni la telemetria", [k for k in LEIDAS if "telemetria_ventas" in k], [])
 
 print("\nEl perfiles.json de verdad: AIRBUS lo calcula sin ninguna marca, el interno no")
 _p = {x["id"]: x for x in json.load(open(AQUI + "/perfiles.json"))["perfiles"]}

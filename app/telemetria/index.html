@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telemetría · digivend</title>
+<!-- Un solo origen. Esta pagina habla con /api/* del mismo dominio y con nadie
+     mas: hay redes de cliente que cortan las paginas que llaman fuera. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M8 3a7 7 0 0 1 5 2l-1 1a5.6 5.6 0 0 0-8 0L3 5a7 7 0 0 1 5-2zm0 3a4 4 0 0 1 3 1.2l-1 1a2.6 2.6 0 0 0-4 0l-1-1A4 4 0 0 1 8 6zm0 3a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6; --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+  --verde:#15803d; --amarillo:#a16207; --rojo:#c62828;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --sombra:none; --verde:#4ade80; --amarillo:#facc15; --rojo:#f87171;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --sombra:none; --verde:#4ade80; --amarillo:#facc15; --rojo:#f87171;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1240px;margin:0 auto;padding:18px 16px 72px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+.marca{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn,a.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);text-decoration:none;
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
+button.btn:hover,a.btn:hover{border-color:var(--tinta-3)}
+button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);color:#fff}
+.barra{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:16px 0 6px}
+.barra label{font-size:13px;color:var(--tinta-2);display:flex;align-items:center;gap:8px}
+.barra select,.barra input{
+  font:inherit;font-size:14px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:5px 8px;max-width:100%
+}
+.barra input{min-width:200px}
+.nota{
+  margin:12px 0 4px;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+.nota.mal{border-left-color:var(--rojo)}
+.pestanas{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:14px}
+.kpi{background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:11px 13px;box-shadow:var(--sombra)}
+.kpi .et{font-size:12px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
+.kpi .vl{font-size:24px;font-weight:650;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .nt{font-size:12px;color:var(--tinta-3);margin-top:2px}
+section.caja{
+  background:var(--tarjeta);border:1px solid var(--borde);border-radius:12px;
+  padding:12px 16px 14px;box-shadow:var(--sombra);margin-top:14px
+}
+.cabsec{display:flex;align-items:baseline;gap:12px;justify-content:space-between;flex-wrap:wrap}
+section.caja h2{font-size:15px;margin:0;font-weight:650}
+section.caja .sub{font-size:12.5px;color:var(--tinta-2);margin:2px 0 10px}
+.tabla{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--tinta-2);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;
+   padding:6px 10px 6px 0;border-bottom:1px solid var(--borde);white-space:nowrap}
+td{padding:7px 10px 7px 0;border-bottom:1px solid var(--borde);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.mat{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;white-space:nowrap}
+.tenue{color:var(--tinta-3);font-size:12px}
+.si{color:var(--verde);font-weight:600}
+.no{color:var(--rojo);font-weight:600}
+.vacio{color:var(--tinta-3);font-size:13.5px;padding:8px 0}
+footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+#cargando{padding:40px 0;color:var(--tinta-2)}
+@media (max-width:700px){
+  .tabla table,.tabla tbody,.tabla tr,.tabla td{display:block;width:100%}
+  .tabla thead{display:none}
+  .tabla tr{border-bottom:1px solid var(--borde);padding:9px 0}
+  .tabla tr:last-child{border-bottom:0}
+  .tabla td{border:0;padding:2px 0}
+  .tabla td[data-et]:not(:empty)::before{content:attr(data-et) " · ";color:var(--tinta-3);font-size:12px}
+  .barra input{min-width:0;width:100%}
+  .barra label.busca{flex:1 1 100%}
+}
+</style>
+</head>
+<body>
+<div class="env">
+  <header class="top">
+    <div class="marca">
+      <b>Telemetría</b>
+      <span id="quien"></span>
+    </div>
+    <div class="acciones">
+      <a class="btn" href="/operativo/">Informe general</a>
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn" id="bSalir" type="button">Salir</button>
+    </div>
+  </header>
+
+  <div id="cargando">Cargando…</div>
+  <div class="nota" id="aviso" hidden></div>
+
+  <div id="todo" hidden>
+    <div class="barra">
+      <label>Día <select id="dia"></select></label>
+      <label>Mostrar <select id="filtro">
+        <option value="falta">Sin venta o sin DEX</option>
+        <option value="sin_venta">Sin venta por telemetría</option>
+        <option value="sin_dex">Sin DEX</option>
+        <option value="nada">Sin venta ni DEX</option>
+        <option value="todas">Todas</option>
+      </select></label>
+      <label class="busca">Buscar <input id="busca" type="search" placeholder="Matrícula, cliente, centro…"></label>
+      <button class="btn" id="bCsv" type="button">Descargar CSV</button>
+    </div>
+    <div class="nota" id="ficheros"></div>
+    <div class="pestanas" id="pestanas" role="tablist"></div>
+    <div class="kpis" id="kpis"></div>
+    <section class="caja">
+      <div class="cabsec"><h2 id="tTabla"></h2><span class="tenue" id="cuenta"></span></div>
+      <p class="sub" id="sTabla"></p>
+      <div class="tabla" id="tabla"></div>
+    </section>
+  </div>
+
+  <footer id="pie" hidden></footer>
+</div>
+
+<script>
+/* ===================================================================
+   Telemetría · digivend.es  (docs/52)
+
+   Las máquinas que tienen telemetría según los ficheros de Nayax, Prodelfi y
+   Nebula que se suben en la consola, cruzadas con el censo de VenCloud, y si
+   ese día mandaron a VenCloud su venta por telemetría y su lectura (DEX).
+
+   El fichero ya llega con el ámbito del perfil aplicado: lo escribió la noche
+   para este perfil, y la API no deja pedir otro. Esta página no decide qué
+   máquinas ve nadie: filtra y dibuja.
+   =================================================================== */
+const CLAVE_TEMA = "digivend.tema";
+const num = n => new Intl.NumberFormat("es-ES").format(Math.round(n||0));
+const pct = (a,b) => b ? new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(100*a/b) + " %" : "—";
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = s => document.querySelector(s);
+const NOMBRE = {nayax:"Nayax", prodelfi:"Prodelfi", nebula:"Nebula (Coges)", grupos:"Grupos de Prodelfi"};
+const MAX_FILAS = 400;
+
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = $("#bTema");
+  const oscuro = () => document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const pinta = () => { b.textContent = oscuro() ? "Modo claro" : "Modo oscuro"; };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const n = oscuro() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+  });
+})();
+$("#bSalir").addEventListener("click", async ()=>{
+  try{ await fetch("/api/salir", {method:"POST", credentials:"same-origin"}); }catch(e){}
+  location.href = "/";
+});
+
+let D=null, PESTANA="nayax", VENTA={}, DEX={};
+
+function fechaLarga(s){
+  const d = new Date(String(s)+"T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(s)
+    : d.toLocaleDateString("es-ES",{weekday:"long", day:"numeric", month:"long", year:"numeric"});
+}
+function fechaCorta(s){
+  if(!s) return "";
+  const d = new Date(String(s).length > 10 ? String(s) : String(s)+"T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(s)
+    : d.toLocaleString("es-ES", String(s).length > 10
+        ? {day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"}
+        : {day:"numeric", month:"short"});
+}
+function isoLocal(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function avisa(t, mal){ const a=$("#aviso"); a.textContent=t; a.hidden=!t; a.classList.toggle("mal", !!mal); }
+
+/* El último día, hasta el elegido, en que la máquina mandó algo. Dentro de la
+   semana que guarda el fichero: más atrás no se sabe, y se dice. */
+function ultimo(conj, m, hasta){
+  const dias = Object.keys(D.dias||{}).filter(f=>f<=hasta).sort().reverse();
+  for(const f of dias) if(conj[f] && conj[f].has(m)) return f;
+  return null;
+}
+const desde = () => Object.keys(D.dias||{}).sort()[0];
+
+function filasDe(sistema){
+  const dia = $("#dia").value, v = VENTA[dia]||new Set(), x = DEX[dia]||new Set();
+  return (D.maquinas||[]).filter(m=>m.sistema===sistema).map(m=>({
+    ...m, venta: v.has(m.matricula), dex: x.has(m.matricula),
+  }));
+}
+function pasaFiltro(m){
+  const f = $("#filtro").value;
+  if(f==="sin_venta" && m.venta) return false;
+  if(f==="sin_dex" && m.dex) return false;
+  if(f==="nada" && (m.venta || m.dex)) return false;
+  if(f==="falta" && m.venta && m.dex) return false;
+  const q = $("#busca").value.trim().toLowerCase();
+  if(q){
+    const t = [m.matricula, m.cliente, m.centro, m.ubicacion, m.delegacion, m.cod_pdv,
+               m.prodelfi && m.prodelfi.descripcion, m.nebula && m.nebula.dispositivo,
+               m.nayax && m.nayax.id].join(" ").toLowerCase();
+    if(!t.includes(q)) return false;
+  }
+  return true;
+}
+function pasaFuera(f){
+  const q = $("#busca").value.trim().toLowerCase();
+  return !q || [f.id, f.nombre, f.detalle, f.motivo].join(" ").toLowerCase().includes(q);
+}
+
+/* Las columnas de cada pestaña: [cabecera, valor para pantalla (html), valor para el CSV]. */
+function columnas(sistema){
+  const dia = $("#dia").value;
+  const sn = b => b ? `<span class="si">Sí</span>` : `<span class="no">No</span>`;
+  const ult = (conj, m) => { const f = ultimo(conj, m.matricula, dia); return f ? fechaCorta(f) : `antes del ${fechaCorta(desde())}`; };
+  const base = [
+    ["Matrícula", m=>`<span class="mat">${esc(m.matricula)}</span>`, m=>m.matricula],
+    ["Cliente · centro", m=>`${esc(m.cliente)}<br><span class="tenue">${esc(m.num_centro)} ${esc(m.centro)}</span>`,
+      m=>`${m.cliente} · ${m.num_centro} ${m.centro}`],
+    ["Ubicación", m=>`${esc(m.ubicacion)}<br><span class="tenue">PDV ${esc(m.cod_pdv)} · ${esc(m.delegacion)}</span>`,
+      m=>`${m.ubicacion} · PDV ${m.cod_pdv} · ${m.delegacion}`],
+    ["Venta", m=>sn(m.venta), m=>m.venta?"Sí":"No"],
+    ["DEX", m=>sn(m.dex), m=>m.dex?"Sí":"No"],
+    ["Última venta", m=>m.venta ? "" : esc(ult(VENTA, m)), m=>m.venta ? dia : (ultimo(VENTA, m.matricula, dia)||"")],
+    ["Último DEX", m=>m.dex ? "" : esc(ult(DEX, m)), m=>m.dex ? dia : (ultimo(DEX, m.matricula, dia)||"")],
+  ];
+  const tambien = ["También", m=>esc((m.tambien||[]).map(t=>NOMBRE[t]||t).join(", ")),
+                   m=>(m.tambien||[]).map(t=>NOMBRE[t]||t).join(", ")];
+  if(sistema==="nayax") return [...base,
+    ["Nayax · última comunicación", m=>esc(fechaCorta(m.nayax && m.nayax.ultima)), m=>(m.nayax&&m.nayax.ultima)||""],
+    tambien];
+  if(sistema==="prodelfi") return [...base,
+    ["Prodelfi", m=>m.prodelfi ? `${m.prodelfi.codigo!=null ? `<span class="mat">${esc(m.prodelfi.codigo)}</span> · ` : ""}${esc(m.prodelfi.descripcion)}<br><span class="tenue">grupo ${esc(m.prodelfi.grupo)} · ${esc(m.prodelfi.como)}</span>` : "",
+      m=>m.prodelfi ? `${m.prodelfi.codigo??""} ${m.prodelfi.descripcion} (grupo ${m.prodelfi.grupo}; ${m.prodelfi.como})` : ""],
+    ["Nayax · última comunicación", m=>esc(fechaCorta(m.nayax && m.nayax.ultima)), m=>(m.nayax&&m.nayax.ultima)||""],
+    tambien];
+  return [...base,
+    ["Nebula", m=>m.nebula ? `<span class="mat">${esc(m.nebula.dispositivo)}</span><br><span class="tenue">última venta ${esc(fechaCorta(m.nebula.ultima_venta))}</span>` : "",
+      m=>m.nebula ? `${m.nebula.dispositivo} (última venta ${m.nebula.ultima_venta})` : ""],
+    tambien];
+}
+const COLS_FUERA = [
+  ["Sistema", f=>esc(NOMBRE[f.sistema]||f.sistema), f=>NOMBRE[f.sistema]||f.sistema],
+  ["Id en el sistema", f=>`<span class="mat">${esc(f.id)}</span>`, f=>f.id],
+  ["Nombre", f=>esc(f.nombre), f=>f.nombre],
+  ["Dónde dice el sistema", f=>esc(f.detalle), f=>f.detalle],
+  ["Última comunicación", f=>esc(fechaCorta(f.ultima)), f=>f.ultima],
+  ["Por qué no está", f=>esc(f.motivo), f=>f.motivo],
+];
+
+function actual(){
+  if(PESTANA==="fuera"){
+    return {cols:COLS_FUERA, filas:(D.fuera||[]).filter(pasaFuera)};
+  }
+  return {cols:columnas(PESTANA), filas:filasDe(PESTANA).filter(pasaFiltro)};
+}
+
+function pinta(){
+  const dia = $("#dia").value;
+  const sistemas = ["nayax","prodelfi","nebula"].filter(s=>(D.maquinas||[]).some(m=>m.sistema===s));
+  const pest = [...sistemas.map(s=>{
+      const fs = filasDe(s), falta = fs.filter(m=>!(m.venta && m.dex)).length;
+      return [s, `${NOMBRE[s]} · ${num(falta)} de ${num(fs.length)}`];
+    }),
+    ...(D.fuera ? [["fuera", `No están en VenCloud · ${num(D.fuera.length)}`]] : [])];
+  if(!pest.some(([id])=>id===PESTANA)) PESTANA = pest.length ? pest[0][0] : "nayax";
+  $("#pestanas").innerHTML = pest.map(([id,t])=>
+    `<button class="btn" type="button" role="tab" data-p="${id}" aria-pressed="${id===PESTANA}">${esc(t)}</button>`).join("");
+  $("#pestanas").querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{ PESTANA=b.dataset.p; pinta(); }));
+
+  $("#filtro").disabled = PESTANA==="fuera";
+  if(PESTANA==="fuera"){
+    const por = {};
+    (D.fuera||[]).forEach(f=>{ por[f.sistema]=(por[f.sistema]||0)+1; });
+    $("#kpis").innerHTML = Object.entries(por).map(([s,n])=>`<div class="kpi"><div class="et">${esc(NOMBRE[s]||s)}</div>
+      <div class="vl">${num(n)}</div><div class="nt">en el sistema y no en VenCloud</div></div>`).join("");
+    $("#tTabla").textContent = "Están en un sistema de telemetría y no en VenCloud";
+    $("#sTabla").textContent = "Lo que trae el fichero de cada sistema y no se ha podido cruzar con ninguna máquina instalada en VenCloud. No tienen centro, así que solo salen en el perfil sin ámbito.";
+  }else{
+    const fs = filasDe(PESTANA), n = fs.length;
+    const v = fs.filter(m=>m.venta).length, x = fs.filter(m=>m.dex).length, nada = fs.filter(m=>!m.venta && !m.dex).length;
+    $("#kpis").innerHTML = `
+      <div class="kpi"><div class="et">Máquinas</div><div class="vl">${num(n)}</div><div class="nt">con ${esc(NOMBRE[PESTANA])} en este ámbito</div></div>
+      <div class="kpi"><div class="et">Venta por telemetría</div><div class="vl">${pct(v,n)}</div><div class="nt">${num(v)} la mandaron a VenCloud</div></div>
+      <div class="kpi"><div class="et">DEX</div><div class="vl">${pct(x,n)}</div><div class="nt">${num(x)} mandaron su lectura</div></div>
+      <div class="kpi"><div class="et">Ni venta ni DEX</div><div class="vl">${num(nada)}</div><div class="nt">no transmitieron nada ese día</div></div>`;
+    const QUE = {falta:"sin venta o sin DEX", sin_venta:"sin venta por telemetría", sin_dex:"sin DEX",
+                 nada:"sin venta ni DEX", todas:"todas"};
+    $("#tTabla").textContent = `${NOMBRE[PESTANA]}: ${QUE[$("#filtro").value]}`;
+    $("#sTabla").textContent = PESTANA==="nayax"
+      ? "Máquinas con Nayax que ese día no mandaron a VenCloud su venta, su DEX o las dos. La última comunicación es la que traía el fichero de Nayax al subirlo."
+      : `Máquinas con ${NOMBRE[PESTANA]} cuya venta o lectura no entró en VenCloud ese día.`;
+  }
+
+  const {cols, filas} = actual();
+  $("#cuenta").textContent = `${num(filas.length)} ${filas.length===1?"fila":"filas"}`;
+  if(!filas.length){
+    $("#tabla").innerHTML = `<p class="vacio">Ninguna${PESTANA==="fuera" ? "" : " con este filtro el " + esc(fechaLarga(dia))}.</p>`;
+    return;
+  }
+  const vis = filas.slice(0, MAX_FILAS);
+  $("#tabla").innerHTML = `<table><thead><tr>${cols.map(c=>`<th>${esc(c[0])}</th>`).join("")}</tr></thead><tbody>
+    ${vis.map(f=>`<tr>${cols.map(c=>`<td data-et="${esc(c[0])}">${c[1](f)}</td>`).join("")}</tr>`).join("")}
+    </tbody></table>`
+    + (filas.length > vis.length ? `<p class="vacio">Y ${num(filas.length-vis.length)} más: están todas en el CSV.</p>` : "");
+}
+
+function csv(){
+  const {cols, filas} = actual();
+  const q = v => { const s = String(v==null?"":v); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
+  const texto = "﻿" + [cols.map(c=>q(c[0])).join(";"), ...filas.map(f=>cols.map(c=>q(c[2](f))).join(";"))].join("\r\n");
+  const url = URL.createObjectURL(new Blob([texto], {type:"text/csv;charset=utf-8"}));
+  const a = document.createElement("a");
+  a.href = url; a.download = `telemetria_${PESTANA}_${$("#dia").value}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+function pintaFicheros(){
+  const fi = (D.ficheros && D.ficheros.ficheros) || {}, faltan = (D.ficheros && D.ficheros.faltan) || [];
+  const partes = Object.entries(fi).map(([t,f])=>{
+    const r = f.resumen || {};
+    const extra = r.exportado ? `, exportado el ${fechaCorta(r.exportado)}` : "";
+    return `${esc(NOMBRE[t]||t)} (${esc(f.nombre)}, subido el ${esc(fechaCorta(f.subido))}${esc(extra)})`;
+  });
+  $("#ficheros").innerHTML = `Cruzado con ${partes.join(" · ") || "ningún fichero"}.`
+    + (faltan.length ? ` <b>Falta ${esc(faltan.map(t=>NOMBRE[t]||t).join(", "))}</b>: lo suyo no se ha podido cruzar.` : "")
+    + " Los ficheros se suben en la consola.";
+  $("#ficheros").classList.toggle("mal", !!faltan.length);
+}
+
+(async function arranca(){
+  let r;
+  try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(r.status === 401){ location.href = "/"; return; }
+  if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
+  const yo = await r.json();
+  if(yo.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  $("#quien").textContent = (yo.perfil ? yo.perfil + " · " : "") + (yo.nombre || yo.correo);
+
+  let rt;
+  try{ rt = await fetch("/api/telemetria", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(rt.status === 401){ location.href = "/"; return; }
+  $("#cargando").hidden = true;
+  if(!rt.ok){
+    let d={}; try{ d = await rt.json(); }catch(e){}
+    avisa(d.error || "La telemetría no está disponible ahora mismo.", true);
+    return;
+  }
+  D = await rt.json();
+  for(const [f, v] of Object.entries(D.dias||{})){ VENTA[f] = new Set(v.venta||[]); DEX[f] = new Set(v.dex||[]); }
+  const dias = Object.keys(D.dias||{}).sort().reverse();
+  if(!dias.length){ avisa("Todavía no hay ningún día cruzado.", true); return; }
+  $("#dia").innerHTML = dias.map(f=>`<option value="${esc(f)}">${esc(fechaLarga(f))}</option>`).join("");
+  /* El día que llega en la dirección (desde el cuadrado), o ayer, o el último. */
+  const pedido = new URLSearchParams(location.search).get("dia");
+  const hoy = new Date(), ayer = isoLocal(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()-1));
+  $("#dia").value = dias.includes(pedido) ? pedido : dias.includes(ayer) ? ayer : dias[0];
+  if(!dias.includes(pedido) && !dias.includes(ayer))
+    avisa(`Todavía no hay datos de ayer: lo último cruzado es del ${fechaLarga(dias[0])}.`, true);
+  pintaFicheros();
+  ["#dia","#filtro"].forEach(s=>$(s).addEventListener("change", pinta));
+  $("#busca").addEventListener("input", pinta);
+  $("#bCsv").addEventListener("click", csv);
+  $("#todo").hidden = false;
+  pinta();
+  const gen = D.generado ? new Date(D.generado) : null;
+  $("#pie").innerHTML = "Venta = la máquina sale ese día en la venta por telemetría de VenCloud (informe 179). "
+    + "DEX = la máquina mandó sola su lectura (parte de SYSTEM con la lectura capturada). "
+    + "Un día sin venta puede ser un día sin ventas: el fin de semana o un centro cerrado. "
+    + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
+    + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
+  $("#pie").hidden = false;
+})();
+</script>
+</body>
+</html>

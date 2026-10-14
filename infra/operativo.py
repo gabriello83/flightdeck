@@ -56,6 +56,12 @@ CLASES = {
     200: "Kiosko",
 }
 
+# La cifra grande del cuadrado de telemetria cuando hay ficheros de los sistemas
+# de cobro (docs/52): «venta» es el porcentaje de maquinas que mandaron venta por
+# telemetria a VenCloud ese dia; «dex», el de las que mandaron su lectura. Las
+# dos viajan siempre; esto solo dice cual va en grande y pinta el semaforo.
+TELEMETRIA_PRINCIPAL = "venta"
+
 SIN_PLAN = ("No hay plan de visitas de este día: el informe D12 (VenCloud 184) "
             "no lo trae.")
 
@@ -123,6 +129,7 @@ class DiaOperativo:
         self.vehiculos = set()
         self.visitas_sin_vehiculo = 0
         self.dex = set()             # maquinas con lectura remota
+        self.venta_tel = set()       # maquinas con venta por telemetria
         self.repo = {}               # clase -> unidades vendibles repuestas
         self.repo_consumibles = 0.0
         self.repo_valor = 0.0
@@ -144,6 +151,13 @@ class DiaOperativo:
                 m = R.v(p, "matricula", "")
                 if m:
                     self.dex.add(m)
+
+    def come_telemetria(self, filas):
+        """Las maquinas que mandaron venta por telemetria ese dia (informe 179)."""
+        for f in filas:
+            m = str(R.v(f, "matricula", "") or "").strip().upper()
+            if m:
+                self.venta_tel.add(m)
 
     def come_plan(self, filas):
         """El plan del dia: los puntos de venta que tocaba visitar.
@@ -208,6 +222,10 @@ class Operativo:
         self.apertura = {}
         self.cierre = {}
         self.foto = {}
+        # La telemetria segun los ficheros de los sistemas de cobro (docs/52):
+        # None mientras no se haya subido ninguno.
+        self.externa = None
+        self.fuera = None
         # Los cierres de inventario de ALMACEN, por periodo. Solo las filas de
         # tipo A: son unas quince al mes.
         self.balance = {}
@@ -291,6 +309,30 @@ class Operativo:
         self.foto["pdvs"] = {"activos": len(pdvs), "maquinas": len(maquinas)}
         self._auditables = auditables
 
+    def pon_telemetria(self, cruce, propias, ficheros, fuera=None):
+        """Las maquinas de este perfil que, segun los ficheros, tienen telemetria.
+
+        `cruce` es telemetria.cruza() sobre el censo ENTERO; `propias`, las filas
+        del censo de este perfil: el ambito se aplica aqui, al escribir. Las que
+        estan en un sistema y no en VenCloud no tienen centro, asi que no son de
+        ningun perfil acotado: solo las ve el que no tiene ambito, y para los
+        demas `fuera` llega None.
+        """
+        if cruce is None:
+            return
+        maquinas = {}
+        for f in propias:
+            mat = str(R.v(f, "matricula", "") or "").strip().upper()
+            x = cruce["maquinas"].get(mat)
+            if x and mat not in maquinas:
+                maquinas[mat] = dict(x, censo={
+                    "delegacion": R.v(f, "delegacion", ""), "cliente": R.v(f, "cliente", ""),
+                    "num_centro": R.v(f, "num_centro", ""), "centro": R.v(f, "centro", ""),
+                    "cod_pdv": str(R.v(f, "cod_pdv", "") or ""), "ubicacion": R.v(f, "ubicacion", "")})
+        self.externa = maquinas
+        self.fuera = fuera
+        self.foto["telemetria"] = ficheros
+
     def come_balance(self, filas):
         for b in filas:
             if R.v(b, "tipo_elemento") != "A":
@@ -340,16 +382,96 @@ class Operativo:
             "valor": round(d.repo_valor, 2),
         }
 
+        out["telemetria"] = (self.telemetria_del_dia(d) if self.externa is not None
+                             else self.telemetria_vencloud(d))
+        return out
+
+    def telemetria_vencloud(self, d):
+        """Sin ficheros de los sistemas: lo que VenCloud dice que lleva telemetria
+        (40 maquinas en octubre de 2026) y cuantas mandaron su DEX."""
         auditables = getattr(self, "_auditables", None)
         if auditables:
             con = len(d.dex & auditables)
             pct = porcentaje(con, len(auditables))
-            out["telemetria"] = {"auditables": len(auditables), "con_dex": con, "pct": pct,
-                                 "color": semaforo(pct)}
-        else:
-            out["telemetria"] = {"sin_dato": "Ninguna máquina de este ámbito lleva telemetría."
-                                 if auditables is not None else "No se ha podido leer el censo."}
-        return out
+            return {"auditables": len(auditables), "con_dex": con, "pct": pct,
+                    "color": semaforo(pct)}
+        return {"sin_dato": "Ninguna máquina de este ámbito lleva telemetría."
+                if auditables is not None else "No se ha podido leer el censo."}
+
+    def telemetria_del_dia(self, d):
+        """Con los ficheros: de las maquinas que tienen telemetria segun Nayax,
+        Prodelfi y Nebula, cuantas mandaron venta y cuantas DEX a VenCloud."""
+        if not self.externa:
+            return {"sin_dato": "Ninguna máquina de este ámbito sale en los ficheros de "
+                                "telemetría (Nayax, Prodelfi, Nebula).",
+                    "fuera_de_vencloud": len(self.fuera) if self.fuera is not None else None}
+        venta = {m for m in self.externa if m in d.venta_tel}
+        dex = {m for m in self.externa if m in d.dex}
+        por = {}
+        for m, x in self.externa.items():
+            s = por.setdefault(x["sistema"], {"maquinas": 0, "con_venta": 0, "con_dex": 0})
+            s["maquinas"] += 1
+            s["con_venta"] += m in venta
+            s["con_dex"] += m in dex
+        n = len(self.externa)
+        pct_venta, pct_dex = porcentaje(len(venta), n), porcentaje(len(dex), n)
+        pct = pct_dex if TELEMETRIA_PRINCIPAL == "dex" else pct_venta
+        return {"fuente": "ficheros", "principal": TELEMETRIA_PRINCIPAL,
+                "maquinas": n, "con_venta": len(venta), "con_dex": len(dex),
+                "con_las_dos": len(venta & dex), "pct": pct, "color": semaforo(pct),
+                "pct_venta": pct_venta, "pct_dex": pct_dex, "por_sistema": por,
+                "fuera_de_vencloud": len(self.fuera) if self.fuera is not None else None}
+
+    def detalle_telemetria(self, perfil_id, anterior=None):
+        """El fichero de la pagina de telemetria: maquina a maquina, que dias de
+        la semana mandaron venta y cuales DEX.
+
+        Como el informe, acumula: los dias de esta noche sobre los que ya habia
+        escritos, para que un dia que ya no se recalcula no se pierda. Cada dia
+        guarda solo las maquinas que mandaron algo; el resto es lo que falta.
+        """
+        if self.externa is None:
+            return None
+        previos = (anterior or {}).get("dias") or {}
+        dias = {}
+        for f, d in self.dias.items():
+            if d is not None:
+                dias[f] = {"venta": sorted(m for m in self.externa if m in d.venta_tel),
+                           "dex": sorted(m for m in self.externa if m in d.dex)}
+        for f, v in previos.items():
+            dias.setdefault(f, v)
+        dias = dict(sorted(dias.items())[-DIAS_NOCHE:])
+        maquinas = []
+        for m, x in sorted(self.externa.items()):
+            c = x["censo"]
+            fila = {"matricula": m, "sistema": x["sistema"],
+                    "tambien": [s for s in x["sistemas"] if s != x["sistema"]],
+                    "delegacion": c["delegacion"], "cliente": c["cliente"],
+                    "num_centro": c["num_centro"], "centro": c["centro"],
+                    "cod_pdv": c["cod_pdv"], "ubicacion": c["ubicacion"]}
+            if "nayax" in x:
+                fila["nayax"] = {"id": x["nayax"]["id"], "ultima": x["nayax"]["ultima"]}
+            if "prodelfi" in x:
+                p = x["prodelfi"]
+                fila["prodelfi"] = {"codigo": p["codigo"], "grupo": p["grupo"],
+                                    "descripcion": p["descripcion"], "como": p["como"]}
+            if "nebula" in x:
+                fila["nebula"] = dict(x["nebula"])
+            maquinas.append(fila)
+        return {
+            "generado": datetime.datetime.utcnow().isoformat() + "Z",
+            "perfil": perfil_id,
+            "ultimo_dia": max(dias) if dias else None,
+            "dias": dias,
+            "ficheros": self.foto.get("telemetria"),
+            "maquinas": maquinas,
+            "fuera": self.fuera,
+            "_nota": ("Máquinas con telemetría según los ficheros de Nayax, Prodelfi y Nebula "
+                      "subidos en la consola, cruzadas con el censo de VenCloud. Cada día lleva "
+                      "las que mandaron venta por telemetría (informe 179) y las que mandaron "
+                      "su lectura (DEX). «fuera» son las de esos sistemas que no están en "
+                      "VenCloud; null si el perfil está acotado (no tienen centro)."),
+        }
 
     def fichero(self, perfil_id, anterior=None):
         """El fichero del perfil: los dias de esta noche sobre los que ya habia.
