@@ -20,7 +20,7 @@ LA ULTIMA COMPRA es el ultimo movimiento de tipo CO (entrada por albaran de
 compra: «Albarán de compra: ...», «Proveedor: BIMBO»), en unidades, como la
 existencia. Es lo que llego al almacen; el pedido de compra en si no se baja.
 
-LO QUE TRAE EL MAESTRO DE ARTICULOS (M8_EXT_MAESTRO_ARTICULOS, sin parametros): las
+LO QUE TRAE EL MAESTRO DE ARTICULOS (M8 · EXT_MAESTRO_ARTICULOS, sin parametros): las
 unidades por pack y por caja (`unidpack`, `unidcaja`) y los codigos de barras
 (`stocks.articuloscodequivalentes`), cada uno con la cantidad que representa.
 Un codigo con cantidad 1 es el de la UNIDAD; el de cantidad 24, el de una caja
@@ -28,7 +28,7 @@ de 24. Eso es lo que se deduce del modelo, y el maestro trae el dato en bruto
 para poder comprobarlo con el primer volcado. Mientras el informe no exista,
 la pagina lo dice en vez de enseñar los productos como si no tuvieran codigo.
 
-Las fotos (M9_EXT_MAESTRO_ARTICULOS_FOTOS) vienen en base64 y se guardan una vez
+Las fotos (M9 · EXT_MAESTRO_ARTICULOS_FOTOS) vienen en base64 y se guardan una vez
 para todos en cabina/_articulos/fotos/; quien puede ver cada una lo dice el
 fichero de su perfil, que solo cita las de los productos de sus almacenes.
 """
@@ -44,9 +44,9 @@ import reglas as R
 UMBRAL = 0.15
 MOV_COMPRA = "CO"
 
-SIN_MAESTRO = ("Falta el maestro de artículos de VenCloud (M8_EXT_MAESTRO_ARTICULOS): sin él no "
+SIN_MAESTRO = ("Falta el maestro de artículos de VenCloud (M8 · EXT_MAESTRO_ARTICULOS): sin él no "
                "hay unidades por pack ni códigos de barras.")
-SIN_FOTOS = ("Falta el informe de fotos de VenCloud (M9_EXT_MAESTRO_ARTICULOS_FOTOS): los "
+SIN_FOTOS = ("Falta el informe de fotos de VenCloud (M9 · EXT_MAESTRO_ARTICULOS_FOTOS): los "
              "productos salen sin foto.")
 
 # Lo que puede ir en la clave de S3 de una foto. Los codigos de VenCloud son

@@ -1629,7 +1629,7 @@ left join recursos.vehiculosmodelos mo on mo.id = v.vehiculomodeloid
 left join general.delegaciones del     on del.id = v.delegacionid
 ```
 
-## M8 · M8_EXT_MAESTRO_ARTICULOS  *(sin parámetros)*
+## M8 · EXT_MAESTRO_ARTICULOS  *(sin parámetros)*
 
 Los artículos vivos con sus unidades por pack y por caja y todos sus códigos de barras
 (docs/54). Los códigos van juntos en una columna, `código|cantidad|tipo` separados por punto
@@ -1658,7 +1658,7 @@ where a.obsoleto = false
 order by a.codigo
 ```
 
-## M9 · M9_EXT_MAESTRO_ARTICULOS_FOTOS  *(sin parámetros)*
+## M9 · EXT_MAESTRO_ARTICULOS_FOTOS  *(sin parámetros)*
 
 La foto principal de cada artículo que ha pasado por un almacén en los últimos 120 días, en
 base64 (docs/54). Va la miniatura (`fotothumb`) y, si no la tiene, la foto entera. Solo esos

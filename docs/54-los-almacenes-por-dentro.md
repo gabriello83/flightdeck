@@ -68,7 +68,7 @@ vez para todos en `cabina/_articulos/fotos/<código>`, y solo se reescriben si c
 ## Para ponerlo en marcha
 
 1. En VenCloud, crear los dos informes nuevos con el SQL de docs/17: con estos
-   nombres exactos, **M8_EXT_MAESTRO_ARTICULOS** y **M9_EXT_MAESTRO_ARTICULOS_FOTOS**, los dos
+   nombres exactos, **M8 · EXT_MAESTRO_ARTICULOS** y **M9 · EXT_MAESTRO_ARTICULOS_FOTOS**, los dos
    sin parámetros.
    Apuntar el número que les dé VenCloud.
 2. Con esos números se añaden al manifiesto (`maestros/articulos`, `maestros/articulos_fotos`) y
