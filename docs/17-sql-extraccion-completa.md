@@ -1544,6 +1544,56 @@ where (c.table_schema = 'comercial' and c.table_name in ('clientes', 'clientesce
 order by c.table_schema, c.table_name, c.ordinal_position
 ```
 
+## M7 · EXT_MAESTRO_CANALES  *(sin parámetros)*
+
+El planograma de **espirales** de todas las máquinas: cada canal activo con su artículo, su
+capacidad y los precios que guarda. Es la otra mitad de M1 (los carriles de las calientes). Nació
+como `M7 · EXT_AIRBUS_PLANOGRAMA`, que en realidad ya traía toda la red; Gabriele lo renombró el
+15-oct-2026.
+
+Dos cambios sobre aquel SQL:
+
+- El punto de venta se cruza por **`m.pdvid`**, el PDV donde está instalada la máquina, y no por
+  `pdv.maquinaid`: una máquina con un PDV antiguo dado de baja salía dos veces.
+- Trae los **tres precios** y `preciotpdto`, la categoría de precio del canal y si la máquina usa
+  precios en canales o planograma por categorías. **El precio del canal no es el que cobra la
+  máquina** salvo con `precios_en_canales` (docs/19): es una copia que se queda vieja.
+
+```sql
+select
+  c.id                           as id,
+  cast(cli.codigo as text)       as cod_cliente,
+  cli.nombre                     as cliente,
+  cast(cen.numcentro as text)    as num_centro,
+  cen.denomina                   as centro,
+  pdv.codigo                     as cod_pdv,
+  pdv.ubicacion                  as ubicacion,
+  m.codigo                       as matricula,
+  m.preciosencanales             as precios_en_canales,
+  m.planogporcategorias          as planograma_por_categorias,
+  c.numero                       as numero,
+  c.etiqueta                     as canal,
+  c.capacmax                     as capacidad_max,
+  c.stockrecom                   as stock_recomendado,
+  c.cargaminima                  as carga_minima,
+  a.codigo                       as cod_articulo,
+  a.denomina                     as articulo,
+  k.codigo                       as cod_categoria_precio,
+  c.precioef                     as precio_canal_ef,
+  c.preciotp                     as precio_canal_tp,
+  c.preciotc                     as precio_canal_tc,
+  c.preciotpdto                  as precio_canal_tpdto
+from recursos.maquinascanales c
+join recursos.maquinas m                       on m.id = c.maquinaid
+left join vending.pdvs pdv                     on pdv.id = m.pdvid
+left join comercial.clientescentros cen        on cen.id = pdv.clientecentroid
+left join comercial.clientes cli               on cli.id = cen.clienteid
+left join stocks.articulos a                   on a.id = c.articuloid
+left join stocks.articuloscategoriasprecios k  on k.id = c.articulocategoriaprecioid
+where c.activo is true
+order by cli.codigo, cen.numcentro, pdv.codigo, m.codigo, c.etiqueta
+```
+
 ## M10 · EXT_MAESTRO_TARIFAS  *(sin parámetros)*
 
 Todas las líneas de **precio de venta** que VenCloud usa para decidir qué cobra cada máquina, en una
