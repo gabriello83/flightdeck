@@ -1544,12 +1544,12 @@ where (c.table_schema = 'comercial' and c.table_name in ('clientes', 'clientesce
 order by c.table_schema, c.table_name, c.ordinal_position
 ```
 
-## M7 · EXT_MAESTRO_CANALES  *(sin parámetros)*
+## M7 · EXT_PLANOGRAMA  *(sin parámetros)*  ·  **informe 178**
 
 El planograma de **espirales** de todas las máquinas: cada canal activo con su artículo, su
 capacidad y los precios que guarda. Es la otra mitad de M1 (los carriles de las calientes). Nació
 como `M7 · EXT_AIRBUS_PLANOGRAMA`, que en realidad ya traía toda la red; Gabriele lo renombró el
-15-oct-2026.
+15-oct-2026. Se baja cada noche a `maestros/planograma/` (`m_planograma` en el manifiesto).
 
 Dos cambios sobre aquel SQL:
 
