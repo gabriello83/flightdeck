@@ -27,7 +27,7 @@ en un cliente o en un grupo de clientes, y hay **tarifas estándar**: las tablas
 Un precio que sale de una de esas tablas es de nivel **Estándar**, y se dice a quién está asignada.
 
 El orden es el de VenCloud: su función `vending.getprecioscanal`, leída el 15-oct-2026 con la sonda
-`EXT_SONDA_PRECIOS` (docs/17, M7Z). Busca así, y se queda con lo primero que encuentra:
+`EXT_SONDA_PRECIOS` (docs/17, M10Z). Busca así, y se queda con lo primero que encuentra:
 
 | paso | dónde | nivel en la página |
 |---|---|---|
@@ -60,7 +60,7 @@ calcula aparte un precio subvencionado, y si la máquina cobra ése, ahí no coi
 
 | | |
 |---|---|
-| Precio de tarifa, venta gratuita, precios en canales | `M7_EXT_MAESTRO_TARIFAS` (docs/17, M7), maestro, cada noche → `maestros/tarifas/m_tarifas.json.gz` |
+| Precio de tarifa, venta gratuita, precios en canales | `M10 · EXT_MAESTRO_TARIFAS` (docs/17, M10), maestro, cada noche → `maestros/tarifas/m_tarifas.json.gz` |
 | Qué tarifa estándar tiene asignada cada sitio | `EXT_INSTALACIONES` (M5): `tarifa_vending_pdv` y `tarifa_vending_cliente` |
 | Precio cobrado | telemetría (A12) y audit de la visita (A11) |
 | Productos de la máquina | reposiciones (A2) |

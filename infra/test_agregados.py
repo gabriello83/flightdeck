@@ -486,7 +486,7 @@ comprueba("y nada mas", _inst2["nuevos"]["clientes"], [])
 
 print("\nTarifas (docs/52): sin maestro se dice; con maestro, resumen y un fichero por centro")
 _op = json.loads(ALMACEN["cabina/interno/operativo.json"])
-comprueba("sin el maestro, el cuadrado dice por que", "M7_EXT_MAESTRO_TARIFAS" in _op["foto"]["tarifas"]["sin_dato"], True)
+comprueba("sin el maestro, el cuadrado dice por que", "M10 · EXT_MAESTRO_TARIFAS" in _op["foto"]["tarifas"]["sin_dato"], True)
 comprueba("y no se escribe ningun resumen que parezca bueno",
           [k for k in ALMACEN if "/tarifas/" in k and k.startswith("cabina/interno")], [])
 comprueba("el estado de seis meses se guarda igual", "cabina/_tarifas/estado.json.gz" in ALMACEN, True)

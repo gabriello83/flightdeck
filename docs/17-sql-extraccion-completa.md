@@ -1544,7 +1544,7 @@ where (c.table_schema = 'comercial' and c.table_name in ('clientes', 'clientesce
 order by c.table_schema, c.table_name, c.ordinal_position
 ```
 
-## M7 · M7_EXT_MAESTRO_TARIFAS  *(sin parámetros)*
+## M10 · EXT_MAESTRO_TARIFAS  *(sin parámetros)*
 
 Todas las líneas de **precio de venta** que VenCloud usa para decidir qué cobra cada máquina, en una
 sola tabla y cada una con el nivel del que cuelga. Es lo que necesita el cuadrado de tarifas del
@@ -1552,7 +1552,7 @@ informe general operativo ([52-tarifas.md](52-tarifas.md)): hasta ahora sólo sa
 tiene asignada cada cliente, centro y punto de venta (M5), pero no **qué precio** pone a cada
 producto.
 
-Lleva exactamente lo que mira `vending.getprecioscanal` (leída con la sonda M7Z el 15-oct-2026) y
+Lleva exactamente lo que mira `vending.getprecioscanal` (leída con la sonda M10Z el 15-oct-2026) y
 nada más: siete trozos unidos con `union all`.
 
 | `origen` | tabla | qué es |
@@ -1766,7 +1766,7 @@ where p.vtagratuita is true
        and cast(p.fechafinsubvencion as date) >= current_date)
 ```
 
-## M7Z · EXT_SONDA_PRECIOS  *(sin parámetros, se lanza una vez)*
+## M10Z · EXT_SONDA_PRECIOS  *(sin parámetros, se lanza una vez)*
 
 No es un informe de datos: es la pregunta «¿cómo decide VenCloud qué precio rige en cada
 máquina?». Lo calcula su función `vending.getprecioscanal` (la del informe 37), y dentro está el
