@@ -682,12 +682,12 @@ const servidor = http.createServer((pet, res) => {
     // Sin el maestro de articulos no se ensena a nadie «sin codigo»: se dice que falta.
     const antes = API['/api/almacenes'];
     API['/api/almacenes'] = { ...antes, maestro: false, fotos: false,
-      avisos: ['Falta el maestro de artículos de VenCloud (EXT_MAESTRO_ARTICULOS): sin él no hay unidades por pack ni códigos de barras.'],
+      avisos: ['Falta el maestro de artículos de VenCloud (M8_EXT_MAESTRO_ARTICULOS): sin él no hay unidades por pack ni códigos de barras.'],
       almacenes: antes.almacenes.map(a => ({ ...a, productos: a.productos.map(p => {
         const q = { ...p, foto: false }; ['unid_pack', 'unid_caja', 'ean_unidad', 'otros_codigos', 'categoria'].forEach(k => delete q[k]); return q; }) })) };
     const b = await abre('/almacenes/');
     await b.pagina.waitForSelector('#filas tr[data-cod]');
-    comprueba_que('sin maestro lo dice arriba', (await b.pagina.textContent('#avisos')).includes('EXT_MAESTRO_ARTICULOS'));
+    comprueba_que('sin maestro lo dice arriba', (await b.pagina.textContent('#avisos')).includes('M8_EXT_MAESTRO_ARTICULOS'));
     comprueba('y no hay filtro de sin codigo',
       await b.pagina.$$eval('#resumen button', x => x.map(t => t.dataset.f)), ['todos', 'bajo']);
     comprueba_que('ni nadie sale sin codigo', !(await b.pagina.textContent('#filas')).includes('Sin código de unidad'));
