@@ -56,12 +56,6 @@ CLASES = {
     200: "Kiosko",
 }
 
-# La cifra grande del cuadrado de telemetria cuando hay ficheros de los sistemas
-# de cobro (docs/53): «venta» es el porcentaje de maquinas que mandaron venta por
-# telemetria a VenCloud ese dia; «dex», el de las que mandaron su lectura. Las
-# dos viajan siempre; esto solo dice cual va en grande y pinta el semaforo.
-TELEMETRIA_PRINCIPAL = "venta"
-
 SIN_PLAN = ("No hay plan de visitas de este día: el informe D12 (VenCloud 184) "
             "no lo trae.")
 
@@ -310,7 +304,13 @@ class Operativo:
         self._auditables = auditables
 
     def pon_telemetria(self, cruce, propias, ficheros, fuera=None):
-        """Las maquinas de este perfil que, segun los ficheros, tienen telemetria.
+        """Las diferencias entre los sistemas de telemetria y VenCloud.
+
+        Gabriele, 15-oct: el dato de telemetria sale SIEMPRE de VenCloud; los
+        ficheros de Nayax, Prodelfi y Nebula solo sirven para ver en que no
+        coinciden. Asi que esto no toca el cuadrado: alimenta la pagina de
+        diferencias, con las maquinas que tiene algun sistema y las que VenCloud
+        marca con telemetria aunque no las tenga ninguno.
 
         `cruce` es telemetria.cruza() sobre el censo ENTERO; `propias`, las filas
         del censo de este perfil: el ambito se aplica aqui, al escribir. Las que
@@ -323,9 +323,16 @@ class Operativo:
         maquinas = {}
         for f in propias:
             mat = str(R.v(f, "matricula", "") or "").strip().upper()
+            if not mat or mat in maquinas:
+                continue
             x = cruce["maquinas"].get(mat)
-            if x and mat not in maquinas:
-                maquinas[mat] = dict(x, censo={
+            marcada = tiene_telemetria(f)
+            if not x and not marcada:
+                continue
+            if not x:
+                # VenCloud dice que lleva telemetria y no esta en ningun fichero.
+                x = {"sistema": "solo_vencloud", "sistemas": []}
+            maquinas[mat] = dict(x, vencloud=marcada, censo={
                     "delegacion": R.v(f, "delegacion", ""), "cliente": R.v(f, "cliente", ""),
                     "num_centro": R.v(f, "num_centro", ""), "centro": R.v(f, "centro", ""),
                     "cod_pdv": str(R.v(f, "cod_pdv", "") or ""), "ubicacion": R.v(f, "ubicacion", "")})
@@ -382,8 +389,9 @@ class Operativo:
             "valor": round(d.repo_valor, 2),
         }
 
-        out["telemetria"] = (self.telemetria_del_dia(d) if self.externa is not None
-                             else self.telemetria_vencloud(d))
+        out["telemetria"] = self.telemetria_vencloud(d)
+        if self.externa is not None and "sin_dato" not in out["telemetria"]:
+            out["telemetria"]["diferencias"] = self.diferencias()
         return out
 
     def telemetria_vencloud(self, d):
@@ -398,29 +406,20 @@ class Operativo:
         return {"sin_dato": "Ninguna máquina de este ámbito lleva telemetría."
                 if auditables is not None else "No se ha podido leer el censo."}
 
-    def telemetria_del_dia(self, d):
-        """Con los ficheros: de las maquinas que tienen telemetria segun Nayax,
-        Prodelfi y Nebula, cuantas mandaron venta y cuantas DEX a VenCloud."""
-        if not self.externa:
-            return {"sin_dato": "Ninguna máquina de este ámbito sale en los ficheros de "
-                                "telemetría (Nayax, Prodelfi, Nebula).",
-                    "fuera_de_vencloud": len(self.fuera) if self.fuera is not None else None}
-        venta = {m for m in self.externa if m in d.venta_tel}
-        dex = {m for m in self.externa if m in d.dex}
-        por = {}
-        for m, x in self.externa.items():
-            s = por.setdefault(x["sistema"], {"maquinas": 0, "con_venta": 0, "con_dex": 0})
-            s["maquinas"] += 1
-            s["con_venta"] += m in venta
-            s["con_dex"] += m in dex
-        n = len(self.externa)
-        pct_venta, pct_dex = porcentaje(len(venta), n), porcentaje(len(dex), n)
-        pct = pct_dex if TELEMETRIA_PRINCIPAL == "dex" else pct_venta
-        return {"fuente": "ficheros", "principal": TELEMETRIA_PRINCIPAL,
-                "maquinas": n, "con_venta": len(venta), "con_dex": len(dex),
-                "con_las_dos": len(venta & dex), "pct": pct, "color": semaforo(pct),
-                "pct_venta": pct_venta, "pct_dex": pct_dex, "por_sistema": por,
-                "fuera_de_vencloud": len(self.fuera) if self.fuera is not None else None}
+    def diferencias(self):
+        """Cuantas maquinas no cuadran entre los sistemas y VenCloud (docs/53).
+
+        Solo lo que se ve sin mirar el dia: maquinas de un sistema que VenCloud
+        no marca con telemetria, las que VenCloud marca y no tiene ningun
+        sistema, y las de un sistema que no estan en VenCloud. Lo que pasa cada
+        dia (si mandaron venta o DEX) esta en la pagina.
+        """
+        en_sistema = [x for x in self.externa.values() if x["sistema"] != "solo_vencloud"]
+        return {"en_sistemas": len(en_sistema),
+                "sin_marca": sum(1 for x in en_sistema if not x["vencloud"]),
+                "solo_vencloud": sum(1 for x in self.externa.values()
+                                     if x["sistema"] == "solo_vencloud"),
+                "fuera": len(self.fuera) if self.fuera is not None else None}
 
     def detalle_telemetria(self, perfil_id, anterior=None):
         """El fichero de la pagina de telemetria: maquina a maquina, que dias de
@@ -446,6 +445,7 @@ class Operativo:
             c = x["censo"]
             fila = {"matricula": m, "sistema": x["sistema"],
                     "tambien": [s for s in x["sistemas"] if s != x["sistema"]],
+                    "vencloud": x["vencloud"],
                     "delegacion": c["delegacion"], "cliente": c["cliente"],
                     "num_centro": c["num_centro"], "centro": c["centro"],
                     "cod_pdv": c["cod_pdv"], "ubicacion": c["ubicacion"]}
@@ -466,8 +466,10 @@ class Operativo:
             "ficheros": self.foto.get("telemetria"),
             "maquinas": maquinas,
             "fuera": self.fuera,
-            "_nota": ("Máquinas con telemetría según los ficheros de Nayax, Prodelfi y Nebula "
-                      "subidos en la consola, cruzadas con el censo de VenCloud. Cada día lleva "
+            "_nota": ("Diferencias entre los sistemas de telemetría (ficheros de Nayax, Prodelfi y "
+                      "Nebula subidos en la consola) y VenCloud: máquinas de un sistema, con "
+                      "«vencloud» si el censo las marca con telemetría, y las que el censo marca "
+                      "sin estar en ningún sistema (sistema «solo_vencloud»). Cada día lleva "
                       "las que mandaron venta por telemetría (informe 179) y las que mandaron "
                       "su lectura (DEX). «fuera» son las de esos sistemas que no están en "
                       "VenCloud; null si el perfil está acotado (no tienen centro)."),

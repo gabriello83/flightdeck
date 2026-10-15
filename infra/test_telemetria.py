@@ -290,9 +290,14 @@ comprueba("sin fichero de Prodelfi, ZAZ1 no se da por Prodelfi",
           "23FE1655" in TE.cruza(CENSO, {"nayax": leidos["nayax"]})["maquinas"], False)
 
 # ----------------------------------------------------------------------
-print("\nEl cuadrado: de las que tienen telemetria segun los ficheros, cuantas mandan a VenCloud")
+print("\nEl cuadrado sale de VenCloud; los ficheros, solo para las diferencias (Gabriele, 15-oct)")
 DIA = AYER.isoformat()
 meta = {"ficheros": {"nayax": {"nombre": "MachineStatus.xlsx"}}, "faltan": []}
+# VenCloud marca con telemetria: una que tiene Nayax, una de Prodelfi y una que
+# no esta en ningun sistema.
+for f in CENSO:
+    if f["matricula"] in ("20SE0001", "18CE4507", "24SE0777"):
+        f["telemetria"] = 40
 
 
 def dex(m):
@@ -304,25 +309,25 @@ op = OP.Operativo([DIA])
 op.come_censo(CENSO)
 op.pon_telemetria(c, CENSO, meta, fuera=c["fuera"])
 d = op.dia(DIA)
-d.come_telemetria([{"matricula": "20SE0001"}, {"matricula": "20se0002"}, {"matricula": "15FE1566"},
-                   {"matricula": "20SE0005"}])  # esta no tiene telemetria segun los ficheros
-d.come_partes([dex("20SE0001"), dex("18CE4507")])
+d.come_telemetria([{"matricula": "20SE0001"}, {"matricula": "20se0002"}, {"matricula": "15FE1566"}])
+d.come_partes([dex("20SE0001"), dex("18CE4507"), dex("15FE1566")])
 t = op.cuadrados_del_dia(d)["telemetria"]
 n = len(c["maquinas"])
-comprueba("el universo son las de los ficheros", t["maquinas"], n)
-comprueba("con venta: 3 (la de sin telemetria no suma)", t["con_venta"], 3)
-comprueba("con DEX: 2", t["con_dex"], 2)
-comprueba("con las dos: 1", t["con_las_dos"], 1)
-comprueba("la cifra grande es la venta", (t["principal"], t["pct"]), ("venta", OP.porcentaje(3, n)))
-comprueba("y pinta el semaforo", t["color"], "rojo")
-comprueba("por sistema: Nayax", t["por_sistema"]["nayax"], {"maquinas": 4, "con_venta": 1, "con_dex": 1})
-comprueba("las que estan fuera de VenCloud", t["fuera_de_vencloud"], 4)
+comprueba("el universo es el de VenCloud: las tres que marca", t["auditables"], 3)
+comprueba("y el DEX, de esas: 2 (la de Nebula no esta marcada y no suma)", t["con_dex"], 2)
+comprueba("con su semaforo", (t["pct"], t["color"]), (OP.porcentaje(2, 3), "rojo"))
+comprueba("debajo, las diferencias con los sistemas", t["diferencias"],
+          {"en_sistemas": n, "sin_marca": n - 2, "solo_vencloud": 1, "fuera": 4})
 
 det = op.detalle_telemetria("interno")
-comprueba("la pagina: una fila por maquina", len(det["maquinas"]), n)
+comprueba("la pagina: las de los sistemas y la que solo tiene VenCloud", len(det["maquinas"]), n + 1)
+solo = [x["matricula"] for x in det["maquinas"] if x["sistema"] == "solo_vencloud"]
+comprueba("la que VenCloud marca y ningun sistema tiene", solo, ["24SE0777"])
 comprueba("el dia lleva quien mando venta", det["dias"][DIA]["venta"], ["15FE1566", "20SE0001", "20SE0002"])
 f2 = next(x for x in det["maquinas"] if x["matricula"] == "20SE0002")
 comprueba("con su sistema y lo que tambien tiene", (f2["sistema"], f2["tambien"]), ("prodelfi", ["nayax"]))
+comprueba("si VenCloud la marca con telemetria", (f2["vencloud"],
+          next(x for x in det["maquinas"] if x["matricula"] == "20SE0001")["vencloud"]), (False, True))
 comprueba("y el centro del censo", (f2["centro"], f2["delegacion"]), ("HOSPITAL FUNDACIO PUIGVERT", "Cataluña"))
 comprueba("y la ultima comunicacion de Nayax", f2["nayax"]["ultima"][:10], HACE_3.isoformat())
 viejo = {"dias": {"2020-01-01": {"venta": ["X"], "dex": []}}}
@@ -332,17 +337,17 @@ comprueba("acumula los dias anteriores, y guarda una semana",
 print("\nUn perfil acotado: solo sus maquinas, y sin las de fuera")
 propias = [f for f in CENSO if f["cliente"] == "AMAZON"]
 op2 = OP.Operativo([DIA])
+op2.come_censo(propias)
 op2.pon_telemetria(c, propias, meta, fuera=None)
 t2 = op2.cuadrados_del_dia(op2.dia(DIA))["telemetria"]
-comprueba("las dos de ZAZ1", t2["maquinas"], 2)
-comprueba("las de fuera no son de nadie: no se cuentan", t2["fuera_de_vencloud"], None)
-comprueba("ni salen en la pagina", op2.detalle_telemetria("amazon")["fuera"], None)
-op3 = OP.Operativo([DIA])
-op3.pon_telemetria(c, [f for f in CENSO if f["cliente"] == "COLEGIO SANTA ANA"], meta)
-comprueba("si ninguna de las suyas esta en los ficheros, se dice",
-          "sin_dato" in op3.cuadrados_del_dia(op3.dia(DIA))["telemetria"], True)
+comprueba("VenCloud no marca ninguna de Amazon: sin dato, aunque Prodelfi tenga dos",
+          ("sin_dato" in t2, "diferencias" in t2), (True, False))
+det2 = op2.detalle_telemetria("amazon")
+comprueba("pero la pagina si las ensena", sorted(x["matricula"] for x in det2["maquinas"]),
+          ["15SE0771", "23FE1655"])
+comprueba("las de fuera no son de nadie: no salen", det2["fuera"], None)
 
-print("\nSin ficheros, el cuadrado de siempre: lo que VenCloud dice que lleva telemetria")
+print("\nSin ficheros, el cuadrado de siempre y sin pagina")
 op4 = OP.Operativo([DIA])
 op4.come_censo([dict(CENSO[0], telemetria=40)])
 op4.pon_telemetria(None, CENSO, meta)
@@ -412,9 +417,9 @@ comprueba("el resumen dice con que ficheros se cruzo",
 oi = json.loads(ALMACEN["cabina/interno/operativo.json"])
 oa = json.loads(ALMACEN["cabina/amazon/operativo.json"])
 ti, ta = oi["dias"][DIA]["telemetria"], oa["dias"][DIA]["telemetria"]
-comprueba("interno: todas las de los ficheros, una con venta", (ti["maquinas"], ti["con_venta"]), (n, 2))
-comprueba("Amazon: las dos de ZAZ1, una con venta y DEX",
-          (ta["maquinas"], ta["con_venta"], ta["con_dex"]), (2, 1, 1))
+comprueba("interno: el dato de VenCloud (3 marcadas, ningun DEX suyo)", (ti["auditables"], ti["con_dex"]), (3, 0))
+comprueba("  y las diferencias", ti["diferencias"]["solo_vencloud"], 1)
+comprueba("Amazon: VenCloud no marca ninguna, y se dice", "sin_dato" in ta, True)
 comprueba("la foto dice que ficheros hay", sorted(oi["foto"]["telemetria"]["ficheros"]),
           ["grupos", "nayax", "nebula", "prodelfi"])
 pi = json.loads(ALMACEN["cabina/interno/telemetria.json"])

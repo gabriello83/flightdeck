@@ -192,10 +192,11 @@ const API = {
                             prodelfi: { nombre: 'Maquinas 1.xlsx', subido: new Date().toISOString(), resumen: {} } },
                 faltan: ['nebula', 'grupos'] },
     maquinas: [
-      { matricula: '20SE0001', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P1', ubicacion: 'Hall', nayax: { id: '20SE0001', ultima: `${iso(HOY)}T10:00:00` } },
-      { matricula: '20SE0002', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P2', ubicacion: 'Planta 1', nayax: { id: '20SE0002', ultima: `${iso(HOY)}T09:00:00` } },
-      { matricula: '20SE0003', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P3', ubicacion: 'Urgencias', nayax: { id: '20SE0003', ultima: '2026-10-01T09:00:00' } },
-      { matricula: '18CE4507', sistema: 'prodelfi', tambien: ['nayax'], delegacion: 'Madrid', cliente: 'RTVE', num_centro: 200, centro: 'TORRESPAÑA', cod_pdv: 'P4', ubicacion: 'Planta 2', prodelfi: { codigo: 4, grupo: 138, descripcion: 'CE4507 Torrespaña', como: 'tipo y número CE4507' }, nayax: { id: '18CE4507', ultima: '2026-10-01T09:00:00' } }
+      { matricula: '20SE0001', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P1', ubicacion: 'Hall', vencloud: true, nayax: { id: '20SE0001', ultima: `${iso(HOY)}T10:00:00` } },
+      { matricula: '20SE0002', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P2', ubicacion: 'Planta 1', vencloud: true, nayax: { id: '20SE0002', ultima: `${iso(HOY)}T09:00:00` } },
+      { matricula: '20SE0003', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P3', ubicacion: 'Urgencias', vencloud: false, nayax: { id: '20SE0003', ultima: '2026-10-01T09:00:00' } },
+      { matricula: '18CE4507', sistema: 'prodelfi', tambien: ['nayax'], delegacion: 'Madrid', cliente: 'RTVE', num_centro: 200, centro: 'TORRESPAÑA', cod_pdv: 'P4', ubicacion: 'Planta 2', vencloud: true, prodelfi: { codigo: 4, grupo: 138, descripcion: 'CE4507 Torrespaña', como: 'tipo y número CE4507' }, nayax: { id: '18CE4507', ultima: '2026-10-01T09:00:00' } },
+      { matricula: '24SE0777', sistema: 'solo_vencloud', tambien: [], vencloud: true, delegacion: 'Andalucía', cliente: 'AIRBUS', num_centro: 300, centro: 'SAN PABLO SUR', cod_pdv: 'P5', ubicacion: 'Comedor' }
     ],
     fuera: [{ sistema: 'nayax', id: '99XX9999', nombre: 'FANTASMA', detalle: 'Serunion / Sur', ultima: `${iso(HOY)}T10:00:00`, motivo: 'La matrícula 99XX9999 no está instalada en VenCloud.' }]
   }
@@ -643,26 +644,31 @@ const servidor = http.createServer((pet, res) => {
       sesiones: ['resumen', 'instalaciones'], catalogo_sesiones: { resumen: 'Resumen', instalaciones: 'Instalaciones y altas' } };
     const op = API['/api/operativo'];
     const antes = JSON.stringify(op);
-    op.dias[iso(AYER)].telemetria = { fuente: 'ficheros', principal: 'venta', maquinas: 2504, con_venta: 1921,
-      con_dex: 972, con_las_dos: 947, pct: 76.7, color: 'amarillo', pct_venta: 76.7, pct_dex: 38.8,
-      por_sistema: { nayax: { maquinas: 2170, con_venta: 1900, con_dex: 950 } }, fuera_de_vencloud: 218 };
+    // El dato sigue siendo el de VenCloud; los ficheros solo anaden las diferencias.
+    op.dias[iso(AYER)].telemetria = { auditables: 2254, con_dex: 975, pct: 43.3, color: 'rojo',
+      diferencias: { en_sistemas: 2504, sin_marca: 300, solo_vencloud: 20, fuera: 218 } };
     op.foto.telemetria = { ficheros: { nayax: { nombre: 'MachineStatus.xlsx' } }, faltan: [] };
     const { pagina, errores, fuera } = await abre('/operativo/');
     await pagina.waitForSelector('.cuadro[data-id="telemetria"]');
-    comprueba('el cuadrado lleva la venta en grande, en amarillo',
+    comprueba('el cuadrado sigue con el DEX de VenCloud, en rojo',
       [(await pagina.textContent('.cuadro[data-id="telemetria"] .vl')).trim(),
-       await pagina.$eval('.cuadro[data-id="telemetria"]', c => c.classList.contains('amarillo'))], ['76,7 %', true]);
-    comprueba_que('y el DEX debajo', (await pagina.textContent('.cuadro[data-id="telemetria"] .sub')).includes('DEX 38,8 %'));
+       await pagina.$eval('.cuadro[data-id="telemetria"]', c => c.classList.contains('rojo'))], ['43,3 %', true]);
+    const sub = await pagina.textContent('.cuadro[data-id="telemetria"] .sub');
+    comprueba_que('y debajo las diferencias con los ficheros',
+      sub.includes('975 de 2254') && sub.includes('538 diferencias con Nayax, Prodelfi y Nebula'));
     comprueba('lleva a la pagina de telemetria, con el dia',
       await pagina.getAttribute('.cuadro[data-id="telemetria"]', 'href'), `/telemetria/?dia=${iso(AYER)}`);
     await Promise.all([pagina.waitForURL('**/telemetria/**'), pagina.click('.cuadro[data-id="telemetria"]')]);
     await pagina.waitForSelector('#tabla table');
-    comprueba('pestañas: Nayax, Prodelfi y las que no estan en VenCloud',
-      await pagina.$$eval('#pestanas button', x => x.map(b => b.dataset.p)), ['nayax', 'prodelfi', 'fuera']);
-    comprueba('Nayax: las que no mandaron venta o DEX ayer',
+    comprueba('pestañas: Nayax, Prodelfi, solo en VenCloud y las que no estan en VenCloud',
+      await pagina.$$eval('#pestanas button', x => x.map(b => b.dataset.p)), ['nayax', 'prodelfi', 'solo_vencloud', 'fuera']);
+    comprueba('Nayax: las que tienen alguna diferencia ayer',
       await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(t => t.textContent.trim())), ['20SE0002', '20SE0003']);
     comprueba_que('con el ultimo dia que si mando', (await pagina.textContent('#tabla tbody tr:nth-child(2)')).match(/\d+ \w+/));
     comprueba_que('y dice que fichero falta', (await pagina.textContent('#ficheros')).includes('Falta Nebula (Coges), Grupos de Prodelfi'));
+    await pagina.selectOption('#filtro', 'sin_marca');
+    comprueba('sin telemetria en VenCloud: la que Nayax tiene y VenCloud no marca',
+      await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(t => t.textContent.trim())), ['20SE0003']);
     await pagina.selectOption('#filtro', 'todas');
     comprueba('todas: las tres', await pagina.locator('#tabla tbody tr').count(), 3);
     await pagina.fill('#busca', 'urgencias');

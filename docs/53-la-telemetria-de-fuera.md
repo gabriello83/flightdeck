@@ -1,7 +1,7 @@
 # 53 · La telemetría de fuera: Nayax, Prodelfi y Nebula contra VenCloud
 
 > `infra/telemetria.py` (leer y cruzar), `infra/api/lambda_api.py` (`/api/admin/telemetria`,
-> `/api/telemetria`), `infra/operativo.py` (`pon_telemetria`, `telemetria_del_dia`,
+> `/api/telemetria`), `infra/operativo.py` (`pon_telemetria`, `diferencias`,
 > `detalle_telemetria`), `infra/lambda_agregados.py` (`lee_telemetria_externa`),
 > `infra/plantilla-web.yaml` (`s3:PutObject` en `externo/telemetria/*`), `app/consola/`
 > (pestaña Telemetría), `app/telemetria/` y el cuadrado de `app/operativo/`.
@@ -13,14 +13,18 @@ transmiten datos en Nayax; máquinas que están en Nayax y no están en VenCloud
 Prodelfi pero no entra la telemetría correctamente o el dato electrónico; lo mismo con Nebula»*.
 Los ficheros los sube él **desde la consola**.
 
+Y el 15 de octubre lo acotó: *«yo quiero que los datos de telemetría salgan siempre desde las
+tablas de VenCloud. Los ficheros de telemetría externa sólo sirven para controlar las diferencias
+entre las plataformas Nayax, Prodelfi, Coges con VenCloud»*. Así que **el cuadrado no cambia de
+dato**: los ficheros no son el universo de nada, sólo el contraste.
+
 ## El problema
 
-VenCloud sabe qué máquinas le mandan venta por telemetría (informe 179) y cuáles le mandan su
-lectura (DEX: partes de SYSTEM con `estado_lectura` 2). Lo que no sabe es cuáles **deberían**
-mandarla. Su campo `telemetria` del censo dice 40 en 40 máquinas, cuando el 14 de octubre había
-2.504 con un sistema de cobro conectado. Eso sólo lo saben los sistemas: Nayax, Prodelfi y Nebula
-(los lectores Coges). Hasta ahora el cuadrado de telemetría medía el DEX sobre esas 40, que no son
-el parque.
+VenCloud sabe qué máquinas tienen telemetría (el campo `telemetria` del censo, distinto de 0), cuáles
+le mandan venta por telemetría (informe 179) y cuáles su lectura (DEX: partes de SYSTEM con
+`estado_lectura` 2). Lo que no sabe es si eso cuadra con lo que de verdad hay conectado: eso sólo lo
+saben los sistemas, Nayax, Prodelfi y Nebula (los lectores Coges). El 14 de octubre VenCloud marcaba
+2.254 máquinas y los sistemas traían 2.504; de ahí salió el fichero de importación de 334.
 
 ## Cómo llegan los ficheros
 
@@ -84,29 +88,33 @@ VenCloud, máquina a máquina. Lo que no se ha podido cruzar: 83 filas de Nayax,
 
 ## El cuadrado
 
-Con ficheros, el universo son **las máquinas que tienen telemetría según los ficheros**, dentro
-del ámbito del perfil. De ellas, cuántas mandaron ese día **venta por telemetría** a VenCloud y
-cuántas su **DEX**. Las dos cifras viajan siempre; la grande (y el semáforo) es la venta
-(`TELEMETRIA_PRINCIPAL` en `operativo.py`), con el DEX debajo. El 13 de octubre: venta 76,7 %,
-DEX 38,8 %, las dos 37,8 %.
+**Sale siempre de VenCloud**, haya ficheros o no: de las máquinas del censo con telemetría, cuántas
+mandaron ese día su DEX. Es el mismo dato de antes (docs/51); el 13 de octubre, 43,3 %.
 
-Sin ningún fichero subido, el cuadrado sigue como estaba (DEX sobre las máquinas del censo con
-telemetría). Un perfil sin ninguna máquina en los ficheros lo dice («sin dato»), no da un cero.
+Si hay ficheros subidos, debajo se añade cuántas diferencias hay con los sistemas, sin mirar el día
+(`diferencias()` en `operativo.py`):
+
+- `sin_marca`: máquinas que tienen un sistema y VenCloud no marca con telemetría;
+- `solo_vencloud`: las que VenCloud marca y no salen en ningún fichero;
+- `fuera`: lo que trae un sistema y no está instalado en VenCloud (sólo en el perfil sin ámbito).
+
+Y el cuadrado lleva a la página. Sin ningún fichero subido, ni diferencias ni enlace.
 
 ## La página
 
-El cuadrado lleva a `/telemetria/?dia=…`, con una pestaña por sistema y los cuatro análisis:
+`/telemetria/?dia=…` enseña las diferencias, con una pestaña por sistema:
 
 | pestaña | qué enseña |
 |---|---|
-| Nayax | máquinas con Nayax que ese día no mandaron venta, DEX o las dos, con la última comunicación que traía el fichero |
+| Nayax | máquinas con Nayax, si VenCloud las marca con telemetría y si ese día le mandaron venta y DEX, con la última comunicación que traía el fichero |
 | Prodelfi | ídem, con el código de Prodelfi, su descripción y cómo se cruzó |
 | Nebula (Coges) | ídem, con el dispositivo y su última venta |
+| Solo en VenCloud | las que VenCloud marca con telemetría y ningún sistema tiene |
 | No están en VenCloud | lo que trae un sistema y no se ha podido cruzar con ninguna máquina instalada, con el motivo |
 
-Cada pestaña filtra (sin venta o sin DEX, sin venta, sin DEX, ni una ni otra, todas), busca, y se
-descarga en CSV. Para cada máquina sale el último día de la semana en que sí mandó; más atrás no se
-guarda y se dice («antes del …»).
+Cada pestaña filtra (con alguna diferencia, sin telemetría en VenCloud, sin venta, sin DEX, ni una
+ni otra, todas), busca, y se descarga en CSV. Para cada máquina sale el último día de la semana en
+que sí mandó; más atrás no se guarda y se dice («antes del …»).
 
 **Ojo con leer «sin venta» como «no transmite»**: un día sin venta puede ser un día sin ventas
 (domingo, centro cerrado). El DEX no depende de que se venda. Por eso la página deja elegir el día

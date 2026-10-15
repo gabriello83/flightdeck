@@ -103,7 +103,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 <div class="env">
   <header class="top">
     <div class="marca">
-      <b>Telemetría</b>
+      <b>Telemetría: diferencias con VenCloud</b>
       <span id="quien"></span>
     </div>
     <div class="acciones">
@@ -120,7 +120,8 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
     <div class="barra">
       <label>Día <select id="dia"></select></label>
       <label>Mostrar <select id="filtro">
-        <option value="falta">Sin venta o sin DEX</option>
+        <option value="falta">Con alguna diferencia</option>
+        <option value="sin_marca">Sin telemetría en VenCloud</option>
         <option value="sin_venta">Sin venta por telemetría</option>
         <option value="sin_dex">Sin DEX</option>
         <option value="nada">Sin venta ni DEX</option>
@@ -146,9 +147,11 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 /* ===================================================================
    Telemetría · digivend.es  (docs/53)
 
-   Las máquinas que tienen telemetría según los ficheros de Nayax, Prodelfi y
-   Nebula que se suben en la consola, cruzadas con el censo de VenCloud, y si
-   ese día mandaron a VenCloud su venta por telemetría y su lectura (DEX).
+   Las diferencias entre los sistemas de telemetría (los ficheros de Nayax,
+   Prodelfi y Nebula que se suben en la consola) y VenCloud: si VenCloud marca
+   la máquina con telemetría, si ese día le llegó su venta y su DEX, las que
+   VenCloud marca sin estar en ningún sistema, y las de un sistema que no están
+   en VenCloud. El dato del cuadrado es siempre el de VenCloud (Gabriele, 15-oct).
 
    El fichero ya llega con el ámbito del perfil aplicado: lo escribió la noche
    para este perfil, y la API no deja pedir otro. Esta página no decide qué
@@ -159,7 +162,8 @@ const num = n => new Intl.NumberFormat("es-ES").format(Math.round(n||0));
 const pct = (a,b) => b ? new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(100*a/b) + " %" : "—";
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const $ = s => document.querySelector(s);
-const NOMBRE = {nayax:"Nayax", prodelfi:"Prodelfi", nebula:"Nebula (Coges)", grupos:"Grupos de Prodelfi"};
+const NOMBRE = {nayax:"Nayax", prodelfi:"Prodelfi", nebula:"Nebula (Coges)", grupos:"Grupos de Prodelfi",
+                solo_vencloud:"Solo en VenCloud"};
 const MAX_FILAS = 400;
 
 function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
@@ -222,7 +226,10 @@ function pasaFiltro(m){
   if(f==="sin_venta" && m.venta) return false;
   if(f==="sin_dex" && m.dex) return false;
   if(f==="nada" && (m.venta || m.dex)) return false;
-  if(f==="falta" && m.venta && m.dex) return false;
+  if(f==="sin_marca" && m.vencloud) return false;
+  /* Una diferencia: un sistema la tiene y VenCloud no la marca, o no mando a
+     VenCloud su venta o su DEX ese dia. */
+  if(f==="falta" && m.venta && m.dex && m.vencloud) return false;
   const q = $("#busca").value.trim().toLowerCase();
   if(q){
     const t = [m.matricula, m.cliente, m.centro, m.ubicacion, m.delegacion, m.cod_pdv,
@@ -248,6 +255,7 @@ function columnas(sistema){
       m=>`${m.cliente} · ${m.num_centro} ${m.centro}`],
     ["Ubicación", m=>`${esc(m.ubicacion)}<br><span class="tenue">PDV ${esc(m.cod_pdv)} · ${esc(m.delegacion)}</span>`,
       m=>`${m.ubicacion} · PDV ${m.cod_pdv} · ${m.delegacion}`],
+    ["Telemetría en VenCloud", m=>sn(m.vencloud), m=>m.vencloud?"Sí":"No"],
     ["Venta", m=>sn(m.venta), m=>m.venta?"Sí":"No"],
     ["DEX", m=>sn(m.dex), m=>m.dex?"Sí":"No"],
     ["Última venta", m=>m.venta ? "" : esc(ult(VENTA, m)), m=>m.venta ? dia : (ultimo(VENTA, m.matricula, dia)||"")],
@@ -263,6 +271,7 @@ function columnas(sistema){
       m=>m.prodelfi ? `${m.prodelfi.codigo??""} ${m.prodelfi.descripcion} (grupo ${m.prodelfi.grupo}; ${m.prodelfi.como})` : ""],
     ["Nayax · última comunicación", m=>esc(fechaCorta(m.nayax && m.nayax.ultima)), m=>(m.nayax&&m.nayax.ultima)||""],
     tambien];
+  if(sistema==="solo_vencloud") return base;
   return [...base,
     ["Nebula", m=>m.nebula ? `<span class="mat">${esc(m.nebula.dispositivo)}</span><br><span class="tenue">última venta ${esc(fechaCorta(m.nebula.ultima_venta))}</span>` : "",
       m=>m.nebula ? `${m.nebula.dispositivo} (última venta ${m.nebula.ultima_venta})` : ""],
@@ -286,9 +295,9 @@ function actual(){
 
 function pinta(){
   const dia = $("#dia").value;
-  const sistemas = ["nayax","prodelfi","nebula"].filter(s=>(D.maquinas||[]).some(m=>m.sistema===s));
+  const sistemas = ["nayax","prodelfi","nebula","solo_vencloud"].filter(s=>(D.maquinas||[]).some(m=>m.sistema===s));
   const pest = [...sistemas.map(s=>{
-      const fs = filasDe(s), falta = fs.filter(m=>!(m.venta && m.dex)).length;
+      const fs = filasDe(s), falta = fs.filter(m=>!(m.venta && m.dex && m.vencloud)).length;
       return [s, `${NOMBRE[s]} · ${num(falta)} de ${num(fs.length)}`];
     }),
     ...(D.fuera ? [["fuera", `No están en VenCloud · ${num(D.fuera.length)}`]] : [])];
@@ -308,17 +317,21 @@ function pinta(){
   }else{
     const fs = filasDe(PESTANA), n = fs.length;
     const v = fs.filter(m=>m.venta).length, x = fs.filter(m=>m.dex).length, nada = fs.filter(m=>!m.venta && !m.dex).length;
+    const mc = fs.filter(m=>m.vencloud).length;
     $("#kpis").innerHTML = `
-      <div class="kpi"><div class="et">Máquinas</div><div class="vl">${num(n)}</div><div class="nt">con ${esc(NOMBRE[PESTANA])} en este ámbito</div></div>
+      <div class="kpi"><div class="et">Máquinas</div><div class="vl">${num(n)}</div><div class="nt">${PESTANA==="solo_vencloud"
+        ? "con telemetría en VenCloud y en ningún sistema" : "con " + esc(NOMBRE[PESTANA]) + " en este ámbito"}</div></div>
+      ${PESTANA==="solo_vencloud" ? "" : `<div class="kpi"><div class="et">Sin telemetría en VenCloud</div><div class="vl">${num(n-mc)}</div><div class="nt">VenCloud no las marca</div></div>`}
       <div class="kpi"><div class="et">Venta por telemetría</div><div class="vl">${pct(v,n)}</div><div class="nt">${num(v)} la mandaron a VenCloud</div></div>
       <div class="kpi"><div class="et">DEX</div><div class="vl">${pct(x,n)}</div><div class="nt">${num(x)} mandaron su lectura</div></div>
       <div class="kpi"><div class="et">Ni venta ni DEX</div><div class="vl">${num(nada)}</div><div class="nt">no transmitieron nada ese día</div></div>`;
-    const QUE = {falta:"sin venta o sin DEX", sin_venta:"sin venta por telemetría", sin_dex:"sin DEX",
+    const QUE = {falta:"con alguna diferencia", sin_marca:"sin telemetría en VenCloud", sin_venta:"sin venta por telemetría", sin_dex:"sin DEX",
                  nada:"sin venta ni DEX", todas:"todas"};
     $("#tTabla").textContent = `${NOMBRE[PESTANA]}: ${QUE[$("#filtro").value]}`;
-    $("#sTabla").textContent = PESTANA==="nayax"
-      ? "Máquinas con Nayax que ese día no mandaron a VenCloud su venta, su DEX o las dos. La última comunicación es la que traía el fichero de Nayax al subirlo."
-      : `Máquinas con ${NOMBRE[PESTANA]} cuya venta o lectura no entró en VenCloud ese día.`;
+    $("#sTabla").textContent = PESTANA==="solo_vencloud"
+      ? "VenCloud las marca con telemetría y no salen en el fichero de Nayax, ni en el de Prodelfi, ni en el de Nebula."
+      : `Máquinas con ${NOMBRE[PESTANA]} que VenCloud no marca con telemetría, o cuya venta o DEX no entró en VenCloud ese día.`
+        + (PESTANA==="nayax" ? " La última comunicación es la que traía el fichero de Nayax al subirlo." : "");
   }
 
   const {cols, filas} = actual();
