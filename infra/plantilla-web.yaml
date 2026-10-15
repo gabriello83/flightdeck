@@ -330,7 +330,7 @@ Resources:
             Action: [s3:GetObject]
             Resource: !Sub "arn:${AWS::Partition}:s3:::${BucketDatos}/cabina/*"
           # Los ficheros de telemetria que el administrador sube desde la consola
-          # (docs/52). Es lo unico que la web escribe en el bucket de datos.
+          # (docs/53). Es lo unico que la web escribe en el bucket de datos.
           - Sid: SoloLosFicherosDeTelemetria
             Effect: Allow
             Action: [s3:PutObject]
@@ -382,7 +382,7 @@ Resources:
               - Effect: Allow
                 Action: [s3:GetObject]
                 Resource: !Sub "arn:${AWS::Partition}:s3:::${BucketDatos}/cabina/*"
-              # Los ficheros de Nayax, Prodelfi y Nebula de la consola (docs/52).
+              # Los ficheros de Nayax, Prodelfi y Nebula de la consola (docs/53).
               # Solo esa carpeta: la API no puede escribir en ninguna otra.
               - Effect: Allow
                 Action: [s3:PutObject]
