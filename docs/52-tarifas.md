@@ -18,27 +18,50 @@ producto, con un **Excel por centro** para el responsable de la delegación.
 
 El semáforo es el del informe operativo: verde por encima del 95 %, rojo por debajo del 75 %.
 
-## Los niveles
+## Los niveles, y cuál manda
 
 Hay **precios sueltos** por producto (o por categoría) puestos en un punto de venta, en un centro,
 en un cliente o en un grupo de clientes, y hay **tarifas estándar**: las tablas con nombre del menú
 *Gestión de Tarifas Vending Estándar* de VenCloud («AIRBUS OPERATIONS SLU», «ALHAMBRA PUBLICO»…,
-`comercial.tarifasvending`), que se definen aparte y se asignan a un punto de venta, un centro o un
-cliente. Un precio que sale de una de esas tablas es de nivel **Estándar**, y se dice a quién está
-asignada. Un precio suelto que no cuelga de nadie es **General**.
+`comercial.tarifasvending`), que se definen aparte y se asignan a un punto de venta o a un cliente.
+Un precio que sale de una de esas tablas es de nivel **Estándar**, y se dice a quién está asignada.
 
-**El orden entre ellos es provisional.** VenCloud lo decide con `vending.getprecioscanal`, que
-todavía no hemos leído (informe `EXT_SONDA_PRECIOS`, docs/17 M7Z). Hasta entonces manda lo más
-concreto: punto de venta, centro, cliente, grupo, y en cada sitio el precio suelto del artículo
-antes que el de su categoría y que la tarifa estándar asignada allí. Cambiarlo es tocar
-`tarifas.ORDEN` y nada más.
+El orden es el de VenCloud: su función `vending.getprecioscanal`, leída el 15-oct-2026 con la sonda
+`EXT_SONDA_PRECIOS` (docs/17, M7Z). Busca así, y se queda con lo primero que encuentra:
+
+| paso | dónde | nivel en la página |
+|---|---|---|
+| 1 | el punto de venta está marcado de **venta gratuita** (`pdvs.vtagratuita`): todo a 0 | Venta gratuita |
+| 2 | la máquina tiene **precios en canales** (`maquinas.preciosencanales`): el precio de cada canal, sin mirar tarifas | Precio en la máquina |
+| 3 | el precio suelto **del artículo**: punto de venta, centro, cliente, grupo | el sitio donde está |
+| 4 | el precio suelto **de su categoría**: punto de venta, centro, cliente, grupo | el sitio donde está |
+| 5 | la **tarifa estándar asignada al punto de venta** | Estándar |
+| 6 | la **tarifa estándar asignada al cliente** | Estándar |
+| — | nada de lo anterior: VenCloud pone 0 | Sin tarifa |
+
+Tres cosas que no se ven en la pantalla de VenCloud y que salen de leer la función:
+
+- **Toda la búsqueda por artículo va antes que cualquiera por categoría.** Un precio del artículo
+  puesto en el cliente gana a uno de su categoría puesto en el punto de venta.
+- **La tarifa estándar asignada al centro no se usa** (`clientescentros.tarifavendingid`). En el
+  censo de octubre ninguna máquina la tiene, así que hoy no cambia nada; pero si alguien la
+  asigna, VenCloud no la aplicará. Tampoco usa los precios de la ficha del centro ni del cliente
+  (`clientescentrostarifas*`, `clientestarifasvending`) ni el precio suelto que no cuelga de nadie.
+- El precio de la ficha del artículo y el de su categoría sólo valdrían con la tarifa global
+  (`usatarifavendingglobal`), que en Serunion está **apagada**.
+
+Una máquina con **planograma por categorías** sólo hace el paso 4, con la categoría puesta en el
+canal y no la del artículo.
+
+Los puntos de venta con **subvención en vigor** van marcados en el detalle y en el Excel: VenCloud
+calcula aparte un precio subvencionado, y si la máquina cobra ése, ahí no coincidirá.
 
 ## De dónde sale cada cosa
 
 | | |
 |---|---|
-| Precio de tarifa | `EXT_TARIFAS` (docs/17, M7), maestro, cada noche → `maestros/tarifas/m_tarifas.json.gz` |
-| Qué tarifa estándar tiene asignada cada sitio | `EXT_INSTALACIONES` (M5): `tarifa_vending_pdv/centro/cliente` |
+| Precio de tarifa, venta gratuita, precios en canales | `EXT_TARIFAS` (docs/17, M7), maestro, cada noche → `maestros/tarifas/m_tarifas.json.gz` |
+| Qué tarifa estándar tiene asignada cada sitio | `EXT_INSTALACIONES` (M5): `tarifa_vending_pdv` y `tarifa_vending_cliente` |
 | Precio cobrado | telemetría (A12) y audit de la visita (A11) |
 | Productos de la máquina | reposiciones (A2) |
 

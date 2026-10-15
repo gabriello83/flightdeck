@@ -185,11 +185,13 @@ $("#bSalir").addEventListener("click", async ()=>{
   location.href = "/";
 });
 
-/* Precio suelto en el punto de venta, el centro, el cliente o el grupo; o una
-   tarifa estandar (menu «Tarifas Vending Estándar» de VenCloud) asignada a uno
-   de ellos. */
-const NIVEL = {pdv:"Punto de venta", centro:"Centro", cliente:"Cliente", grupo:"Grupo de clientes", estandar:"Estándar", general:"General (sin asignar)"};
-const ASIGNADA = {pdv:"al punto de venta", centro:"al centro", cliente:"al cliente"};
+/* De donde sale el precio, en el orden en que lo busca VenCloud
+   (getprecioscanal, docs/52): venta gratuita del punto de venta, precio puesto
+   en la maquina, precio suelto en el punto de venta, el centro, el cliente o el
+   grupo, y la tarifa estandar (menu «Tarifas Vending Estándar») asignada al
+   punto de venta o al cliente. */
+const NIVEL = {gratuito:"Venta gratuita", maquina:"Precio en la máquina", pdv:"Punto de venta", centro:"Centro", cliente:"Cliente", grupo:"Grupo de clientes", estandar:"Estándar"};
+const ASIGNADA = {pdv:"al punto de venta", cliente:"al cliente"};
 const ESTADO = {coincide:"Coincide", no_coincide:"Precio distinto", sin_tarifa:"Sin tarifa", sin_dato:"Sin venta electrónica"};
 const MEDIOS = [["ef","Efectivo"],["tp","Tarjeta privada"],["tc","Tarjeta crédito"]];
 const SEMAFORO = {verde:"En objetivo", amarillo:"Vigilar", rojo:"Por debajo"};
@@ -350,7 +352,7 @@ function filaProducto(f){
     return `<span class="m">${t}</span><span>${x.tarifa!=null ? eur(x.tarifa) : (f.estado==="sin_tarifa" ? "sin tarifa" : "—")}</span>`
       + `<span class="${mal ? "mal" : ""}" title="${x.venta ? esc(fechaCorta(x.venta.fecha)+" · "+(x.venta.fuente==="audit"?"audit de la visita":"telemetría")) : "sin venta electrónica desde el cambio"}">${venta}</span>`;
   }).join("");
-  return `<tr><td><b>${esc(f.matricula)}</b><div class="peq">${esc(f.cod_pdv)}${f.ubicacion ? " · "+esc(f.ubicacion) : ""}</div></td>`
+  return `<tr><td><b>${esc(f.matricula)}</b><div class="peq">${esc(f.cod_pdv)}${f.ubicacion ? " · "+esc(f.ubicacion) : ""}${f.subvencion ? " · con subvención" : ""}</div></td>`
     + `<td>${esc(f.articulo || f.cod_articulo)}<div class="peq">${esc(f.cod_articulo)}</div></td>`
     + `<td class="oculta-movil">${esc(fechaCorta(f.ultima_carga))}</td>`
     + `<td class="oculta-movil">${f.nivel ? esc(NIVEL[f.nivel]||f.nivel) : "—"}`
@@ -375,7 +377,8 @@ function excel(det, c){
         if(!x || x.ok!==false) return;
         distintos.push([...base, t, x.tarifa, x.venta.precio, Math.round((x.venta.precio - x.tarifa)*100)/100,
           x.venta.fecha, fuente(x.venta), NIVEL[f.nivel]||f.nivel||"",
-          f.tarifa ? f.tarifa + (f.asignada ? ` (asignada ${ASIGNADA[f.asignada]||f.asignada})` : "") : "", ""]);
+          (f.tarifa ? f.tarifa + (f.asignada ? ` (asignada ${ASIGNADA[f.asignada]||f.asignada})` : "") : "")
+            + (f.subvencion ? (f.tarifa ? " · " : "") + "punto de venta con subvención" : ""), ""]);
       });
     } else if(f.estado==="sin_tarifa"){
       const v = m => ((f.medios||{})[m]||{}).venta;
@@ -459,7 +462,7 @@ function pinta(){
     + "y se compara la última venta de cada medio de pago (telemetría o, si no hay, el audit de la visita) "
     + "posterior al último cambio de la tarifa con el precio de la tarifa, exacto. Lo que no tiene tarifa o no "
     + "tiene venta electrónica no entra en el porcentaje: se cuenta aparte. "
-    + esc(RES.provisional || "") + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
+    + esc(RES.subvencion || "") + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;
 })();
 </script>

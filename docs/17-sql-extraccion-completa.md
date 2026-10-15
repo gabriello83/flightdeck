@@ -1546,27 +1546,32 @@ order by c.table_schema, c.table_name, c.ordinal_position
 
 ## M7 · EXT_TARIFAS  *(sin parámetros)*
 
-Todas las líneas de **precio de venta** que guarda VenCloud, en una sola tabla y cada una con el
-nivel del que cuelga. Es lo que necesita el cuadrado de tarifas del informe general operativo
-([52-tarifas.md](52-tarifas.md)): hasta ahora sólo sabíamos **qué tarifa** tiene asignada cada
-cliente, centro y punto de venta (M5), pero no **qué precio** pone a cada producto.
+Todas las líneas de **precio de venta** que VenCloud usa para decidir qué cobra cada máquina, en una
+sola tabla y cada una con el nivel del que cuelga. Es lo que necesita el cuadrado de tarifas del
+informe general operativo ([52-tarifas.md](52-tarifas.md)): hasta ahora sólo sabíamos **qué tarifa**
+tiene asignada cada cliente, centro y punto de venta (M5), pero no **qué precio** pone a cada
+producto.
 
-VenCloud guarda precios en nueve sitios, y por eso son nueve trozos unidos con `union all`:
+Lleva exactamente lo que mira `vending.getprecioscanal` (leída con la sonda M7Z el 15-oct-2026) y
+nada más: siete trozos unidos con `union all`.
 
 | `origen` | tabla | qué es |
 |---|---|---|
-| `tarifa` | `tarifasvending` + `tarifasvendingdetalle` | las tarifas con nombre, que se asignan a cliente, centro o PDV |
-| `productos` | `tarifasvendingproductos` | precios sueltos por artículo, colgados de un PDV, centro, cliente o grupo (o de ninguno: la estándar) |
+| `tarifa` | `tarifasvending` + `tarifasvendingdetalle` | las tarifas estándar con nombre, que se asignan al punto de venta o al cliente |
+| `productos` | `tarifasvendingproductos` | precios sueltos por artículo, colgados de un PDV, centro, cliente o grupo |
 | `categorias` | `tarifasvendingcategorias` | lo mismo, por categoría de precio |
-| `centro_productos` | `clientescentrostarifasproductos` | precio por artículo en la ficha del centro |
-| `centro_categorias` | `clientescentrostarifascategorias` | precio por categoría en la ficha del centro |
-| `cliente_vending` | `clientestarifasvending` | precio y descuento por artículo en la ficha del cliente |
-| `articulo` | `stocks.articulos` | el precio de venta de la ficha y su categoría de precio |
-| `categoria` | `stocks.articuloscategoriasprecios` | el precio base de cada categoría |
+| `articulo` | `stocks.articulos` | el nombre del artículo y su categoría de precio |
 | `cliente_grupo` | `comercial.clientes` | a qué grupo pertenece cada cliente |
+| `canal` | `recursos.maquinascanales` | sólo de las máquinas con **precios en canales** (`nivel` = `canal`) o con **planograma por categorías** (`nivel` = `planograma`): el precio o la categoría puestos en cada canal |
+| `pdv` | `vending.pdvs` | los puntos de venta de **venta gratuita** (`nivel` = `gratuito`) y los que tienen una **subvención en vigor** (`nivel` = `subvencion`) |
 
-El `id` lleva delante la letra de su origen (`T`, `P`, `C`, `CP`, `CC`, `CV`, `A`, `K`, `G`): los ids
-de nueve tablas distintas se repiten entre sí.
+Lo que VenCloud no mira para el precio no viene: la ficha del centro y del cliente
+(`clientescentrostarifas*`, `clientestarifasvending`), el precio base de la categoría y el de la
+ficha del artículo (sólo valdrían con `usatarifavendingglobal`, apagado en Serunion) y los precios
+sueltos que no cuelgan de nadie.
+
+El `id` lleva delante la letra de su origen (`T`, `P`, `C`, `A`, `G`, `M`, `V`): los ids de tablas
+distintas se repiten entre sí.
 
 ```sql
 select
@@ -1575,27 +1580,22 @@ select
   'tarifa'                           as nivel,
   t.id                               as tarifa_id,
   t.nombre                           as tarifa,
-  t.tipo                             as tipo_tarifa,
   t.activa                           as activa,
   cast(null as bigint)               as grupo_id,
-  cast(null as text)                 as grupo,
-  cast(cli.codigo as text)           as cod_cliente,
+  cast(null as text)                 as cod_cliente,
   cast(null as text)                 as num_centro,
   cast(null as text)                 as cod_pdv,
+  cast(null as text)                 as matricula,
   a.codigo                           as cod_articulo,
   a.denomina                         as articulo,
   cast(null as text)                 as cod_categoria,
-  cast(null as text)                 as categoria,
   d.precioef                         as precio_ef,
   d.preciotp                         as precio_tp,
   d.preciotc                         as precio_tc,
   d.preciotpdto                      as precio_tpdto,
-  cast(null as numeric)              as descuento,
-  cast(null as numeric)              as precio_ef_ant,
   cast(t.fechaactualiza as text)     as fecha_cambio
 from comercial.tarifasvendingdetalle d
 join comercial.tarifasvending t   on t.id = d.tarifavendingid
-left join comercial.clientes cli  on cli.id = t.clienteid
 left join stocks.articulos a      on a.id = d.articuloid
 
 union all
@@ -1605,34 +1605,30 @@ select
   case when coalesce(p.pdvid, 0) <> 0           then 'pdv'
        when coalesce(p.clientecentroid, 0) <> 0 then 'centro'
        when coalesce(p.clienteid, 0) <> 0       then 'cliente'
-       when coalesce(p.clientegrupoid, 0) <> 0  then 'grupo'
-       else 'global' end,
+       else 'grupo' end,
   cast(null as bigint),
   cast(null as text),
-  cast(null as integer),
   cast(null as boolean),
   p.clientegrupoid,
-  g.nombre,
   cast(cli.codigo as text),
   cast(cen.numcentro as text),
   pdv.codigo,
+  cast(null as text),
   a.codigo,
   a.denomina,
-  cast(null as text),
   cast(null as text),
   p.precioef,
   p.preciotp,
   p.preciotc,
   p.preciotpdto,
-  cast(null as numeric),
-  p.precioefant,
   cast(p.fechaultcambio as text)
 from comercial.tarifasvendingproductos p
-left join comercial.clientesgrupos g    on g.id = p.clientegrupoid
 left join comercial.clientes cli        on cli.id = p.clienteid
 left join comercial.clientescentros cen on cen.id = p.clientecentroid
 left join vending.pdvs pdv              on pdv.id = p.pdvid
 left join stocks.articulos a            on a.id = p.articuloid
+where coalesce(p.pdvid, 0) <> 0 or coalesce(p.clientecentroid, 0) <> 0
+   or coalesce(p.clienteid, 0) <> 0 or coalesce(p.clientegrupoid, 0) <> 0
 
 union all
 select
@@ -1641,123 +1637,30 @@ select
   case when coalesce(c.pdvid, 0) <> 0           then 'pdv'
        when coalesce(c.clientecentroid, 0) <> 0 then 'centro'
        when coalesce(c.clienteid, 0) <> 0       then 'cliente'
-       when coalesce(c.clientegrupoid, 0) <> 0  then 'grupo'
-       else 'global' end,
+       else 'grupo' end,
   cast(null as bigint),
   cast(null as text),
-  cast(null as integer),
   cast(null as boolean),
   c.clientegrupoid,
-  g.nombre,
   cast(cli.codigo as text),
   cast(cen.numcentro as text),
   pdv.codigo,
   cast(null as text),
   cast(null as text),
+  cast(null as text),
   k.codigo,
-  k.nombre,
   c.precioef,
   c.preciotp,
   c.preciotc,
   c.preciotpdto,
-  cast(null as numeric),
-  c.precioefant,
   cast(c.fechaultcambio as text)
 from comercial.tarifasvendingcategorias c
-left join comercial.clientesgrupos g           on g.id = c.clientegrupoid
 left join comercial.clientes cli               on cli.id = c.clienteid
 left join comercial.clientescentros cen        on cen.id = c.clientecentroid
 left join vending.pdvs pdv                     on pdv.id = c.pdvid
 left join stocks.articuloscategoriasprecios k  on k.id = c.categoriaid
-
-union all
-select
-  'CP' || cast(x.id as text),
-  'centro_productos',
-  'centro',
-  cast(null as bigint),
-  cast(null as text),
-  cast(null as integer),
-  cast(null as boolean),
-  cast(null as bigint),
-  cast(null as text),
-  cast(cli.codigo as text),
-  cast(cen.numcentro as text),
-  cast(null as text),
-  a.codigo,
-  a.denomina,
-  cast(null as text),
-  cast(null as text),
-  x.precioef,
-  x.preciotp,
-  x.preciotc,
-  cast(null as numeric),
-  cast(null as numeric),
-  x.precioefant,
-  cast(x.fechaultcambio as text)
-from comercial.clientescentrostarifasproductos x
-left join comercial.clientescentros cen on cen.id = x.clientecentroid
-left join comercial.clientes cli        on cli.id = cen.clienteid
-left join stocks.articulos a            on a.id = x.articuloid
-
-union all
-select
-  'CC' || cast(x.id as text),
-  'centro_categorias',
-  'centro',
-  cast(null as bigint),
-  cast(null as text),
-  cast(null as integer),
-  cast(null as boolean),
-  cast(null as bigint),
-  cast(null as text),
-  cast(cli.codigo as text),
-  cast(cen.numcentro as text),
-  cast(null as text),
-  cast(null as text),
-  cast(null as text),
-  k.codigo,
-  k.nombre,
-  x.precioef,
-  x.preciotp,
-  x.preciotc,
-  cast(null as numeric),
-  cast(null as numeric),
-  x.precioefant,
-  cast(x.fechaultcambio as text)
-from comercial.clientescentrostarifascategorias x
-left join comercial.clientescentros cen        on cen.id = x.clientecentroid
-left join comercial.clientes cli               on cli.id = cen.clienteid
-left join stocks.articuloscategoriasprecios k  on k.id = x.categoriaid
-
-union all
-select
-  'CV' || cast(x.id as text),
-  'cliente_vending',
-  'cliente',
-  cast(null as bigint),
-  cast(null as text),
-  cast(null as integer),
-  cast(null as boolean),
-  cast(null as bigint),
-  cast(null as text),
-  cast(cli.codigo as text),
-  cast(null as text),
-  cast(null as text),
-  a.codigo,
-  a.denomina,
-  cast(null as text),
-  cast(null as text),
-  x.precio,
-  cast(null as numeric),
-  cast(null as numeric),
-  cast(null as numeric),
-  x.descuento,
-  cast(null as numeric),
-  cast(null as text)
-from comercial.clientestarifasvending x
-left join comercial.clientes cli on cli.id = x.clienteid
-left join stocks.articulos a     on a.id = x.articuloid
+where coalesce(c.pdvid, 0) <> 0 or coalesce(c.clientecentroid, 0) <> 0
+   or coalesce(c.clienteid, 0) <> 0 or coalesce(c.clientegrupoid, 0) <> 0
 
 union all
 select
@@ -1766,7 +1669,6 @@ select
   'articulo',
   cast(null as bigint),
   cast(null as text),
-  a.clase,
   cast(null as boolean),
   cast(null as bigint),
   cast(null as text),
@@ -1776,9 +1678,6 @@ select
   a.codigo,
   a.denomina,
   k.codigo,
-  k.nombre,
-  a.precioventa,
-  cast(null as numeric),
   cast(null as numeric),
   cast(null as numeric),
   cast(null as numeric),
@@ -1789,42 +1688,13 @@ left join stocks.articuloscategoriasprecios k on k.id = a.articulocategoriapreci
 
 union all
 select
-  'K' || cast(k.id as text),
-  'categoria',
-  'categoria',
-  cast(null as bigint),
-  cast(null as text),
-  k.clasearticulo,
-  not k.obsoleta,
-  cast(null as bigint),
-  cast(null as text),
-  cast(null as text),
-  cast(null as text),
-  cast(null as text),
-  cast(null as text),
-  cast(null as text),
-  k.codigo,
-  k.nombre,
-  k.precio,
-  cast(null as numeric),
-  cast(null as numeric),
-  cast(null as numeric),
-  cast(null as numeric),
-  cast(null as numeric),
-  cast(null as text)
-from stocks.articuloscategoriasprecios k
-
-union all
-select
   'G' || cast(cli.id as text),
   'cliente_grupo',
   'grupo',
   cast(null as bigint),
   cast(null as text),
-  cast(null as integer),
   cast(null as boolean),
   cli.clientegrupoid,
-  g.nombre,
   cast(cli.codigo as text),
   cast(null as text),
   cast(null as text),
@@ -1836,12 +1706,64 @@ select
   cast(null as numeric),
   cast(null as numeric),
   cast(null as numeric),
-  cast(null as numeric),
-  cast(null as numeric),
   cast(null as text)
 from comercial.clientes cli
-left join comercial.clientesgrupos g on g.id = cli.clientegrupoid
 where coalesce(cli.clientegrupoid, 0) <> 0
+
+union all
+select
+  'M' || cast(c.id as text),
+  'canal',
+  case when m.preciosencanales is true then 'canal' else 'planograma' end,
+  cast(null as bigint),
+  cast(null as text),
+  c.activo,
+  cast(null as bigint),
+  cast(null as text),
+  cast(null as text),
+  cast(null as text),
+  m.codigo,
+  a.codigo,
+  a.denomina,
+  k.codigo,
+  c.precioef,
+  c.preciotp,
+  c.preciotc,
+  c.preciotpdto,
+  cast(m.fechaultcambioplanograma as text)
+from recursos.maquinascanales c
+join recursos.maquinas m                       on m.id = c.maquinaid
+left join stocks.articulos a                   on a.id = c.articuloid
+left join stocks.articuloscategoriasprecios k  on k.id = c.articulocategoriaprecioid
+where (m.preciosencanales is true or m.planogporcategorias is true)
+  and c.activo is true
+
+union all
+select
+  'V' || cast(p.id as text),
+  'pdv',
+  case when p.vtagratuita is true then 'gratuito' else 'subvencion' end,
+  cast(null as bigint),
+  cast(null as text),
+  cast(null as boolean),
+  cast(null as bigint),
+  cast(null as text),
+  cast(null as text),
+  p.codigo,
+  cast(null as text),
+  cast(null as text),
+  cast(null as text),
+  cast(null as text),
+  cast(null as numeric),
+  cast(null as numeric),
+  cast(null as numeric),
+  cast(null as numeric),
+  cast(p.fechafinsubvencion as text)
+from vending.pdvs p
+where p.vtagratuita is true
+   or (p.acuerdosubvencion is true
+       and cast(p.fechainisubvencion as date) <= current_date
+       and cast(p.fechafinsubvencion as date) >= current_date)
 ```
 
 ## M7Z · EXT_SONDA_PRECIOS  *(sin parámetros, se lanza una vez)*
@@ -1850,6 +1772,12 @@ No es un informe de datos: es la pregunta «¿cómo decide VenCloud qué precio 
 máquina?». Lo calcula su función `vending.getprecioscanal` (la del informe 37), y dentro está el
 orden entre punto de venta, centro, cliente, grupo y estándar. Se lee una vez y se copia a
 `tarifas.ORDEN`.
+
+**Leída el 15-oct-2026.** El orden que sale está en [52-tarifas.md](52-tarifas.md) y en
+`infra/tarifas.py`. La configuración de Serunion: `usatarifavendingglobal=false
+tarifvtamodo=0 modoasignacambioprecio=0 aplicarcambiosclienteacentro=false
+acttprivadadtogrupocliente=false`. Sólo hay que volver a lanzarla si VenCloud se actualiza y
+cambia la función.
 
 ```sql
 select

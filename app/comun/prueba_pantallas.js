@@ -193,7 +193,7 @@ const CENTRO_TARIFAS = {
     { matricula: '22SE1877', cod_pdv: 'S00741', ubicacion: 'Planta 2', cod_articulo: '102411', articulo: 'ÑAMING ENSALADA <MIXTA> & CO',
       ultima_carga: '2026-10-01', nivel: null, origen: null, tarifa: '', cambio_tarifa: '', desde: '2026-04-14',
       medios: { ef: { venta: { precio: 2.3, fecha: '2026-10-12', fuente: 'audit' } } }, estado: 'sin_tarifa' },
-    { matricula: '22SE1878', cod_pdv: 'S00742', ubicacion: '', cod_articulo: '5322', articulo: 'AGUA 50CL',
+    { matricula: '22SE1878', cod_pdv: 'S00742', ubicacion: '', subvencion: true, cod_articulo: '5322', articulo: 'AGUA 50CL',
       ultima_carga: '2026-09-20', nivel: 'centro', origen: 'productos', tarifa: '', cambio_tarifa: '2026-10-05', desde: '2026-10-05',
       medios: { ef: { tarifa: 0.9 } }, estado: 'sin_dato' },
     { matricula: '22SE1878', cod_pdv: 'S00742', ubicacion: '', cod_articulo: '9355', articulo: 'FANTA',
@@ -204,7 +204,7 @@ const CENTRO_TARIFAS = {
 const RESUMEN_TARIFAS = {
   generado: new Date().toISOString(), desde: '2026-04-14', dias: 183,
   total: { coincide: 13, no_coincide: 3, sin_tarifa: 2, sin_dato: 1, controlados: 16, pct: 81.3 },
-  provisional: 'El orden entre niveles es provisional.',
+  subvencion: 'Los puntos de venta con subvención en vigor van marcados.',
   delegaciones: [
     { delegacion: 'Andalucía - Cádiz', coincide: 1, no_coincide: 1, sin_tarifa: 1, sin_dato: 1, controlados: 2, pct: 50, color: 'rojo',
       centros: [{ num_centro: '114001', centro: 'HOSPITAL DE JEREZ', cliente: 'SERUNION, SA', cod_cliente: '10002', maquinas: 2,

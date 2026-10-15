@@ -37,12 +37,29 @@ OPERATIONS SLU», «ALHAMBRA PUBLICO»...), que se definen aparte y luego se
 asignan a un punto de venta, un centro o un cliente. Un precio que sale de una
 de esas tablas es de nivel «estandar», y se dice ademas a quien esta asignada.
 
-QUE PRECIO RIGE EN CADA MAQUINA. VenCloud lo decide con su funcion
-`vending.getprecioscanal`, que aun no hemos leido (EXT_SONDA_PRECIOS). Hasta
-entonces el orden es el de `ORDEN`: lo mas concreto manda —punto de venta, luego
-centro, luego cliente, luego grupo— y dentro de cada sitio el precio suelto del
-articulo va antes que el de su categoria y que la tarifa estandar asignada ahi.
-Si la funcion dice otra cosa, se cambia ORDEN y nada mas.
+QUE PRECIO RIGE EN CADA MAQUINA. Lo decide VenCloud con su funcion
+`vending.getprecioscanal`, leida el 15-oct-2026 con EXT_SONDA_PRECIOS (docs/17,
+M7Z), y el orden de `ORDEN` es el suyo, paso a paso:
+
+  1. El punto de venta marcado de venta gratuita (`pdvs.vtagratuita`): todo a 0.
+  2. La maquina con precios en canales (`maquinas.preciosencanales`): el precio
+     guardado en cada canal, sin mirar ninguna tarifa.
+  3. El precio suelto del ARTICULO: punto de venta, centro, cliente, grupo.
+  4. El precio suelto de su CATEGORIA: punto de venta, centro, cliente, grupo.
+     Toda la busqueda por articulo va antes que cualquiera por categoria.
+  5. La tarifa estandar asignada al punto de venta.
+  6. La tarifa estandar asignada al cliente.
+
+  Y lo que NO usa: la tarifa estandar asignada al CENTRO
+  (`clientescentros.tarifavendingid`; en el censo de octubre no la tiene
+  ninguna maquina), los precios de la ficha del centro y del cliente
+  (`clientescentrostarifas*`, `clientestarifasvending`) ni el precio suelto que
+  no cuelga de nadie. El precio de la ficha del articulo y el de su categoria
+  solo entrarian con `usatarifavendingglobal`, que en Serunion esta apagado: sin
+  nada de lo anterior, VenCloud pone 0, y aqui es «sin tarifa».
+
+  Una maquina con planograma por categorias (`planogporcategorias`) solo mira
+  el paso 4, con la categoria puesta en el canal y no la del articulo.
 
 POR QUE HAY UN ESTADO QUE SE GUARDA DE UNA NOCHE A OTRA. Los agregados leen 120
 dias y aqui hacen falta seis meses. En vez de leer 180 dias de telemetria cada
@@ -78,23 +95,21 @@ AUDIT = {"ef": ("num_efectivo", "imp_efectivo"),
 # leche y vasos. Para que entren, una receta cuenta si se ha vendido.
 RECETA = re.compile(r"^R\d+$")
 
-NIVELES = ("pdv", "centro", "cliente", "grupo", "estandar", "general")
-ASIGNADA = {"pdv": "al punto de venta", "centro": "al centro", "cliente": "al cliente"}
-NOMBRE_NIVEL = {"pdv": "Punto de venta", "centro": "Centro", "cliente": "Cliente",
-                "grupo": "Grupo de clientes", "estandar": "Estándar",
-                "general": "General (sin asignar)"}
+NIVELES = ("gratuito", "maquina", "pdv", "centro", "cliente", "grupo", "estandar")
+ASIGNADA = {"pdv": "al punto de venta", "cliente": "al cliente"}
+NOMBRE_NIVEL = {"gratuito": "Venta gratuita", "maquina": "Precio en la máquina",
+                "pdv": "Punto de venta", "centro": "Centro", "cliente": "Cliente",
+                "grupo": "Grupo de clientes", "estandar": "Estándar"}
 
-# El orden en que se busca el precio. Provisional hasta leer getprecioscanal:
-# ver el docstring del modulo.
+# El orden en que VenCloud busca el precio (getprecioscanal, ver el docstring).
+# Los dos primeros pasos, venta gratuita y precio en canales, van antes y
+# aparte: dependen del punto de venta y de la maquina, no del articulo.
 ORDEN = (
-    ("pdv", "productos"), ("pdv", "categorias"), ("pdv", "tarifa"),
-    ("centro", "productos"), ("centro", "centro_productos"),
-    ("centro", "categorias"), ("centro", "centro_categorias"), ("centro", "tarifa"),
-    ("cliente", "productos"), ("cliente", "cliente_vending"),
-    ("cliente", "categorias"), ("cliente", "tarifa"),
-    ("grupo", "productos"), ("grupo", "categorias"),
-    # Un precio suelto que no cuelga de nadie: vale para todos.
-    ("general", "productos"), ("general", "categorias"),
+    ("pdv", "productos"), ("centro", "productos"),
+    ("cliente", "productos"), ("grupo", "productos"),
+    ("pdv", "categorias"), ("centro", "categorias"),
+    ("cliente", "categorias"), ("grupo", "categorias"),
+    ("pdv", "tarifa"), ("cliente", "tarifa"),
 )
 
 SIN_MAESTRO = ("Falta el maestro de tarifas: el informe EXT_TARIFAS de VenCloud "
@@ -259,6 +274,9 @@ class Tarifas:
         self.categoria_de = {}      # articulo -> categoria
         self.articulo = {}          # articulo -> nombre
         self.grupo_de = {}          # cod_cliente -> grupo_id
+        self.maquina = {}           # matricula -> {"modo": "canal"|"planograma", "arts": {...}}
+        self.gratuito = set()       # cod_pdv de venta gratuita
+        self.subvencion = set()     # cod_pdv con subvencion en vigor
         for f in filas or []:
             o = R.v(f, "origen", "")
             linea = {"ef": _precio(R.v(f, "precio_ef", None)),
@@ -269,10 +287,14 @@ class Tarifas:
             art, cat = _s(R.v(f, "cod_articulo", "")), _s(R.v(f, "cod_categoria", ""))
             if o == "tarifa":
                 t = _s(R.v(f, "tarifa_id", ""))
-                if t and art:
+                # VenCloud salta la linea de una tarifa estandar sin precio de
+                # efectivo y sigue buscando.
+                if t and art and R.v(f, "precio_ef", None) is not None:
                     linea["tarifa"] = _s(R.v(f, "tarifa", ""))
                     self.detalle.setdefault(t, {})[art] = linea
-                    self.nombre[t] = (linea["tarifa"], R.v(f, "activa", True), linea["fecha"])
+                if t:
+                    self.nombre[t] = (_s(R.v(f, "tarifa", "")), R.v(f, "activa", True),
+                                      linea["fecha"])
             elif o == "articulo":
                 if art:
                     self.articulo[art] = _s(R.v(f, "articulo", ""))[:60]
@@ -282,32 +304,59 @@ class Tarifas:
                 c, g = _s(R.v(f, "cod_cliente", "")), _s(R.v(f, "grupo_id", ""))
                 if c and g:
                     self.grupo_de[c] = g
-            elif o in ("productos", "categorias", "centro_productos",
-                       "centro_categorias", "cliente_vending"):
+            elif o == "canal":
+                mat, modo = _s(R.v(f, "matricula", "")), R.v(f, "nivel", "")
+                if not mat or modo not in ("canal", "planograma"):
+                    continue
+                m = self.maquina.setdefault(mat, {"modo": modo, "arts": {}})
+                if art and art not in m["arts"]:
+                    m["arts"][art] = dict(linea, categoria=cat)
+            elif o == "pdv":
+                pdv, que = _s(R.v(f, "cod_pdv", "")), R.v(f, "nivel", "")
+                if pdv and que == "gratuito":
+                    self.gratuito.add(pdv)
+                elif pdv and que == "subvencion":
+                    self.subvencion.add(pdv)
+            elif o in ("productos", "categorias"):
                 nivel = R.v(f, "nivel", "")
-                if nivel == "global":
-                    nivel = "general"
                 clave = {"pdv": _s(R.v(f, "cod_pdv", "")), "centro": _s(R.v(f, "num_centro", "")),
-                         "cliente": _s(R.v(f, "cod_cliente", "")), "grupo": _s(R.v(f, "grupo_id", "")),
-                         "general": ""}.get(nivel)
-                que = cat if o.endswith("categorias") else art
-                if clave is None or not que or (nivel != "general" and not clave):
+                         "cliente": _s(R.v(f, "cod_cliente", "")),
+                         "grupo": _s(R.v(f, "grupo_id", ""))}.get(nivel)
+                que = cat if o == "categorias" else art
+                # El precio suelto que no cuelga de nadie VenCloud no lo usa.
+                if not clave or not que:
                     continue
                 self.sueltos.setdefault((o, nivel, clave), {})[que] = linea
 
     def precio(self, articulo, sitio):
         """La linea de precio que rige y de donde sale, o None.
 
-        `sitio`: {"pdv", "centro", "cliente", "tarifa_pdv", "tarifa_centro",
-        "tarifa_cliente"} de la fila del censo.
+        `sitio`: {"matricula", "pdv", "centro", "cliente", "tarifa_pdv",
+        "tarifa_cliente"} de la fila del censo. El orden es el de VenCloud.
         """
+        if sitio.get("pdv") and sitio["pdv"] in self.gratuito:
+            return {"ef": 0.0, "tp": 0.0, "tc": 0.0, "tpdto": None, "fecha": "",
+                    "nivel": "gratuito", "origen": "gratuito"}
+        maq = self.maquina.get(sitio.get("matricula", ""))
+        if maq and maq["modo"] == "canal":
+            linea = maq["arts"].get(articulo)
+            if not linea:
+                return None
+            return dict(linea, nivel="maquina", origen="canal")
         claves = {"pdv": sitio.get("pdv", ""), "centro": sitio.get("centro", ""),
                   "cliente": sitio.get("cliente", ""),
-                  "grupo": self.grupo_de.get(sitio.get("cliente", ""), ""), "general": ""}
-        cat = self.categoria_de.get(articulo, "")
+                  "grupo": self.grupo_de.get(sitio.get("cliente", ""), "")}
+        if maq:
+            # Planograma por categorias: la categoria del canal, y nada mas.
+            canal = maq["arts"].get(articulo) or {}
+            cat, solo = canal.get("categoria", ""), "categorias"
+        else:
+            cat, solo = self.categoria_de.get(articulo, ""), None
         for nivel, origen in ORDEN:
+            if solo and origen != solo:
+                continue
             clave = claves[nivel]
-            if nivel != "general" and not clave:
+            if not clave:
                 continue
             if origen == "tarifa":
                 t = sitio.get(f"tarifa_{nivel}", "")
@@ -318,15 +367,16 @@ class Tarifas:
                     return dict(linea, nivel="estandar", asignada=nivel, origen="tarifa",
                                 tarifa_id=t)
                 continue
-            que = cat if origen.endswith("categorias") else articulo
+            que = cat if origen == "categorias" else articulo
             linea = self.sueltos.get((origen, nivel, clave), {}).get(que) if que else None
             if linea:
                 return dict(linea, nivel=nivel, origen=origen)
         return None
 
     def tarifa_asignada(self, sitio):
-        """La tarifa con nombre del nivel mas concreto que la tenga."""
-        for nivel in ("pdv", "centro", "cliente"):
+        """La tarifa estandar que VenCloud aplica: la del punto de venta, y si
+        no tiene, la del cliente. La del centro no la usa."""
+        for nivel in ("pdv", "cliente"):
             t = sitio.get(f"tarifa_{nivel}", "")
             if t:
                 return {"nivel": nivel, "id": t, "nombre": (self.nombre.get(t) or ("",))[0]}
@@ -339,7 +389,7 @@ class Tarifas:
 def compara(linea, obs, matricula, articulo, hoy):
     """El estado de un producto de una maquina, con lo que se ha comparado."""
     corte = (hoy - datetime.timedelta(days=DIAS_VENTANA)).isoformat()
-    if not linea or not any(linea.get(m) for m in MEDIOS):
+    if not linea or not any(linea.get(m) is not None for m in MEDIOS):
         # Sin tarifa: se ensena lo que cobra, para que se pueda rellenar.
         venta = {m: obs.ultimo_precio(matricula, articulo, m, corte) for m in MEDIOS}
         return "sin_tarifa", {m: {"venta": v} for m, v in venta.items() if v}, corte
@@ -348,7 +398,7 @@ def compara(linea, obs, matricula, articulo, hoy):
     for m in MEDIOS:
         t = linea.get(m)
         v = obs.ultimo_precio(matricula, articulo, m, desde)
-        if not t:
+        if t is None:
             # Ese medio no tiene precio en la tarifa: no se puede controlar.
             if v:
                 medios[m] = {"venta": v, "tarifa": None}
@@ -403,10 +453,9 @@ def calcula(censo, tarifas, obs, hoy, semaforo=None):
         mat = _s(R.v(f, "matricula", ""))
         if not num or not mat:
             continue
-        sitio = {"pdv": _s(R.v(f, "cod_pdv", "")), "centro": num,
+        sitio = {"matricula": mat, "pdv": _s(R.v(f, "cod_pdv", "")), "centro": num,
                  "cliente": _s(R.v(f, "cod_cliente", "")),
                  "tarifa_pdv": _s(R.v(f, "tarifa_vending_pdv", "") or ""),
-                 "tarifa_centro": _s(R.v(f, "tarifa_vending_centro", "") or ""),
                  "tarifa_cliente": _s(R.v(f, "tarifa_vending_cliente", "") or "")}
         c = centros.setdefault(num, {
             "num_centro": num, "centro": _s(R.v(f, "centro", "")),
@@ -434,6 +483,7 @@ def calcula(censo, tarifas, obs, hoy, semaforo=None):
                 "tarifa": (linea.get("tarifa") or "") if linea else "",
                 "asignada": (linea.get("asignada") or "") if linea else "",
                 "cambio_tarifa": (linea.get("fecha") or "") if linea else "",
+                "subvencion": sitio["pdv"] in tarifas.subvencion,
                 "desde": desde, "medios": medios, "estado": estado})
 
     detalle, delegaciones = {}, {}
@@ -475,9 +525,8 @@ def calcula(censo, tarifas, obs, hoy, semaforo=None):
     resumen = {"generado": datetime.datetime.utcnow().isoformat() + "Z",
                "desde": corte, "dias": DIAS_VENTANA, "total": total,
                "delegaciones": lista,
-               "provisional": ("El orden entre niveles (punto de venta, centro, cliente, "
-                               "grupo, estándar) es provisional hasta leer cómo lo decide "
-                               "VenCloud (EXT_SONDA_PRECIOS).")}
+               "subvencion": ("Los puntos de venta con subvención en vigor van marcados: "
+                              "si la máquina cobra el precio subvencionado, ahí no coincidirá.")}
     return resumen, detalle
 
 

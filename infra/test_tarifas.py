@@ -52,8 +52,8 @@ def tele(mat, art, precio, linea=2, cuando="2026-10-13 10:00:00"):
 
 
 def linea(origen, nivel="", art="", ef=None, tp=None, tc=None, tpdto=None, fecha="",
-          tarifa_id=None, tarifa="", pdv="", centro="", cliente="", grupo=None, cat=""):
-    return {"origen": origen, "nivel": nivel, "cod_articulo": art, "precio_ef": ef,
+          tarifa_id=None, tarifa="", pdv="", centro="", cliente="", grupo=None, cat="", mat=""):
+    return {"origen": origen, "nivel": nivel, "matricula": mat, "cod_articulo": art, "precio_ef": ef,
             "precio_tp": tp, "precio_tc": tc, "precio_tpdto": tpdto, "fecha_cambio": fecha,
             "tarifa_id": tarifa_id, "tarifa": tarifa, "cod_pdv": pdv, "num_centro": centro,
             "cod_cliente": cliente, "grupo_id": grupo, "cod_categoria": cat}
@@ -114,7 +114,7 @@ c.come_telemetria([tele("M1", "100", 0.9, 2, "2026-09-02 09:00:00"),
                    tele("M1", "100", 1.0, 2, "2026-10-02 09:00:00")])
 comprueba("mismo estado", b.estado(), c.estado())
 
-print("\nQue precio rige: lo mas concreto manda")
+print("\nQue precio rige: el orden de VenCloud (getprecioscanal)")
 ta = TA.Tarifas([
     linea("tarifa", "tarifa", "100", 1.0, 0.9, 1.0, tarifa_id=7, tarifa="ESTANDAR 2024", fecha="2026-01-01"),
     linea("tarifa", "tarifa", "200", 1.5, 1.5, 1.5, tarifa_id=7, tarifa="ESTANDAR 2024", fecha="2026-01-01"),
@@ -126,7 +126,7 @@ ta = TA.Tarifas([
     linea("productos", "grupo", "500", 3.0, 3.0, 3.0, grupo=9),
     {"origen": "cliente_grupo", "nivel": "grupo", "cod_cliente": "10002", "grupo_id": 9},
 ])
-sitio = {"pdv": "P1", "centro": "500", "cliente": "10002", "tarifa_pdv": "", "tarifa_centro": "",
+sitio = {"matricula": "M1", "pdv": "P1", "centro": "500", "cliente": "10002", "tarifa_pdv": "",
          "tarifa_cliente": "7"}
 comprueba("el precio suelto del centro gana a la tarifa del cliente",
           (ta.precio("100", sitio)["nivel"], ta.precio("100", sitio)["ef"]), ("centro", 1.2))
@@ -138,10 +138,65 @@ comprueba("el del punto de venta gana a todo",
 comprueba("por categoria, si el articulo no tiene precio propio",
           (ta.precio("300", sitio)["origen"], ta.precio("300", sitio)["ef"]), ("categorias", 0.8))
 comprueba("el grupo del cliente", ta.precio("500", sitio)["nivel"], "grupo")
-comprueba("el precio general, sin asignar, al final", ta.precio("400", sitio)["nivel"], "general")
+comprueba("el precio suelto que no cuelga de nadie VenCloud no lo usa", ta.precio("400", sitio), None)
 comprueba("un articulo sin precio en ningun sitio", ta.precio("999", sitio), None)
 comprueba("un codigo numerico del censo casa con el texto del maestro",
           ta.precio("100", dict(sitio, centro=TA._s(500.0)))["nivel"], "centro")
+
+print("\nEl orden fino de getprecioscanal")
+tb = TA.Tarifas([
+    linea("articulo", "articulo", "600", cat="BEBIDA"),
+    linea("productos", "cliente", "600", 1.1, 1.1, 1.1, cliente="10002"),
+    linea("categorias", "pdv", "", 0.7, 0.7, 0.7, pdv="P1", cat="BEBIDA"),
+    linea("articulo", "articulo", "700", cat="BEBIDA"),
+    linea("tarifa", "tarifa", "700", 1.3, 1.3, 1.3, tarifa_id=8, tarifa="TARIFA PDV"),
+    linea("tarifa", "tarifa", "800", 1.3, 1.3, 1.3, tarifa_id=8, tarifa="TARIFA PDV"),
+    linea("tarifa", "tarifa", "800", 1.9, 1.9, 1.9, tarifa_id=7, tarifa="ESTANDAR 2024"),
+    linea("tarifa", "tarifa", "900", None, 1.0, 1.0, tarifa_id=8, tarifa="TARIFA PDV"),
+    linea("tarifa", "tarifa", "900", 1.6, 1.6, 1.6, tarifa_id=7, tarifa="ESTANDAR 2024"),
+])
+st = dict(sitio, tarifa_pdv="8")
+comprueba("el precio del articulo en el cliente gana a la categoria en el punto de venta",
+          (tb.precio("600", st)["nivel"], tb.precio("600", st)["ef"]), ("cliente", 1.1))
+comprueba("la categoria (aunque sea del punto de venta) gana a la tarifa estandar",
+          (tb.precio("700", st)["origen"], tb.precio("700", st)["ef"]), ("categorias", 0.7))
+comprueba("la tarifa estandar del punto de venta gana a la del cliente",
+          (tb.precio("800", st)["asignada"], tb.precio("800", st)["ef"]), ("pdv", 1.3))
+comprueba("una linea de tarifa sin precio de efectivo se salta",
+          (tb.precio("900", st)["asignada"], tb.precio("900", st)["ef"]), ("cliente", 1.6))
+comprueba("la tarifa estandar asignada al centro VenCloud no la usa",
+          tb.precio("800", dict(sitio, tarifa_cliente="", tarifa_centro="8")), None)
+
+print("\nVenta gratuita, precio en canales y planograma por categorias")
+tc_ = TA.Tarifas([
+    linea("articulo", "articulo", "100", cat="SNACK"),
+    linea("productos", "centro", "100", 1.2, 1.2, 1.2, centro="500"),
+    linea("categorias", "centro", "", 0.9, 0.9, 0.9, centro="500", cat="SNACK"),
+    linea("categorias", "centro", "", 0.5, 0.5, 0.5, centro="500", cat="BARATO"),
+    linea("pdv", "gratuito", pdv="PG"),
+    linea("pdv", "subvencion", pdv="PS"),
+    linea("canal", "canal", "100", 1.05, 1.05, 1.0, mat="MC"),
+    linea("canal", "planograma", "100", 1.4, 1.4, 1.4, cat="BARATO", mat="MP"),
+])
+comprueba("punto de venta gratuito: todo a cero",
+          tuple(tc_.precio("100", dict(sitio, pdv="PG"))[k] for k in ("nivel", "ef", "tc")),
+          ("gratuito", 0.0, 0.0))
+comprueba("maquina con precios en canales: el del canal",
+          tuple(tc_.precio("100", dict(sitio, matricula="MC"))[k] for k in ("nivel", "ef", "tc")),
+          ("maquina", 1.05, 1.0))
+comprueba("en esa maquina, un articulo sin canal no tiene precio",
+          tc_.precio("555", dict(sitio, matricula="MC")), None)
+comprueba("planograma por categorias: la categoria del canal, no el precio del articulo",
+          tc_.precio("100", dict(sitio, matricula="MP"))["ef"], 0.5)
+comprueba("una maquina normal sigue con el precio del articulo",
+          tc_.precio("100", sitio)["ef"], 1.2)
+obg = TA.Observador()
+obg.come_telemetria([tele("MG", "100", 0.0, 2)])
+comprueba("gratuito y cobra cero: coincide",
+          TA.compara(tc_.precio("100", dict(sitio, pdv="PG")), obg, "MG", "100", HOY)[0], "coincide")
+obg.come_telemetria([tele("MG", "100", 1.0, 2, "2026-10-13 11:00:00")])
+comprueba("gratuito y cobra un euro: no coincide",
+          TA.compara(tc_.precio("100", dict(sitio, pdv="PG")), obg, "MG", "100", HOY)[0], "no_coincide")
 
 print("\nCoincide: exacto, medio a medio, desde el ultimo cambio")
 ob = TA.Observador()
@@ -198,6 +253,10 @@ comprueba("el nivel del centro 500: centro (precio suelto) y estandar, uno cada 
           det["500"]["resumen"]["niveles"], {"centro": 1, "estandar": 1})
 comprueba("la tarifa asignada del centro", det["500"]["resumen"]["tarifas"],
           [{"tarifa": "ESTANDAR 2024 (asignada al cliente)", "maquinas": 1}])
+comprueba("sin subvencion, la fila no va marcada", det["500"]["filas"][0]["subvencion"], False)
+ts = TA.Tarifas([linea("pdv", "subvencion", pdv="P1")])
+_, dets = TA.calcula(cen[:1], ts, ob, HOY, OP.semaforo)
+comprueba("punto de venta con subvencion: marcado", {r["subvencion"] for r in dets["500"]["filas"]}, {True})
 cu = TA.cuadrado(res, OP.semaforo)
 comprueba("el cuadrado: 66,7 % en rojo", (cu["pct"], cu["color"]), (66.7, "rojo"))
 res0, _ = TA.calcula([], ta, ob, HOY, OP.semaforo)
