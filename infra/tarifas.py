@@ -21,7 +21,7 @@ LAS REGLAS, TAL COMO LAS FIJO GABRIELE:
 
 DE DONDE SALE CADA PRECIO:
 
-  · La tarifa: el maestro EXT_MAESTRO_TARIFAS (docs/17, M7), con todas las lineas de
+  · La tarifa: el maestro M7_EXT_MAESTRO_TARIFAS (docs/17, M7), con todas las lineas de
     precio de VenCloud y el nivel del que cuelga cada una.
   · El precio cobrado: la telemetria (A12), venta a venta, y donde no la hay, el
     audit de la visita (A11), que da importe y numero de ventas por medio de
@@ -112,7 +112,7 @@ ORDEN = (
     ("pdv", "tarifa"), ("cliente", "tarifa"),
 )
 
-SIN_MAESTRO = ("Falta el maestro de tarifas: el informe EXT_MAESTRO_TARIFAS de VenCloud "
+SIN_MAESTRO = ("Falta el maestro de tarifas: el informe M7_EXT_MAESTRO_TARIFAS de VenCloud "
                "todavía no se descarga.")
 
 # Coincide, no coincide, sin tarifa, sin dato.
@@ -264,7 +264,7 @@ class Observador:
 # el maestro de tarifas
 # ----------------------------------------------------------------------
 class Tarifas:
-    """EXT_MAESTRO_TARIFAS, indexado para buscar el precio de un articulo en un sitio."""
+    """M7_EXT_MAESTRO_TARIFAS, indexado para buscar el precio de un articulo en un sitio."""
 
     def __init__(self, filas):
         self.filas = len(filas or [])

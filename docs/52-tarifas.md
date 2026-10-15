@@ -60,7 +60,7 @@ calcula aparte un precio subvencionado, y si la máquina cobra ése, ahí no coi
 
 | | |
 |---|---|
-| Precio de tarifa, venta gratuita, precios en canales | `EXT_MAESTRO_TARIFAS` (docs/17, M7), maestro, cada noche → `maestros/tarifas/m_tarifas.json.gz` |
+| Precio de tarifa, venta gratuita, precios en canales | `M7_EXT_MAESTRO_TARIFAS` (docs/17, M7), maestro, cada noche → `maestros/tarifas/m_tarifas.json.gz` |
 | Qué tarifa estándar tiene asignada cada sitio | `EXT_INSTALACIONES` (M5): `tarifa_vending_pdv` y `tarifa_vending_cliente` |
 | Precio cobrado | telemetría (A12) y audit de la visita (A11) |
 | Productos de la máquina | reposiciones (A2) |

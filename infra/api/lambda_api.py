@@ -365,7 +365,7 @@ def tarifas(perfil, centro=None):
         resumen = _crudo(base + "resumen.json.gz")
     except Exception:
         return r(503, {"error": "Las tarifas todavía no se han calculado: falta el maestro "
-                                "de tarifas (EXT_MAESTRO_TARIFAS) o la carga de esta noche.",
+                                "de tarifas (M7_EXT_MAESTRO_TARIFAS) o la carga de esta noche.",
                        "_nota": "Lo escriben los agregados cada noche (4:45)."})
     if centro is None:
         return _como_json(resumen)

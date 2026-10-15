@@ -1544,7 +1544,7 @@ where (c.table_schema = 'comercial' and c.table_name in ('clientes', 'clientesce
 order by c.table_schema, c.table_name, c.ordinal_position
 ```
 
-## M7 · EXT_MAESTRO_TARIFAS  *(sin parámetros)*
+## M7 · M7_EXT_MAESTRO_TARIFAS  *(sin parámetros)*
 
 Todas las líneas de **precio de venta** que VenCloud usa para decidir qué cobra cada máquina, en una
 sola tabla y cada una con el nivel del que cuelga. Es lo que necesita el cuadrado de tarifas del

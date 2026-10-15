@@ -93,7 +93,7 @@ CLAVE_RUTAS = os.environ.get("RUTAS", "maestros/rutas/m_rutas.json.gz")
 # sin fichero (los anteriores al 13-oct-2026) no tiene plan, y el cuadrado de
 # rutas lo dice.
 PLAN_VISITAS = ("crudo/rutas_plan_visitas", "rutas_plan_visitas")
-# Tarifas contra venta real (docs/52). El maestro EXT_MAESTRO_TARIFAS, y lo que se
+# Tarifas contra venta real (docs/52). El maestro M7_EXT_MAESTRO_TARIFAS, y lo que se
 # guarda de una noche a otra: la ultima carga de cada producto y el ultimo precio
 # cobrado, seis meses (tarifas.py explica por que no se relee todo).
 CLAVE_TARIFAS = os.environ.get("TARIFAS", "maestros/tarifas/m_tarifas.json.gz")
