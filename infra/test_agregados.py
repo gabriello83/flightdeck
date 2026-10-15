@@ -127,12 +127,60 @@ pon("crudo/stock_balance", "stock_balance", AYER,
       "fecha_ult_inventario": str(HOY), "matricula": "A1"}] * 2
     + [{"anho": 2026, "mes": 9, "tipo_elemento": "M", "valor_total": 500,
         "fecha_ult_inventario": "1900-01-01", "matricula": "A1"}] * 2
-    + [{"anho": 2026, "mes": 9, "tipo_elemento": "A", "valor_total": 9000,
+    + [{"id": 50, "anho": 2026, "mes": 9, "tipo_elemento": "A", "valor_total": 9000,
+        "fecha": f"{AYER} 21:25:41", "almacen": "Sevilla CECO L0K071 ",
         "fecha_ult_inventario": str(HOY), "matricula": "A1"}]
     + [{"anho": 2026, "mes": 8, "tipo_elemento": "M", "valor_total": 7777,
         "fecha_ult_inventario": str(HOY), "matricula": "A1"}] * 6
     + [{"anho": 2026, "mes": 8, "tipo_elemento": "A", "valor_total": 123456,
         "fecha_ult_inventario": str(HOY), "matricula": "A1"}])
+
+# Los almacenes por dentro (docs/54). El detalle del cierre de Sevilla: el agua
+# y el azucar, que luego se mueven, y el cafe, que no se mueve en la ventana.
+pon("crudo/stock_balance_prod", "stock_balance_prod", AYER,
+    [{"elemento_id": 50, "cod_articulo": "5322", "articulo": "AGUA", "cantidad": 900.0},
+     {"elemento_id": 50, "cod_articulo": "5961", "articulo": "AZUCAR", "cantidad": 40.0},
+     {"elemento_id": 50, "cod_articulo": "119162", "articulo": "CAFE", "cantidad": 60.0},
+     {"elemento_id": 999, "cod_articulo": "1", "articulo": "DE UNA MAQUINA", "cantidad": 5.0}])
+_ANTEAYER = AYER - datetime.timedelta(days=1)
+# El agua: se compran 600 anteayer y luego van saliendo hasta quedar 80 (13 %).
+pon("crudo/stock_almacen", "stock_almacen", _ANTEAYER,
+    [{"id": 1, "fecha": f"{_ANTEAYER} 06:00:00", "tipo_mov": "CO", "cantidad": 600.0,
+      "existencia_resultante": 650.0, "almacen": "Sevilla CECO L0K071 ", "cod_articulo": "5322",
+      "articulo": "AGUA", "origen_destino": "Proveedor: FONT VELLA",
+      "documento": "Albarán de compra: 77-01/10/2026"}])
+pon("crudo/stock_almacen", "stock_almacen", AYER,
+    # Llegan desordenados: manda la fecha, no el orden del fichero.
+    [{"id": 3, "fecha": f"{AYER} 23:00:00", "tipo_mov": "SV", "cantidad": -70.0,
+      "existencia_resultante": 80.0, "almacen": "Sevilla CECO L0K071 ", "cod_articulo": "5322",
+      "articulo": "AGUA"},
+     {"id": 2, "fecha": f"{AYER} 08:00:00", "tipo_mov": "SV", "cantidad": -500.0,
+      "existencia_resultante": 150.0, "almacen": "Sevilla CECO L0K071 ", "cod_articulo": "5322",
+      "articulo": "AGUA"},
+     # El azucar: 200 comprados y quedan 100, el 50 %.
+     {"id": 4, "fecha": f"{AYER} 09:00:00", "tipo_mov": "CO", "cantidad": 200.0,
+      "existencia_resultante": 240.0, "almacen": "Sevilla CECO L0K071 ", "cod_articulo": "5961",
+      "articulo": "AZUCAR", "origen_destino": "Proveedor: AZUCARERA"},
+     {"id": 5, "fecha": f"{AYER} 10:00:00", "tipo_mov": "SV", "cantidad": -140.0,
+      "existencia_resultante": 100.0, "almacen": "Sevilla CECO L0K071 ", "cod_articulo": "5961",
+      "articulo": "AZUCAR"}])
+ALMACEN["maestros/articulos/m_articulos.json.gz"] = gzip.compress(json.dumps([
+    {"cod_articulo": "5322", "articulo": "AGUA", "unid_pack": 24, "unid_caja": 24,
+     "codigos_barras": "8410000000016|1|0;8410000000023|24|0"},
+    # El azucar solo tiene el codigo de la caja: es el que hay que senalar.
+    {"cod_articulo": "5961", "articulo": "AZUCAR", "unid_pack": 0, "unid_caja": 10,
+     "codigos_barras": "8410000000030|10|0"},
+    {"cod_articulo": "119162", "articulo": "CAFE", "unid_pack": 6, "unid_caja": 6,
+     "codigos_barras": ""},
+]).encode())
+import base64 as _b64  # noqa: E402
+ALMACEN["maestros/articulos_fotos/m_articulos_fotos.json.gz"] = gzip.compress(json.dumps([
+    {"cod_articulo": "5322", "foto": _b64.b64encode(b"\xff\xd8\xff\xe0agua").decode()},
+    # Lo que no es una imagen no se guarda.
+    {"cod_articulo": "5961", "foto": _b64.b64encode(b"esto no es una foto").decode()},
+    # Ni la foto de un articulo que no esta en ningun almacen.
+    {"cod_articulo": "424242", "foto": _b64.b64encode(b"\x89PNG\r\n\x1a\nxx").decode()},
+]).encode())
 
 # El censo de la instalacion: un maestro, con una pega de cada clase.
 ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"] = gzip.compress(json.dumps([
@@ -250,6 +298,43 @@ comprueba("la reposicion de AIRBUS no lleva la de Consum",
           < op_int["dias"][_ayer]["reposiciones"]["unidades"], True)
 comprueba("el resumen dice que cuadrados se quedaron sin dato",
           "almacenes" not in res["operativo"]["interno"]["sin_dato"], True)
+
+print("\nLos almacenes por dentro (docs/54)")
+_al = json.loads(gzip.decompress(ALMACEN["cabina/interno/almacenes.json.gz"]))
+_sev = {p["cod"]: p for p in _al["almacenes"][0]["productos"]}
+comprueba("un almacen, con el nombre limpio", [a["almacen"] for a in _al["almacenes"]],
+          ["Sevilla CECO L0K071"])
+comprueba("la existencia es la del ultimo movimiento por fecha, no por orden del fichero",
+          (_sev["5322"]["existencias"], _sev["5322"]["de"]), (80.0, "movimiento"))
+comprueba("la ultima compra, con su proveedor",
+          (_sev["5322"]["compra"]["cantidad"], _sev["5322"]["compra"]["proveedor"]), (600.0, "FONT VELLA"))
+comprueba("80 de 600 es menos del 15 %: bajo minimo", (_sev["5322"]["pct"], _sev["5322"]["bajo"]),
+          (13.3, True))
+comprueba("100 de 200 no", _sev["5961"]["bajo"], False)
+comprueba("el cafe no se movio: cantidad del cierre, sin compra",
+          (_sev["119162"]["existencias"], _sev["119162"]["de"], "compra" in _sev["119162"]),
+          (60.0, "cierre", False))
+comprueba("lo de una maquina no entra", "1" in _sev, False)
+comprueba("el bajo minimo va primero", _al["almacenes"][0]["productos"][0]["cod"], "5322")
+comprueba("unidades por pack y caja del maestro", (_sev["5322"]["unid_pack"], _sev["5322"]["unid_caja"]),
+          (24, 24))
+comprueba("el pack a cero es que no esta", _sev["5961"]["unid_pack"], None)
+comprueba("codigo de la unidad: el de cantidad 1", _sev["5322"]["ean_unidad"], ["8410000000016"])
+comprueba("el azucar solo tiene el de la caja", (_sev["5961"]["ean_unidad"],
+          _sev["5961"]["otros_codigos"]), ([], [{"codigo": "8410000000030", "cantidad": 10}]))
+comprueba("el resumen los cuenta", (_al["total"]["bajo_minimo"], _al["total"]["sin_codigo_unidad"],
+          _al["total"]["sin_pack"], _al["total"]["sin_foto"]), (1, 2, 1, 2))
+comprueba("con maestro y fotos no hay avisos", _al["avisos"], [])
+comprueba("la foto se guarda una vez, como imagen", ALMACEN.get("cabina/_articulos/fotos/5322"),
+          b"\xff\xd8\xff\xe0agua")
+comprueba("lo que no es imagen, no", "cabina/_articulos/fotos/5961" in ALMACEN, False)
+comprueba("ni la de un articulo fuera de los almacenes", "cabina/_articulos/fotos/424242" in ALMACEN,
+          False)
+comprueba("AIRBUS no tiene almacenes: ni fichero", "cabina/cli-airbus/almacenes.json.gz" in ALMACEN,
+          False)
+comprueba("el cuadrado lleva cuantos estan bajo minimo", op_int["foto"]["almacenes"]["bajo_minimo"], 1)
+comprueba("y la respuesta lo dice", res["almacenes"]["perfiles"]["interno"],
+          {"productos": 3, "bajo_minimo": 1})
 
 print("\nInterno: ve los dos centros")
 comprueba("310 partes leidos", interno["servicio"]["partes_totales"], 310)

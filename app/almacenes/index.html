@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Almacenes · digivend</title>
+<!-- Un solo origen. Esta pagina habla con /api/* del mismo dominio y con nadie
+     mas, fotos incluidas: las sirve /api/almacenes/foto. La cabecera de verdad
+     la pone CloudFront; esta va por si se abre suelta. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%236d4fc2'/%3E%3Cpath d='M2 7l6-4 6 4v7H2z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6; --morado:#6d4fc2;
+  --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+  --rojo:#c62828; --rojo-suave:#fbe9e7; --verde:#15803d; --ambar:#a15c00; --ambar-suave:#fff4e0;
+  --barra:#d9d7d0;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --morado:#8a6fe0; --sombra:none;
+    --rojo:#ef6b5e; --rojo-suave:#3a1d1a; --verde:#3fb36b; --ambar:#e8a33d; --ambar-suave:#33270f;
+    --barra:#3a3a36;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --morado:#8a6fe0; --sombra:none;
+  --rojo:#ef6b5e; --rojo-suave:#3a1d1a; --verde:#3fb36b; --ambar:#e8a33d; --ambar-suave:#33270f;
+  --barra:#3a3a36;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.45; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1240px;margin:0 auto;padding:18px 16px 72px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+.marca{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn,a.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);text-decoration:none;
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
+button.btn:hover,a.btn:hover{border-color:var(--tinta-3)}
+.barra{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:16px 0 4px}
+.barra label{font-size:13px;color:var(--tinta-2);display:flex;align-items:center;gap:8px}
+.barra select,.barra input{
+  font:inherit;font-size:14px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:5px 8px;max-width:100%
+}
+.barra input{width:220px}
+.nota{
+  margin:12px 0 4px;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+.nota.mal{border-left-color:var(--rojo)}
+.nota.falta{border-left-color:var(--ambar)}
+.resumen{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin:14px 0 6px}
+.resumen button{
+  font:inherit;text-align:left;cursor:pointer;color:var(--tinta);
+  background:var(--tarjeta);border:1px solid var(--borde);border-radius:12px;padding:11px 14px;box-shadow:var(--sombra)
+}
+.resumen button[aria-pressed="true"]{border-color:var(--morado);box-shadow:0 0 0 2px var(--morado) inset}
+.resumen button:disabled{cursor:default;opacity:.75}
+.resumen .n{font-size:26px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;display:block}
+.resumen .t{font-size:12.5px;color:var(--tinta-2)}
+.resumen .rojo .n{color:var(--rojo)}
+.cuenta{font-size:13px;color:var(--tinta-2);margin:10px 0 6px}
+.tabla-env{overflow-x:auto;border-radius:12px}
+table.prod{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;background:var(--tarjeta);
+  border:1px solid var(--borde);border-radius:12px;overflow:hidden;font-size:14px}
+.prod th{font-size:12px;font-weight:600;color:var(--tinta-2);text-align:left;padding:9px 10px;
+  border-bottom:1px solid var(--borde);background:var(--fondo)}
+.prod td{padding:9px 10px;border-bottom:1px solid var(--borde);vertical-align:top;overflow-wrap:anywhere}
+.prod col.c1{width:84px} .prod col.c3{width:128px} .prod col.c4{width:150px}
+.prod col.c5{width:128px} .prod col.c6{width:96px} .prod col.c7{width:176px}
+.prod td.niv{white-space:nowrap}
+.prod tr:last-child td{border-bottom:none}
+.prod tr.bajo td{background:var(--rojo-suave)}
+.prod .num{text-align:right;font-variant-numeric:tabular-nums}
+.prod .num b{white-space:nowrap}
+.foto{width:64px;height:64px;border-radius:8px;border:1px solid var(--borde);background:#fff;
+  object-fit:contain;display:block}
+.sinfoto{width:64px;height:64px;border-radius:8px;border:1px dashed var(--borde-fuerte);display:flex;
+  align-items:center;justify-content:center;text-align:center;font-size:10.5px;color:var(--tinta-3);line-height:1.15}
+.nom{font-weight:600}
+.peq{font-size:12.5px;color:var(--tinta-2)}
+.etq{display:inline-block;font-size:11.5px;font-weight:650;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.etq.rojo{background:var(--rojo);color:#fff}
+.etq.ambar{background:var(--ambar-suave);color:var(--ambar);border:1px solid var(--ambar)}
+.nivel{width:110px;height:7px;border-radius:4px;background:var(--barra);overflow:hidden;margin-top:4px}
+.nivel i{display:block;height:100%;background:var(--verde)}
+.bajo .nivel i{background:var(--rojo)}
+.ean{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+.vacio{color:var(--tinta-3)}
+button.mas{margin:12px auto 0;display:block}
+footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+#cargando{padding:40px 0;color:var(--tinta-2)}
+@media (max-width:760px){
+  .barra input{width:100%}
+  .barra label{flex:1 1 100%;min-width:0}
+  .barra label select,.barra label input{flex:1;min-width:0;width:100%}
+  .resumen{grid-template-columns:1fr 1fr;gap:8px}
+  .resumen button{padding:9px 11px}
+  .resumen .n{font-size:22px}
+  table.prod{table-layout:auto}
+  .tabla-env{overflow:visible}
+  table.prod,.prod tbody,.prod tr,.prod td{display:block;width:100%}
+  .prod thead{display:none}
+  table.prod{border:none;background:none}
+  .prod colgroup{display:none}
+  .prod tr{display:grid;grid-template-columns:72px minmax(0,1fr) minmax(0,1fr);gap:6px 10px;background:var(--tarjeta);
+    border:1px solid var(--borde);border-radius:12px;padding:10px;margin-bottom:10px}
+  .prod tr.bajo{background:var(--rojo-suave)}
+  .prod td{border:none;padding:0;background:none!important}
+  .prod td.c-foto{grid-row:span 3}
+  .prod td.c-prod{grid-column:2 / 4}
+  .prod td[data-t]::before{content:attr(data-t);display:block;font-size:11px;color:var(--tinta-3)}
+  .prod .num{text-align:left}
+  .prod td.c-cod{grid-column:1 / 4}
+}
+</style>
+</head>
+<body>
+<div class="env">
+  <header class="top">
+    <div class="marca">
+      <b>Almacenes</b>
+      <span id="quien"></span>
+    </div>
+    <div class="acciones">
+      <a class="btn" href="/operativo/">Informe operativo</a>
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn" id="bSalir" type="button">Salir</button>
+    </div>
+  </header>
+
+  <div id="cargando">Cargando…</div>
+  <div class="nota mal" id="aviso" hidden></div>
+  <div id="avisos"></div>
+
+  <div id="cuerpo" hidden>
+    <div class="barra">
+      <label>Almacén <select id="almacen"></select></label>
+      <label>Buscar <input id="buscar" type="search" placeholder="Producto, código o EAN" autocomplete="off"></label>
+    </div>
+    <div class="resumen" id="resumen"></div>
+    <div class="cuenta" id="cuenta"></div>
+    <div class="tabla-env">
+    <table class="prod" id="tabla">
+      <colgroup><col class="c1"><col><col class="c3"><col class="c4"><col class="c5"><col class="c6"><col class="c7"></colgroup>
+      <thead><tr>
+        <th>Foto</th><th>Producto</th><th class="num">Existencias</th><th class="num">Última compra</th>
+        <th>Nivel</th><th class="num">Ud/pack · ud/caja</th><th>Código de barras de la unidad</th>
+      </tr></thead>
+      <tbody id="filas"></tbody>
+    </table>
+    </div>
+    <button class="btn mas" id="bMas" type="button" hidden></button>
+  </div>
+
+  <footer id="pie" hidden></footer>
+</div>
+
+<script>
+/* ===================================================================
+   Almacenes · digivend.es  (docs/54)
+
+   Que producto hay en cada almacen, con su foto, sus unidades por pack y por
+   caja y su codigo de barras de la unidad, y cuales estan ya por debajo del
+   15 % de la ultima compra. El fichero llega de la API ya cortado por el
+   perfil de la sesion: esta pagina no decide quien ve que, solo dibuja.
+
+   Donde no hay dato se dice: un producto sin compra en la ventana no tiene
+   porcentaje, y sin el maestro de articulos no se enseña a nadie «sin codigo».
+   =================================================================== */
+const CLAVE_TEMA = "digivend.tema";
+const num  = n => new Intl.NumberFormat("es-ES",{maximumFractionDigits:2}).format(n||0);
+const pct  = n => new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(n||0) + " %";
+const esc  = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = s => document.querySelector(s);
+const TANDA = 300;
+
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = $("#bTema");
+  const oscuro = () => document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const pinta = () => { b.textContent = oscuro() ? "Modo claro" : "Modo oscuro"; };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const n = oscuro() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+  });
+})();
+$("#bSalir").addEventListener("click", async ()=>{
+  try{ await fetch("/api/salir", {method:"POST", credentials:"same-origin"}); }catch(e){}
+  location.href = "/";
+});
+
+let DATOS = null, VER = "todos", MOSTRADOS = TANDA;
+
+function fecha(s){
+  const d = new Date(String(s)+"T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(s||"") : d.toLocaleDateString("es-ES",{day:"numeric", month:"short", year:"numeric"});
+}
+function mesLargo(p){
+  const d = new Date(String(p)+"-01T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(p) : d.toLocaleDateString("es-ES",{month:"long", year:"numeric"});
+}
+
+/* Los filtros. Los que dependen del maestro solo existen si el maestro llego. */
+function filtros(){
+  const f = [
+    {id:"todos", t:"Productos", n:p=>true},
+    {id:"bajo", t:`Por debajo del ${DATOS.umbral_pct} % de su última compra`, n:p=>p.bajo, rojo:true},
+  ];
+  if(DATOS.maestro){
+    f.push({id:"sin_codigo", t:"Sin código de barras de la unidad",
+            n:p=>!p.fuera_del_maestro && !(p.ean_unidad||[]).length, rojo:true});
+    f.push({id:"sin_pack", t:"Sin unidades por pack", n:p=>!p.fuera_del_maestro && !p.unid_pack});
+  }
+  if(DATOS.fotos) f.push({id:"sin_foto", t:"Sin foto", n:p=>!p.foto});
+  return f;
+}
+
+function productos(){
+  const sel = $("#almacen").value;
+  const out = [];
+  for(const a of DATOS.almacenes){
+    if(sel && a.almacen !== sel) continue;
+    for(const p of a.productos) out.push(Object.assign({almacen:a.almacen}, p));
+  }
+  return out;
+}
+
+function casa(p, q){
+  if(!q) return true;
+  const h = [p.nombre, p.cod, p.categoria, ...(p.ean_unidad||[]), ...((p.otros_codigos||[]).map(c=>c.codigo))]
+    .join(" ").toLowerCase();
+  return q.split(/\s+/).every(t => h.includes(t));
+}
+
+function celdaFoto(p){
+  if(p.foto) return `<img class="foto" loading="lazy" alt="" src="/api/almacenes/foto?art=${encodeURIComponent(p.cod)}">`;
+  return `<div class="sinfoto">${DATOS.fotos ? "Sin foto en VenCloud" : "Sin foto"}</div>`;
+}
+
+function celdaExistencias(p){
+  let packs = "";
+  if(p.unid_pack && p.existencias > 0)
+    packs = `<div class="peq">≈ ${num(Math.floor(p.existencias / p.unid_pack))} packs de ${num(p.unid_pack)}</div>`;
+  const de = p.de === "cierre" ? `cierre de ${esc(mesLargo((DATOS.periodo_cierre||"")))}` : `a ${esc(fecha(p.fecha))}`;
+  return `<b>${num(p.existencias)} ud</b>${p.existencias < 0 ? ' <span class="etq ambar">negativa</span>' : ""}`
+    + packs + `<div class="peq">${de}</div>`;
+}
+
+function celdaCompra(p){
+  if(!p.compra) return `<span class="vacio">Sin compra en la ventana</span>`;
+  return `${num(p.compra.cantidad)} ud<div class="peq">${esc(fecha(p.compra.fecha))}`
+    + (p.compra.proveedor ? ` · ${esc(p.compra.proveedor)}` : "") + `</div>`;
+}
+
+function celdaNivel(p){
+  if(p.bajo && p.pct == null) return `<span class="etq rojo">Bajo mínimo</span><div class="peq">existencia negativa</div>`;
+  if(p.pct == null) return `<span class="vacio">—</span>`;
+  const ancho = Math.max(0, Math.min(100, p.pct));
+  return (p.bajo ? `<span class="etq rojo">Bajo mínimo</span> ` : "") + `<b>${pct(p.pct)}</b>`
+    + `<div class="nivel" aria-hidden="true"><i style="width:${ancho}%"></i></div>`;
+}
+
+function celdaPack(p){
+  if(!DATOS.maestro) return `<span class="vacio">—</span>`;
+  if(p.fuera_del_maestro) return `<span class="vacio">No está en el maestro</span>`;
+  const v = x => x ? num(x) : `<span class="vacio">sin dato</span>`;
+  return `${v(p.unid_pack)} · ${v(p.unid_caja)}`;
+}
+
+function celdaCodigo(p){
+  if(!DATOS.maestro) return `<span class="vacio">—</span>`;
+  if(p.fuera_del_maestro) return `<span class="vacio">No está en el maestro</span>`;
+  const u = (p.ean_unidad||[]);
+  let h = u.length ? u.map(c=>`<div class="ean">${esc(c)}</div>`).join("")
+                   : `<span class="etq rojo">Sin código de unidad</span>`;
+  const otros = (p.otros_codigos||[]);
+  if(otros.length)
+    h += `<div class="peq">` + otros.map(c => `${c.cantidad ? "×" + num(c.cantidad) : "sin cantidad"}: <span class="ean">${esc(c.codigo)}</span>`).join("<br>") + `</div>`;
+  return h;
+}
+
+function pinta(){
+  const fs = filtros();
+  if(!fs.some(f=>f.id===VER)) VER = "todos";
+  const base = productos();
+  const cuentas = Object.fromEntries(fs.map(f => [f.id, base.filter(f.n).length]));
+  $("#resumen").innerHTML = fs.map(f =>
+    `<button type="button" data-f="${f.id}" aria-pressed="${VER===f.id}" class="${f.rojo && cuentas[f.id] ? "rojo" : ""}">`
+    + `<span class="n">${num(cuentas[f.id])}</span><span class="t">${esc(f.t)}</span></button>`).join("");
+
+  const filtro = fs.find(f=>f.id===VER);
+  const q = $("#buscar").value.trim().toLowerCase();
+  const lista = base.filter(filtro.n).filter(p => casa(p, q))
+    .sort((a,b) => (b.bajo?1:0) - (a.bajo?1:0) || (a.pct??1e9) - (b.pct??1e9) || a.nombre.localeCompare(b.nombre, "es"));
+  const varios = !$("#almacen").value;
+  $("#cuenta").textContent = `${num(lista.length)} producto${lista.length===1?"":"s"}`
+    + (VER!=="todos" ? ` · ${filtro.t.toLowerCase()}` : "") + (q ? ` · «${$("#buscar").value.trim()}»` : "");
+  $("#filas").innerHTML = lista.slice(0, MOSTRADOS).map(p =>
+    `<tr class="${p.bajo ? "bajo" : ""}" data-cod="${esc(p.cod)}">`
+    + `<td class="c-foto">${celdaFoto(p)}</td>`
+    + `<td class="c-prod"><div class="nom">${esc(p.nombre || "(sin nombre)")}</div>`
+    +   `<div class="peq">Cód. ${esc(p.cod)}${p.categoria ? " · " + esc(p.categoria) : ""}</div>`
+    +   (varios ? `<div class="peq">${esc(p.almacen)}</div>` : "") + `</td>`
+    + `<td class="num" data-t="Existencias">${celdaExistencias(p)}</td>`
+    + `<td class="num" data-t="Última compra">${celdaCompra(p)}</td>`
+    + `<td class="niv" data-t="Nivel">${celdaNivel(p)}</td>`
+    + `<td class="num" data-t="Ud/pack · ud/caja">${celdaPack(p)}</td>`
+    + `<td class="c-cod" data-t="Código de barras de la unidad">${celdaCodigo(p)}</td></tr>`).join("")
+    || `<tr><td colspan="7" class="vacio">Ningún producto con este filtro.</td></tr>`;
+  const resto = lista.length - MOSTRADOS;
+  $("#bMas").hidden = resto <= 0;
+  if(resto > 0) $("#bMas").textContent = `Ver ${num(Math.min(resto, TANDA))} más (quedan ${num(resto)})`;
+}
+
+/* Una foto que no carga se cambia por el hueco, sin dejar el icono roto. */
+document.addEventListener("error", e => {
+  const t = e.target;
+  if(t && t.tagName === "IMG" && t.classList.contains("foto")){
+    const d = document.createElement("div"); d.className = "sinfoto"; d.textContent = "Foto no disponible";
+    t.replaceWith(d);
+  }
+}, true);
+
+$("#resumen").addEventListener("click", e => {
+  const b = e.target.closest("button[data-f]");
+  if(!b) return;
+  VER = b.dataset.f; MOSTRADOS = TANDA; pinta();
+});
+$("#almacen").addEventListener("change", ()=>{ MOSTRADOS = TANDA; escribir("digivend.almacen", $("#almacen").value); pinta(); });
+$("#buscar").addEventListener("input", ()=>{ MOSTRADOS = TANDA; pinta(); });
+$("#bMas").addEventListener("click", ()=>{ MOSTRADOS += TANDA; pinta(); });
+
+function avisa(texto){
+  const a = $("#aviso");
+  a.textContent = texto; a.hidden = !texto;
+}
+
+(async function arranca(){
+  let r;
+  try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(r.status === 401){ location.href = "/"; return; }
+  if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
+  const yo = await r.json();
+  if(yo.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  $("#quien").textContent = (yo.perfil ? yo.perfil + " · " : "") + (yo.nombre || yo.correo);
+
+  let ra;
+  try{ ra = await fetch("/api/almacenes", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(ra.status === 401){ location.href = "/"; return; }
+  $("#cargando").hidden = true;
+  if(!ra.ok){
+    let d={}; try{ d = await ra.json(); }catch(e){}
+    avisa(ra.status === 403 ? "Este perfil no tiene acceso a los almacenes." : (d.error || "Los almacenes no están disponibles ahora mismo."));
+    return;
+  }
+  DATOS = await ra.json();
+  $("#avisos").innerHTML = (DATOS.avisos||[]).map(t => `<div class="nota falta">${esc(t)}</div>`).join("");
+  if(!(DATOS.almacenes||[]).length){ avisa("Ningún almacén de este perfil tiene producto."); return; }
+
+  const sel = $("#almacen");
+  sel.innerHTML = `<option value="">Todos (${num(DATOS.almacenes.length)})</option>`
+    + DATOS.almacenes.map(a => `<option value="${esc(a.almacen)}">${esc(a.almacen)}`
+      + (a.resumen.bajo_minimo ? ` · ${num(a.resumen.bajo_minimo)} bajo mínimo` : "") + `</option>`).join("");
+  const antes = leer("digivend.almacen");
+  if(antes && DATOS.almacenes.some(a => a.almacen === antes)) sel.value = antes;
+  if(new URLSearchParams(location.search).get("ver") === "bajo") VER = "bajo";
+  $("#cuerpo").hidden = false;
+  pinta();
+
+  const gen = DATOS.generado ? new Date(DATOS.generado) : null;
+  $("#pie").innerHTML = "Datos de VenCloud, filtrados por las delegaciones de tu perfil y servidos desde este "
+    + "mismo dominio." + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "")
+    + ` La existencia es la que deja el último movimiento de cada producto; si no se ha movido en la ventana, `
+    + `la del cierre de ${esc(mesLargo(DATOS.periodo_cierre||""))}. La última compra es la última entrada por `
+    + `albarán de compra. Un producto está bajo mínimo cuando le queda menos del ${esc(DATOS.umbral_pct)} % `
+    + `de lo que se compró la última vez. Donde no hay dato, se dice en vez de estimarse.`;
+  $("#pie").hidden = false;
+})();
+</script>
+</body>
+</html>

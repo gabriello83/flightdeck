@@ -1629,6 +1629,54 @@ left join recursos.vehiculosmodelos mo on mo.id = v.vehiculomodeloid
 left join general.delegaciones del     on del.id = v.delegacionid
 ```
 
+## M8 · EXT_MAESTRO_ARTICULOS  *(sin parámetros)*
+
+Los artículos vivos con sus unidades por pack y por caja y todos sus códigos de barras
+(docs/54). Los códigos van juntos en una columna, `código|cantidad|tipo` separados por punto
+y coma, para no repetir el artículo una vez por código: la cantidad es cuántas unidades
+representa ese código (1 = la unidad, 24 = una caja de 24).
+
+```sql
+select
+  a.id        as id,
+  a.codigo    as cod_articulo,
+  a.denomina  as articulo,
+  a.clase     as clase,
+  cat.nombre  as categoria,
+  a.unidpack  as unid_pack,
+  a.unidcaja  as unid_caja,
+  a.unidmedida as unidad_medida,
+  a.usarunidpackvta as usar_unid_pack_venta,
+  a.codigoeanoficial as ean_oficial,
+  (select string_agg(ce.codbarras || '|' || cast(ce.cantidad as text) || '|' || cast(ce.tipo as text), ';')
+     from stocks.articuloscodequivalentes ce
+    where ce.articuloid = a.id) as codigos_barras,
+  case when a.articulofotoid is null then 0 else 1 end as tiene_foto
+from stocks.articulos a
+left join stocks.articuloscategorias cat on cat.id = a.articulocategoriaid
+where a.obsoleto = false
+order by a.codigo
+```
+
+## M9 · EXT_MAESTRO_ARTICULOS_FOTOS  *(sin parámetros)*
+
+La foto principal de cada artículo que ha pasado por un almacén en los últimos 120 días, en
+base64 (docs/54). Va la miniatura (`fotothumb`) y, si no la tiene, la foto entera. Solo esos
+artículos —unos 450—: la foto pesa y el maestro tiene 27.000.
+
+```sql
+select
+  a.codigo as cod_articulo,
+  encode(coalesce(f.fotothumb, f.foto), 'base64') as foto
+from stocks.articulos a
+join stocks.articulosfotos f on f.id = a.articulofotoid
+where a.obsoleto = false
+  and exists (select 1
+                from stocks.diarmovalm d
+               where d.articuloid = a.id
+                 and d.fecha >= current_date - 120)
+```
+
 ---
 
 # El manifiesto para la Lambda

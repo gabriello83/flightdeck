@@ -509,6 +509,36 @@ del falsos.OBJETOS["cabina/ope-sur/operativo.json"]
 comprueba("sin calcular todavia, 503",
           llama("GET", "/api/operativo", cookie=COOKIE_OLGA)["statusCode"], 503)
 
+print("\nLos almacenes por dentro (docs/54): solo quien ve su cuadrado")
+_alm = {"umbral_pct": 15, "almacenes": [{"almacen": "Sevilla", "productos": [
+    {"cod": "5322", "nombre": "AGUA", "foto": True},
+    {"cod": "777", "nombre": "SIN FOTO", "foto": False}]}]}
+falsos.OBJETOS["cabina/interno/almacenes.json.gz"] = gzip.compress(json.dumps(_alm).encode())
+falsos.OBJETOS["cabina/ope-sur/almacenes.json.gz"] = gzip.compress(json.dumps(_alm).encode())
+falsos.OBJETOS["cabina/_articulos/fotos/5322"] = b"\xff\xd8\xff\xe0foto"
+falsos.OBJETOS["cabina/_articulos/fotos/777"] = b"\xff\xd8\xff\xe0otra"
+comprueba("un cliente, 403", llama("GET", "/api/almacenes", cookie=COOKIE_ANA)["statusCode"], 403)
+comprueba("operaciones tampoco: es nuestro stock",
+          llama("GET", "/api/almacenes", cookie=COOKIE_OLGA)["statusCode"], 403)
+comprueba("ni su foto", llama("GET", "/api/almacenes/foto", cookie=COOKIE_OLGA,
+                              query={"art": "5322"})["statusCode"], 403)
+_a = cuerpo_de(llama("GET", "/api/almacenes", cookie=COOKIE_JEFE))
+comprueba("el administrador ve los suyos", _a["almacenes"][0]["almacen"], "Sevilla")
+_f = llama("GET", "/api/almacenes/foto", cookie=COOKIE_JEFE, query={"art": "5322"})
+comprueba("y la foto de un producto suyo, como imagen",
+          (_f["statusCode"], _f["isBase64Encoded"],
+           __import__("base64").b64decode(_f["body"])[:3]), (200, True, b"\xff\xd8\xff"))
+comprueba("un producto que su fichero cita sin foto, 404",
+          llama("GET", "/api/almacenes/foto", cookie=COOKIE_JEFE,
+                query={"art": "777"})["statusCode"], 404)
+for _malo in ("../interno/almacenes.json.gz", "", "a/b"):
+    comprueba(f"un codigo raro ({_malo!r}), 400",
+              llama("GET", "/api/almacenes/foto", cookie=COOKIE_JEFE,
+                    query={"art": _malo})["statusCode"], 400)
+del falsos.OBJETOS["cabina/interno/almacenes.json.gz"]
+comprueba("sin calcular todavia, 503",
+          llama("GET", "/api/almacenes", cookie=COOKIE_JEFE)["statusCode"], 503)
+
 print("\nUna ruta que no existe")
 comprueba("404", llama("GET", "/api/loquesea", cookie=COOKIE_JEFE)["statusCode"], 404)
 

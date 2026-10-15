@@ -23,6 +23,7 @@ Solo biblioteca estandar y boto3: nada que empaquetar.
 import datetime
 import json
 import os
+import re
 import secrets
 
 import boto3
@@ -165,6 +166,15 @@ def encamina(evento, metodo, ruta):
             return r(503, {"error": "El informe operativo todavia no se ha calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
         return r(200, A.recorta_operativo(datos, perfil))
+
+    # Los almacenes por dentro (docs/54): el fichero del perfil, y la foto de un
+    # producto. Quien ve el cuadrado de almacenes ve la pagina; la foto solo si
+    # el fichero de SU perfil cita ese producto con foto.
+    if ruta in ("/api/almacenes", "/api/almacenes/foto") and metodo == "GET":
+        if "almacenes" not in A.cuadrados_de(perfil):
+            raise PermissionError("Este perfil no tiene el cuadrado de almacenes.")
+        q = evento.get("queryStringParameters") or {}
+        return almacenes(perfil, q.get("art", "") if ruta.endswith("/foto") else None)
 
     # El orden lo elige el usuario y se guarda en el SERVIDOR: asi lo encuentra
     # igual desde otro ordenador. El navegador no es el sitio donde vive.
@@ -346,6 +356,38 @@ def serie(perfil, mes=None):
     datos = json.loads(_crudo(f"{base}{mes}.json.gz"))
     return r(200, {"mes": mes,
                    "filas": [A.recorta_dia(f, perfil) for f in datos.get("filas", [])]})
+
+
+CODIGO_ARTICULO = re.compile(r"[A-Za-z0-9._-]{1,40}")
+
+
+def almacenes(perfil, art=None):
+    """Los almacenes del perfil de la sesion, o la foto de uno de sus productos."""
+    try:
+        cuerpo = _crudo(f"cabina/{perfil.get('perfil_id', '')}/almacenes.json.gz")
+    except Exception:
+        return r(503, {"error": "Los almacenes todavía no se han calculado.",
+                       "_nota": "Lo escriben los agregados cada noche (4:45)."})
+    if art is None:
+        return _json_grande(json.loads(cuerpo))
+    art = str(art)
+    if not CODIGO_ARTICULO.fullmatch(art):
+        raise ValueError("Ese código de artículo no es válido.")
+    citadas = {p.get("cod") for a in json.loads(cuerpo).get("almacenes", [])
+               for p in a.get("productos", []) if p.get("foto")}
+    if art not in citadas:
+        return r(404, {"error": "Ese producto no tiene foto en los almacenes de este perfil."})
+    try:
+        obj = s3.get_object(Bucket=BUCKET, Key=f"cabina/_articulos/fotos/{art}")
+    except Exception:
+        return r(404, {"error": "La foto todavía no se ha guardado."})
+    import base64
+    return {"statusCode": 200,
+            "headers": {"content-type": obj.get("ContentType") or "image/jpeg",
+                        # Es de la sesion, pero no cambia en el dia.
+                        "cache-control": "private, max-age=86400"},
+            "isBase64Encoded": True,
+            "body": base64.b64encode(obj["Body"].read()).decode("ascii")}
 
 
 def ve_delegaciones(perfil):

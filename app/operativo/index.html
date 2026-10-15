@@ -189,12 +189,13 @@ $("#bSalir").addEventListener("click", async ()=>{
 
 /* A donde lleva cada cuadrado: la sesion del panel y el panel dentro de ella.
    Gabriele decidira en un segundo paso que se ve al pulsar cada uno; hasta
-   entonces, la seccion que ya existe. Almacenes y furgonetas no tienen todavia
-   ninguna seccion en el panel, y se dice en vez de llevar a cualquier sitio. */
+   entonces, la seccion que ya existe. Furgonetas no tiene todavia ninguna
+   seccion en el panel, y se dice en vez de llevar a cualquier sitio. */
 const DESTINO = {
   rutas:        {sesion:"resumen",       panel:"visitas_dia"},
   averias:      {sesion:"disponibilidad",panel:"sat"},
-  almacenes:    null,
+  // Almacenes tiene su propia pagina: productos, fotos, packs y bajo minimo (docs/54).
+  almacenes:    {url:"/almacenes/"},
   furgonetas:   null,
   pdvs:         {sesion:"instalaciones", panel:"censo"},
   ventas:       {sesion:"venta_consumo", panel:"recaudacion"},
@@ -236,7 +237,8 @@ function contenido(id, d, f){
     case "telemetria": return {vl:pct(x.pct), pct:x.pct,
       sub:`${num(x.con_dex)} de ${num(x.auditables)} máquinas mandaron su lectura (DEX)`};
     case "almacenes": return {vl:eur(x.valor),
-      sub:`Cierre de ${mesLargo(x.periodo)} · ${num((x.por_almacen||[]).length)} almacenes`};
+      sub:`Cierre de ${mesLargo(x.periodo)} · ${num((x.por_almacen||[]).length)} almacenes`
+        + (x.bajo_minimo ? ` · ${num(x.bajo_minimo)} productos bajo mínimo` : "")};
     case "furgonetas": return {vl:num(x.activas),
       sub:`con visitas ese día · ${num(x.visitas)} visitas`
         + (x.visitas_sin_vehiculo ? ` (${num(x.visitas_sin_vehiculo)} sin vehículo)` : "")};
@@ -272,11 +274,11 @@ function pinta(){
     const c = contenido(id, d, f);
     if(!c) return;
     const dest = DESTINO[id];
-    const va = dest && ses.has(dest.sesion);
+    const va = dest && (dest.url || ses.has(dest.sesion));
     const el = document.createElement(va ? "a" : "div");
     el.className = "cuadro";
     el.dataset.id = id;
-    if(va) el.href = `/panel/?ver=${encodeURIComponent(dest.sesion)}#${encodeURIComponent(dest.panel)}`;
+    if(va) el.href = dest.url || `/panel/?ver=${encodeURIComponent(dest.sesion)}#${encodeURIComponent(dest.panel)}`;
     const color = c.sin ? null : semaforo(c.pct);
     if(c.sin) el.classList.add("sin");
     else if(color){ el.classList.add(color); el.style.setProperty("--fondo-c", `var(--${color})`); }
@@ -286,7 +288,7 @@ function pinta(){
       + `<div class="vl">${c.sin ? "Sin dato" : c.vl}</div>`
       + `<div class="sub">${esc(c.sin || c.sub)}</div>`
       + `<div class="pie"><span class="foto">${id==="pdvs"||id==="almacenes" ? "foto de la última carga" : ""}</span>`
-      + `<span>${va ? "Ver sección →" : dest ? "" : "Sin sección todavía"}</span></div>`;
+      + `<span>${va ? (dest.url ? "Ver detalle →" : "Ver sección →") : dest ? "" : "Sin sección todavía"}</span></div>`;
     if(va) el.setAttribute("aria-label", `${TITULO[id]}: ${c.sin ? c.sin : c.vl}. Abrir la sección.`);
     cont.appendChild(el);
   });
