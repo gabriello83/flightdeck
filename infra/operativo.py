@@ -57,7 +57,7 @@ CLASES = {
 }
 
 # La cifra grande del cuadrado de telemetria cuando hay ficheros de los sistemas
-# de cobro (docs/52): «venta» es el porcentaje de maquinas que mandaron venta por
+# de cobro (docs/53): «venta» es el porcentaje de maquinas que mandaron venta por
 # telemetria a VenCloud ese dia; «dex», el de las que mandaron su lectura. Las
 # dos viajan siempre; esto solo dice cual va en grande y pinta el semaforo.
 TELEMETRIA_PRINCIPAL = "venta"
@@ -222,7 +222,7 @@ class Operativo:
         self.apertura = {}
         self.cierre = {}
         self.foto = {}
-        # La telemetria segun los ficheros de los sistemas de cobro (docs/52):
+        # La telemetria segun los ficheros de los sistemas de cobro (docs/53):
         # None mientras no se haya subido ninguno.
         self.externa = None
         self.fuera = None

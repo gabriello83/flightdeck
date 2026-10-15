@@ -302,7 +302,7 @@ LEIDAS.clear()
 L.lambda_handler({}, None)
 comprueba("no se lee visita_ventas", [k for k in LEIDAS if "visita_ventas" in k], [])
 # La telemetria si: el informe operativo cuenta que maquinas mandaron venta
-# (docs/52). En un relleno historico, donde no hay informe, tampoco se lee.
+# (docs/53). En un relleno historico, donde no hay informe, tampoco se lee.
 comprueba("la telemetria si, que la quiere el informe operativo",
           bool([k for k in LEIDAS if "telemetria_ventas" in k]), True)
 LEIDAS.clear()

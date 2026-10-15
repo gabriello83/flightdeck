@@ -26,7 +26,7 @@ a la sección del panel que ya existe.
 Desde el 14 de octubre, si en la consola se han subido los ficheros de Nayax, Prodelfi y Nebula, el
 de telemetría mide otra cosa: de las máquinas que tienen telemetría **según esos ficheros**, cuántas
 mandaron venta por telemetría a VenCloud (y, debajo, cuántas su DEX), y lleva a `/telemetria/`
-con las que no transmiten. Ver docs/52.
+con las que no transmiten. Ver docs/53.
 
 Semáforo: **verde por encima del 95 %, amarillo del 75 al 95 %, rojo por debajo del 75 %**. El
 mensaje original decía «amarillo >95 % <75 %»; se ha leído como el tramo entre los dos.

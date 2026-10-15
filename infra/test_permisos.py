@@ -213,7 +213,7 @@ comprueba("y no lleva TABLA en el entorno",
           "TABLA" not in ingesta["Agregados"]["Properties"]["Environment"]["Variables"],
           "actualizar la pila le pisaria el codigo con el marcador")
 
-# La API escribe en el bucket de datos (los ficheros de telemetria, docs/52), y
+# La API escribe en el bucket de datos (los ficheros de telemetria, docs/53), y
 # un PutObject sobre todo el bucket le dejaria pisar los paneles de cualquier
 # perfil. Solo en externo/telemetria/, en el rol y en la frontera.
 print("\nLa web solo escribe en externo/telemetria/")

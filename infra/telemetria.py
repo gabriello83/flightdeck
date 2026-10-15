@@ -1,6 +1,6 @@
 """
 La telemetria de fuera: los ficheros de Nayax, Prodelfi y Nebula cruzados con
-el censo de VenCloud (docs/52).
+el censo de VenCloud (docs/53).
 
 Lo pidio Gabriele el 14 de octubre de 2026. VenCloud dice que maquinas mandan
 venta por telemetria y cuales mandan su lectura (DEX), pero no sabe cuales

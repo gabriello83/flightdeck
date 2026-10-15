@@ -511,7 +511,7 @@ del falsos.OBJETOS["cabina/ope-sur/operativo.json"]
 comprueba("sin calcular todavia, 503",
           llama("GET", "/api/operativo", cookie=COOKIE_OLGA)["statusCode"], 503)
 
-print("\nLos ficheros de telemetria de la consola (docs/52)")
+print("\nLos ficheros de telemetria de la consola (docs/53)")
 import base64 as _b64  # noqa: E402
 _nebula = ("\ufeff,Nombre,Dispositivo,Id telemetría,Nombre cliente,Última venta\n"
            ",15FE1566,CUNI-1,abc,APPLE,2026-10-14 13:17:37.000\n"

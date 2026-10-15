@@ -175,7 +175,7 @@ const API = {
   '/api/admin/config': { asistente_global: true, limite_preguntas_dia: 40, umbral_rentabilidad_mes: 350 },
   '/api/admin/telefonos': { telefonos: [] },
   '/api/admin/cola': { cola: [] },
-  // Los ficheros de telemetria de la consola y su cruce (docs/52), con la forma
+  // Los ficheros de telemetria de la consola y su cruce (docs/53), con la forma
   // que escriben lambda_api.py y operativo.detalle_telemetria.
   '/api/admin/telemetria': {
     ficheros: { nayax: { _id: 'nayax', tipo: 'nayax', nombre: 'MachineStatus.xlsx', subido: new Date().toISOString(),
@@ -637,7 +637,7 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nLa telemetria cruzada con los ficheros (docs/52)');
+  console.log('\nLa telemetria cruzada con los ficheros (docs/53)');
   {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno',
       sesiones: ['resumen', 'instalaciones'], catalogo_sesiones: { resumen: 'Resumen', instalaciones: 'Instalaciones y altas' } };

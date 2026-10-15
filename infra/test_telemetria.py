@@ -1,5 +1,5 @@
 """
-La telemetria de fuera (docs/52): leer los ficheros de Nayax, Prodelfi y Nebula
+La telemetria de fuera (docs/53): leer los ficheros de Nayax, Prodelfi y Nebula
 tal y como salen de cada sistema, cruzarlos con el censo con las reglas que se
 decidieron con Gabriele, y lo que de eso llega al cuadrado y a la pagina.
 

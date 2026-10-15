@@ -25,7 +25,7 @@ rm "$TEMP/index.py"
 
 # --- plataforma web --------------------------------------------------------
 # telemetria.py vive en infra/ porque lo usan las dos pilas: la API lee los
-# ficheros al subirlos y los agregados los cruzan de noche (docs/52).
+# ficheros al subirlos y los agregados los cruzan de noche (docs/53).
 (cd infra/api && zip -q "$SALIDA/api.zip" comun.py autorizacion.py catalogo.py lambda_api.py)
 (cd infra && zip -q "$SALIDA/api.zip" telemetria.py)
 (cd infra/api && zip -q "$SALIDA/alarmas.zip" comun.py autorizacion.py catalogo.py lambda_alarmas.py)

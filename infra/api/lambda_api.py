@@ -37,7 +37,7 @@ cog = boto3.client("cognito-idp")
 
 POOL = os.environ.get("POOL", "")
 CLIENTE = os.environ.get("CLIENTE_POOL", "")
-# Los ficheros de telemetria que se suben desde la consola (docs/52). Es el UNICO
+# Los ficheros de telemetria que se suben desde la consola (docs/53). Es el UNICO
 # sitio del bucket de datos en el que esta Lambda escribe.
 EXTERNO = "externo/telemetria"
 # Un listado de maquinas son cientos de KB. En base64 crece un tercio, y la
@@ -174,7 +174,7 @@ def encamina(evento, metodo, ruta):
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
         return r(200, A.recorta_operativo(datos, perfil))
 
-    # La pagina de telemetria (docs/52): maquina a maquina, de las del perfil.
+    # La pagina de telemetria (docs/53): maquina a maquina, de las del perfil.
     # La misma regla que el cuadrado que lleva a ella: si no lo ve, no la ve.
     if ruta == "/api/telemetria" and metodo == "GET":
         if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
@@ -741,7 +741,7 @@ def administra(evento, metodo, ruta, admin):
 
 
 # ----------------------------------------------------------------------
-# los ficheros de telemetria (docs/52)
+# los ficheros de telemetria (docs/53)
 # ----------------------------------------------------------------------
 def sube_telemetria(d, admin):
     """Un fichero de Nayax, Prodelfi, Nebula o grupos, subido desde la consola.

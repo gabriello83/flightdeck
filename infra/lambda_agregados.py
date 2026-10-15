@@ -94,7 +94,7 @@ CLAVE_RUTAS = os.environ.get("RUTAS", "maestros/rutas/m_rutas.json.gz")
 # rutas lo dice.
 PLAN_VISITAS = ("crudo/rutas_plan_visitas", "rutas_plan_visitas")
 # Los ficheros de los sistemas de telemetria que se suben desde la consola
-# (docs/52): uno por sistema, el ultimo que se subio, ya leido por la API.
+# (docs/53): uno por sistema, el ultimo que se subio, ya leido por la API.
 EXTERNO = "externo/telemetria"
 
 # Que informe alimenta que bloque, y EN QUE ORDEN SE LEE.
@@ -1355,7 +1355,7 @@ def lambda_handler(event, context):
             clave = f"cabina/{acu.perfil['id']}/operativo.json"
             fichero = op.fichero(acu.perfil["id"], _json_de(clave))
             escribe(clave, fichero)
-            # La pagina de telemetria (docs/52), solo si hay ficheros subidos.
+            # La pagina de telemetria (docs/53), solo si hay ficheros subidos.
             clave_t = f"cabina/{acu.perfil['id']}/telemetria.json"
             detalle = op.detalle_telemetria(acu.perfil["id"], _json_de(clave_t))
             if detalle is not None:
@@ -1428,7 +1428,7 @@ def lambda_handler(event, context):
         # El informe general operativo (docs/51): ultimo dia y cuadrados sin dato.
         "operativo": resumen_operativo,
         # Los ficheros de telemetria de la consola con los que se ha cruzado, y
-        # los que faltan (docs/52).
+        # los que faltan (docs/53).
         "telemetria_externa": externa,
     }
     if parado_en:

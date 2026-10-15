@@ -1,4 +1,4 @@
-# 52 · La telemetría de fuera: Nayax, Prodelfi y Nebula contra VenCloud
+# 53 · La telemetría de fuera: Nayax, Prodelfi y Nebula contra VenCloud
 
 > `infra/telemetria.py` (leer y cruzar), `infra/api/lambda_api.py` (`/api/admin/telemetria`,
 > `/api/telemetria`), `infra/operativo.py` (`pon_telemetria`, `telemetria_del_dia`,
