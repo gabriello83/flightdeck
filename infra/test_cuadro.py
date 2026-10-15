@@ -301,6 +301,8 @@ ALMACEN["config/perfiles.json"] = json.dumps({"perfiles": [{"id": "interno", "am
 LEIDAS.clear()
 L.lambda_handler({}, None)
 comprueba("se lee visita_ventas (docs/52)", bool([k for k in LEIDAS if "visita_ventas" in k]), True)
+# La telemetria tambien: la quieren el informe operativo (docs/53) y las
+# tarifas (docs/52).
 comprueba("y la telemetria", bool([k for k in LEIDAS if "telemetria_ventas" in k]), True)
 comprueba("pero el interno sigue sin cuadro",
           [k for k in ALMACEN if k.startswith("cabina/interno/cuadro/")], [])

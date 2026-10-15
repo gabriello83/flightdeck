@@ -238,8 +238,16 @@ function contenido(id, d, f){
         + (x.fuera_de_plan ? ` · ${num(x.fuera_de_plan)} fuera del plan` : "")};
     case "averias": return {vl:pct(x.pct), pct:x.pct,
       sub:`${num(x.a_tiempo)} de ${num(x.cerradas)} cerradas en menos de ${num(x.horas)} h`};
-    case "telemetria": return {vl:pct(x.pct), pct:x.pct,
-      sub:`${num(x.con_dex)} de ${num(x.auditables)} máquinas mandaron su lectura (DEX)`};
+    case "telemetria": {
+      /* El dato es siempre el de VenCloud. Si se han subido los ficheros de
+         Nayax, Prodelfi y Nebula, debajo van las diferencias con ellos, y el
+         cuadrado lleva a la pagina que las ensena (docs/53). */
+      const df = x.diferencias;
+      const n = df ? (df.sin_marca||0) + (df.solo_vencloud||0) + (df.fuera||0) : 0;
+      return {vl:pct(x.pct), pct:x.pct,
+        sub:`${num(x.con_dex)} de ${num(x.auditables)} máquinas mandaron su lectura (DEX)`
+          + (df ? ` · ${num(n)} diferencias con Nayax, Prodelfi y Nebula` : "")};
+    }
     case "almacenes": return {vl:eur(x.valor),
       sub:`Cierre de ${mesLargo(x.periodo)} · ${num((x.por_almacen||[]).length)} almacenes`};
     case "furgonetas": return {vl:num(x.activas),
@@ -280,11 +288,15 @@ function pinta(){
     const c = contenido(id, d, f);
     if(!c) return;
     const dest = DESTINO[id];
-    const va = dest && (dest.url || ses.has(dest.sesion));
+    /* La telemetria cruzada con los ficheros tiene pagina propia, con las
+       maquinas que no transmiten (docs/53). */
+    const propia = id==="telemetria" && f.telemetria
+      ? `/telemetria/?dia=${encodeURIComponent(fecha)}` : null;
+    const va = propia || (dest && (dest.url || ses.has(dest.sesion)));
     const el = document.createElement(va ? "a" : "div");
     el.className = "cuadro";
     el.dataset.id = id;
-    if(va) el.href = dest.url || `/panel/?ver=${encodeURIComponent(dest.sesion)}#${encodeURIComponent(dest.panel)}`;
+    if(va) el.href = propia || dest.url || `/panel/?ver=${encodeURIComponent(dest.sesion)}#${encodeURIComponent(dest.panel)}`;
     const color = c.sin ? null : semaforo(c.pct);
     if(c.sin) el.classList.add("sin");
     else if(color){ el.classList.add(color); el.style.setProperty("--fondo-c", `var(--${color})`); }

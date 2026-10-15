@@ -71,6 +71,7 @@ import serie as S
 import cuadro as CU
 import operativo as OP
 import tarifas as TA
+import telemetria as TE
 from cuadro import Cuadro
 
 s3 = boto3.client("s3")
@@ -102,6 +103,9 @@ CLAVE_ESTADO_TARIFAS = "cabina/_tarifas/estado.json.gz"
 # antes de filtrar por perfil: el estado es uno para todos.
 TARIFAS_COME = {"lineas": "come_cargas", "telemetria": "come_telemetria",
                 "ventas_parte": "come_audit"}
+# Los ficheros de los sistemas de telemetria que se suben desde la consola
+# (docs/53): uno por sistema, el ultimo que se subio, ya leido por la API.
+EXTERNO = "externo/telemetria"
 
 # Que informe alimenta que bloque, y EN QUE ORDEN SE LEE.
 #
@@ -1120,6 +1124,21 @@ SERIE_COME = {
 }
 
 
+def lee_telemetria_externa():
+    """Los ficheros de Nayax, Prodelfi, Nebula y grupos que hay subidos.
+
+    ({tipo: filas}, {"ficheros": {tipo: lo que se sabe del fichero}, "faltan": [...]})
+    """
+    filas, meta = {}, {}
+    for tipo in TE.TIPOS:
+        d = _json_de(f"{EXTERNO}/{tipo}/actual.json")
+        if d and d.get("filas"):
+            filas[tipo] = d["filas"]
+            # Sin quien lo subio: esto viaja al fichero de cada perfil.
+            meta[tipo] = {k: d.get(k) for k in ("nombre", "subido", "resumen")}
+    return filas, {"ficheros": meta, "faltan": [t for t in TE.TIPOS if t not in filas]}
+
+
 def come_operativo(op, dia, nombre, filas, clase_de):
     """Lo que hace el informe general operativo con las filas de una fuente.
 
@@ -1137,6 +1156,8 @@ def come_operativo(op, dia, nombre, filas, clase_de):
         od.come_partes(filas)
     elif nombre == "lineas":
         od.come_lineas(filas, clase_de)
+    elif nombre == "telemetria":
+        od.come_telemetria(filas)
 
 
 def escribe_tarifas(acu, op, tarifas, censo, observador, hoy):
@@ -1235,6 +1256,17 @@ def lambda_handler(event, context):
     # de ir aprendiendo maquina a maquina segun aparecen en la ventana. Una
     # maquina que no ha tenido ni una visita en 120 dias tambien queda situada.
     censo = _filas(_json_de(CLAVE_CENSO))
+    # La telemetria de los ficheros de la consola se cruza con el censo ENTERO,
+    # antes de repartir: si un final de matricula es unico o no se mira en todo
+    # el parque, no en el trozo de un perfil.
+    cruce, externa = None, None
+    if censo and not historico:
+        ext_filas, externa = lee_telemetria_externa()
+        if any(t in ext_filas for t in TE.SISTEMAS):
+            cruce = TE.cruza(censo, ext_filas)
+            externa["maquinas"] = len(cruce["maquinas"])
+            externa["fuera"] = len(cruce["fuera"])
+        del ext_filas
     if censo:
         leidas["instalaciones"] = len(censo)
         mapa.aprende(censo)
@@ -1248,6 +1280,9 @@ def lambda_handler(event, context):
             if not historico:
                 acu.come_instalaciones(propias)
                 operativos[acu.perfil["id"]].come_censo(propias)
+                operativos[acu.perfil["id"]].pon_telemetria(
+                    cruce, propias, externa,
+                    fuera=None if tiene_ambito(acu.ambito) or cruce is None else cruce["fuera"])
             if acu.cuadro:
                 acu.cuadro.come_instalaciones(propias)
     else:
@@ -1265,8 +1300,9 @@ def lambda_handler(event, context):
     # las filas sin centro. Y la telemetria de un dia se lee antes que la venta
     # del parte de ese dia, que es lo que evita contar la venta dos veces.
     con_cuadro = any(acu.cuadro for acu in acumuladores)
-    # Las dos fuentes de venta las necesitan el cuadro y las tarifas: se leen
-    # siempre.
+    # La venta (telemetria y parte) la necesitan el cuadro y las tarifas, que la
+    # leen siempre, tambien en un relleno historico. La telemetria la quiere
+    # ademas el informe operativo (que maquinas mandaron venta, docs/53).
     fuentes = [f for f in FUENTES if f[3] is not None or con_cuadro or f[0] in TARIFAS_COME]
     observador = TA.Observador(_json_de(CLAVE_ESTADO_TARIFAS))
     series, series_centros = defaultdict(list), defaultdict(list)
@@ -1363,6 +1399,11 @@ def lambda_handler(event, context):
             clave = f"cabina/{acu.perfil['id']}/operativo.json"
             fichero = op.fichero(acu.perfil["id"], _json_de(clave))
             escribe(clave, fichero)
+            # La pagina de telemetria (docs/53), solo si hay ficheros subidos.
+            clave_t = f"cabina/{acu.perfil['id']}/telemetria.json"
+            detalle = op.detalle_telemetria(acu.perfil["id"], _json_de(clave_t))
+            if detalle is not None:
+                escribe(clave_t, detalle)
             # Lo que falta, a la vista en la respuesta: un cuadrado sin dato
             # todos los dias es un informe que no llega, no un dia flojo.
             ultimo = fichero["dias"].get(fichero["ultimo_dia"] or "", {})
@@ -1437,6 +1478,9 @@ def lambda_handler(event, context):
                                "precios": len(observador.ventas),
                                "ventas_sin_articulo": observador.sin_articulo,
                                "medio_desconocido": observador.medio_desconocido}},
+        # Los ficheros de telemetria de la consola con los que se ha cruzado, y
+        # los que faltan (docs/53).
+        "telemetria_externa": externa,
     }
     if parado_en:
         # Esto tiene que verse en la RESPUESTA, no solo en el registro: es la
