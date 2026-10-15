@@ -34,11 +34,11 @@ def comprueba(que, obtenido, esperado):
 
 # ----------------------------------------------------------------------
 print("\nForma del manifiesto")
-comprueba("34 informes", len(INFS), 34)
+comprueba("35 informes", len(INFS), 35)
 comprueba("ventana de reproceso de 3 dias", M["ventana_reproceso_dias"], 3)
-comprueba("ids sin repetir", len({i["id"] for i in INFS}), 34)
-comprueba("nombres sin repetir", len({i["nombre"] for i in INFS}), 34)
-comprueba("destinos sin repetir", len({i["destino"] for i in INFS}), 34)
+comprueba("ids sin repetir", len({i["id"] for i in INFS}), 35)
+comprueba("nombres sin repetir", len({i["nombre"] for i in INFS}), 35)
+comprueba("destinos sin repetir", len({i["destino"] for i in INFS}), 35)
 # El nombre es el de VenCloud. Los nuevos llevan delante su codigo de docs/17
 # (A12_EXT_...), como los pone Gabriele alli; la carga los pide por numero.
 comprueba("todos los nombres son EXT_..., con o sin su codigo delante",
@@ -66,7 +66,7 @@ print("\nMaestro y fecha van juntos o no van")
 incoherentes = [i["id"] for i in INFS
                 if (i["clave_fecha"] == "ninguna") != i["destino"].startswith("maestros/")]
 comprueba("coherentes", incoherentes, [])
-comprueba("10 maestros", sum(1 for i in INFS if i["clave_fecha"] == "ninguna"), 10)
+comprueba("11 maestros", sum(1 for i in INFS if i["clave_fecha"] == "ninguna"), 11)
 comprueba("24 incrementales", sum(1 for i in INFS if i["clave_fecha"] != "ninguna"), 24)
 
 print("\nLos destinos")

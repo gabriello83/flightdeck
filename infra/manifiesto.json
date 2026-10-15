@@ -292,6 +292,14 @@
       "clave_fecha": "ninguna",
       "destino": "maestros/planograma",
       "filas_mes": 93674
+    },
+    {
+      "id": "m_tarifas",
+      "nombre": "M10_EXT_MAESTRO_TARIFAS",
+      "informe": 186,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/tarifas",
+      "filas_mes": 93532
     }
   ],
   "descartados": {
