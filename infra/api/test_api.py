@@ -532,7 +532,7 @@ comprueba("nada de rutas con barras",
           llama("GET", "/api/tarifas", cookie=COOKIE_JEFE, query={"centro": "../ope-sur/x"})["statusCode"], 400)
 del falsos.OBJETOS["cabina/interno/tarifas/resumen.json.gz"]
 comprueba("sin calcular todavia, 503 con el motivo",
-          "EXT_TARIFAS" in cuerpo_de(llama("GET", "/api/tarifas", cookie=COOKIE_JEFE))["error"], True)
+          "EXT_MAESTRO_TARIFAS" in cuerpo_de(llama("GET", "/api/tarifas", cookie=COOKIE_JEFE))["error"], True)
 
 print("\nUna ruta que no existe")
 comprueba("404", llama("GET", "/api/loquesea", cookie=COOKIE_JEFE)["statusCode"], 404)
