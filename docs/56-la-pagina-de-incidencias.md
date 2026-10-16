@@ -26,6 +26,15 @@ acaban ayer. El anterior de «mes corriente» es el mismo trozo del mes de antes
 meses» y «último año», los tres meses o el año de antes; el de un intervalo, los mismos días justo
 antes. Si los datos no llegan al periodo anterior, se dice en vez de comparar.
 
+El periodo **«Cerradas un día»** cuenta otra cosa, la del cuadrado: las averías técnicas que se
+**cerraron** ese día, por su fecha de cierre, y cuántas en menos de 24 horas. Es donde se abre la
+página desde el cuadrado de Incidencias (`/incidencias/?dia=AAAA-MM-DD`), para que la cifra de la
+página sea la del cuadrado (Gabriele, 16-oct-2026: el cuadrado decía 75,5 % y la página abría en
+el último año con 57,4 %). Se compara con el día anterior. La tasa de resolución no aplica, porque
+todas están cerradas, y el filtro de estado se apaga. Lo único que puede separar la página del
+cuadrado es una tarea abierta hace más de 120 días: el cuadrado no la mide (`sin_tarea`) y la
+página sí.
+
 | Medida | Cuenta |
 |---|---|
 | Total | tareas de la SAT, sin la matrícula ficticia (`00SE0000`) ni los preventivos (docs/50) |

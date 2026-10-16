@@ -223,6 +223,19 @@ def encamina(evento, metodo, ruta):
             return r(503, {"error": "Las rutas todavía no se han calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
 
+    # La pagina de furgonetas (docs/58): vehiculo a vehiculo, del perfil. La
+    # misma regla que el cuadrado que lleva a ella.
+    if ruta == "/api/furgonetas" and metodo == "GET":
+        if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
+            raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
+        if "furgonetas" not in A.cuadrados_de(perfil):
+            raise PermissionError("Este perfil no ve las furgonetas.")
+        try:
+            return _como_json(_crudo(f"cabina/{perfil.get('perfil_id', '')}/furgonetas.json.gz"))
+        except Exception:
+            return r(503, {"error": "Las furgonetas todavía no se han calculado.",
+                           "_nota": "Lo escriben los agregados cada noche (4:45)."})
+
     # La pagina de incidencias (docs/56): las de la SAT del perfil de la sesion.
     # La misma regla que el cuadrado de Incidencias que lleva a ella. Se sirve
     # comprimido tal cual esta en S3: con un ano de incidencias del interno

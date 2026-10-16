@@ -1530,6 +1530,9 @@ def lambda_handler(event, context):
             clave_r = f"cabina/{acu.perfil['id']}/rutas.json.gz"
             escribe_comprimido(clave_r, op.detalle_rutas(acu.perfil["id"], _json_de(clave_r),
                                                          festivos, ubicaciones))
+            # La pagina de furgonetas (docs/58): vehiculo a vehiculo, cada dia.
+            clave_f = f"cabina/{acu.perfil['id']}/furgonetas.json.gz"
+            escribe_comprimido(clave_f, op.detalle_furgonetas(acu.perfil["id"], _json_de(clave_f)))
             # Lo que falta, a la vista en la respuesta: un cuadrado sin dato
             # todos los dias es un informe que no llega, no un dia flojo.
             ultimo = fichero["dias"].get(fichero["ultimo_dia"] or "", {})

@@ -612,6 +612,21 @@ comprueba("sin calcular todavia, 503",
           llama("GET", "/api/rutas", cookie=COOKIE_OLGA)["statusCode"], 503)
 del falsos.OBJETOS["cabina/interno/rutas.json.gz"]
 
+print("\nLa pagina de furgonetas (docs/58): el fichero del perfil de la sesion")
+falsos.OBJETOS["cabina/interno/furgonetas.json.gz"] = gzip.compress(json.dumps({"perfil": "interno"}).encode())
+falsos.OBJETOS["cabina/ope-sur/furgonetas.json.gz"] = gzip.compress(json.dumps({"perfil": "ope-sur"}).encode())
+comprueba("un cliente no ve la pagina de furgonetas",
+          llama("GET", "/api/furgonetas", cookie=COOKIE_ANA)["statusCode"], 403)
+comprueba("operaciones ve la de SU perfil, descomprimida",
+          cuerpo_de(llama("GET", "/api/furgonetas", cookie=COOKIE_OLGA))["perfil"], "ope-sur")
+comprueba("y no hay parametro con el que pedir otra",
+          cuerpo_de(llama("GET", "/api/furgonetas", cookie=COOKIE_OLGA,
+                          query={"perfil": "interno"}))["perfil"], "ope-sur")
+del falsos.OBJETOS["cabina/ope-sur/furgonetas.json.gz"]
+comprueba("sin calcular todavia, 503",
+          llama("GET", "/api/furgonetas", cookie=COOKIE_OLGA)["statusCode"], 503)
+del falsos.OBJETOS["cabina/interno/furgonetas.json.gz"]
+
 print("\nLa pagina de incidencias (docs/56): el fichero del perfil de la sesion, comprimido")
 import base64 as _b64i  # noqa: E402
 falsos.OBJETOS["cabina/interno/incidencias.json.gz"] = gzip.compress(json.dumps({"perfil": "interno"}).encode())
