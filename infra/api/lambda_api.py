@@ -210,6 +210,23 @@ def encamina(evento, metodo, ruta):
                                     "Nayax, Prodelfi y Nebula en la consola y espera a la noche.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
 
+    # La pagina de incidencias (docs/56): las de la SAT del perfil de la sesion.
+    # La misma regla que el cuadrado de Incidencias que lleva a ella. Se sirve
+    # comprimido tal cual esta en S3: con un ano de incidencias del interno
+    # pasaria del limite de respuesta de una Lambda si se descomprimiera.
+    if ruta == "/api/incidencias" and metodo == "GET":
+        if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
+            raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
+        if "averias" not in A.cuadrados_de(perfil):
+            raise PermissionError("Este perfil no ve las incidencias.")
+        try:
+            comprimido = s3.get_object(Bucket=BUCKET, Key=f"cabina/{perfil.get('perfil_id', '')}/"
+                                                           "incidencias.json.gz")["Body"].read()
+        except Exception:
+            return r(503, {"error": "Las incidencias todavía no se han calculado.",
+                           "_nota": "Lo escriben los agregados cada noche (4:45)."})
+        return _comprimido(comprimido)
+
     # Los almacenes por dentro (docs/54): el fichero del perfil, y la foto de un
     # producto. Quien ve el cuadrado de almacenes ve la pagina; la foto solo si
     # el fichero de SU perfil cita ese producto con foto.
@@ -302,6 +319,18 @@ def _crudo(clave):
         import gzip
         cuerpo = gzip.decompress(cuerpo)
     return cuerpo
+
+
+def _comprimido(cuerpo):
+    """Un JSON que ya esta comprimido en S3, sin abrirlo: el navegador lo abre."""
+    import base64
+    if cuerpo[:2] != b"\x1f\x8b":
+        return _como_json(cuerpo)
+    return {"statusCode": 200,
+            "headers": {"content-type": "application/json; charset=utf-8",
+                        "content-encoding": "gzip", "cache-control": "no-store"},
+            "isBase64Encoded": True,
+            "body": base64.b64encode(cuerpo).decode("ascii")}
 
 
 def _como_json(cuerpo):

@@ -597,6 +597,28 @@ del falsos.OBJETOS["cabina/interno/telemetria.json"]
 comprueba("sin cruce todavia, 503",
           llama("GET", "/api/telemetria", cookie=COOKIE_JEFE)["statusCode"], 503)
 
+print("\nLa pagina de incidencias (docs/56): el fichero del perfil de la sesion, comprimido")
+import base64 as _b64i  # noqa: E402
+falsos.OBJETOS["cabina/interno/incidencias.json.gz"] = gzip.compress(json.dumps({"perfil": "interno"}).encode())
+falsos.OBJETOS["cabina/ope-sur/incidencias.json.gz"] = gzip.compress(json.dumps({"perfil": "ope-sur"}).encode())
+
+
+def _inc(**kw):
+    x = llama("GET", "/api/incidencias", **kw)
+    if x["statusCode"] != 200:
+        return x["statusCode"]
+    return (x["headers"].get("content-encoding"),
+            json.loads(gzip.decompress(_b64i.b64decode(x["body"])))["perfil"])
+
+
+comprueba("un cliente no ve la pagina de incidencias", _inc(cookie=COOKIE_ANA), 403)
+comprueba("operaciones ve la de SU perfil, tal cual comprimida", _inc(cookie=COOKIE_OLGA), ("gzip", "ope-sur"))
+comprueba("y no hay parametro con el que pedir otra",
+          _inc(cookie=COOKIE_OLGA, query={"perfil": "interno"}), ("gzip", "ope-sur"))
+del falsos.OBJETOS["cabina/ope-sur/incidencias.json.gz"]
+comprueba("sin calcular todavia, 503", _inc(cookie=COOKIE_OLGA), 503)
+del falsos.OBJETOS["cabina/interno/incidencias.json.gz"]
+
 print("\nLos almacenes por dentro (docs/54): solo quien ve su cuadrado")
 _alm = {"umbral_pct": 15, "almacenes": [{"almacen": "Sevilla", "productos": [
     {"cod": "5322", "nombre": "AGUA", "foto": True},

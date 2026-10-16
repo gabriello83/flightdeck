@@ -15,7 +15,7 @@ a la sección del panel que ya existe.
 | cuadrado | dato principal | de dónde sale | color | lleva a |
 |---|---|---|---|---|
 | Rutas | % de visitas previstas que se hicieron | plan de visitas (D12) contra visitas reales, por punto de venta | semáforo | Resumen · Visitas por día |
-| Averías | % de averías cerradas ese día en menos de 24 h | SAT: fallos técnicos (sin serie E ni ficticia), apertura y cierre de sus eventos | semáforo | Disponibilidad · SAT |
+| Incidencias (antes Averías) | % de averías cerradas ese día en menos de 24 h | SAT: fallos técnicos (sin serie E ni ficticia), apertura y cierre de sus eventos | semáforo | Su página, /incidencias/ (docs/56) |
 | Almacenes | valor del producto en almacén | último cierre mensual de inventario (C9, tipo A) | propio | `/almacenes/` (docs/54) |
 | Furgonetas | furgonetas con visitas ese día | vehículo de las visitas reales, sin «xxxx-xxx» | propio | todavía sin sección |
 | Puntos de venta activos | puntos de venta en estado 1 | censo (M5) de esa noche | propio | Instalaciones · Censo |

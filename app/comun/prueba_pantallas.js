@@ -186,6 +186,33 @@ const API = {
           { cod: '119162', nombre: 'CAFE GARIBALDI ESPRESSO BAR 1000GR', existencias: 60, de: 'cierre', fecha: '2026-10-05',
             categoria: 'Café', unid_pack: 6, unid_caja: 6, ean_unidad: ['8000000000001'], otros_codigos: [], foto: false }] }]
   },
+  // Las incidencias (docs/56), con la forma que escribe infra/incidencias.py.
+  '/api/incidencias': (() => {
+    const d = (n, h = '09:00') => `${iso(new Date(AYER.getTime() - n * 86400000))} ${h}`;
+    return {
+      generado: new Date().toISOString(), perfil: 'interno', estado_al_dia: true, sin_estado: null,
+      fuente: 'M13 · EXT_SAT_INCIDENCIAS', ultimo_dia: iso(AYER), desde: '2026-01-26', horas_sla: 24,
+      umbrales: { verde: 95, amarillo: 75 },
+      marcas: { tecnica: 1, devolucion: 2, reposicion: 4, caducado: 8, higiene: 16, bloqueante: 32, especial: 64 },
+      zonas: { 'Levante - Valencia': 'Levante', 'Madrid - Leganes': 'Centro', 'Levante - Murcia': 'Levante' },
+      centros: [['500073', 'INDUSTRIA DEL CURTIDO', '32072', 'CURTIDO SA'], ['1001', 'AIRBUS GETAFE', 'C7', 'AIRBUS'],
+                ['2002', 'CONSUM MURCIA', '10002', 'SERUNION']],
+      delegaciones: ['Levante - Valencia', 'Madrid - Leganes', 'Levante - Murcia'],
+      operaciones: [['T08', 'CAFÉ - Distribuidor fuera de servicio', 'AVERIAS TECNICAS'],
+                    ['D01', 'DEVOLUCION - Transferencia Bancaria', 'Devolución dinero'],
+                    ['S010', 'Reponer distribuidor automatico', 'Solicitudes cliente'],
+                    ['T31', 'CAFÉ - Grupo café averiado', 'AVERIAS TECNICAS']],
+      tecnicos: ['Javier', 'Miguel'],
+      incidencias: [
+        { n: 'A-7', a: d(35), x: d(35, '19:00'), h: 10, m: 'A1', c: 1, d: 1, o: 3, t: 1, f: 1 },
+        { n: 'A-6', a: d(6), m: 'C1', c: 2, d: 2, o: 0, t: 1, f: 33, tx: 'fuera de servicio', u: 'Hall', p: 'C09' },
+        { n: 'A-1', a: d(5), x: d(5, '14:00'), h: 5, m: 'M1', c: 0, d: 0, o: 0, t: 0, f: 33 },
+        { n: 'A-2', a: d(4), x: d(3, '15:00'), h: 30, m: 'M1', c: 0, d: 0, o: 3, t: 0, f: 1 },
+        { n: 'A-3', a: d(2), m: 'M1', c: 0, d: 0, o: 3, t: 0, f: 1, tx: 'no sale café · vuelve a fallar', u: 'Comedor', p: 'C01502' },
+        { n: 'A-4', a: d(1), x: d(1, '11:00'), h: 2, m: 'A1', c: 1, d: 1, o: 1, t: 1, f: 2 },
+        { n: 'E-5', a: d(0), m: 'C1', c: 2, d: 2, o: 2, t: 1, f: 68, tx: 'máquina vacía', u: 'Hall', p: 'C09' }]
+    };
+  })(),
   '/api/estado-carga': { ultima_carga: new Date().toISOString(), dias_pedidos: [iso(AYER)], descargas_ok: 75, descargas_fallidas: 0, bytes: 12345678, filas_por_informe: { visita_cabecera: 1000 }, errores: [], retraso_dias: 0 },
   '/api/admin/usuarios': { usuarios: [{ _id: 'eva@airbus.com', nombre: 'Eva', perfil_id: 'cli-airbus', estado: 'activo' }] },
   '/api/admin/perfiles': {
@@ -707,10 +734,11 @@ const servidor = http.createServer((pet, res) => {
     comprueba('y ese cuadrado no lleva color de semaforo',
       await pagina.$eval('.cuadro[data-id="rutas"]', c => c.classList.contains('sin')), true);
     await pagina.selectOption('#dia', iso(AYER));
-    await Promise.all([pagina.waitForURL('**/panel/**'), pagina.click('.cuadro[data-id="averias"]')]);
-    await pagina.waitForSelector('#rejilla .panel');
-    comprueba('al pulsar averias, el panel abre filtrado en su seccion',
-      await pagina.$$eval('#filtros button[aria-pressed="true"]', x => x.map(b => b.dataset.f)), ['disponibilidad']);
+    comprueba('el cuadrado de averias se llama Incidencias',
+      await pagina.textContent('.cuadro[data-id="averias"] .et'), 'Incidencias');
+    await Promise.all([pagina.waitForURL('**/incidencias/**'), pagina.click('.cuadro[data-id="averias"]')]);
+    await pagina.waitForSelector('#kpis .kpi');
+    comprueba_que('y al pulsarlo abre su pagina', pagina.url().includes('/incidencias/'), pagina.url());
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
@@ -875,6 +903,62 @@ const servidor = http.createServer((pet, res) => {
     comprueba('sin un solo error en la consola del navegador', b.errores, []);
     await b.pagina.close();
     API['/api/almacenes'] = antes;
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nLas incidencias, como el Power BI (docs/56)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre('/incidencias/');
+    await pagina.waitForSelector('#kpis .kpi');
+    comprueba('arranca en los ultimos 3 meses: el ano no esta entero', await pagina.inputValue('#periodo'), 'tres');
+    const kpi = async i => pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent);
+    comprueba('siete incidencias, sin el preventivo que la noche ya quito', await kpi(1), '7');
+    comprueba('tasa de resolucion: 4 de 7', await kpi(2), '57,1 %');
+    comprueba('SLA: 3 de las 4 cerradas en menos de 24 h', await kpi(4), '75 %');
+    comprueba('y en amarillo, como el cuadrado', await pagina.$eval('#kpis .kpi:nth-child(4)', e => e.className), 'kpi amarillo');
+    comprueba('el centro con mas averias tecnicas va primero',
+      await pagina.$eval('#gTecnicas .fb .nom', e => e.textContent), 'INDUSTRIA DEL CURTIDO');
+    comprueba('las devoluciones, el suyo', await pagina.$$eval('#gDevol .fb .nom', x => x.map(e => e.textContent)), ['AIRBUS GETAFE']);
+    await pagina.click('#gZonas .fb[data-d="Levante - Murcia"]');
+    comprueba('pulsar una delegacion filtra por ella', [await pagina.inputValue('#deleg'), await kpi(1)], ['Levante - Murcia', '2']);
+    await pagina.click('#bLimpiar');
+    await pagina.selectOption('#estado', 'abierta');
+    comprueba('solo las abiertas: la tasa no aplica', [await kpi(1), await kpi(2)], ['3', '—']);
+    await pagina.selectOption('#estado', '');
+    await pagina.click('.hojas button[data-h="abiertas"]');
+    await pagina.waitForSelector('#tarjetas .kpi');
+    comprueba('las seis tarjetas', await pagina.$$eval('#tarjetas .kpi .vl', x => x.map(e => e.textContent)),
+      ['2', '1', '0', '0', '1', '1']);
+    comprueba('la que lleva mas dias, sin vender y de Serunion va primero',
+      await pagina.$$eval('#tLista tr.elige .mat', x => x.filter((_, i) => i % 2 === 0).map(e => e.textContent)), ['A-6', 'A-3']);
+    comprueba_que('la maquina critica va marcada', (await pagina.textContent('#tLista')).includes('crítica'));
+    await pagina.click('#tLista tr.elige:nth-child(2)');
+    comprueba_que('la ficha ensena sus notas', (await pagina.textContent('#ficha')).includes('vuelve a fallar'));
+    await pagina.click('#tarjetas button[data-t="criticas"]');
+    comprueba('maquinas criticas: las tres averias de M1',
+      await pagina.$$eval('#tLista tr.elige .mat', x => x.filter((_, i) => i % 2 === 0).map(e => e.textContent)).then(l => l.sort()),
+      ['A-1', 'A-2', 'A-3']);
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+
+    // Sin M13 no se ensena un estado que no se sabe: se dice por que.
+    const antes = API['/api/incidencias'];
+    API['/api/incidencias'] = { ...antes, estado_al_dia: false, fuente: 'D7 · EXT_SAT_AVERIAS y D8 · EXT_SAT_EVENTOS',
+      sin_estado: 'Falta el informe M13 · EXT_SAT_INCIDENCIAS de VenCloud (docs/17).',
+      incidencias: antes.incidencias.map(r => { const q = { ...r }; ['x', 'h', 'tx', 'u', 'p'].forEach(k => delete q[k]); return q; }) };
+    const b = await abre('/incidencias/?ver=abiertas');
+    await b.pagina.waitForSelector('#tarjetas .kpi');
+    comprueba_que('sin M13 lo dice arriba', (await b.pagina.textContent('#notaEstado')).includes('M13'));
+    comprueba('las abiertas sin dato, las criticas si', await b.pagina.$$eval('#tarjetas .kpi .vl', x => x.map(e => e.textContent)),
+      ['—', '—', '—', '—', '—', '1']);
+    await b.pagina.click('.hojas button[data-h="panel"]');
+    comprueba('el total si, la tasa no', [await b.pagina.$eval('#kpis .kpi:nth-child(1) .vl', e => e.textContent),
+      await b.pagina.$eval('#kpis .kpi:nth-child(2) .vl', e => e.textContent)], ['7', '—']);
+    comprueba('sin un solo error en la consola del navegador', b.errores, []);
+    await b.pagina.close();
+    API['/api/incidencias'] = antes;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 

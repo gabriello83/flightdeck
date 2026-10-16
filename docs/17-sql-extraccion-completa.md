@@ -2056,6 +2056,75 @@ left join general.delegaciones del     on del.id = v.delegacionid
 order by del.nombre, v.matricula
 ```
 
+## M13 · EXT_SAT_INCIDENCIAS  *(sin parámetros)*
+
+La foto de las incidencias de la SAT, para la página de Incidencias (docs/56). Son las tareas de
+los últimos 400 días y **todas las que siguen sin cerrar**, sean de cuando sean, con su estado de
+hoy y la hora de apertura y de cierre sacadas del registro de eventos.
+
+Hace falta porque D7 y D8 se bajan por la fecha de alta de la tarea y la extracción solo vuelve a
+bajar los tres últimos días: una tarea que se cierra al cuarto día se queda abierta para siempre en
+el crudo. Con eso se sabe cuántas incidencias entran, pero no cuántas hay abiertas ni cuánto se
+tarda en cerrarlas. Este informe se baja entero cada noche, como un maestro.
+
+Los `join` son los de D7 y los eventos, los de D8. `tipoestado` 9 es finalizada: en la muestra del
+15-oct-2026 todas las de estado 99 traen tipo 9 y ninguna otra lo trae. Unas 3.400 filas por mes.
+
+```sql
+select
+  t.id          as id,
+  t.numero      as numero,
+  t.serie       as serie,
+  cast(t.fecha as text)         as fecha_alta,
+  cast(t.fechafin as text)      as fecha_fin,
+  t.tipotarea   as tipo_tarea,
+  t.titulo      as titulo,
+  t.estado      as estado,
+  t.tipoestado  as tipo_estado,
+  t.severidad   as severidad,
+  t.origen      as origen,
+  t.pdvubicacion as ubicacion,
+  op.codigo     as cod_operacion,
+  op.nombre     as operacion,
+  cat.nombre    as categoria,
+  m.codigo      as matricula,
+  pdv.codigo    as cod_pdv,
+  cen.numcentro as num_centro,
+  cen.denomina  as centro,
+  cli.codigo    as cod_cliente,
+  cli.nombre    as cliente,
+  emp.nombre    as tecnico_asignado,
+  del.nombre    as delegacion,
+  (select cast(min(l.fecha) as text)
+     from sat.tareatecnicaeventoslog l
+    where l.tareatecnicaid = t.id) as apertura,
+  (select cast(min(l.fecha) as text)
+     from sat.tareatecnicaeventoslog l
+    where l.tareatecnicaid = t.id
+      and l.estado = 99) as cierre,
+  (select l.notas
+     from sat.tareatecnicaeventoslog l
+    where l.tareatecnicaid = t.id
+      and coalesce(l.notas, '') <> ''
+    order by l.fecha desc
+    limit 1) as ultima_nota
+from sat.tareatecnica t
+left join configuracion.satoperaciones op            on op.id  = t.satoperacionid
+left join configuracion.satoperacionescategorias cat on cat.id = op.satoperacioncategoriaid
+left join recursos.maquinas m           on m.id   = t.maquinaid
+left join vending.pdvs pdv              on pdv.id = t.pdvid
+left join comercial.clientescentros cen on cen.id = t.clientecentroid
+left join comercial.clientes cli        on cli.id = cen.clienteid
+left join recursos.empleados emp        on emp.id = t.empasignadoid
+left join general.delegaciones del      on del.id = t.delegacionid
+where t.fecha >= current_date - 400
+   or t.tipoestado <> 9
+order by t.fecha
+```
+
+Al manifiesto entra con `"id": "m_sat_incidencias"`, `"clave_fecha": "ninguna"` y
+`"destino": "maestros/sat_incidencias"`; ese destino es el que lee la Lambda de agregados.
+
 ---
 
 # El manifiesto para la Lambda

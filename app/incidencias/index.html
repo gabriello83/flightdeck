@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Incidencias · digivend</title>
+<!-- Un solo origen. Esta pagina habla con /api/* del mismo dominio y con nadie
+     mas: hay redes de cliente que cortan las paginas que llaman fuera. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M8 3.2 13.2 12.5H2.8z' fill='none' stroke='white' stroke-width='1.4' stroke-linejoin='round'/%3E%3Cpath d='M8 6.6v2.8M8 10.6v.4' stroke='white' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6; --barra:#2a78d6; --pista:#ebeae6; --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+  /* El semaforo, el mismo del informe general. El amarillo lleva texto oscuro. */
+  --verde:#15803d; --amarillo:#f2b705; --rojo:#c62828; --sin:#d9d8d2;
+  --t-verde:#ffffff; --t-amarillo:#1b1b1b; --t-rojo:#ffffff; --t-sin:#52514e;
+  --texto-verde:#15803d; --texto-rojo:#c62828;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --barra:#3987e5; --pista:#262624; --sombra:none;
+    --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b; --sin:#3a3a36;
+    --t-sin:#c3c2b7; --texto-verde:#4ade80; --texto-rojo:#f87171;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --barra:#3987e5; --pista:#262624; --sombra:none;
+  --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b; --sin:#3a3a36;
+  --t-sin:#c3c2b7; --texto-verde:#4ade80; --texto-rojo:#f87171;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1240px;margin:0 auto;padding:18px 16px 72px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+.marca{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn,a.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);text-decoration:none;
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
+button.btn:hover,a.btn:hover{border-color:var(--tinta-3)}
+button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);color:#fff}
+button.btn:disabled{opacity:.5;cursor:default}
+.hojas{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 0}
+.barra{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:14px 0 6px}
+.barra label{font-size:13px;color:var(--tinta-2);display:flex;align-items:center;gap:8px;min-width:0}
+.barra select,.barra input{
+  font:inherit;font-size:14px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:5px 8px;max-width:100%
+}
+.barra select{max-width:260px}
+.barra input[type=search]{min-width:220px}
+.nota{
+  margin:12px 0 4px;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+.nota.mal{border-left-color:var(--rojo)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:14px}
+#tarjetas{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.kpi{background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:11px 13px;box-shadow:var(--sombra);
+     text-align:left;font:inherit;color:inherit}
+.kpi .et{font-size:12px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
+.kpi .vl{font-size:26px;font-weight:650;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .nt{font-size:12px;color:var(--tinta-3);margin-top:2px}
+.kpi .dl{font-size:12.5px;color:var(--tinta-2);margin-top:4px;font-variant-numeric:tabular-nums}
+.kpi.verde{background:var(--verde);border-color:var(--verde)}
+.kpi.amarillo{background:var(--amarillo);border-color:var(--amarillo)}
+.kpi.rojo{background:var(--rojo);border-color:var(--rojo)}
+.kpi.verde *,.kpi.rojo *{color:var(--t-verde)!important}
+.kpi.amarillo *{color:var(--t-amarillo)!important}
+button.kpi{cursor:pointer}
+button.kpi:hover{border-color:var(--tinta-3)}
+button.kpi[aria-pressed="true"]{border-color:var(--s1);box-shadow:0 0 0 2px var(--s1) inset}
+.mejor{color:var(--texto-verde);font-weight:600}
+.peor{color:var(--texto-rojo);font-weight:600}
+section.caja{
+  background:var(--tarjeta);border:1px solid var(--borde);border-radius:12px;
+  padding:12px 16px 14px;box-shadow:var(--sombra);margin-top:14px;min-width:0
+}
+.cabsec{display:flex;align-items:baseline;gap:12px;justify-content:space-between;flex-wrap:wrap}
+section.caja h2{font-size:15px;margin:0;font-weight:650}
+section.caja .sub{font-size:12.5px;color:var(--tinta-2);margin:2px 0 10px}
+.dos{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.dos > section.caja{margin-top:14px}
+.ficha-y-tabla{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:14px;align-items:start}
+/* Barras: una sola serie, del color de la marca. El numero va siempre escrito
+   al lado, asi que la barra no es la unica forma de leerlo. */
+.barras{display:flex;flex-direction:column;gap:3px}
+.fb{display:grid;grid-template-columns:minmax(120px,240px) 1fr;gap:10px;align-items:center;
+    padding:3px 4px;border-radius:6px;cursor:pointer;background:none;border:0;font:inherit;color:inherit;text-align:left;width:100%}
+.fb:hover{background:color-mix(in srgb, var(--s1) 6%, transparent)}
+.fb.elegida{background:color-mix(in srgb, var(--s1) 12%, transparent)}
+.fb .nom{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fb .pis{display:flex;align-items:center;gap:8px;min-width:0}
+.fb .b{height:14px;border-radius:0 4px 4px 0;background:var(--barra);min-width:2px}
+.fb .v{font-size:12.5px;color:var(--tinta-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.zona{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--tinta-3);margin:8px 0 2px 4px;
+      display:flex;gap:8px}
+.zona:first-child{margin-top:0}
+.tabla{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--tinta-2);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;
+   padding:6px 10px 6px 0;border-bottom:1px solid var(--borde);white-space:nowrap}
+td{padding:7px 10px 7px 0;border-bottom:1px solid var(--borde);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.elige{cursor:pointer}
+tr.elige:hover td{background:color-mix(in srgb, var(--s1) 6%, transparent)}
+tr.elegida td{background:color-mix(in srgb, var(--s1) 12%, transparent)}
+.mat{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;white-space:nowrap}
+.tenue{color:var(--tinta-3);font-size:12px}
+.etq{display:inline-block;font-size:11.5px;border-radius:5px;padding:0 6px;border:1px solid var(--borde-fuerte);
+     color:var(--tinta-2);white-space:nowrap}
+.dias{display:inline-block;min-width:44px;white-space:nowrap;text-align:center;border-radius:6px;padding:0 6px;font-weight:650;
+      font-variant-numeric:tabular-nums;background:var(--sin);color:var(--t-sin)}
+.dias.verde{background:var(--verde);color:var(--t-verde)}
+.dias.amarillo{background:var(--amarillo);color:var(--t-amarillo)}
+.dias.rojo{background:var(--rojo);color:var(--t-rojo)}
+.ficha{position:sticky;top:12px}
+.ficha dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13.5px}
+.ficha dt{color:var(--tinta-3);font-size:12px;text-transform:uppercase;letter-spacing:.03em;padding-top:2px}
+.ficha dd{margin:0;overflow-wrap:anywhere}
+.ficha .texto{margin-top:10px;padding:9px 11px;border-radius:8px;background:var(--fondo);font-size:13.5px;white-space:pre-wrap;overflow-wrap:anywhere}
+.vacio{color:var(--tinta-3);font-size:13.5px;padding:8px 0}
+footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+#cargando{padding:40px 0;color:var(--tinta-2)}
+@media (max-width:900px){
+  .dos,.ficha-y-tabla{grid-template-columns:1fr}
+  .ficha{position:static}
+}
+@media (max-width:700px){
+  .tabla table,.tabla tbody,.tabla tr,.tabla td{display:block;width:100%}
+  .tabla thead{display:none}
+  .tabla tr{border-bottom:1px solid var(--borde);padding:9px 0}
+  .tabla tr:last-child{border-bottom:0}
+  .tabla td{border:0;padding:2px 0;text-align:left!important;overflow-wrap:anywhere}
+  .tabla td[data-et]:not(:empty)::before{content:attr(data-et) " · ";color:var(--tinta-3);font-size:12px}
+  .barra input[type=search]{min-width:0;width:100%}
+  .barra label.busca{flex:1 1 100%}
+  .barra select{max-width:100%;min-width:0}
+  .barra label{flex:1 1 calc(50% - 8px)}
+  .barra label select{flex:1}
+  .fb{grid-template-columns:minmax(90px,40%) 1fr}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kpi .vl{font-size:22px}
+}
+</style>
+</head>
+<body>
+<div class="env">
+  <header class="top">
+    <div class="marca">
+      <b>Incidencias</b>
+      <span id="quien"></span>
+    </div>
+    <div class="acciones">
+      <a class="btn" href="/operativo/">Informe general</a>
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn" id="bSalir" type="button">Salir</button>
+    </div>
+  </header>
+
+  <div id="cargando">Cargando…</div>
+  <div class="nota" id="aviso" hidden></div>
+
+  <div id="todo" hidden>
+    <div class="hojas" role="tablist">
+      <button class="btn" type="button" role="tab" data-h="panel">Panel de control</button>
+      <button class="btn" type="button" role="tab" data-h="abiertas">Incidencias abiertas</button>
+    </div>
+
+    <div class="barra">
+      <label class="solo-panel">Periodo <select id="periodo">
+        <option value="anio">Último año</option>
+        <option value="tres">Últimos 3 meses</option>
+        <option value="ultimo">Último mes</option>
+        <option value="mes">Mes corriente</option>
+        <option value="libre">Intervalo libre</option>
+      </select></label>
+      <label class="solo-panel libre" hidden>Desde <input type="date" id="desde"></label>
+      <label class="solo-panel libre" hidden>Hasta <input type="date" id="hasta"></label>
+      <label class="solo-panel">Estado <select id="estado">
+        <option value="">Todas</option><option value="abierta">Abierta</option><option value="cerrada">Cerrada</option>
+      </select></label>
+      <label>Zona <select id="zona"></select></label>
+      <label>Delegación <select id="deleg"></select></label>
+      <label>Centro <select id="centro"></select></label>
+      <button class="btn" id="bLimpiar" type="button">Limpiar filtros</button>
+    </div>
+    <div class="nota" id="notaEstado" hidden></div>
+
+    <!-- ============================ hoja 1 ============================ -->
+    <div id="hPanel">
+      <p class="tenue" id="rango"></p>
+      <div class="kpis" id="kpis"></div>
+      <section class="caja">
+        <div class="cabsec"><h2>Total de incidencias por zona</h2><span class="tenue">Pulsa una delegación para filtrar por ella</span></div>
+        <p class="sub" id="sZonas"></p>
+        <div id="gZonas"></div>
+      </section>
+      <div class="dos">
+        <section class="caja">
+          <div class="cabsec"><h2>Los 10 centros con más averías técnicas</h2></div>
+          <p class="sub">Fallos técnicos por operación, sin las solicitudes especiales. Pulsa un centro para filtrar por él.</p>
+          <div id="gTecnicas"></div>
+        </section>
+        <section class="caja">
+          <div class="cabsec"><h2>Los 10 centros con más devoluciones</h2></div>
+          <p class="sub">Devoluciones de dinero: en el sitio, por transferencia o a tarjeta.</p>
+          <div id="gDevol"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ============================ hoja 2 ============================ -->
+    <div id="hAbiertas" hidden>
+      <div class="kpis" id="tarjetas"></div>
+      <div class="ficha-y-tabla">
+        <section class="caja">
+          <div class="cabsec"><h2 id="hLista">Incidencias</h2><span class="tenue" id="cLista"></span></div>
+          <p class="sub" id="sLista"></p>
+          <div class="barra" style="margin-top:0">
+            <label class="busca">Buscar <input id="busca" type="search" placeholder="Nº, máquina, centro, operación…"></label>
+            <button class="btn" id="bCsv" type="button">Descargar CSV</button>
+          </div>
+          <div class="tabla" id="tLista"></div>
+        </section>
+        <section class="caja ficha" id="ficha" aria-live="polite"></section>
+      </div>
+    </div>
+  </div>
+
+  <footer id="pie" hidden></footer>
+</div>
+
+<script>
+/* ===================================================================
+   Incidencias · digivend.es  (docs/56)
+
+   Lo que abre el cuadrado de Incidencias del informe general. Copia la forma
+   del Power BI «Control operativo Incidencias 2» de Gabriele: un panel de
+   control (total, tasa de resolución, tiempo de resolución y SLA de 24 horas
+   contra el periodo anterior, por zona y delegación, y los diez centros con
+   más averías y con más devoluciones) y una hoja de incidencias abiertas con
+   seis tarjetas, la lista ordenada por prioridad y la ficha de la que se pulsa.
+
+   El fichero ya llega con el ámbito del perfil aplicado: lo escribió la noche
+   para este perfil, y la API no deja pedir otro. Esta página no decide qué
+   ve nadie: filtra, cuenta y dibuja.
+   =================================================================== */
+const CLAVE_TEMA = "digivend.tema";
+const nf = new Intl.NumberFormat("es-ES");
+const num = n => nf.format(Math.round(n||0));
+const dec = (n, d=1) => n==null ? "—" : new Intl.NumberFormat("es-ES",{maximumFractionDigits:d, minimumFractionDigits:0}).format(n);
+const fpct = p => p==null ? "—" : dec(p) + " %";
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = s => document.querySelector(s);
+const PRIMERAS = 100;
+
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = $("#bTema");
+  const oscuro = () => document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const pinta = () => { b.textContent = oscuro() ? "Modo claro" : "Modo oscuro"; };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const n = oscuro() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+  });
+})();
+$("#bSalir").addEventListener("click", async ()=>{
+  try{ await fetch("/api/salir", {method:"POST", credentials:"same-origin"}); }catch(e){}
+  location.href = "/";
+});
+
+let D = null, M = {}, INC = [], HOJA = "panel", TARJETA = "tecnicas", ELEGIDA = null, TODAS_FILAS = false;
+
+/* ------------------------------------------------------------ fechas */
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const deIso = s => { const [a,m,d] = String(s).slice(0,10).split("-").map(Number); return new Date(a, m-1, d); };
+const sumaDias = (s, n) => { const d = deIso(s); d.setDate(d.getDate()+n); return iso(d); };
+const inicioMes = (s, menos=0) => { const d = deIso(s); return iso(new Date(d.getFullYear(), d.getMonth()-menos, 1)); };
+const finMes = (s, menos=0) => { const d = deIso(s); return iso(new Date(d.getFullYear(), d.getMonth()-menos+1, 0)); };
+/* El mismo dia unos meses antes, sin pasarse del final de ese mes (31 de marzo
+   menos un mes es el 28 o 29 de febrero, como EDATE en el Power BI). */
+const mismoDia = (s, menos) => { const d = deIso(s), f = new Date(d.getFullYear(), d.getMonth()-menos+1, 0);
+  return iso(new Date(f.getFullYear(), f.getMonth(), Math.min(d.getDate(), f.getDate()))); };
+function fechaCorta(s){
+  const d = deIso(s);
+  return Number.isNaN(d.getTime()) ? String(s) : d.toLocaleDateString("es-ES",{day:"numeric", month:"short", year:"numeric"});
+}
+function fechaHora(s){
+  if(!s) return "—";
+  return String(s).length > 10 ? `${fechaCorta(s)} ${String(s).slice(11,16)}` : fechaCorta(s);
+}
+
+/* Los periodos del Power BI, contados hasta ayer (el último día que trae el
+   fichero). Cada uno con el periodo con el que se compara. */
+function periodo(){
+  const fm = D.ultimo_dia, p = $("#periodo").value;
+  if(p === "mes") return {d: inicioMes(fm), h: fm, pd: inicioMes(fm,1), ph: mismoDia(fm,1), nombre:"el mismo trozo del mes anterior"};
+  if(p === "ultimo") return {d: inicioMes(fm,1), h: finMes(fm,1), pd: inicioMes(fm,2), ph: finMes(fm,2), nombre:"el mes de antes"};
+  if(p === "tres") return {d: inicioMes(fm,2), h: fm, pd: inicioMes(fm,5), ph: mismoDia(fm,3), nombre:"los tres meses de antes"};
+  if(p === "anio") return {d: inicioMes(fm,11), h: fm, pd: inicioMes(fm,23), ph: mismoDia(fm,12), nombre:"el año de antes"};
+  let d = $("#desde").value || inicioMes(fm), h = $("#hasta").value || fm;
+  if(h < d) [d, h] = [h, d];
+  const largo = Math.round((deIso(h) - deIso(d)) / 864e5) + 1;
+  return {d, h, pd: sumaDias(d, -largo), ph: sumaDias(d, -1), nombre:`los ${num(largo)} días de antes`};
+}
+
+/* ------------------------------------------------------------ filtros */
+const abierta = r => !("x" in r);
+const fila = r => r._;
+function prepara(){
+  M = D.marcas || {};
+  INC = (D.incidencias||[]).map(r => {
+    const c = D.centros[r.c] || [], o = D.operaciones[r.o] || [], dl = D.delegaciones[r.d] || "";
+    r._ = {dia: r.a.slice(0,10), deleg: dl, zona: (D.zonas||{})[dl] || "Otra zona",
+           num_centro: c[0]||"", centro: c[1]||"", cod_cliente: c[2]||"", cliente: c[3]||"",
+           cod_op: o[0]||"", op: o[1]||"", cat: o[2]||"", tecnico: (D.tecnicos||[])[r.t] || ""};
+    return r;
+  });
+}
+const tiene = (r, m) => (r.f & (M[m]||0)) !== 0;
+const tecnica = r => tiene(r,"tecnica") && !tiene(r,"especial");
+function enLugar(r){
+  const z = $("#zona").value, dl = $("#deleg").value, c = $("#centro").value, x = fila(r);
+  return (!z || x.zona===z) && (!dl || x.deleg===dl) && (!c || x.num_centro===c);
+}
+function enEstado(r){
+  const e = $("#estado").value;
+  if(!e || !D.estado_al_dia) return true;
+  return e === "abierta" ? abierta(r) : !abierta(r);
+}
+const entre = (r, d, h) => fila(r).dia >= d && fila(r).dia <= h;
+
+function opciones(sel, valores, todas, etiqueta){
+  const antes = sel.value;
+  sel.innerHTML = `<option value="">${esc(todas)}</option>` + valores.map(v =>
+    `<option value="${esc(v[0])}">${esc(etiqueta ? etiqueta(v) : v[1])}</option>`).join("");
+  sel.value = valores.some(v => String(v[0])===antes) ? antes : "";
+}
+function pintaFiltros(){
+  const zonas = [...new Set(INC.map(r=>fila(r).zona))].sort((a,b)=>a.localeCompare(b,"es"));
+  opciones($("#zona"), zonas.map(z=>[z,z]), "Todas");
+  const z = $("#zona").value;
+  const delegs = [...new Set(INC.filter(r=>!z || fila(r).zona===z).map(r=>fila(r).deleg))].filter(Boolean)
+    .sort((a,b)=>a.localeCompare(b,"es"));
+  opciones($("#deleg"), delegs.map(d=>[d,d]), "Todas");
+  const dl = $("#deleg").value, centros = new Map();
+  INC.forEach(r => { const x = fila(r);
+    if((!z || x.zona===z) && (!dl || x.deleg===dl) && x.num_centro) centros.set(x.num_centro, x.centro); });
+  opciones($("#centro"), [...centros].sort((a,b)=>a[1].localeCompare(b[1],"es")), "Todos",
+    v => `${v[1]} (${v[0]})`);
+}
+
+/* ------------------------------------------------------------ hoja 1 */
+function medidas(lista){
+  const cerradas = lista.filter(r=>!abierta(r)), conHoras = cerradas.filter(r=>r.h!=null);
+  const hs = conHoras.map(r=>r.h).sort((a,b)=>a-b);
+  const mediana = hs.length ? (hs.length%2 ? hs[(hs.length-1)/2] : (hs[hs.length/2-1]+hs[hs.length/2])/2) : null;
+  return {
+    total: lista.length,
+    abiertas: lista.length - cerradas.length,
+    cerradas: cerradas.length,
+    tasa: lista.length ? 100*cerradas.length/lista.length : null,
+    media: hs.length ? hs.reduce((a,b)=>a+b,0)/hs.length : null,
+    mediana,
+    con_horas: hs.length,
+    sla: hs.length ? 100*conHoras.filter(r=>r.h < D.horas_sla).length/hs.length : null,
+  };
+}
+function semaforo(p){
+  const u = D.umbrales || {verde:95, amarillo:75};
+  return p==null ? "" : p > u.verde ? "verde" : p >= u.amarillo ? "amarillo" : "rojo";
+}
+/* La flecha dice hacia donde va; el color, si es para bien. Mas incidencias o
+   mas horas es peor; mas resolucion o mas SLA, mejor. */
+function delta(actual, previo, modo, mejorSiSube){
+  if(actual==null || previo==null) return `<div class="dl tenue">sin periodo anterior con que comparar</div>`;
+  const v = modo==="pts" ? actual - previo : (previo ? 100*(actual-previo)/previo : null);
+  if(v==null) return `<div class="dl tenue">el periodo anterior está a cero</div>`;
+  if(Math.abs(v) < 0.05) return `<div class="dl">= igual que ${esc(periodo().nombre)}</div>`;
+  const bien = (v > 0) === mejorSiSube;
+  return `<div class="dl"><span class="${bien?"mejor":"peor"}">${v>0?"▲":"▼"} ${dec(Math.abs(v))} ${modo==="pts"?"puntos":"%"}</span> contra ${esc(periodo().nombre)}</div>`;
+}
+function pintaPanel(){
+  const p = periodo(), desde = D.desde || p.d;
+  const lugar = INC.filter(r=>enLugar(r) && enEstado(r));
+  const ahora = lugar.filter(r=>entre(r, p.d, p.h));
+  const hayPrevio = p.pd >= desde;
+  const antes = hayPrevio ? lugar.filter(r=>entre(r, p.pd, p.ph)) : null;
+  const a = medidas(ahora), b = antes ? medidas(antes) : {};
+  $("#rango").textContent = `Del ${fechaCorta(p.d)} al ${fechaCorta(p.h)}, por la fecha en que entró cada incidencia.`
+    + (p.d < desde ? ` Ojo: los datos empiezan el ${fechaCorta(desde)}.` : "");
+  const soloAbiertas = $("#estado").value === "abierta";
+  const conEstado = D.estado_al_dia;
+  const kpi = (et, vl, nt, dl, color) => `<div class="kpi ${esc(color||"")}"><div class="et">${esc(et)}</div>
+    <div class="vl">${vl}</div><div class="nt">${nt}</div>${dl||""}</div>`;
+  const sinEstado = "Sin dato: falta el informe M13";
+  $("#kpis").innerHTML =
+    kpi("Total de incidencias", num(a.total),
+        conEstado ? `${num(a.abiertas)} abiertas · ${num(a.cerradas)} cerradas` : "entradas en el periodo",
+        delta(a.total, antes ? b.total : null, "pct", false))
+    + (conEstado && !soloAbiertas
+      ? kpi("Tasa de resolución", fpct(a.tasa), "cerradas sobre el total", delta(a.tasa, antes ? b.tasa : null, "pts", true))
+      : kpi("Tasa de resolución", "—", soloAbiertas ? "no aplica a las abiertas" : sinEstado, ""))
+    + (conEstado && !soloAbiertas
+      ? kpi("Tiempo de resolución", a.mediana==null ? "—" : `${dec(a.mediana)} h`,
+            a.media==null ? "mediana de las cerradas con hora" : `mediana · la media es ${dec(a.media)} h`,
+            delta(a.mediana, antes ? b.mediana : null, "pct", false))
+      : kpi("Tiempo de resolución", "—", soloAbiertas ? "no aplica a las abiertas" : sinEstado, ""))
+    + (conEstado && !soloAbiertas
+      ? kpi(`SLA ${D.horas_sla} h`, fpct(a.sla), `cerradas en menos de ${D.horas_sla} horas · ${num(a.con_horas)} con hora`,
+            delta(a.sla, antes ? b.sla : null, "pts", true), semaforo(a.sla))
+      : kpi(`SLA ${D.horas_sla} h`, "—", soloAbiertas ? "no aplica a las abiertas" : sinEstado, ""));
+  pintaZonas(ahora);
+  $("#gTecnicas").innerHTML = topCentros(ahora.filter(tecnica));
+  $("#gDevol").innerHTML = topCentros(ahora.filter(r=>tiene(r,"devolucion")));
+  document.querySelectorAll("#gTecnicas .fb, #gDevol .fb").forEach(b=>b.addEventListener("click", ()=>{
+    $("#centro").value = $("#centro").value===b.dataset.c ? "" : b.dataset.c; pintaTodo();
+  }));
+}
+function barras(filas, max, attr, elegido){
+  return `<div class="barras">${filas.map(([clave, nombre, n, titulo])=>
+    `<button type="button" class="fb${clave===elegido?" elegida":""}" ${attr}="${esc(clave)}" title="${esc(titulo||nombre)}: ${num(n)}">
+      <span class="nom">${esc(nombre)}</span>
+      <span class="pis"><span class="b" style="width:${max ? Math.max(.5, 100*n/max) : 0}%"></span><span class="v">${num(n)}</span></span>
+    </button>`).join("")}</div>`;
+}
+function pintaZonas(lista){
+  const porZona = new Map();
+  lista.forEach(r => { const x = fila(r);
+    if(!porZona.has(x.zona)) porZona.set(x.zona, new Map());
+    const m = porZona.get(x.zona); m.set(x.deleg, (m.get(x.deleg)||0)+1); });
+  const zonas = [...porZona].map(([z, m]) => [z, [...m].sort((a,b)=>b[1]-a[1]), [...m.values()].reduce((a,b)=>a+b,0)])
+    .sort((a,b)=>b[2]-a[2]);
+  const max = Math.max(0, ...zonas.flatMap(z=>z[1].map(d=>d[1])));
+  $("#sZonas").textContent = `${num(lista.length)} incidencias en ${num(zonas.length)} ${zonas.length===1?"zona":"zonas"}. La zona sale del nombre de la delegación.`;
+  if(!lista.length){ $("#gZonas").innerHTML = `<p class="vacio">Ninguna incidencia con estos filtros.</p>`; return; }
+  $("#gZonas").innerHTML = zonas.map(([z, ds, t]) =>
+    `<div class="zona"><span>${esc(z)}</span><span>${num(t)}</span></div>`
+    + barras(ds.map(([d,n])=>[d, d||"Sin delegación", n]), max, "data-d", $("#deleg").value)).join("");
+  $("#gZonas").querySelectorAll(".fb").forEach(b=>b.addEventListener("click", ()=>{
+    const d = b.dataset.d;
+    if($("#deleg").value === d){ $("#deleg").value = ""; }
+    else { $("#zona").value = ""; pintaFiltros(); $("#deleg").value = d; }
+    pintaTodo();
+  }));
+}
+function topCentros(lista){
+  const m = new Map();
+  lista.forEach(r => { const x = fila(r), k = x.num_centro;
+    const v = m.get(k) || [k, x.centro || "Sin centro", 0, `${x.centro} (nº ${x.num_centro})`]; v[2]++; m.set(k, v); });
+  const filas = [...m.values()].sort((a,b)=>b[2]-a[2] || a[1].localeCompare(b[1],"es")).slice(0,10);
+  if(!filas.length) return `<p class="vacio">Ninguna en el periodo.</p>`;
+  return barras(filas, filas[0][2], "data-c", $("#centro").value);
+}
+
+/* ------------------------------------------------------------ hoja 2 */
+/* Las seis tarjetas del Power BI. Las cinco primeras son de incidencias
+   ABIERTAS y necesitan el estado de hoy; la de máquinas críticas cuenta
+   entradas y sale siempre. */
+const TARJETAS = [
+  {id:"tecnicas",  et:"Incidencias técnicas", nt:"abiertas, fallos técnicos", esta: r=>abierta(r) && tecnica(r), estado:true},
+  {id:"reposicion",et:"Reposición",           nt:"abiertas, piden reponer",  esta: r=>abierta(r) && tiene(r,"reposicion"), estado:true},
+  {id:"caducados", et:"Caducados",            nt:"abiertas, producto caducado", esta: r=>abierta(r) && tiene(r,"caducado"), estado:true},
+  {id:"higiene",   et:"Emergencia sanitaria", nt:"abiertas: insectos, hongos, moho", esta: r=>abierta(r) && tiene(r,"higiene"), estado:true},
+  {id:"bloqueo",   et:"Fuera de servicio",    nt:"abiertas que dejan la máquina sin vender", esta: r=>abierta(r) && tecnica(r) && tiene(r,"bloqueante"), estado:true},
+  {id:"criticas",  et:"Máquinas críticas",    nt:"3 o más averías técnicas en 30 días", estado:false},
+];
+/* Las maquinas con tres o mas averias tecnicas entradas en los ultimos 30
+   dias, y esas averias. */
+function criticas(lugar){
+  const d0 = sumaDias(D.ultimo_dia, -30), por = new Map();
+  lugar.filter(r=>tecnica(r) && entre(r, d0, D.ultimo_dia) && r.m).forEach(r => {
+    if(!por.has(r.m)) por.set(r.m, []); por.get(r.m).push(r); });
+  const maquinas = [...por].filter(([,l])=>l.length >= 3);
+  return {maquinas, incidencias: maquinas.flatMap(([,l])=>l), cuantas: new Map(maquinas.map(([m,l])=>[m,l.length]))};
+}
+const horasAbierta = r => Math.max(0, (Date.now() - new Date(r.a.length>10 ? r.a.replace(" ","T") : r.a+"T00:00")) / 36e5);
+const diasAbierta = r => Math.floor(horasAbierta(r) / 24);
+const colorDias = d => d <= 1 ? "verde" : d <= 3 ? "amarillo" : "rojo";
+/* La prioridad del Power BI: primero los dias abierta (hasta 1, hasta 3, mas
+   de 3), luego si deja la maquina sin vender, luego si es de un centro del
+   propio Serunion (cliente 10002) y luego si la maquina es critica. */
+function prioridad(r, crit){
+  const d = diasAbierta(r), peso = !abierta(r) ? 0 : d <= 1 ? 1 : d <= 3 ? 2 : 3;
+  return peso*1000 + (tiene(r,"bloqueante")?100:0) + (fila(r).cod_cliente==="10002"?10:0) + (crit.cuantas.has(r.m)?1:0);
+}
+function listaTarjeta(lugar, crit){
+  const t = TARJETAS.find(x=>x.id===TARJETA);
+  if(t.id === "criticas") return crit.incidencias;
+  if(!D.estado_al_dia) return null;
+  return lugar.filter(t.esta);
+}
+function pintaAbiertas(){
+  const lugar = INC.filter(enLugar), crit = criticas(lugar);
+  $("#tarjetas").innerHTML = TARJETAS.map(t => {
+    const n = t.id==="criticas" ? crit.maquinas.length : (D.estado_al_dia ? lugar.filter(t.esta).length : null);
+    return `<button class="kpi" type="button" data-t="${t.id}" aria-pressed="${t.id===TARJETA}">
+      <div class="et">${esc(t.et)}</div><div class="vl">${n==null ? "—" : num(n)}</div>
+      <div class="nt">${esc(n==null ? "sin dato: falta el informe M13" : t.nt)}</div></button>`;
+  }).join("");
+  $("#tarjetas").querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{
+    TARJETA = b.dataset.t; ELEGIDA = null; TODAS_FILAS = false; pintaAbiertas(); }));
+  pintaLista(lugar, crit);
+}
+function filasLista(lugar, crit){
+  const l = listaTarjeta(lugar, crit);
+  if(!l) return null;
+  const q = $("#busca").value.trim().toLowerCase();
+  return l.filter(r => { if(!q) return true; const x = fila(r);
+      return [r.n, r.m, x.centro, x.num_centro, x.op, x.deleg, x.tecnico, r.tx].join(" ").toLowerCase().includes(q); })
+    .map(r => [r, prioridad(r, crit)])
+    .sort((a,b)=> TARJETA==="criticas"
+      ? (crit.cuantas.get(b[0].m) - crit.cuantas.get(a[0].m)) || a[0].m.localeCompare(b[0].m) || b[0].a.localeCompare(a[0].a)
+      : (b[1]-a[1]) || a[0].a.localeCompare(b[0].a))
+    .map(x=>x[0]);
+}
+function pintaLista(lugar, crit){
+  const t = TARJETAS.find(x=>x.id===TARJETA);
+  $("#hLista").textContent = t.et;
+  $("#sLista").textContent = TARJETA==="criticas"
+    ? `Las averías técnicas de los últimos 30 días (hasta el ${fechaCorta(D.ultimo_dia)}) de las máquinas que tienen tres o más, abiertas y cerradas.`
+    : "Ordenadas por prioridad: días abierta, si deja la máquina sin vender, si el centro es de Serunion y si la máquina es crítica. Pulsa una para ver su ficha.";
+  const filas = filasLista(lugar, crit);
+  $("#bCsv").disabled = !filas || !filas.length;
+  if(!filas){
+    $("#cLista").textContent = "";
+    $("#tLista").innerHTML = `<p class="vacio">${esc(D.sin_estado || "Sin dato.")}</p>`;
+    pintaFicha(); return;
+  }
+  $("#cLista").textContent = `${num(filas.length)} ${filas.length===1?"incidencia":"incidencias"}`;
+  if(ELEGIDA && !filas.includes(ELEGIDA)) ELEGIDA = null;
+  if(!filas.length){ $("#tLista").innerHTML = `<p class="vacio">Ninguna con estos filtros.</p>`; pintaFicha(); return; }
+  const vis = filas.slice(0, TODAS_FILAS ? filas.length : PRIMERAS), resto = filas.length - vis.length;
+  const ultima = TARJETA==="criticas"
+    ? r => abierta(r) ? (D.estado_al_dia ? `<span class="etq">abierta</span>` : "") : `<span class="tenue">cerrada</span>`
+    : r => { const d = diasAbierta(r); return `<span class="dias ${colorDias(d)}">${num(d)} ${d===1?"día":"días"}</span>`; };
+  $("#tLista").innerHTML = `<table><thead><tr><th>Entró</th><th>Nº</th><th>Máquina</th><th>Centro</th><th>Operación</th>
+    <th>${TARJETA==="criticas"?"Estado":"Abierta"}</th></tr></thead><tbody>
+    ${vis.map((r,i)=>{ const x = fila(r);
+      return `<tr class="elige${r===ELEGIDA?" elegida":""}" data-i="${i}">
+        <td data-et="Entró">${esc(fechaHora(r.a))}</td><td data-et="Nº"><span class="mat">${esc(r.n)}</span></td>
+        <td data-et="Máquina"><span class="mat">${esc(r.m)}</span>${crit.cuantas.has(r.m) && TARJETA!=="criticas" ? ` <span class="etq" title="${num(crit.cuantas.get(r.m))} averías técnicas en 30 días">crítica</span>` : ""}</td>
+        <td data-et="Centro">${esc(x.centro)}<br><span class="tenue">nº ${esc(x.num_centro)} · ${esc(x.deleg)}</span></td>
+        <td data-et="Operación">${esc(x.op)}${tiene(r,"bloqueante") ? ` <span class="etq">sin vender</span>` : ""}</td>
+        <td data-et="${TARJETA==="criticas"?"Estado":"Abierta"}">${ultima(r)}</td></tr>`; }).join("")}</tbody></table>`
+    + (resto > 0 ? `<p class="vacio">Y ${num(resto)} más. <button class="btn" id="bMas" type="button">Ver todas</button> o bájalas en CSV.</p>` : "");
+  $("#tLista").querySelectorAll("tr.elige").forEach(tr=>tr.addEventListener("click", ()=>{
+    ELEGIDA = vis[+tr.dataset.i]; pintaLista(lugar, crit);
+    if(matchMedia("(max-width:900px)").matches) $("#ficha").scrollIntoView({behavior:"smooth", block:"start"});
+  }));
+  const mas = $("#bMas"); if(mas) mas.addEventListener("click", ()=>{ TODAS_FILAS = true; pintaLista(lugar, crit); });
+  pintaFicha();
+}
+function pintaFicha(){
+  const r = ELEGIDA;
+  if(!r){
+    $("#ficha").innerHTML = `<h2>Ficha de la incidencia</h2><p class="vacio">Pulsa una incidencia de la lista para ver su ficha: dónde está, qué le pasa y lo que se ha anotado.</p>`;
+    return;
+  }
+  const x = fila(r), ab = abierta(r);
+  const estado = !D.estado_al_dia ? "sin dato (falta el informe M13)"
+    : ab ? `Abierta · lleva ${num(horasAbierta(r))} horas` : `Cerrada el ${esc(fechaHora(r.x))}${r.h!=null ? ` · en ${dec(r.h)} horas` : ""}`;
+  const dd = (et, v) => v ? `<dt>${esc(et)}</dt><dd>${v}</dd>` : "";
+  $("#ficha").innerHTML = `<h2>Incidencia <span class="mat">${esc(r.n)}</span></h2>
+    <p class="sub">${estado}</p>
+    <dl>
+      ${dd("Entró", esc(fechaHora(r.a)))}
+      ${dd("Máquina", `<span class="mat">${esc(r.m)}</span>`)}
+      ${dd("Centro", `${esc(x.centro)} <span class="tenue">nº ${esc(x.num_centro)}</span>`)}
+      ${dd("Cliente", esc(x.cliente))}
+      ${dd("Ubicación", esc(r.u))}
+      ${dd("Punto de venta", r.p ? `<span class="mat">${esc(r.p)}</span>` : "")}
+      ${dd("Delegación", esc(x.deleg))}
+      ${dd("Operación", `${esc(x.op)} <span class="tenue">${esc(x.cod_op)}</span>`)}
+      ${dd("Categoría", esc(x.cat))}
+      ${dd("Técnico", esc(x.tecnico))}
+    </dl>
+    ${r.tx ? `<div class="texto">${esc(r.tx)}</div>` : `<p class="tenue" style="margin-top:10px">${ab ? (tiene(r,"devolucion") ? "Las devoluciones no traen sus notas: pueden llevar datos del cliente." : "Sin notas.") : "Las notas solo se guardan de las incidencias abiertas."}</p>`}`;
+}
+
+function csv(){
+  const lugar = INC.filter(enLugar), crit = criticas(lugar), filas = filasLista(lugar, crit) || [];
+  const q = v => { const s = String(v==null?"":v); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
+  const cab = ["Nº","Entró","Cerrada","Horas","Máquina","Nº centro","Centro","Cliente","Delegación","Zona","Operación","Categoría","Técnico","Notas"];
+  const texto = "﻿" + [cab.join(";"), ...filas.map(r=>{ const x = fila(r);
+    return [r.n, r.a, r.x||"", r.h==null?"":String(r.h).replace(".",","), r.m, x.num_centro, x.centro, x.cliente,
+            x.deleg, x.zona, x.op, x.cat, x.tecnico, r.tx||""].map(q).join(";"); })].join("\r\n");
+  const url = URL.createObjectURL(new Blob([texto], {type:"text/csv;charset=utf-8"}));
+  const a = document.createElement("a");
+  a.href = url; a.download = `incidencias_${TARJETA}_${D.ultimo_dia}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+/* ------------------------------------------------------------ todo */
+function pintaHoja(){
+  document.querySelectorAll(".hojas button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.h===HOJA)));
+  $("#hPanel").hidden = HOJA !== "panel";
+  $("#hAbiertas").hidden = HOJA !== "abiertas";
+  document.querySelectorAll(".solo-panel").forEach(l => {
+    l.hidden = HOJA !== "panel" || (l.classList.contains("libre") && $("#periodo").value !== "libre"); });
+  $("#estado").disabled = !D.estado_al_dia;
+}
+function pintaTodo(){
+  pintaHoja();
+  if(HOJA === "panel") pintaPanel(); else pintaAbiertas();
+}
+
+(async function arranca(){
+  let r;
+  try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(r.status === 401){ location.href = "/"; return; }
+  if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
+  const yo = await r.json();
+  if(yo.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  $("#quien").textContent = (yo.perfil ? yo.perfil + " · " : "") + (yo.nombre || yo.correo);
+
+  let ri;
+  try{ ri = await fetch("/api/incidencias", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(ri.status === 401){ location.href = "/"; return; }
+  $("#cargando").hidden = true;
+  if(!ri.ok){
+    let d={}; try{ d = await ri.json(); }catch(e){}
+    $("#aviso").textContent = d.error || "Las incidencias no están disponibles ahora mismo.";
+    $("#aviso").classList.add("mal"); $("#aviso").hidden = false;
+    return;
+  }
+  D = await ri.json();
+  prepara();
+  if(!D.estado_al_dia){
+    $("#notaEstado").textContent = D.sin_estado + " Hasta entonces se ven las que entraron, por dónde y de qué tipo, y las máquinas críticas.";
+    $("#notaEstado").hidden = false;
+  }
+  /* El Power BI arranca en el último año; si los datos no llegan a tanto, en
+     el periodo más largo que cubren. */
+  const desde = D.desde || D.ultimo_dia;
+  const q = new URLSearchParams(location.search);
+  const pedido = q.get("periodo");
+  $("#periodo").value = ["anio","tres","ultimo","mes","libre"].includes(pedido) ? pedido
+    : inicioMes(D.ultimo_dia, 11) >= desde ? "anio" : inicioMes(D.ultimo_dia, 2) >= desde ? "tres" : "ultimo";
+  $("#desde").value = inicioMes(D.ultimo_dia); $("#hasta").value = D.ultimo_dia;
+  $("#desde").min = $("#hasta").min = desde; $("#desde").max = $("#hasta").max = D.ultimo_dia;
+  if(q.get("ver") === "abiertas") HOJA = "abiertas";
+  pintaFiltros();
+  if(q.get("delegacion")){ $("#deleg").value = q.get("delegacion"); pintaFiltros(); }
+  document.querySelectorAll(".hojas button").forEach(b=>b.addEventListener("click", ()=>{ HOJA = b.dataset.h; pintaTodo(); }));
+  ["#periodo","#desde","#hasta","#estado"].forEach(s=>$(s).addEventListener("change", pintaTodo));
+  $("#zona").addEventListener("change", ()=>{ pintaFiltros(); ELEGIDA = null; pintaTodo(); });
+  $("#deleg").addEventListener("change", ()=>{ pintaFiltros(); ELEGIDA = null; pintaTodo(); });
+  $("#centro").addEventListener("change", ()=>{ ELEGIDA = null; pintaTodo(); });
+  $("#bLimpiar").addEventListener("click", ()=>{
+    ["#zona","#deleg","#centro","#estado"].forEach(s=>$(s).value=""); pintaFiltros(); ELEGIDA = null; pintaTodo(); });
+  $("#busca").addEventListener("input", ()=>{ TODAS_FILAS = false; pintaAbiertas(); });
+  $("#bCsv").addEventListener("click", csv);
+  $("#todo").hidden = false;
+  pintaTodo();
+  const gen = D.generado ? new Date(D.generado) : null;
+  $("#pie").innerHTML = `Incidencias de la SAT de VenCloud (${esc(D.fuente)}), sin la matrícula ficticia del centro de pruebas ni los preventivos. `
+    + "Técnica = fallo técnico por la operación, como en el resto de la plataforma. "
+    + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
+    + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
+  $("#pie").hidden = false;
+})();
+</script>
+</body>
+</html>

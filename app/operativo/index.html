@@ -193,7 +193,8 @@ $("#bSalir").addEventListener("click", async ()=>{
    seccion en el panel, y se dice en vez de llevar a cualquier sitio. */
 const DESTINO = {
   rutas:        {sesion:"resumen",       panel:"visitas_dia"},
-  averias:      {sesion:"disponibilidad",panel:"sat"},
+  // Incidencias tiene su propia pagina, como el Power BI de Gabriele (docs/56).
+  averias:      {url:"/incidencias/"},
   // Almacenes tiene su propia pagina: productos, fotos, packs y bajo minimo (docs/54).
   almacenes:    {url:"/almacenes/"},
   furgonetas:   null,
@@ -205,7 +206,7 @@ const DESTINO = {
   tarifas:      {url:"/tarifas/"},
 };
 const TITULO = {
-  rutas:"Rutas", averias:"Averías", almacenes:"Almacenes", furgonetas:"Furgonetas",
+  rutas:"Rutas", averias:"Incidencias", almacenes:"Almacenes", furgonetas:"Furgonetas",
   pdvs:"Puntos de venta activos", ventas:"Ventas", reposiciones:"Reposiciones", telemetria:"Telemetría",
   tarifas:"Tarifas",
 };

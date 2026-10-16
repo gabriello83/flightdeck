@@ -612,6 +612,42 @@ comprueba("el cuadrado del informe operativo: 0 %, rojo",
           (_op["foto"]["tarifas"]["pct"], _op["foto"]["tarifas"]["color"]), (0.0, "rojo"))
 del ALMACEN["maestros/tarifas/m_tarifas.json.gz"]
 
+print("\nIncidencias (docs/56): sin M13, sin estado; con M13, la foto de hoy y con su ambito")
+_inc = json.loads(gzip.decompress(ALMACEN["cabina/interno/incidencias.json.gz"]))
+comprueba("sin M13 el fichero sale, pero dice que no tiene el estado",
+          (_inc["estado_al_dia"], "M13" in _inc["sin_estado"]), (False, True))
+_hace10 = (AYER - datetime.timedelta(days=10)).isoformat()
+ALMACEN["maestros/sat_incidencias/m_sat_incidencias.json.gz"] = gzip.compress(json.dumps([
+    # Abierta hace diez dias y cerrada ayer: en el crudo de la ventana seguiria abierta.
+    {"id": 501, "serie": "A", "numero": 9001, "fecha_alta": _hace10, "tipo_estado": 9, "estado": 99,
+     "apertura": f"{_hace10} 08:00:00", "cierre": f"{AYER} 09:00:00", "cod_operacion": "T08",
+     "operacion": "CAFÉ - Distribuidor fuera de servicio", "categoria": "AVERIAS TECNICAS",
+     "matricula": "A1", "num_centro": "1001", "centro": "AIRBUS GETAFE", "cod_cliente": "C7",
+     "cliente": "AIRBUS OPERATIONS SL", "delegacion": "Madrid - Leganes", "titulo": "no sale cafe"},
+    {"id": 502, "serie": "A", "numero": 9002, "fecha_alta": str(AYER), "tipo_estado": 1, "estado": 1,
+     "apertura": f"{AYER} 10:00:00", "cierre": None, "cod_operacion": "T08",
+     "operacion": "CAFÉ - Distribuidor fuera de servicio", "categoria": "AVERIAS TECNICAS",
+     "matricula": "C1", "num_centro": "2002", "centro": "CONSUM MURCIA", "cod_cliente": "C9",
+     "cliente": "CONSUM S COOP V", "delegacion": "Levante - Murcia", "titulo": "pantalla negra"},
+    {"id": 503, "serie": "A", "numero": 9003, "fecha_alta": str(AYER), "tipo_estado": 1,
+     "matricula": "00SE0000", "centro": "CENTRO TEST", "apertura": f"{AYER} 10:00:00"},
+]).encode())
+L.lambda_handler({}, None)
+_inc = json.loads(gzip.decompress(ALMACEN["cabina/interno/incidencias.json.gz"]))
+_inc_air = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/incidencias.json.gz"]))
+comprueba("con M13, al dia", _inc["estado_al_dia"], True)
+comprueba("el interno tiene las dos, sin la ficticia", sorted(x["n"] for x in _inc["incidencias"]),
+          ["A-9001", "A-9002"])
+comprueba("AIRBUS solo la suya", [x["n"] for x in _inc_air["incidencias"]], ["A-9001"])
+comprueba("cerrada a las 241 horas", [x.get("h") for x in _inc_air["incidencias"]], [241.0])
+comprueba("la abierta de Consum lleva su texto en el interno",
+          [x.get("tx") for x in _inc["incidencias"] if x["n"] == "A-9002"], ["pantalla negra"])
+_op = json.loads(ALMACEN["cabina/cli-airbus/operativo.json"])
+comprueba("y el cuadrado de AIRBUS ve el cierre del decimo dia, fuera de 24 h",
+          (_op["dias"][AYER.isoformat()]["averias"]["cerradas"],
+           _op["dias"][AYER.isoformat()]["averias"]["a_tiempo"]), (1, 0))
+del ALMACEN["maestros/sat_incidencias/m_sat_incidencias.json.gz"]
+
 print("\nEl perfiles.json de verdad coge lo que tiene que coger")
 # Con los datos como los devolvio VenCloud el 4 de octubre de 2026, y con el
 # fichero tal cual se despliega: si alguien le cambia un numero, esto lo dice.
