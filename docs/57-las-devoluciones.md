@@ -45,7 +45,7 @@ Pulsar un canal, una delegación o un centro filtra la página por él.
 | Hasta cerrar | de la apertura al cierre, con su hora; las cerradas sin hora no entran en la mediana |
 | Fuera | la matrícula ficticia 00SE0000, como en toda la plataforma. Con el M13 del 16-oct eran 9.934 de 27.450, todas en «CENTRO TEST» de la central, sin máquina ni sitio |
 
-Con el M13 del 16-oct-2026 sale esto para el perfil interno: 16.724 devoluciones en trece meses y
+Con el M13 del 16-oct-2026 sale esto para el perfil interno: 16.681 devoluciones en trece meses hasta ayer y
 518 entre el 1 y el 15 de octubre, frente a 569 en los mismos días de septiembre. 76 de esas siguen
 sin cerrar, y hoy hay 497 sin cerrar en total.
 
