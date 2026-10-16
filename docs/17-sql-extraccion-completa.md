@@ -2008,8 +2008,8 @@ where a.obsoleto = false
 ## M11 · EXT_MAESTRO_EMPLEADOS  *(sin parámetros)*
 
 Informe 190. Los empleados con su cargo y sus marcas de rol, sin teléfono, email ni DNI. El
-`cargo` llega como número, sin nombre: por quién hace las visitas SAT, el **8 es técnico** y el
-7 reponedor (inferido el 16-oct-2026, VenCloud no lo dice). Hay personas con dos fichas
+`cargo` llega como número, sin nombre: el **8 es técnico**, el **9 responsable SAT** y el 7
+reponedor (16-oct-2026: deducido de quién hace las visitas SAT y confirmado por Gabriele). Hay personas con dos fichas
 (Meliton Pizarroso: una de cargo 8 inactiva y otra de cargo 9 activa).
 
 ```sql
