@@ -289,7 +289,10 @@ function festivo(f, dl){
   const c = D.festivos;
   if(!c) return null;
   if((c.nacional||[]).includes(f)) return "nacional";
-  if(((c.delegaciones||{})[dl]||[]).includes(f)) return "local";
+  const d = (c.delegaciones||{})[dl];
+  if(Array.isArray(d)) return d.includes(f) ? "local" : null;   /* el formato de antes, solo locales */
+  if(d && (d.autonomico||[]).includes(f)) return "autonómico";
+  if(d && (d.local||[]).includes(f)) return "local";
   return null;
 }
 const dia = () => D.dias[$("#dia").value] || {};
@@ -527,7 +530,7 @@ function pintaFest(){
   const c = D.festivos, u = D.umbrales||{};
   const locales = c ? Object.keys(c.delegaciones||{}) : [];
   $("#sFest").textContent = (c
-    ? `Calendario: ${num((c.nacional||[]).length)} festivos nacionales; locales apuntados en ${locales.length ? locales.length + " " + (locales.length===1?"delegación":"delegaciones") : "ninguna delegación todavía"}. `
+    ? `Calendario: ${num((c.nacional||[]).length)} festivos nacionales; autonómicos y locales apuntados en ${locales.length ? locales.length + " " + (locales.length===1?"delegación":"delegaciones") : "ninguna delegación todavía"}. `
     : "No hay calendario de festivos cargado: solo se pueden ver los laborables con muy pocas visitas. ")
     + `Un día normal es la mediana de visitas de los laborables de la delegación sin festivo; «muchas menos» es menos del ${fpct(100*(u.festivo_bajo||.5))} de eso.`;
   const filas = (D.control_festivos||[]).filter(x=>deLaDeleg(x.delegacion) && x.fecha<=$("#dia").value).slice().reverse();

@@ -63,9 +63,22 @@ traía 913 visitas previstas, se hicieron 161 y el cuadrado salió al 17,6 %. Es
 %: lo que hace es comprobar que el festivo se comporta como tal.
 
 El calendario está en `config/festivos.json` del bucket de datos (en el repositorio,
-`infra/festivos.json`). Lleva los festivos nacionales de 2026 y, por delegación, los locales. **Los
-locales están vacíos**: no los tenemos y no se inventan. Hay que apuntarlos a mano y volver a subir
-el fichero.
+`infra/festivos.json`). Lleva, para 2026, tres capas:
+
+- **nacional**: los de toda España.
+- **autonomicos**: los de cada comunidad, con los traslados de los nacionales que caen en domingo
+  (en 2026, el 1 de noviembre y el 6 de diciembre pasan al lunes donde la comunidad lo decide).
+  Salen del BOE-A-2025-21667 y del decreto de cada comunidad.
+- **delegaciones**: por el nombre exacto de VenCloud, la ciudad cuyo calendario se aplica, su
+  comunidad y sus dos fiestas locales, con el boletín de donde salen (BOJA, DOGC, DOGV, BORM, BOCM,
+  BOB, BOC, BOP de León, BOPA).
+
+La ciudad es la de la delegación, no la de cada centro: Leganés lleva los de Leganés aunque visite
+Getafe o Madrid; Amazon (Girona) lleva los de Figueres, donde está su único centro. CENTRAL no tiene
+ciudad propia (centros en Zaragoza y Barcelona) y lleva solo los nacionales. Extremadura no sale en
+Rutas porque VenCloud no le trae plan. Para 2027 hay que añadir el año en las tres capas y volver a
+subir el fichero; la página enseña «festivo autonómico» o «festivo local» según de dónde venga.
+Un fichero con el formato de antes (una lista de locales por delegación) se sigue leyendo.
 
 Para cada delegación, **un día normal** es la mediana de sus visitas en los laborables (de lunes
 a viernes) sin festivo, con al menos tres días. Con esa mediana se marca:

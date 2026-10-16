@@ -285,7 +285,7 @@ const HACE3 = iso(new Date(HOY.getTime() - 3 * 86400000));
 API['/api/rutas'] = {
   generado: new Date().toISOString(), perfil: 'interno', ultimo_dia: iso(AYER),
   umbrales: { verde: 95, amarillo: 75, festivo_bajo: 0.5 },
-  festivos: { nacional: [HACE3], delegaciones: {}, nota: '' },
+  festivos: { nacional: [HACE3], delegaciones: { 'Andalucía - Málaga': { ciudad: 'Málaga', comunidad: 'Andalucía', autonomico: [iso(AYER)], local: [] } }, nota: '' },
   dias: {
     [HACE3]: {
       visitas_deleg: { 'Madrid - Leganes': 3, 'Andalucía - Málaga': 40 },
@@ -1036,6 +1036,7 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('el control de festivos marca el festivo con visitas de dia normal',
       (await pagina.textContent('#tFest')).includes('Visitas de día normal')
       && (await pagina.textContent('#tFest')).includes('sin descontar'));
+    comprueba_que('el autonomico de la delegacion sale en su fila', (await pagina.textContent('#tDeleg')).includes('festivo autonómico'));
     await pagina.selectOption('#dia', HACE3);
     comprueba_que('un festivo lo dice arriba', !(await pagina.$eval('#festivoDia', n => n.hidden))
       && (await pagina.textContent('#festivoDia')).includes('festivo nacional'));

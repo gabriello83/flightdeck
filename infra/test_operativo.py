@@ -267,6 +267,36 @@ comprueba("sin calendario, solo los laborables flojos",
 comprueba("con menos de tres dias normales no hay normal",
           OP.control_festivos({"2026-10-12": dias["2026-10-12"]}, FEST)[0]["estado"], "sin_normal")
 
+print("\nFestivos: autonomicos por comunidad y locales por ciudad")
+F2 = {"nacional": ["2026-10-12"],
+      "autonomicos": {"Andalucía": ["2026-12-07"], "Cataluña": ["2026-09-11"]},
+      "delegaciones": {"Andalucía - Cádiz": {"ciudad": "Cádiz", "comunidad": "Andalucía", "locales": ["2026-10-07"]},
+                       "Cataluña - Cornella": {"ciudad": "Cornellà", "comunidad": "Cataluña", "locales": []},
+                       "Viejo": ["2026-10-13"]}}
+comprueba("nacional, autonomico y local de Cadiz",
+          [OP.es_festivo(f, "Andalucía - Cádiz", F2) for f in ("2026-10-12", "2026-12-07", "2026-10-07", "2026-09-11")],
+          ["nacional", "autonómico", "local", None])
+comprueba("el de Cataluña, en Cornella", OP.es_festivo("2026-09-11", "Cataluña - Cornella", F2), "autonómico")
+comprueba("la lista sola de antes sigue valiendo", OP.es_festivo("2026-10-13", "Viejo", F2), "local")
+r = OP.resumen_festivos(F2)
+comprueba("el resumen da a la pagina los dos por delegacion", r["delegaciones"]["Andalucía - Cádiz"],
+          {"ciudad": "Cádiz", "comunidad": "Andalucía", "autonomico": ["2026-12-07"], "local": ["2026-10-07"]})
+comprueba("una delegacion solo con autonomicos tambien sale", r["delegaciones"]["Cataluña - Cornella"]["autonomico"],
+          ["2026-09-11"])
+
+import datetime, json as _json, os as _os
+REAL = _json.load(open(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "festivos.json"), encoding="utf-8"))
+todas = [f for v in REAL["autonomicos"].values() for f in v] + REAL["nacional"] + \
+        [f for d in REAL["delegaciones"].values() for f in d["locales"]]
+comprueba("config/festivos.json: todas las fechas son fechas", all(datetime.date.fromisoformat(f) for f in todas), True)
+comprueba("cada delegacion con ciudad tiene su comunidad en autonomicos",
+          [k for k, d in REAL["delegaciones"].items() if d["ciudad"] and d["comunidad"] not in REAL["autonomicos"]], [])
+comprueba("cada delegacion con ciudad tiene sus dos locales",
+          [k for k, d in REAL["delegaciones"].items() if d["ciudad"] and len(d["locales"]) != 2], [])
+comprueba("cada comunidad, 12 dias con los 8 nacionales de entre semana o sabado",
+          {c: len(set(v) | {f for f in REAL["nacional"] if datetime.date.fromisoformat(f).weekday() < 6})
+           for c, v in REAL["autonomicos"].items()}, {c: 12 for c in REAL["autonomicos"]})
+
 print()
 if fallos:
     print(f"{len(fallos)} PRUEBAS FALLIDAS: {', '.join(fallos)}")
