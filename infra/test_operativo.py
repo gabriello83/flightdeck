@@ -159,6 +159,114 @@ comprueba("el dia recalculado sustituye", f["dias"]["2026-10-09"]["furgonetas"][
 comprueba("ultimo dia", f["ultimo_dia"], "2026-10-09")
 comprueba("los umbrales viajan en el fichero", f["umbrales"], {"verde": 95.0, "amarillo": 75.0})
 
+print("\nLa pagina de rutas: delegaciones, rutas y puntos de venta (docs/55)")
+
+
+def parte(pdv, deleg, ruta="R1", quien="Ana", pid=None, ini="2026-10-09 09:30:00"):
+    return dict(visita(pdv, matricula="M" + pdv), delegacion=deleg, ruta=ruta, empleado=quien,
+                centro="C " + pdv, num_centro="9" + pdv[-1], parte_id=pid or "id" + pdv, fecha_ini=ini)
+
+
+def plan(pdv, deleg, ruta):
+    return {"cod_pdv": pdv, "delegacion": deleg, "ruta": ruta, "centro": "C " + pdv,
+            "num_centro": "9" + pdv[-1], "matricula": "M" + pdv}
+
+
+def linea(pid):
+    return {"parte_id": pid, "tipo_linea": "CM", "cantidad": 3, "matricula": "M"}
+
+
+op = OP.Operativo([DIA])
+d = op.dia(DIA)
+d.come_partes([parte("P1", "Madrid", "R1", ini="2026-10-09 11:00:00"),
+               parte("P1", "Madrid", "R1", "Pepe", pid="idP1b", ini="2026-10-09T08:05:00"),
+               parte("P2", "Madrid", "R2"), parte("P9", "Madrid", "R2", "Luis"),
+               parte("S1", "Sevilla", "S")])
+d.come_plan([plan("P1", "Madrid", "R1"), plan("P2", "Madrid", "R1"), plan("P2", "Madrid", "R2"),
+             plan("P3", "Madrid", "R2"), plan("S1", "Sevilla", "S"), plan("S2", "Sevilla", "S")])
+# P1: su segundo parte tiene lineas -> no es pasaje vacio. P2 y P9 no tienen
+# ninguna -> pasaje vacio. S1 tiene una linea de retirada: tampoco.
+d.come_lineas([linea("idP1b"), dict(linea("idS1"), tipo_linea="RC")], {})
+r = op.detalle_rutas("interno", ubicaciones={"MP3": "Planta 8"})["dias"][DIA]
+comprueba("el total cuenta por punto de venta", (r["total"]["previstas"], r["total"]["hechas"]), (5, 3))
+dl = {x["delegacion"]: x for x in r["delegaciones"]}
+comprueba("Madrid: 2 de 3 y una fuera de plan", (dl["Madrid"]["hechas"], dl["Madrid"]["previstas"],
+                                                 dl["Madrid"]["fuera"], dl["Madrid"]["pct"]), (2, 3, 1, 66.7))
+comprueba("la peor delegacion primero", [x["delegacion"] for x in r["delegaciones"]], ["Sevilla", "Madrid"])
+rt = {x["ruta"]: x for x in r["rutas"]}
+comprueba("P2 en dos rutas cuenta en las dos", (rt["R1"]["previstas"], rt["R2"]["previstas"]), (2, 2))
+comprueba("la visita fuera de plan va a la ruta del parte", (rt["R2"]["fuera"], rt["R1"]["fuera"]), (1, 0))
+comprueba("pasaje vacio: visitas sin ninguna linea, en hechas y fuera de ruta",
+          (r["total"]["vacio"], dl["Madrid"]["vacio"], dl["Sevilla"]["vacio"]), (2, 2, 0))
+comprueba("pasaje vacio por ruta: P2 en R1 y R2, P9 en R2", (rt["R1"]["vacio"], rt["R2"]["vacio"]), (1, 2))
+comprueba("la lista, pendientes primero, con matricula, ubicacion, hora y reponedor", r["visitas"], [
+    ["PENDIENTE", "P3", "MP3", "Madrid", "R2", "93", "C P3", "Planta 8", "", "", None],
+    ["PENDIENTE", "S2", "MS2", "Sevilla", "S", "92", "C S2", "", "", "", None],
+    ["HECHA", "P1", "MP1", "Madrid", "R1", "91", "C P1", "", "08:05", "Pepe", 0],
+    ["HECHA", "P2", "MP2", "Madrid", "R1 / R2", "92", "C P2", "", "09:30", "Ana", 1],
+    ["HECHA", "S1", "MS1", "Sevilla", "S", "91", "C S1", "", "09:30", "Ana", 0],
+    ["FUERA DE RUTA", "P9", "MP9", "Madrid", "R2", "99", "C P9", "", "09:30", "Luis", 1],
+])
+comprueba("con lineas no se avisa de nada", "sin_vacio" in r, False)
+
+op = OP.Operativo([DIA])
+op.dia(DIA).come_partes([parte("P1", "Madrid")])
+op.dia(DIA).come_plan([plan("P1", "Madrid", "R1")])
+r = op.detalle_rutas("interno")["dias"][DIA]
+comprueba("sin ninguna linea ese dia, el pasaje vacio no se sabe y se dice",
+          (r["total"]["vacio"], r["delegaciones"][0]["vacio"], r["visitas"][0][10], "sin_vacio" in r),
+          (None, None, None, True))
+
+op = OP.Operativo([DIA])
+op.dia(DIA).come_partes([parte("P1", "Madrid")])
+r = op.detalle_rutas("interno")["dias"][DIA]
+comprueba("sin plan se dice, y quedan las visitas por delegacion",
+          ("sin_dato" in r, r["visitas_deleg"], "pct" in r["total"]), (True, {"Madrid": 1}, False))
+
+comprueba("la hora del parte", (OP.hora("2026-10-09 07:41:12"), OP.hora("2026-10-09T18:02"),
+                                OP.hora("2026-10-09"), OP.hora(None)), ("07:41", "18:02", "", ""))
+
+print("\nEl fichero de rutas guarda las cifras y solo una semana de listas")
+viejo = {"dias": {"2026-08-01": {"total": {}, "visitas": [["X"]]},
+                  "2026-08-02": {"total": {}, "no_visitados": [["X"]], "fuera": []}}}
+fechas = [f"2026-10-{n:02d}" for n in range(1, 10)]
+op = OP.Operativo(fechas)
+for f in fechas:
+    op.dia(f).come_plan([plan("P1", "Madrid", "R1")])
+fr = op.detalle_rutas("interno", viejo)
+comprueba("el dia viejo se queda", "2026-08-01" in fr["dias"], True)
+comprueba("pero sin sus listas", "visitas" in fr["dias"]["2026-08-01"], False)
+comprueba("ni las de antes, con su nombre viejo",
+          ("no_visitados" in fr["dias"]["2026-08-02"], "fuera" in fr["dias"]["2026-08-02"]), (False, False))
+comprueba("las listas, de los ultimos siete", sum("visitas" in v for v in fr["dias"].values()), 7)
+
+print("\nFestivos: que tengan muchas menos visitas que un dia normal")
+FEST = {"nacional": ["2026-10-12"], "delegaciones": {"Sevilla": ["2026-10-13"]}}
+dias = {}
+for f, mad, sev in [("2026-10-05", 100, 40), ("2026-10-06", 110, 42), ("2026-10-07", 90, 38),
+                    ("2026-10-08", 100, 41), ("2026-10-09", 30, 40), ("2026-10-10", 5, 2),
+                    ("2026-10-12", 10, 39), ("2026-10-13", 100, 3)]:
+    dias[f] = {"visitas_deleg": {"Madrid": mad, "Sevilla": sev},
+               "delegaciones": [{"delegacion": "Madrid", "previstas": 100},
+                                {"delegacion": "Sevilla", "previstas": 40 if f != "2026-10-13" else 5}]}
+c = {(x["fecha"], x["delegacion"]): x for x in OP.control_festivos(dias, FEST)}
+comprueba("el nacional en Madrid, bien: 10 contra un normal de 100",
+          (c[("2026-10-12", "Madrid")]["estado"], c[("2026-10-12", "Madrid")]["normal"]), ("bien", 100))
+comprueba("pero con el plan entero: sin descontar", c[("2026-10-12", "Madrid")]["plan_sin_descontar"], True)
+comprueba("Sevilla trabajo el nacional como un dia normal", c[("2026-10-12", "Sevilla")]["estado"],
+          "festivo_con_visitas")
+comprueba("el local de Sevilla, bien y con el plan descontado",
+          (c[("2026-10-13", "Sevilla")]["estado"], c[("2026-10-13", "Sevilla")]["plan_sin_descontar"]),
+          ("bien", False))
+comprueba("el local de Sevilla no es festivo en Madrid", ("2026-10-13", "Madrid") in c, False)
+comprueba("un laborable flojo sin festivo apuntado se ensena", c[("2026-10-09", "Madrid")]["estado"],
+          "pocas_sin_festivo")
+comprueba("el sabado no se mira", ("2026-10-10", "Madrid") in c, False)
+comprueba("sin calendario, solo los laborables flojos",
+          [x["estado"] for x in OP.control_festivos(dias, None)], ["pocas_sin_festivo", "pocas_sin_festivo", "pocas_sin_festivo"])
+comprueba("con menos de tres dias normales no hay normal",
+          OP.control_festivos({"2026-10-12": dias["2026-10-12"]}, FEST)[0]["estado"], "sin_normal")
+
 print()
 if fallos:
     print(f"{len(fallos)} PRUEBAS FALLIDAS: {', '.join(fallos)}")

@@ -248,7 +248,7 @@ ALMACEN["maestros/instalaciones/m_instalaciones.json.gz"] = gzip.compress(json.d
 
 # El plan de visitas de ayer (D12): un punto de venta de AIRBUS y uno de Consum.
 pon("crudo/rutas_plan_visitas", "rutas_plan_visitas", AYER,
-    [{"cod_pdv": "P1", "num_centro": "1001", "centro": "AIRBUS GETAFE", "cod_cliente": "C7",
+    [{"cod_pdv": "P1", "matricula": "A1", "num_centro": "1001", "centro": "AIRBUS GETAFE", "cod_cliente": "C7",
       "cliente": "AIRBUS OPERATIONS SL", "delegacion": "Madrid"},
      {"cod_pdv": "Q1", "num_centro": "2002", "centro": "CONSUM MURCIA", "cod_cliente": "C9",
       "cliente": "CONSUM S COOP V", "delegacion": "Levante - Murcia"}])
@@ -298,6 +298,18 @@ comprueba("la reposicion de AIRBUS no lleva la de Consum",
           < op_int["dias"][_ayer]["reposiciones"]["unidades"], True)
 comprueba("el resumen dice que cuadrados se quedaron sin dato",
           "almacenes" not in res["operativo"]["interno"]["sin_dato"], True)
+
+print("\nLa pagina de rutas (docs/55): un fichero por perfil, con su ambito")
+_ri = json.loads(gzip.decompress(ALMACEN["cabina/interno/rutas.json.gz"]))
+_ra = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/rutas.json.gz"]))
+comprueba("el interno, los dos puntos de venta del plan", _ri["dias"][_ayer]["total"]["previstas"], 2)
+comprueba("AIRBUS, solo el suyo, y en su lista no sale Consum",
+          (_ra["dias"][_ayer]["total"]["previstas"],
+           all("CONSUM" not in " ".join(map(str, x)).upper()
+               for x in _ra["dias"][_ayer]["visitas"])), (1, True))
+comprueba("cada maquina de la lista, con su ubicacion del censo",
+          {x[2]: x[7] for x in _ra["dias"][_ayer]["visitas"]}.get("A1"), "Hall")
+comprueba("sin calendario de festivos subido, se dice (null)", _ri["festivos"], None)
 
 print("\nLos almacenes por dentro (docs/54)")
 _al = json.loads(gzip.decompress(ALMACEN["cabina/interno/almacenes.json.gz"]))

@@ -210,6 +210,19 @@ def encamina(evento, metodo, ruta):
                                     "Nayax, Prodelfi y Nebula en la consola y espera a la noche.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
 
+    # La pagina de rutas (docs/55): delegaciones, rutas y puntos de venta del
+    # perfil. La misma regla que el cuadrado que lleva a ella.
+    if ruta == "/api/rutas" and metodo == "GET":
+        if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
+            raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
+        if "rutas" not in A.cuadrados_de(perfil):
+            raise PermissionError("Este perfil no ve las rutas.")
+        try:
+            return _como_json(_crudo(f"cabina/{perfil.get('perfil_id', '')}/rutas.json.gz"))
+        except Exception:
+            return r(503, {"error": "Las rutas todavía no se han calculado.",
+                           "_nota": "Lo escriben los agregados cada noche (4:45)."})
+
     # La pagina de incidencias (docs/56): las de la SAT del perfil de la sesion.
     # La misma regla que el cuadrado de Incidencias que lleva a ella. Se sirve
     # comprimido tal cual esta en S3: con un ano de incidencias del interno

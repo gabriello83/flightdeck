@@ -192,7 +192,8 @@ $("#bSalir").addEventListener("click", async ()=>{
    entonces, la seccion que ya existe. Furgonetas no tiene todavia ninguna
    seccion en el panel, y se dice en vez de llevar a cualquier sitio. */
 const DESTINO = {
-  rutas:        {sesion:"resumen",       panel:"visitas_dia"},
+  // Rutas tiene su propia pagina: delegaciones, rutas, puntos de venta y festivos (docs/55).
+  rutas:        {url:"/rutas/", dia:true},
   // Incidencias tiene su propia pagina, como el Power BI de Gabriele (docs/56).
   averias:      {url:"/incidencias/"},
   // Las devoluciones de dinero, con su pagina de tablas y graficos (docs/57).
@@ -304,7 +305,8 @@ function pinta(){
     /* La telemetria cruzada con los ficheros tiene pagina propia, con las
        maquinas que no transmiten (docs/53). */
     const propia = id==="telemetria" && f.telemetria
-      ? `/telemetria/?dia=${encodeURIComponent(fecha)}` : null;
+      ? `/telemetria/?dia=${encodeURIComponent(fecha)}`
+      : dest && dest.url && dest.dia ? `${dest.url}?dia=${encodeURIComponent(fecha)}` : null;
     const va = propia || (dest && (dest.url || ses.has(dest.sesion)));
     const el = document.createElement(va ? "a" : "div");
     el.className = "cuadro";

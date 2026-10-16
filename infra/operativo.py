@@ -75,6 +75,14 @@ def porcentaje(parte, total):
     return round(100.0 * parte / total, 1) if total else None
 
 
+def hora(fecha):
+    """«HH:MM» de una fecha de VenCloud («2026-10-15 08:12:31» o con T); «» si no trae."""
+    s = str(fecha or "")
+    if len(s) >= 16 and s[10] in " T" and s[13] == ":":
+        return s[11:16]
+    return ""
+
+
 def nombre_clase(clase):
     try:
         c = int(clase)
@@ -128,14 +136,41 @@ class DiaOperativo:
         self.repo_consumibles = 0.0
         self.repo_valor = 0.0
         self.venta = None
+        # Para la pagina de rutas (docs/55): de que delegacion, ruta y centro es
+        # cada punto de venta del plan y cada uno visitado, y cuantas visitas
+        # hizo cada delegacion. Un punto de venta, una entrada: no guarda filas.
+        self.plan_de = {}            # pdv -> {"d","r":[rutas],"n","c","m"}
+        self.visita_de = {}          # pdv -> {"d","r","e","n","c","m","h"}, la primera visita
+        self.visitas_deleg = {}      # delegacion -> visitas reales
+        # El pasaje vacio (informe 69 de VenCloud, docs/04): una visita sin
+        # ninguna linea de reposicion. Que parte es de que punto de venta, y
+        # que partes tienen alguna linea; se cruza al final, porque las lineas
+        # llegan en otro informe y en cualquier orden.
+        self.partes_pdv = {}         # parte_id -> pdv, solo visitas reales
+        self.partes_con_lineas = set()
 
     def come_partes(self, filas):
         for p in filas:
             if R.es_visita_real(p):
                 self.visitas += 1
                 pdv = str(R.v(p, "cod_pdv", "") or "")
+                deleg = str(R.v(p, "delegacion", "") or "")
+                self.visitas_deleg[deleg] = self.visitas_deleg.get(deleg, 0) + 1
                 if pdv:
                     self.visitados.add(pdv)
+                    pid = R.v(p, "parte_id", None)
+                    if pid not in (None, ""):
+                        self.partes_pdv[str(pid)] = pdv
+                    x = {"d": deleg, "r": str(R.v(p, "ruta", "") or "").strip(),
+                         "e": str(R.v(p, "empleado", "") or "").strip(),
+                         "n": str(R.v(p, "num_centro", "") or ""),
+                         "c": str(R.v(p, "centro", "") or "").strip(),
+                         "m": str(R.v(p, "matricula", "") or "").strip(),
+                         "h": hora(R.v(p, "fecha_ini", ""))}
+                    # La primera visita del dia es la que se ensena.
+                    antes = self.visita_de.get(pdv)
+                    if antes is None or (x["h"] and (not antes["h"] or x["h"] < antes["h"])):
+                        self.visita_de[pdv] = x
                 v = R.v(p, "vehiculo", "")
                 if vehiculo_real(v):
                     self.vehiculos.add(str(v).strip())
@@ -165,6 +200,14 @@ class DiaOperativo:
             pdv = str(R.v(f, "cod_pdv", "") or "")
             if pdv:
                 self.plan.add(pdv)
+                ruta = str(R.v(f, "ruta", "") or "").strip()
+                x = self.plan_de.setdefault(pdv, {
+                    "d": str(R.v(f, "delegacion", "") or ""), "r": [],
+                    "n": str(R.v(f, "num_centro", "") or ""),
+                    "c": str(R.v(f, "centro", "") or "").strip(),
+                    "m": str(R.v(f, "matricula", "") or "").strip()})
+                if ruta and ruta not in x["r"]:
+                    x["r"].append(ruta)
 
     def come_lineas(self, filas, clase_de):
         """Las unidades repuestas, por clase de maquina.
@@ -177,6 +220,9 @@ class DiaOperativo:
         """
         self.repo_valor += R.valor_cargado(filas)
         for l in filas:
+            pid = R.v(l, "parte_id", None)
+            if pid not in (None, ""):
+                self.partes_con_lineas.add(str(pid))
             if R.v(l, "tipo_linea") != "CM":
                 continue
             u = float(R.v(l, "cantidad", 0) or 0)
@@ -475,6 +521,46 @@ class Operativo:
                       "VenCloud; null si el perfil está acotado (no tienen centro)."),
         }
 
+    def detalle_rutas(self, perfil_id, anterior=None, festivos=None, ubicaciones=None):
+        """El fichero de la pagina de rutas (docs/55).
+
+        Cada dia, por delegacion y por ruta, lo previsto y lo hecho; y los puntos
+        de venta que no se visitaron y las visitas fuera de plan, con su centro.
+        Acumula como el informe: los dias de esta noche sobre los que ya habia.
+        Las listas de puntos de venta solo se guardan de la ultima semana; las
+        cifras, de DIAS_GUARDADOS, que es lo que necesita el control de festivos
+        para saber como es un dia normal de cada delegacion.
+        """
+        dias = dict((anterior or {}).get("dias") or {})
+        for f, d in self.dias.items():
+            if d is not None:
+                dias[f] = rutas_del_dia(d, ubicaciones)
+        dias = dict(sorted(dias.items())[-DIAS_GUARDADOS:])
+        recientes = set(sorted(dias)[-DIAS_NOCHE:])
+        for f, v in dias.items():
+            # Las listas de antes del 16-oct-2026 se llamaban no_visitados y
+            # fuera: tambien se sueltan.
+            v.pop("no_visitados", None)
+            v.pop("fuera", None)
+            if f not in recientes:
+                v.pop("visitas", None)
+        return {
+            "generado": datetime.datetime.utcnow().isoformat() + "Z",
+            "perfil": perfil_id,
+            "ultimo_dia": max(dias) if dias else None,
+            "umbrales": {"verde": VERDE, "amarillo": AMARILLO, "festivo_bajo": FESTIVO_BAJO},
+            "festivos": resumen_festivos(festivos),
+            "dias": dias,
+            "control_festivos": control_festivos(dias, festivos),
+            "_nota": ("Cada día, lo previsto en el plan de visitas (D12, informe 184) contra las "
+                      "visitas reales, por delegación y por ruta, contando por punto de venta. "
+                      "visitas: [estado (HECHA, PENDIENTE, FUERA DE RUTA), pdv, matrícula, "
+                      "delegación, ruta(s), nº centro, centro, ubicación, hora, reponedor, "
+                      "pasaje vacío (1, 0 o null)]. vacio: visitas sin ninguna línea de "
+                      "reposición; null si no llegaron las líneas. control_festivos compara "
+                      "cada festivo y cada día laborable flojo con el día normal de su delegación."),
+        }
+
     def fichero(self, perfil_id, anterior=None):
         """El fichero del perfil: los dias de esta noche sobre los que ya habia.
 
@@ -549,3 +635,204 @@ def almacenes(balance_por_periodo, rutas, ambito):
     return {"valor": round(sum(x["valor"] for x in lista), 2),
             "periodo": f"{anho}-{int(mes):02d}",
             "por_almacen": lista}
+
+
+# ----------------------------------------------------------------------
+# la pagina de rutas (docs/55)
+# ----------------------------------------------------------------------
+# Un festivo «tiene muchas menos visitas» (Gabriele, 13-oct) si no llega a esta
+# fraccion de un dia normal de su delegacion. Y un dia laborable que no llega,
+# sin festivo apuntado, es un festivo local que falta o un dia que fallo.
+FESTIVO_BAJO = 0.5
+# Con menos dias laborables que estos no se sabe como es un dia normal.
+MIN_DIAS_NORMALES = 3
+
+
+# Los tres estados de una visita, como el informe 69 de VenCloud y el Power BI
+# «Control operativo Visitas Pendientes» que se usaba antes de esta pagina.
+HECHA, PENDIENTE, FUERA = "HECHA", "PENDIENTE", "FUERA DE RUTA"
+SIN_LINEAS = ("No ha llegado ninguna línea de reposición de ese día (A2): sin ellas no se "
+              "sabe qué visita fue un pasaje vacío.")
+
+
+def pasajes_vacios(d):
+    """Los puntos de venta visitados ese dia en los que NINGUN parte de persona
+    tiene una sola linea de reposicion: «fue y no hizo nada» (docs/04, informe 69).
+
+    None si ese dia no llego ninguna linea: con visitas y sin lineas lo que
+    falta es el informe, no el trabajo, y no se marca a todos como vacios.
+    """
+    if d.visitados and not d.partes_con_lineas:
+        return None
+    con_algo = {pdv for pid, pdv in d.partes_pdv.items() if pid in d.partes_con_lineas}
+    # Un punto de venta cuyo parte no trae id no se puede cruzar: no se marca.
+    con_id = set(d.partes_pdv.values())
+    return {pdv for pdv in d.visitados if pdv in con_id and pdv not in con_algo}
+
+
+def rutas_del_dia(d, ubicaciones=None):
+    """Lo de un dia: total, delegaciones, rutas y la lista maquina a maquina.
+
+    La lista `visitas` lleva una fila por punto de venta y estado, como el
+    informe 69: [estado, pdv, matricula, delegacion, ruta(s), nº centro, centro,
+    ubicacion, hora, reponedor, pasaje_vacio]. pasaje_vacio es 1, 0 o None (no
+    se sabe); en una PENDIENTE no aplica y va None.
+    """
+    ubicaciones = ubicaciones or {}
+    out = {"visitas_deleg": dict(sorted(d.visitas_deleg.items()))}
+    if d.plan is None or not d.plan:
+        out["sin_dato"] = (SIN_PLAN if d.plan is None
+                           else "El plan de ese día no tiene ninguna visita prevista.")
+        out["total"] = {"visitas": d.visitas}
+        return out
+    hechas = d.plan & d.visitados
+    fuera = d.visitados - d.plan
+    vacios = pasajes_vacios(d)
+
+    def es_vacio(pdv):
+        return None if vacios is None else int(pdv in vacios)
+
+    deleg, rutas = {}, {}
+
+    def fila_deleg(nombre):
+        return deleg.setdefault(nombre, {"delegacion": nombre, "previstas": 0, "hechas": 0,
+                                         "fuera": 0, "vacio": 0,
+                                         "visitas": d.visitas_deleg.get(nombre, 0)})
+
+    def fila_ruta(dl, ruta):
+        return rutas.setdefault((dl, ruta), {"delegacion": dl, "ruta": ruta or "Sin ruta",
+                                             "previstas": 0, "hechas": 0, "fuera": 0, "vacio": 0})
+
+    lista = []
+    for pdv in sorted(d.plan):
+        x = d.plan_de.get(pdv, {"d": "", "r": [], "n": "", "c": "", "m": ""})
+        hecho = pdv in hechas
+        vacio = es_vacio(pdv) if hecho else None
+        g = fila_deleg(x["d"])
+        g["previstas"] += 1
+        g["hechas"] += hecho
+        g["vacio"] += bool(vacio)
+        # Un punto de venta en dos rutas cuenta en las dos rutas, y una sola
+        # vez en su delegacion y en el total.
+        for r in x["r"] or [""]:
+            fr = fila_ruta(x["d"], r)
+            fr["previstas"] += 1
+            fr["hechas"] += hecho
+            fr["vacio"] += bool(vacio)
+        v = d.visita_de.get(pdv, {}) if hecho else {}
+        # La ruta es la del plan; el reponedor, el que fue, que puede ser de
+        # otra ruta (docs/04, informe 69).
+        mat = x.get("m") or v.get("m", "")
+        lista.append([HECHA if hecho else PENDIENTE, pdv, mat, x["d"], " / ".join(x["r"]),
+                      x["n"], x["c"], ubicaciones.get(mat, ""), v.get("h", ""), v.get("e", ""), vacio])
+    for pdv in sorted(fuera):
+        x = d.visita_de.get(pdv, {"d": "", "r": "", "e": "", "n": "", "c": "", "m": "", "h": ""})
+        vacio = es_vacio(pdv)
+        g = fila_deleg(x["d"])
+        g["fuera"] += 1
+        g["vacio"] += bool(vacio)
+        fr = fila_ruta(x["d"], x["r"])
+        fr["fuera"] += 1
+        fr["vacio"] += bool(vacio)
+        lista.append([FUERA, pdv, x.get("m", ""), x["d"], x["r"], x["n"], x["c"],
+                      ubicaciones.get(x.get("m", ""), ""), x.get("h", ""), x["e"], vacio])
+    for nombre, n in d.visitas_deleg.items():
+        fila_deleg(nombre)
+
+    def con_pct(f):
+        p = porcentaje(f["hechas"], f["previstas"])
+        f = dict(f, pct=p, color=semaforo(p))
+        if vacios is None:
+            f["vacio"] = None
+        return f
+
+    pct = porcentaje(len(hechas), len(d.plan))
+    orden = {PENDIENTE: 0, HECHA: 1, FUERA: 2}
+    out.update({
+        "total": {"previstas": len(d.plan), "hechas": len(hechas), "pct": pct,
+                  "color": semaforo(pct), "fuera": len(fuera), "visitas": d.visitas,
+                  "vacio": None if vacios is None else len(vacios & d.visitados)},
+        "delegaciones": sorted((con_pct(f) for f in deleg.values()),
+                               key=lambda f: (f["pct"] is None, f["pct"] or 0, f["delegacion"])),
+        "rutas": sorted((con_pct(f) for f in rutas.values()),
+                        key=lambda f: (f["delegacion"], f["pct"] is None, f["pct"] or 0, f["ruta"])),
+        "visitas": sorted(lista, key=lambda x: (orden[x[0]], x[3], x[4], x[6], x[1])),
+    })
+    if vacios is None:
+        out["sin_vacio"] = SIN_LINEAS
+    return out
+
+
+def es_festivo(fecha, delegacion, festivos):
+    """'nacional', 'local' o None, segun el calendario de config/festivos.json."""
+    if not festivos:
+        return None
+    if fecha in (festivos.get("nacional") or []):
+        return "nacional"
+    if fecha in ((festivos.get("delegaciones") or {}).get(delegacion) or []):
+        return "local"
+    return None
+
+
+def resumen_festivos(festivos):
+    """Lo que la pagina dice del calendario: que hay apuntado y que no."""
+    if not festivos:
+        return None
+    locales = {k: sorted(v) for k, v in (festivos.get("delegaciones") or {}).items() if v}
+    return {"nacional": sorted(festivos.get("nacional") or []), "delegaciones": locales,
+            "nota": festivos.get("nota", "")}
+
+
+def _mediana(xs):
+    xs = sorted(xs)
+    n = len(xs)
+    if not n:
+        return None
+    return xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
+
+
+def control_festivos(dias, festivos):
+    """Delegacion por delegacion, que los festivos tengan muchas menos visitas.
+
+    El dia normal de una delegacion es la mediana de sus visitas en los dias
+    laborables (lunes a viernes) que no son festivo. Contra el se mira:
+
+      · un festivo apuntado con visitas de dia normal -> «festivo_con_visitas»;
+      · un festivo con el plan entero, sin descontar -> plan_sin_descontar;
+      · un laborable sin festivo apuntado y con menos de la mitad de visitas ->
+        «pocas_sin_festivo»: un festivo local que falta en el calendario, o un
+        dia que fallo. No se decide cual: se ensena.
+
+    Sin calendario solo se puede ver lo tercero, y se dice.
+    """
+    por_deleg = {}
+    for f, v in sorted(dias.items()):
+        dsem = datetime.date.fromisoformat(f).weekday()
+        prev = {x["delegacion"]: x["previstas"] for x in v.get("delegaciones") or []}
+        for dl, n in (v.get("visitas_deleg") or {}).items():
+            por_deleg.setdefault(dl, []).append((f, dsem, n, prev.get(dl)))
+        for dl in prev:
+            if dl not in (v.get("visitas_deleg") or {}):
+                por_deleg.setdefault(dl, []).append((f, dsem, 0, prev[dl]))
+    salida = []
+    for dl, filas in sorted(por_deleg.items()):
+        normales = [(n, p) for f, dsem, n, p in filas
+                    if dsem < 5 and not es_festivo(f, dl, festivos)]
+        normal = _mediana([n for n, p in normales]) if len(normales) >= MIN_DIAS_NORMALES else None
+        normal_p = _mediana([p for n, p in normales if p]) if len(normales) >= MIN_DIAS_NORMALES else None
+        for f, dsem, n, p in filas:
+            fest = es_festivo(f, dl, festivos)
+            if not fest and (dsem >= 5 or not normal or n >= FESTIVO_BAJO * normal):
+                continue
+            if fest:
+                # Una delegacion que un dia normal no visita nada no dice nada
+                # de sus festivos.
+                estado = ("sin_normal" if not normal
+                          else "bien" if n < FESTIVO_BAJO * normal else "festivo_con_visitas")
+            else:
+                estado = "pocas_sin_festivo"
+            salida.append({
+                "fecha": f, "delegacion": dl, "festivo": fest, "estado": estado,
+                "visitas": n, "normal": normal, "previstas": p, "normal_previstas": normal_p,
+                "plan_sin_descontar": bool(fest and p and normal_p and p >= FESTIVO_BAJO * normal_p)})
+    return salida

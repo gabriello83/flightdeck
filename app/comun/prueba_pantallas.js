@@ -279,6 +279,52 @@ const API = {
   }
 };
 
+// Rutas (docs/55), con la forma que escribe operativo.detalle_rutas: dos
+// delegaciones ayer, y hace tres dias un festivo nacional con el plan entero.
+const HACE3 = iso(new Date(HOY.getTime() - 3 * 86400000));
+API['/api/rutas'] = {
+  generado: new Date().toISOString(), perfil: 'interno', ultimo_dia: iso(AYER),
+  umbrales: { verde: 95, amarillo: 75, festivo_bajo: 0.5 },
+  festivos: { nacional: [HACE3], delegaciones: {}, nota: '' },
+  dias: {
+    [HACE3]: {
+      visitas_deleg: { 'Madrid - Leganes': 3, 'Andalucía - Málaga': 40 },
+      total: { previstas: 300, hechas: 20, pct: 6.7, color: 'rojo', fuera: 1, visitas: 43 },
+      delegaciones: [
+        { delegacion: 'Madrid - Leganes', previstas: 260, hechas: 2, fuera: 1, visitas: 3, pct: 0.8, color: 'rojo' },
+        { delegacion: 'Andalucía - Málaga', previstas: 40, hechas: 18, fuera: 0, visitas: 40, pct: 45, color: 'rojo' }],
+      rutas: [], no_visitados: [], fuera: []
+    },
+    [iso(AYER)]: {
+      visitas_deleg: { 'Madrid - Leganes': 6, 'Andalucía - Málaga': 3 },
+      total: { previstas: 8, hechas: 6, pct: 75, color: 'amarillo', fuera: 2, visitas: 9, vacio: 2 },
+      delegaciones: [
+        { delegacion: 'Madrid - Leganes', previstas: 6, hechas: 4, fuera: 2, vacio: 2, visitas: 6, pct: 66.7, color: 'rojo' },
+        { delegacion: 'Andalucía - Málaga', previstas: 2, hechas: 2, fuera: 0, vacio: 0, visitas: 3, pct: 100, color: 'verde' }],
+      rutas: [
+        { delegacion: 'Andalucía - Málaga', ruta: 'Málaga 1', previstas: 2, hechas: 2, fuera: 0, vacio: 0, pct: 100, color: 'verde' },
+        { delegacion: 'Madrid - Leganes', ruta: 'Ruta Getafe <Airbus>', previstas: 4, hechas: 2, fuera: 2, vacio: 2, pct: 50, color: 'rojo' },
+        { delegacion: 'Madrid - Leganes', ruta: 'Ruta Leganés', previstas: 2, hechas: 2, fuera: 0, vacio: 0, pct: 100, color: 'verde' }],
+      visitas: [
+        ['PENDIENTE', 'P7', '19FP1530', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1001', 'AIRBUS GETAFE', 'Planta 8', '', '', null],
+        ['PENDIENTE', 'P8', '24CE4842', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1002', 'AIRBUS ILLESCAS', '', '', '', null],
+        ['HECHA', 'P1', '10CE5680', 'Andalucía - Málaga', 'Málaga 1', '2001', 'HOSPITAL MÁLAGA', 'Hall', '08:05', 'Luis Gil', 0],
+        ['HECHA', 'P2', '10CE5681', 'Andalucía - Málaga', 'Málaga 1', '2001', 'HOSPITAL MÁLAGA', '', '08:20', 'Luis Gil', 0],
+        ['HECHA', 'P3', '11AA0001', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1001', 'AIRBUS GETAFE', '', '09:10', 'Ana Pérez', 1],
+        ['HECHA', 'P4', '11AA0002', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1001', 'AIRBUS GETAFE', '', '09:30', 'Ana Pérez', 0],
+        ['HECHA', 'P5', '11AA0003', 'Madrid - Leganes', 'Ruta Leganés', '1004', 'HOSPITAL SEVERO OCHOA', '', '10:00', 'Rosa Gil', 0],
+        ['HECHA', 'P6', '11AA0004', 'Madrid - Leganes', 'Ruta Leganés', '1004', 'HOSPITAL SEVERO OCHOA', '', '10:15', 'Rosa Gil', 0],
+        ['FUERA DE RUTA', 'P9', '12BB0001', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1001', 'AIRBUS GETAFE', '', '11:00', 'Ana Pérez', 1],
+        ['FUERA DE RUTA', 'P10', '12BB0002', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1003', 'CONSUM ALCORCÓN', '', '12:00', 'Ana Pérez', 0]]
+    }
+  },
+  control_festivos: [
+    { fecha: HACE3, delegacion: 'Andalucía - Málaga', festivo: 'nacional', estado: 'festivo_con_visitas', visitas: 40,
+      normal: 39, previstas: 40, normal_previstas: 40, plan_sin_descontar: true },
+    { fecha: HACE3, delegacion: 'Madrid - Leganes', festivo: 'nacional', estado: 'bien', visitas: 3,
+      normal: 300, previstas: 260, normal_previstas: 300, plan_sin_descontar: true }]
+};
+
 // Tarifas (docs/52), con la forma que escribe infra/tarifas.py: dos
 // delegaciones, y en Cadiz un centro con un precio distinto y uno sin tarifa.
 const CENTRO_TARIFAS = {
@@ -754,8 +800,8 @@ const servidor = http.createServer((pet, res) => {
       await pagina.$$eval('#cuadros .cuadro', x => x.filter(c => ['rutas', 'averias', 'telemetria'].includes(c.dataset.id))
         .map(c => ['verde', 'amarillo', 'rojo'].find(k => c.classList.contains(k)))),
       ['amarillo', 'rojo', 'verde']);
-    comprueba('rutas lleva a su seccion del panel',
-      await pagina.getAttribute('.cuadro[data-id="rutas"]', 'href'), '/panel/?ver=resumen#visitas_dia');
+    comprueba('rutas lleva a su pagina, con el dia',
+      await pagina.getAttribute('.cuadro[data-id="rutas"]', 'href'), `/rutas/?dia=${iso(AYER)}`);
     comprueba('almacenes lleva a su pagina',
       await pagina.getAttribute('.cuadro[data-id="almacenes"]', 'href'), '/almacenes/');
     comprueba_que('furgonetas no tiene seccion todavia, y lo dice',
@@ -936,6 +982,78 @@ const servidor = http.createServer((pet, res) => {
     comprueba('sin un solo error en la consola del navegador', b.errores, []);
     await b.pagina.close();
     API['/api/almacenes'] = antes;
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nRutas: delegaciones, rutas, puntos de venta y festivos (docs/55)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre(`/rutas/?dia=${iso(AYER)}`);
+    await pagina.waitForSelector('#tDeleg table');
+    comprueba('arranca en el dia que trae la direccion', await pagina.inputValue('#dia'), iso(AYER));
+    comprueba('los seis indicadores del Power BI, en su orden',
+      await pagina.$$eval('#kpis .kpi .et', x => x.map(e => e.textContent.trim())),
+      ['Visitas pendientes', 'Cumplimiento de ruta', 'Visitas en ruta', 'Visitas efectuadas',
+       'Visitas no planificadas', 'Pasaje vacío']);
+    comprueba('las cifras: 2 pendientes, 75 % en amarillo, 8, 6, 2 y 2',
+      [await pagina.$$eval('#kpis .kpi .vl', x => x.map(e => e.textContent.trim())),
+       await pagina.$eval('#kpis .kpi:nth-child(2)', k => k.classList.contains('amarillo'))],
+      [['2', '75 %', '8', '6', '2', '2'], true]);
+    comprueba('las dos delegaciones', await pagina.$$eval('#tDeleg tbody tr', x => x.map(t => t.dataset.d)),
+      ['Madrid - Leganes', 'Andalucía - Málaga']);
+    comprueba('las tres rutas, con el nombre escapado', await pagina.locator('#tRutas tbody tr').count(), 3);
+    comprueba_que('sin colar HTML del nombre', (await pagina.textContent('#tRutas')).includes('Ruta Getafe <Airbus>'));
+    comprueba('la matriz: Getafe 2 hechas, 2 pendientes, 2 fuera, 6 en total',
+      await pagina.$$eval('#tRutas tbody tr', x => {
+        const t = x.find(r => r.textContent.includes('Getafe'));
+        return [...t.querySelectorAll('td.n')].slice(0, 4).map(c => c.textContent.trim()); }),
+      ['2', '2', '2', '6']);
+    comprueba('el donut con los tres estados', await pagina.locator('#dona svg circle').count(), 3);
+    comprueba('maquinas no visitadas: las dos de Getafe', await pagina.locator('#tPdv tbody tr').count(), 2);
+    comprueba_que('con matricula y ubicacion', (await pagina.textContent('#tPdv')).includes('19FP1530')
+      && (await pagina.textContent('#tPdv')).includes('Planta 8'));
+    await pagina.click('#tRutas tbody tr[data-r$="Ruta Leganés"]');
+    comprueba('al pulsar una ruta, todo se filtra a ella',
+      [await pagina.inputValue('#deleg'), await pagina.locator('#tRutas tbody tr').count(),
+       (await pagina.textContent('#kpis .kpi:nth-child(2) .vl')).trim(),
+       (await pagina.textContent('#tPdv')).includes('Ninguna')],
+      ['Madrid - Leganes', 1, '100 %', true]);
+    await pagina.selectOption('#ruta', '');
+    await pagina.click('#tDeleg tbody tr[data-d="Andalucía - Málaga"]');
+    comprueba('al pulsar una delegacion, se filtra todo',
+      [await pagina.inputValue('#deleg'), await pagina.locator('#tRutas tbody tr').count(),
+       (await pagina.textContent('#tPdv')).includes('Ninguna')], ['Andalucía - Málaga', 1, true]);
+    await pagina.click('#tDeleg tbody tr[data-d="Andalucía - Málaga"]');
+    comprueba('y al volver a pulsarla, todas', await pagina.inputValue('#deleg'), '');
+    await pagina.click('#pestanas button[data-p="vacio"]');
+    comprueba('pasaje vacio: las dos, resaltadas', await pagina.locator('#tPdv tbody tr.vacio').count(), 2);
+    await pagina.click('#pestanas button[data-p="fuera"]');
+    comprueba_que('fuera de plan, con el reponedor', (await pagina.textContent('#tPdv')).includes('Ana Pérez'));
+    await pagina.fill('#busca', 'consum');
+    comprueba('el buscador', await pagina.locator('#tPdv tbody tr').count(), 1);
+    const [descarga] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bCsv')]);
+    comprueba('el CSV', descarga.suggestedFilename(), `rutas_fuera_${iso(AYER)}.csv`);
+    comprueba_que('el control de festivos marca el festivo con visitas de dia normal',
+      (await pagina.textContent('#tFest')).includes('Visitas de día normal')
+      && (await pagina.textContent('#tFest')).includes('sin descontar'));
+    await pagina.selectOption('#dia', HACE3);
+    comprueba_que('un festivo lo dice arriba', !(await pagina.$eval('#festivoDia', n => n.hidden))
+      && (await pagina.textContent('#festivoDia')).includes('festivo nacional'));
+    await pagina.fill('#busca', '');
+    await pagina.click('#pestanas button[data-p="hechas"]');
+    comprueba_que('y de un dia calculado antes, sin hechas en la lista, lo dice',
+      (await pagina.textContent('#tPdv')).includes('antes de que la lista'));
+    comprueba('sin pasaje vacio en ese dia, sin dato y no un cero',
+      (await pagina.textContent('#kpis .kpi:nth-child(6) .vl')).trim(), 'Sin dato');
+    await pagina.setViewportSize({ width: 380, height: 800 });
+    comprueba('en movil no se sale de la pantalla',
+      await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await pagina.emulateMedia({ colorScheme: 'dark' });
+    comprueba_que('en oscuro el fondo es oscuro',
+      (await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(18, 18, 17)');
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
