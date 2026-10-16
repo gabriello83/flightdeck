@@ -16,6 +16,8 @@ import sys
 
 AQUI = __file__.rsplit("/", 1)[0]
 sys.path.insert(0, AQUI)
+# telemetria.py esta en infra/: va en el zip de la API y en el de los agregados.
+sys.path.insert(1, AQUI.rsplit("/", 1)[0])
 
 import falsos  # noqa: E402
 
@@ -503,11 +505,76 @@ comprueba("y el fichero es el de su perfil, aunque pida otro",
           cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA,
                           query={"perfil": "interno"}))["ultimo_dia"], "2026-10-12")
 o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_JEFE))
-comprueba("el administrador ve los ocho", len(o["cuadrados"]), 8)
+comprueba("el administrador ve los nueve, tarifas la ultima", (len(o["cuadrados"]), o["cuadrados"][-1]),
+          (9, "tarifas"))
 comprueba("almacenes incluido", o["foto"]["almacenes"]["valor"], 500000.0)
 del falsos.OBJETOS["cabina/ope-sur/operativo.json"]
 comprueba("sin calcular todavia, 503",
           llama("GET", "/api/operativo", cookie=COOKIE_OLGA)["statusCode"], 503)
+
+print("\nTarifas (docs/52): el resumen del perfil, y un centro solo si es suyo")
+import gzip as _gz  # noqa: E402
+_res = {"total": {"pct": 80.0}, "delegaciones": [{"delegacion": "Sevilla", "centros": [
+    {"num_centro": "500092", "centro": "AIRBUS SAN PABLO SUR"}]}]}
+falsos.OBJETOS["cabina/interno/tarifas/resumen.json.gz"] = _gz.compress(json.dumps(_res).encode())
+falsos.OBJETOS["cabina/interno/tarifas/centros/500092.json.gz"] = _gz.compress(
+    json.dumps({"num_centro": "500092", "filas": [1, 2]}).encode())
+falsos.OBJETOS["cabina/interno/tarifas/centros/600.json.gz"] = _gz.compress(
+    json.dumps({"num_centro": "600", "filas": [9]}).encode())   # uno viejo que ya no cita
+comprueba("un cliente no lo tiene", llama("GET", "/api/tarifas", cookie=COOKIE_ANA)["statusCode"], 403)
+comprueba("operaciones sin la sesion de instalaciones tampoco",
+          llama("GET", "/api/tarifas", cookie=COOKIE_OLGA)["statusCode"], 403)
+comprueba("el administrador, su resumen",
+          cuerpo_de(llama("GET", "/api/tarifas", cookie=COOKIE_JEFE))["total"]["pct"], 80.0)
+comprueba("y un centro que su resumen cita",
+          cuerpo_de(llama("GET", "/api/tarifas", cookie=COOKIE_JEFE, query={"centro": "500092"}))["filas"], [1, 2])
+comprueba("un centro que el resumen de esta noche no cita, no (aunque el fichero exista)",
+          llama("GET", "/api/tarifas", cookie=COOKIE_JEFE, query={"centro": "600"})["statusCode"], 400)
+comprueba("nada de rutas con barras",
+          llama("GET", "/api/tarifas", cookie=COOKIE_JEFE, query={"centro": "../ope-sur/x"})["statusCode"], 400)
+del falsos.OBJETOS["cabina/interno/tarifas/resumen.json.gz"]
+comprueba("sin calcular todavia, 503 con el motivo",
+          "M10 · EXT_MAESTRO_TARIFAS" in cuerpo_de(llama("GET", "/api/tarifas", cookie=COOKIE_JEFE))["error"], True)
+
+print("\nLos ficheros de telemetria de la consola (docs/53)")
+import base64 as _b64  # noqa: E402
+_nebula = ("\ufeff,Nombre,Dispositivo,Id telemetría,Nombre cliente,Última venta\n"
+           ",15FE1566,CUNI-1,abc,APPLE,2026-10-14 13:17:37.000\n"
+           ",SIN MATRICULA,CUNI-2,def,APPLE,\n").encode("utf-8")
+_sube = {"nombre": "devices_20261014.csv", "contenido": _b64.b64encode(_nebula).decode()}
+comprueba("solo el administrador sube ficheros",
+          llama("POST", "/api/admin/telemetria", _sube, cookie=COOKIE_OLGA)["statusCode"], 403)
+_r = llama("POST", "/api/admin/telemetria", _sube, cookie=COOKIE_JEFE)
+comprueba("se reconoce por sus columnas, no por el nombre", cuerpo_de(_r).get("tipo"), "nebula")
+_act = json.loads(falsos.OBJETOS["externo/telemetria/nebula/actual.json"])
+comprueba("lo leido queda para la noche, con su matricula", [f["mat"] for f in _act["filas"]],
+          ["15FE1566", ""])
+comprueba("y el original, tal cual",
+          [v for k, v in falsos.OBJETOS.items() if k.startswith("externo/telemetria/nebula/originales/")],
+          [_nebula])
+comprueba("la consola lo lista con quien lo subio",
+          cuerpo_de(llama("GET", "/api/admin/telemetria", cookie=COOKIE_JEFE))["ficheros"]["nebula"]["por"],
+          "jefe@serunion.es")
+_malo = llama("POST", "/api/admin/telemetria",
+              {"nombre": "x.csv", "contenido": _b64.b64encode(b"a;b;c\n1;2;3\n").decode()},
+              cookie=COOKIE_JEFE)
+comprueba("un fichero que no es de ningun sistema: 400", _malo["statusCode"], 400)
+comprueba("y dice que columnas ha leido", "Columnas leídas: a, b, c" in cuerpo_de(_malo)["error"], True)
+comprueba("sin escribir nada",
+          sorted(k.split("/")[2] for k in falsos.OBJETOS if k.endswith("actual.json")), ["nebula"])
+
+falsos.OBJETOS["cabina/interno/telemetria.json"] = json.dumps({"maquinas": [{"matricula": "A1"}]}).encode()
+falsos.OBJETOS["cabina/ope-sur/telemetria.json"] = json.dumps({"maquinas": []}).encode()
+comprueba("un cliente no ve la pagina de telemetria",
+          llama("GET", "/api/telemetria", cookie=COOKIE_ANA)["statusCode"], 403)
+comprueba("operaciones sin instalaciones tampoco: no ve el cuadrado",
+          llama("GET", "/api/telemetria", cookie=COOKIE_OLGA)["statusCode"], 403)
+comprueba("el administrador, la de su perfil",
+          cuerpo_de(llama("GET", "/api/telemetria", cookie=COOKIE_JEFE,
+                          query={"perfil": "ope-sur"}))["maquinas"], [{"matricula": "A1"}])
+del falsos.OBJETOS["cabina/interno/telemetria.json"]
+comprueba("sin cruce todavia, 503",
+          llama("GET", "/api/telemetria", cookie=COOKIE_JEFE)["statusCode"], 503)
 
 print("\nLos almacenes por dentro (docs/54): solo quien ve su cuadrado")
 _alm = {"umbral_pct": 15, "almacenes": [{"almacen": "Sevilla", "productos": [

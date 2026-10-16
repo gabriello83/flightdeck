@@ -141,7 +141,7 @@ const API = {
   // infra/operativo.py ya recortada por la API: un dia con todo y uno sin plan.
   '/api/operativo': {
     generado: new Date().toISOString(), ultimo_dia: iso(AYER), umbrales: { verde: 95, amarillo: 75 },
-    cuadrados: ['rutas', 'averias', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria'],
+    cuadrados: ['rutas', 'averias', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas'],
     dias: {
       [iso(AYER)]: {
         rutas: { previstas: 400, hechas: 350, pct: 87.5, color: 'amarillo', visitas: 1100, fuera_de_plan: 12 },
@@ -160,7 +160,9 @@ const API = {
         telemetria: { auditables: 2253, con_dex: 900, pct: 39.9, color: 'rojo' }
       }
     },
-    foto: { pdvs: { activos: 3195, maquinas: 3165 }, almacenes: { valor: 502429.74, periodo: '2026-09', por_almacen: [{ almacen: 'A', delegacion: '', valor: 1 }] } }
+    foto: { pdvs: { activos: 3195, maquinas: 3165 },
+            tarifas: { pct: 81.3, color: 'amarillo', coinciden: 13, controlados: 16, sin_tarifa: 2, sin_dato_productos: 1, desde: '2026-04-14' },
+            almacenes: { valor: 502429.74, periodo: '2026-09', por_almacen: [{ almacen: 'A', delegacion: '', valor: 1 }] } }
   },
   // Los almacenes por dentro (docs/54), con la forma que escribe infra/almacenes.py.
   '/api/almacenes': {
@@ -196,7 +198,69 @@ const API = {
   },
   '/api/admin/config': { asistente_global: true, limite_preguntas_dia: 40, umbral_rentabilidad_mes: 350 },
   '/api/admin/telefonos': { telefonos: [] },
-  '/api/admin/cola': { cola: [] }
+  '/api/admin/cola': { cola: [] },
+  // Los ficheros de telemetria de la consola y su cruce (docs/53), con la forma
+  // que escriben lambda_api.py y operativo.detalle_telemetria.
+  '/api/admin/telemetria': {
+    ficheros: { nayax: { _id: 'nayax', tipo: 'nayax', nombre: 'MachineStatus.xlsx', subido: new Date().toISOString(),
+                         por: 'g@serunion.es', resumen: { filas: 2301, con_matricula: 2252, exportado: iso(HOY) } } },
+    tipos: { nayax: 'Nayax', prodelfi: 'Prodelfi', nebula: 'Nebula (Coges)', grupos: 'Grupos de Prodelfi' }
+  },
+  '/api/telemetria': {
+    generado: new Date().toISOString(), perfil: 'interno', ultimo_dia: iso(AYER),
+    dias: {
+      [iso(new Date(HOY.getTime() - 3 * 86400000))]: { venta: ['20SE0003'], dex: ['20SE0003'] },
+      [iso(AYER)]: { venta: ['20SE0001', '20SE0002', '18CE4507'], dex: ['20SE0001'] }
+    },
+    ficheros: { ficheros: { nayax: { nombre: 'MachineStatus.xlsx', subido: new Date().toISOString(), resumen: { exportado: iso(HOY) } },
+                            prodelfi: { nombre: 'Maquinas 1.xlsx', subido: new Date().toISOString(), resumen: {} } },
+                faltan: ['nebula', 'grupos'] },
+    maquinas: [
+      { matricula: '20SE0001', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P1', ubicacion: 'Hall', vencloud: true, nayax: { id: '20SE0001', ultima: `${iso(HOY)}T10:00:00` } },
+      { matricula: '20SE0002', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P2', ubicacion: 'Planta 1', vencloud: true, nayax: { id: '20SE0002', ultima: `${iso(HOY)}T09:00:00` } },
+      { matricula: '20SE0003', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P3', ubicacion: 'Urgencias', vencloud: false, nayax: { id: '20SE0003', ultima: '2026-10-01T09:00:00' } },
+      { matricula: '18CE4507', sistema: 'prodelfi', tambien: ['nayax'], delegacion: 'Madrid', cliente: 'RTVE', num_centro: 200, centro: 'TORRESPAÑA', cod_pdv: 'P4', ubicacion: 'Planta 2', vencloud: true, prodelfi: { codigo: 4, grupo: 138, descripcion: 'CE4507 Torrespaña', como: 'tipo y número CE4507' }, nayax: { id: '18CE4507', ultima: '2026-10-01T09:00:00' } },
+      { matricula: '24SE0777', sistema: 'solo_vencloud', tambien: [], vencloud: true, delegacion: 'Andalucía', cliente: 'AIRBUS', num_centro: 300, centro: 'SAN PABLO SUR', cod_pdv: 'P5', ubicacion: 'Comedor' }
+    ],
+    fuera: [{ sistema: 'nayax', id: '99XX9999', nombre: 'FANTASMA', detalle: 'Serunion / Sur', ultima: `${iso(HOY)}T10:00:00`, motivo: 'La matrícula 99XX9999 no está instalada en VenCloud.' }]
+  }
+};
+
+// Tarifas (docs/52), con la forma que escribe infra/tarifas.py: dos
+// delegaciones, y en Cadiz un centro con un precio distinto y uno sin tarifa.
+const CENTRO_TARIFAS = {
+  num_centro: '114001', centro: 'HOSPITAL DE JEREZ', cliente: 'SERUNION, SA', cod_cliente: '10002',
+  delegacion: 'Andalucía - Cádiz',
+  filas: [
+    { matricula: '22SE1877', cod_pdv: 'S00741', ubicacion: 'Planta 2', cod_articulo: '9354', articulo: 'COCA COLA LATA 33CL',
+      ultima_carga: '2026-10-10', nivel: 'estandar', asignada: 'cliente', origen: 'tarifa', tarifa: 'ESTANDAR 2024', cambio_tarifa: '2026-01-02', desde: '2026-04-14',
+      medios: { ef: { tarifa: 1.2, venta: { precio: 1.3, fecha: '2026-10-13', fuente: 'telemetria' }, ok: false },
+                tc: { tarifa: 1.2, venta: { precio: 1.2, fecha: '2026-10-13', fuente: 'telemetria' }, ok: true } },
+      estado: 'no_coincide' },
+    { matricula: '22SE1877', cod_pdv: 'S00741', ubicacion: 'Planta 2', cod_articulo: '102411', articulo: 'ÑAMING ENSALADA <MIXTA> & CO',
+      ultima_carga: '2026-10-01', nivel: null, origen: null, tarifa: '', cambio_tarifa: '', desde: '2026-04-14',
+      medios: { ef: { venta: { precio: 2.3, fecha: '2026-10-12', fuente: 'audit' } } }, estado: 'sin_tarifa' },
+    { matricula: '22SE1878', cod_pdv: 'S00742', ubicacion: '', subvencion: true, cod_articulo: '5322', articulo: 'AGUA 50CL',
+      ultima_carga: '2026-09-20', nivel: 'centro', origen: 'productos', tarifa: '', cambio_tarifa: '2026-10-05', desde: '2026-10-05',
+      medios: { ef: { tarifa: 0.9 } }, estado: 'sin_dato' },
+    { matricula: '22SE1878', cod_pdv: 'S00742', ubicacion: '', cod_articulo: '9355', articulo: 'FANTA',
+      ultima_carga: '2026-09-20', nivel: 'estandar', asignada: 'cliente', origen: 'tarifa', tarifa: 'ESTANDAR 2024', cambio_tarifa: '2026-01-02', desde: '2026-04-14',
+      medios: { ef: { tarifa: 1.2, venta: { precio: 1.2, fecha: '2026-10-11', fuente: 'telemetria' }, ok: true } }, estado: 'coincide' }
+  ]
+};
+const RESUMEN_TARIFAS = {
+  generado: new Date().toISOString(), desde: '2026-04-14', dias: 183,
+  total: { coincide: 13, no_coincide: 3, sin_tarifa: 2, sin_dato: 1, controlados: 16, pct: 81.3 },
+  subvencion: 'Los puntos de venta con subvención en vigor van marcados.',
+  delegaciones: [
+    { delegacion: 'Andalucía - Cádiz', coincide: 1, no_coincide: 1, sin_tarifa: 1, sin_dato: 1, controlados: 2, pct: 50, color: 'rojo',
+      centros: [{ num_centro: '114001', centro: 'HOSPITAL DE JEREZ', cliente: 'SERUNION, SA', cod_cliente: '10002', maquinas: 2,
+        nivel: 'estandar', niveles: { estandar: 2, centro: 1 }, tarifas: [{ tarifa: 'ESTANDAR 2024 (asignada al cliente)', maquinas: 2 }],
+        coincide: 1, no_coincide: 1, sin_tarifa: 1, sin_dato: 1, controlados: 2, pct: 50, color: 'rojo' }] },
+    { delegacion: 'Madrid - Leganés', coincide: 12, no_coincide: 2, sin_tarifa: 1, sin_dato: 0, controlados: 14, pct: 85.7, color: 'amarillo',
+      centros: [{ num_centro: '500', centro: 'CENTRO 500', cliente: 'CLIENTE', cod_cliente: '1', maquinas: 5,
+        nivel: 'pdv', niveles: { pdv: 15 }, tarifas: [], coincide: 12, no_coincide: 2, sin_tarifa: 1, sin_dato: 0, controlados: 14, pct: 85.7, color: 'amarillo' }] }
+  ]
 };
 
 // El cuadro: el indice y un fichero por mes, con la forma que escribe cuadro.py.
@@ -277,6 +341,12 @@ const servidor = http.createServer((pet, res) => {
       // Un PNG de un pixel: lo que importa es que la pagina la pide aqui.
       res.writeHead(200, { 'content-type': 'image/png' });
       return res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'));
+    }
+    if (u.pathname === '/api/tarifas') {
+      const c = u.searchParams.get('centro');
+      if (c === null) return json(RESUMEN_TARIFAS);
+      if (c !== CENTRO_TARIFAS.num_centro) { res.writeHead(400); return res.end('{"error":"Ese centro no está en las tarifas de este perfil."}'); }
+      return json(CENTRO_TARIFAS);
     }
     if (API[u.pathname]) return json(API[u.pathname]);
     res.writeHead(404); return res.end('{"error":"no existe"}');
@@ -612,9 +682,14 @@ const servidor = http.createServer((pet, res) => {
     const { pagina, errores, fuera } = await abre('/operativo/');
     await pagina.waitForSelector('#cuadros .cuadro');
     comprueba('arranca en ayer', await pagina.inputValue('#dia'), iso(AYER));
-    comprueba('los ocho cuadrados, en su orden',
+    comprueba('los nueve cuadrados, en su orden',
       await pagina.$$eval('#cuadros .cuadro', x => x.map(c => c.dataset.id)),
-      ['rutas', 'averias', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria']);
+      ['rutas', 'averias', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas']);
+    comprueba('tarifas al 81,3 % en amarillo y lleva a su pagina',
+      [await pagina.$eval('.cuadro[data-id="tarifas"]', c => c.classList.contains('amarillo')),
+       await pagina.getAttribute('.cuadro[data-id="tarifas"]', 'href')], [true, '/tarifas/']);
+    comprueba_que('y dice cuantos productos cobran su tarifa',
+      (await pagina.textContent('.cuadro[data-id="tarifas"]')).includes('13 de 16 productos'));
     comprueba('el semaforo: rutas al 87,5 % en amarillo, averias en rojo, telemetria en verde',
       await pagina.$$eval('#cuadros .cuadro', x => x.filter(c => ['rutas', 'averias', 'telemetria'].includes(c.dataset.id))
         .map(c => ['verde', 'amarillo', 'rojo'].find(k => c.classList.contains(k)))),
@@ -639,6 +714,112 @@ const servidor = http.createServer((pet, res) => {
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nTarifas: delegaciones, centros, productos y el Excel del centro');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre('/tarifas/');
+    await pagina.waitForSelector('#cuadros .cuadro');
+    comprueba('un cuadrado por delegacion, con su semaforo',
+      await pagina.$$eval('#cuadros .cuadro', x => x.map(c => [c.dataset.deleg, ['verde', 'amarillo', 'rojo'].find(k => c.classList.contains(k))])),
+      [['Andalucía - Cádiz', 'rojo'], ['Madrid - Leganés', 'amarillo']]);
+    comprueba_que('el total arriba', (await pagina.textContent('.cifra')).includes('81,3'));
+    await pagina.click('#cuadros .cuadro[data-deleg="Andalucía - Cádiz"]');
+    await pagina.waitForSelector('table .pct');
+    comprueba('al pulsar la delegacion, sus centros', await pagina.$$eval('tbody tr td b', x => x.map(b => b.textContent)).then(x => x[0]), 'HOSPITAL DE JEREZ');
+    comprueba_que('con el nivel de sus tarifas', (await pagina.textContent('tbody')).includes('Estándar'));
+    await pagina.click('table .pct');
+    await pagina.waitForSelector('#filas tr');
+    comprueba_que('pide el centro al servidor', pedidos.includes('/api/tarifas?centro=114001'));
+    comprueba('arranca en las incidencias: precio distinto y sin tarifa',
+      await pagina.$$eval('#filas .etq', x => x.map(e => e.className.split(' ')[1])), ['no_coincide', 'sin_tarifa']);
+    comprueba_que('el precio cobrado distinto sale marcado', (await pagina.textContent('#filas .precios .mal')).includes('1,30'));
+    comprueba_que('el nombre del articulo va escapado', (await pagina.innerHTML('#filas')).includes('&lt;MIXTA&gt;'));
+    await pagina.click('.filtros button[data-f="todos"]');
+    comprueba('en «Todos», los cuatro', await pagina.locator('#filas tr').count(), 4);
+    const [descarga] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('el Excel lleva el centro en el nombre', /^tarifas_114001_HOSPITAL_DE_JEREZ_\d{4}-\d\d-\d\d\.xlsx$/.test(descarga.suggestedFilename()), descarga.suggestedFilename());
+    const bytes = fs.readFileSync(await descarga.path());
+    const texto = bytes.toString('utf8');
+    comprueba('es un zip', bytes.slice(0, 4).toString('hex'), '504b0304');
+    comprueba_que('con sus cuatro hojas', ['Resumen', 'Precio distinto', 'Sin tarifa', 'Sin venta electrónica'].every(h => texto.includes(`name="${h}"`)));
+    comprueba_que('la incidencia de precio: 1,20 de tarifa y 1,30 cobrado', texto.includes('<v>1.2</v>') && texto.includes('<v>1.3</v>'));
+    comprueba_que('el producto sin tarifa, con lo que cobra hoy', texto.includes('<v>2.3</v>'));
+    comprueba_que('y el texto escapado dentro del XML', texto.includes('ÑAMING ENSALADA &lt;MIXTA&gt; &amp; CO'));
+    await pagina.goBack();
+    await pagina.waitForSelector('table .pct');
+    comprueba_que('volver atras vuelve a la delegacion', (await pagina.textContent('nav.miga')).includes('Andalucía - Cádiz'));
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nLa telemetria cruzada con los ficheros (docs/53)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno',
+      sesiones: ['resumen', 'instalaciones'], catalogo_sesiones: { resumen: 'Resumen', instalaciones: 'Instalaciones y altas' } };
+    const op = API['/api/operativo'];
+    const antes = JSON.stringify(op);
+    // El dato sigue siendo el de VenCloud; los ficheros solo anaden las diferencias.
+    op.dias[iso(AYER)].telemetria = { auditables: 2254, con_dex: 975, pct: 43.3, color: 'rojo',
+      diferencias: { en_sistemas: 2504, sin_marca: 300, solo_vencloud: 20, fuera: 218 } };
+    op.foto.telemetria = { ficheros: { nayax: { nombre: 'MachineStatus.xlsx' } }, faltan: [] };
+    const { pagina, errores, fuera } = await abre('/operativo/');
+    await pagina.waitForSelector('.cuadro[data-id="telemetria"]');
+    comprueba('el cuadrado sigue con el DEX de VenCloud, en rojo',
+      [(await pagina.textContent('.cuadro[data-id="telemetria"] .vl')).trim(),
+       await pagina.$eval('.cuadro[data-id="telemetria"]', c => c.classList.contains('rojo'))], ['43,3 %', true]);
+    const sub = await pagina.textContent('.cuadro[data-id="telemetria"] .sub');
+    comprueba_que('y debajo las diferencias con los ficheros',
+      sub.includes('975 de 2254') && sub.includes('538 diferencias con Nayax, Prodelfi y Nebula'));
+    comprueba('lleva a la pagina de telemetria, con el dia',
+      await pagina.getAttribute('.cuadro[data-id="telemetria"]', 'href'), `/telemetria/?dia=${iso(AYER)}`);
+    await Promise.all([pagina.waitForURL('**/telemetria/**'), pagina.click('.cuadro[data-id="telemetria"]')]);
+    await pagina.waitForSelector('#tabla table');
+    comprueba('pestañas: Nayax, Prodelfi, solo en VenCloud y las que no estan en VenCloud',
+      await pagina.$$eval('#pestanas button', x => x.map(b => b.dataset.p)), ['nayax', 'prodelfi', 'solo_vencloud', 'fuera']);
+    comprueba('Nayax: las que tienen alguna diferencia ayer',
+      await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(t => t.textContent.trim())), ['20SE0002', '20SE0003']);
+    comprueba_que('con el ultimo dia que si mando', (await pagina.textContent('#tabla tbody tr:nth-child(2)')).match(/\d+ \w+/));
+    comprueba_que('y dice que fichero falta', (await pagina.textContent('#ficheros')).includes('Falta Nebula (Coges), Grupos de Prodelfi'));
+    await pagina.selectOption('#filtro', 'sin_marca');
+    comprueba('sin telemetria en VenCloud: la que Nayax tiene y VenCloud no marca',
+      await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(t => t.textContent.trim())), ['20SE0003']);
+    await pagina.selectOption('#filtro', 'todas');
+    comprueba('todas: las tres', await pagina.locator('#tabla tbody tr').count(), 3);
+    await pagina.fill('#busca', 'urgencias');
+    comprueba('el buscador', await pagina.locator('#tabla tbody tr').count(), 1);
+    await pagina.fill('#busca', '');
+    await pagina.click('#pestanas button[data-p="fuera"]');
+    comprueba_que('las de Nayax que no estan en VenCloud, con el motivo',
+      (await pagina.textContent('#tabla')).includes('no está instalada en VenCloud'));
+    const [descarga] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bCsv')]);
+    comprueba('el CSV de la pestaña', descarga.suggestedFilename(), `telemetria_fuera_${iso(AYER)}.csv`);
+    await pagina.setViewportSize({ width: 380, height: 800 });
+    await pagina.click('#pestanas button[data-p="nayax"]');
+    comprueba('en movil no se sale de la pantalla',
+      await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await pagina.emulateMedia({ colorScheme: 'dark' });
+    comprueba_que('en oscuro el fondo es oscuro',
+      (await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(18, 18, 17)');
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+
+    const c = await abre('/consola/');
+    await c.pagina.waitForSelector('#pestanas button[data-s="telemetria"]');
+    await c.pagina.click('#pestanas button[data-s="telemetria"]');
+    await c.pagina.waitForSelector('#bTele');
+    comprueba_que('la consola dice que fichero hay y cuales faltan',
+      (await c.pagina.textContent('#vista')).includes('MachineStatus.xlsx')
+      && (await c.pagina.textContent('#vista')).includes('Falta: Prodelfi, Nebula (Coges), Grupos de Prodelfi'));
+    comprueba('ni una peticion fuera del dominio', c.fuera, []);
+    comprueba('sin un solo error en la consola del navegador', c.errores, []);
+    await c.pagina.close();
+    Object.assign(op, JSON.parse(antes));
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 

@@ -30,6 +30,7 @@ import boto3
 
 import autorizacion as A
 import catalogo as CAT
+import telemetria as TE
 from comun import (abre_sesion, borra, cierra_sesion, config, cookie_sesion,
                    cuerpo, escribe, lee, lista, panel_de, quien_es, r, s3, BUCKET)
 
@@ -37,6 +38,13 @@ cog = boto3.client("cognito-idp")
 
 POOL = os.environ.get("POOL", "")
 CLIENTE = os.environ.get("CLIENTE_POOL", "")
+# Los ficheros de telemetria que se suben desde la consola (docs/53). Es el UNICO
+# sitio del bucket de datos en el que esta Lambda escribe.
+EXTERNO = "externo/telemetria"
+# Un listado de maquinas son cientos de KB. En base64 crece un tercio, y la
+# peticion entera no puede pasar de los 6 MB que acepta una Lambda.
+MAX_FICHERO = 3 * 1024 * 1024
+
 INTENTOS_MAX = int(os.environ.get("INTENTOS_MAX", "6"))
 MINUTOS_BLOQUEO = int(os.environ.get("MINUTOS_BLOQUEO", "15"))
 
@@ -166,6 +174,30 @@ def encamina(evento, metodo, ruta):
             return r(503, {"error": "El informe operativo todavia no se ha calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
         return r(200, A.recorta_operativo(datos, perfil))
+
+    # Tarifas contra venta real (docs/52): el resumen del perfil, o un centro.
+    # El centro no abre la puerta a otro perfil: el fichero se busca DENTRO del
+    # perfil de la sesion, y solo si su resumen de esta noche lo cita.
+    if ruta == "/api/tarifas" and metodo == "GET":
+        if "tarifas" not in A.cuadrados_de(perfil) or \
+                A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
+            raise PermissionError("Este perfil no tiene el cuadrado de tarifas.")
+        q = evento.get("queryStringParameters") or {}
+        return tarifas(perfil, q.get("centro") if "centro" in q else None)
+
+    # La pagina de telemetria (docs/53): maquina a maquina, de las del perfil.
+    # La misma regla que el cuadrado que lleva a ella: si no lo ve, no la ve.
+    if ruta == "/api/telemetria" and metodo == "GET":
+        if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
+            raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
+        if "telemetria" not in A.cuadrados_de(perfil):
+            raise PermissionError("Este perfil no ve la telemetría.")
+        try:
+            return _como_json(_crudo(f"cabina/{perfil.get('perfil_id', '')}/telemetria.json"))
+        except Exception:
+            return r(503, {"error": "Todavía no hay cruce de telemetría: sube los ficheros de "
+                                    "Nayax, Prodelfi y Nebula en la consola y espera a la noche.",
+                           "_nota": "Lo escriben los agregados cada noche (4:45)."})
 
     # Los almacenes por dentro (docs/54): el fichero del perfil, y la foto de un
     # producto. Quien ve el cuadrado de almacenes ve la pagina; la foto solo si
@@ -356,6 +388,24 @@ def serie(perfil, mes=None):
     datos = json.loads(_crudo(f"{base}{mes}.json.gz"))
     return r(200, {"mes": mes,
                    "filas": [A.recorta_dia(f, perfil) for f in datos.get("filas", [])]})
+
+
+def tarifas(perfil, centro=None):
+    """El resumen de tarifas del perfil de la sesion, o el detalle de un centro."""
+    base = f"cabina/{perfil.get('perfil_id', '')}/tarifas/"
+    try:
+        resumen = _crudo(base + "resumen.json.gz")
+    except Exception:
+        return r(503, {"error": "Las tarifas todavía no se han calculado: falta el maestro "
+                                "de tarifas (M10 · EXT_MAESTRO_TARIFAS) o la carga de esta noche.",
+                       "_nota": "Lo escriben los agregados cada noche (4:45)."})
+    if centro is None:
+        return _como_json(resumen)
+    citados = {str(c.get("num_centro")) for d in json.loads(resumen).get("delegaciones", [])
+               for c in d.get("centros", [])}
+    if not str(centro).isdigit() or str(centro) not in citados:
+        raise ValueError("Ese centro no está en las tarifas de este perfil.")
+    return _como_json(_crudo(f"{base}centros/{centro}.json.gz"))
 
 
 CODIGO_ARTICULO = re.compile(r"[A-Za-z0-9._-]{1,40}")
@@ -747,7 +797,61 @@ def administra(evento, metodo, ruta, admin):
         borra("TELEFONO#" + resto.split("/", 1)[1])
         return r(200, {"ok": True})
 
+    if resto == "telemetria" and metodo == "GET":
+        return r(200, {"ficheros": {f["_id"]: f for f in lista("TELEMETRIA#")},
+                       "tipos": {t: TE.NOMBRE[t] for t in TE.TIPOS}})
+
+    if resto == "telemetria" and metodo == "POST":
+        return sube_telemetria(d, admin)
+
     if resto == "cola" and metodo == "GET":
         return r(200, {"cola": lista("COLA#")[-100:]})
 
     return r(404, {"error": "No existe esa ruta de administracion."})
+
+
+# ----------------------------------------------------------------------
+# los ficheros de telemetria (docs/53)
+# ----------------------------------------------------------------------
+def sube_telemetria(d, admin):
+    """Un fichero de Nayax, Prodelfi, Nebula o grupos, subido desde la consola.
+
+    Se lee AQUI, al subirlo, y no de noche: si no es el fichero que tiene que
+    ser, quien lo sube se entera en el acto y con el motivo, no a la manana
+    siguiente con un cuadrado vacio. Se guarda el original tal cual (para poder
+    volver a leerlo si cambian las reglas) y lo leido, que es lo que usa la
+    noche. El ultimo de cada sistema sustituye al anterior.
+    """
+    import base64
+    import re as _re
+
+    nombre = str(d.get("nombre", "")).strip()[:120] or "fichero"
+    try:
+        datos = base64.b64decode(str(d.get("contenido", "")), validate=True)
+    except Exception:
+        raise ValueError("El fichero no ha llegado bien. Vuelve a subirlo.")
+    if len(datos) > MAX_FICHERO:
+        raise ValueError(f"El fichero pasa de {MAX_FICHERO // 1048576} MB.")
+    try:
+        tipo, filas, resumen = TE.lee(datos)
+    except TE.FicheroNoValido as e:
+        raise ValueError(str(e))
+    except Exception as e:  # noqa: BLE001
+        print(f"ERROR leyendo {nombre}: {type(e).__name__}: {e}")
+        raise ValueError("No se ha podido leer el fichero. ¿Es el .xlsx, .xls o .csv tal cual "
+                         "sale del sistema?")
+    ahora = datetime.datetime.utcnow().replace(microsecond=0)
+    sello = ahora.strftime("%Y%m%dT%H%M%S")
+    limpio = _re.sub(r"[^A-Za-z0-9._-]+", "_", nombre)[-80:]
+    original = f"{EXTERNO}/{tipo}/originales/{sello}-{limpio}"
+    s3.put_object(Bucket=BUCKET, Key=original, Body=datos,
+                  ContentType="application/octet-stream", ServerSideEncryption="AES256")
+    ficha = {"tipo": tipo, "nombre": nombre, "subido": ahora.isoformat() + "Z",
+             "por": admin["correo"], "resumen": resumen, "original": original}
+    s3.put_object(Bucket=BUCKET, Key=f"{EXTERNO}/{tipo}/actual.json",
+                  Body=json.dumps(dict(ficha, filas=filas), ensure_ascii=False,
+                                  separators=(",", ":")).encode("utf-8"),
+                  ContentType="application/json", ServerSideEncryption="AES256")
+    escribe(f"TELEMETRIA#{tipo}", ficha)
+    return r(200, {"ok": True, "tipo": tipo, "nombre_tipo": TE.NOMBRE[tipo], "ficha": ficha,
+                   "_nota": "Se cruza con el censo esta noche, con los agregados (4:45)."})

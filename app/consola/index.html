@@ -252,7 +252,7 @@ function avisa(t, bien){
 
 /* ---------- estado ---------- */
 let YO=null, USUARIOS=[], PERFILES=[], SESIONES={}, TECHO={}, NIVELES={}, IMPLICITOS={}, PARTES_CUADRO={},
-    CONFIG={}, TELEFONOS=[], COLA=[], CARGA=null, SECCION="usuarios", guardando=null;
+    CONFIG={}, TELEFONOS=[], COLA=[], CARGA=null, TELE=null, SECCION="usuarios", guardando=null;
 /* El histórico: la serie diaria del perfil de la sesión y lo último que se
    sumó. Se queda en memoria para que volver a esta pestaña no vuelva a pedirlo. */
 let SERIE=null, SELECTOR=null, SUMA=null, RANGO=null, LUGAR={sel:{}, quiere:null, etiqueta:""};
@@ -263,6 +263,7 @@ const SECCIONES = [
   ["plataforma","Plataforma"],
   ["telefonos", "Teléfonos"],
   ["carga",     "Carga"],
+  ["telemetria","Telemetría"],
   ["historico", "Histórico"],
   ["cola",      "Cola de acciones"],
 ];
@@ -952,6 +953,75 @@ function vistaCarga(){
     </tbody></table></div></section>` : ""}`;
 }
 
+/* ================= telemetría (docs/53) =================
+   Los listados de Nayax, Prodelfi y Nebula tal y como salen de cada sistema.
+   La API los lee al subirlos —si no es el fichero que tiene que ser, lo dice en
+   el acto— y la noche los cruza con el censo. El último de cada uno manda. */
+function resumenFichero(tipo, r){
+  if(!r) return "";
+  const f = s => s ? new Date(s+"T00:00:00").toLocaleDateString("es-ES",{day:"numeric",month:"short",year:"numeric"}) : "—";
+  if(tipo==="nayax") return `${num(r.filas)} máquinas · ${num(r.con_matricula)} con matrícula · exportado el ${f(r.exportado)}`;
+  if(tipo==="prodelfi") return `${num(r.filas)} filas · ${num(r.con_comunicacion)} con comunicación · ${num(r.grupos)} grupos`;
+  if(tipo==="nebula") return `${num(r.filas)} dispositivos · ${num(r.con_matricula)} con matrícula · última venta el ${f(r.ultima_venta)}`;
+  return `${num(r.filas)} grupos`;
+}
+const PARA_QUE = {
+  nayax: "MachineStatus de Nayax: el listado completo de máquinas, con la última comunicación.",
+  prodelfi: "Máquinas de Prodelfi. Las «Sin comunicación» no cuentan.",
+  nebula: "devices de Nebula (lectores Coges).",
+  grupos: "RadGridExport de Prodelfi: el código de grupo con el nombre del cliente. Sirve para asociar las descripciones que no traen la matrícula entera.",
+};
+function vistaTelemetria(){
+  if(!TELE) return `<section class="caja"><h2>Ficheros de telemetría</h2>
+    <p class="vacio">No se ha podido leer qué ficheros hay subidos.</p></section>`;
+  const tipos = Object.entries(TELE.tipos||{});
+  const filas = tipos.map(([t,n])=>{
+    const f = (TELE.ficheros||{})[t];
+    return `<tr>
+      <td><b>${esc(n)}</b><br><span class="cond" style="font-family:inherit">${esc(PARA_QUE[t]||"")}</span></td>
+      <td data-et="Último">${f ? `${esc(f.nombre)}<br><span class="cond">${esc(cuando(f.subido))} · ${esc(f.por||"")}</span>`
+                            : `<span class="pill c">sin subir</span>`}</td>
+      <td data-et="Qué trae">${f ? esc(resumenFichero(t, f.resumen)) : ""}</td>
+    </tr>`;
+  }).join("");
+  const faltan = tipos.filter(([t])=>!(TELE.ficheros||{})[t]).map(([,n])=>n);
+  return `<section class="caja">
+    <div class="cabsec"><h2>Ficheros de telemetría</h2>
+      <button class="btn fuerte" type="button" id="bTele">Subir ficheros…</button></div>
+    <p class="sub">Súbelos tal y como salen de cada sistema (.xlsx, .xls o .csv); se reconoce cuál es
+      cada uno por sus columnas. Esta noche se cruzan con las instalaciones de VenCloud y salen en el
+      cuadrado de telemetría del informe general. El último de cada uno sustituye al anterior.</p>
+    <input type="file" id="fTele" accept=".xlsx,.xls,.csv" multiple hidden>
+    <div class="nota" id="teleEstado" hidden></div>
+    ${faltan.length ? `<div class="nota mal">Falta: ${esc(faltan.join(", "))}. Lo que falta no se cruza, y la página de telemetría lo dice.</div>` : ""}
+    <div class="tabla"><table>
+      <thead><tr><th>Sistema</th><th>Último fichero</th><th>Qué trae</th></tr></thead>
+      <tbody>${filas}</tbody></table></div>
+  </section>`;
+}
+function enBase64(buf){
+  const b = new Uint8Array(buf); let s = "";
+  for(let i=0;i<b.length;i+=0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i+0x8000));
+  return btoa(s);
+}
+async function subeTelemetria(ficheros){
+  const estado = $("#teleEstado"), hechos = [], malos = [];
+  for(const f of ficheros){
+    estado.hidden = false; estado.className = "nota"; estado.textContent = `Subiendo ${f.name}…`;
+    try{
+      const r = await api("POST","/api/admin/telemetria",{nombre:f.name, contenido:enBase64(await f.arrayBuffer())});
+      hechos.push(`${r.nombre_tipo}: ${resumenFichero(r.tipo, r.ficha.resumen)}`);
+    }catch(e){ malos.push(`${f.name}: ${e.message}`); }
+  }
+  try{ TELE = await api("GET","/api/admin/telemetria"); }catch(e){}
+  pinta();
+  const est = $("#teleEstado");
+  est.hidden = false;
+  est.className = "nota " + (malos.length ? "mal" : "bien");
+  est.innerHTML = [...hechos.map(esc), ...malos.map(esc)].join("<br>")
+    + (hechos.length ? "<br>Se cruza esta noche con los agregados." : "");
+}
+
 /* ================= histórico =================
    La misma pregunta que se hace desde el panel de cliente —cuánto hubo en este
    tiempo— pero con el ámbito del administrador, que es todo el parque. El dato
@@ -1134,7 +1204,8 @@ function pinta(){
   }));
   const v = $("#vista");
   v.innerHTML = ({usuarios: vistaUsuarios, perfiles: vistaPerfiles, plataforma: vistaPlataforma,
-                  telefonos: vistaTelefonos, carga: vistaCarga, historico: vistaHistorico,
+                  telefonos: vistaTelefonos, carga: vistaCarga, telemetria: vistaTelemetria,
+                  historico: vistaHistorico,
                   cola: vistaCola}[SECCION] || vistaUsuarios)();
   if(SECCION==="historico") montaSelectorHistorico();
 
@@ -1150,6 +1221,10 @@ function pinta(){
     v.querySelectorAll("[data-bo]").forEach(b=>b.addEventListener("click", ()=>borraPerfil(b.dataset.bo)));
   }
   if(SECCION==="plataforma") $("#bGuardaConfig").addEventListener("click", guardaConfig);
+  if(SECCION==="telemetria" && $("#fTele")){
+    $("#bTele").addEventListener("click", ()=>$("#fTele").click());
+    $("#fTele").addEventListener("change", e=>{ const fs=[...e.target.files]; if(fs.length) subeTelemetria(fs); });
+  }
   if(SECCION==="telefonos"){
     $("#bNuevoTel").addEventListener("click", formTelefono);
     v.querySelectorAll("[data-bo]").forEach(b=>b.addEventListener("click", ()=>borraTelefono(b.dataset.bo)));
@@ -1205,6 +1280,7 @@ async function carga(){
      deben impedir que la consola se abra. */
   try{ COLA = (await api("GET","/api/admin/cola")).cola || []; }catch(e){ COLA = []; }
   try{ CARGA = await api("GET","/api/estado-carga"); }catch(e){ CARGA = null; }
+  try{ TELE = await api("GET","/api/admin/telemetria"); }catch(e){ TELE = null; }
   /* El histórico tampoco debe impedir que la consola se abra: recién
      desplegado no existe todavía, y la pestaña lo dice en vez de fallar. */
   try{

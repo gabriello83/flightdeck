@@ -284,6 +284,22 @@
       "clave_fecha": "ninguna",
       "destino": "maestros/instalaciones",
       "filas_mes": 4500
+    },
+    {
+      "id": "m_planograma",
+      "nombre": "M7_EXT_PLANOGRAMA",
+      "informe": 178,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/planograma",
+      "filas_mes": 93674
+    },
+    {
+      "id": "m_tarifas",
+      "nombre": "M10_EXT_MAESTRO_TARIFAS",
+      "informe": 187,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/tarifas",
+      "filas_mes": 93532
     }
   ],
   "descartados": {

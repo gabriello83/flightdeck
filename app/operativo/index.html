@@ -201,12 +201,17 @@ const DESTINO = {
   ventas:       {sesion:"venta_consumo", panel:"recaudacion"},
   reposiciones: {sesion:"venta_consumo", panel:"carga"},
   telemetria:   {sesion:"instalaciones", panel:"incidencias"},
+  // Tarifas tiene su propia pagina, con delegaciones, centros y productos (docs/52).
+  tarifas:      {url:"/tarifas/"},
 };
 const TITULO = {
   rutas:"Rutas", averias:"Averías", almacenes:"Almacenes", furgonetas:"Furgonetas",
   pdvs:"Puntos de venta activos", ventas:"Ventas", reposiciones:"Reposiciones", telemetria:"Telemetría",
+  tarifas:"Tarifas",
 };
 
+// Los cuadrados que no son de un dia sino la foto de la noche.
+const FOTO = new Set(["pdvs", "almacenes", "tarifas"]);
 let YO=null, DATOS=null;
 
 function fechaLarga(s){
@@ -225,7 +230,7 @@ function mesLargo(p){
 /* Lo que pinta cada cuadrado: valor, linea de debajo y, si lleva semaforo, su
    porcentaje. `d` es el dia elegido; `f`, la foto de la noche. */
 function contenido(id, d, f){
-  const x = id==="pdvs" || id==="almacenes" ? f[id] : d[id];
+  const x = FOTO.has(id) ? f[id] : d[id];
   if(!x) return null;
   if(x.sin_dato) return {sin:x.sin_dato};
   switch(id){
@@ -234,8 +239,16 @@ function contenido(id, d, f){
         + (x.fuera_de_plan ? ` · ${num(x.fuera_de_plan)} fuera del plan` : "")};
     case "averias": return {vl:pct(x.pct), pct:x.pct,
       sub:`${num(x.a_tiempo)} de ${num(x.cerradas)} cerradas en menos de ${num(x.horas)} h`};
-    case "telemetria": return {vl:pct(x.pct), pct:x.pct,
-      sub:`${num(x.con_dex)} de ${num(x.auditables)} máquinas mandaron su lectura (DEX)`};
+    case "telemetria": {
+      /* El dato es siempre el de VenCloud. Si se han subido los ficheros de
+         Nayax, Prodelfi y Nebula, debajo van las diferencias con ellos, y el
+         cuadrado lleva a la pagina que las ensena (docs/53). */
+      const df = x.diferencias;
+      const n = df ? (df.sin_marca||0) + (df.solo_vencloud||0) + (df.fuera||0) : 0;
+      return {vl:pct(x.pct), pct:x.pct,
+        sub:`${num(x.con_dex)} de ${num(x.auditables)} máquinas mandaron su lectura (DEX)`
+          + (df ? ` · ${num(n)} diferencias con Nayax, Prodelfi y Nebula` : "")};
+    }
     case "almacenes": return {vl:eur(x.valor),
       sub:`Cierre de ${mesLargo(x.periodo)} · ${num((x.por_almacen||[]).length)} almacenes`
         + (x.bajo_minimo ? ` · ${num(x.bajo_minimo)} productos bajo mínimo` : "")};
@@ -243,6 +256,9 @@ function contenido(id, d, f){
       sub:`con visitas ese día · ${num(x.visitas)} visitas`
         + (x.visitas_sin_vehiculo ? ` (${num(x.visitas_sin_vehiculo)} sin vehículo)` : "")};
     case "pdvs": return {vl:num(x.activos), sub:`${num(x.maquinas)} máquinas instaladas`};
+    case "tarifas": return {vl:pct(x.pct), pct:x.pct,
+      sub:`${num(x.coinciden)} de ${num(x.controlados)} productos cobran su tarifa`
+        + (x.sin_tarifa ? ` · ${num(x.sin_tarifa)} sin tarifa` : "")};
     case "ventas": return {vl:eur(x.importe),
       sub:`${num(x.unidades)} unidades · ${num(x.maquinas)} máquinas`
         + (x.fuente==="telemetria" ? " · por telemetría" : x.fuente==="visita_ventas" ? " · del parte, parcial" : "")};
@@ -274,11 +290,15 @@ function pinta(){
     const c = contenido(id, d, f);
     if(!c) return;
     const dest = DESTINO[id];
-    const va = dest && (dest.url || ses.has(dest.sesion));
+    /* La telemetria cruzada con los ficheros tiene pagina propia, con las
+       maquinas que no transmiten (docs/53). */
+    const propia = id==="telemetria" && f.telemetria
+      ? `/telemetria/?dia=${encodeURIComponent(fecha)}` : null;
+    const va = propia || (dest && (dest.url || ses.has(dest.sesion)));
     const el = document.createElement(va ? "a" : "div");
     el.className = "cuadro";
     el.dataset.id = id;
-    if(va) el.href = dest.url || `/panel/?ver=${encodeURIComponent(dest.sesion)}#${encodeURIComponent(dest.panel)}`;
+    if(va) el.href = propia || dest.url || `/panel/?ver=${encodeURIComponent(dest.sesion)}#${encodeURIComponent(dest.panel)}`;
     const color = c.sin ? null : semaforo(c.pct);
     if(c.sin) el.classList.add("sin");
     else if(color){ el.classList.add(color); el.style.setProperty("--fondo-c", `var(--${color})`); }
@@ -287,7 +307,7 @@ function pinta(){
       + (color ? `<span class="estado">${ESTADO[color]}</span>` : "")
       + `<div class="vl">${c.sin ? "Sin dato" : c.vl}</div>`
       + `<div class="sub">${esc(c.sin || c.sub)}</div>`
-      + `<div class="pie"><span class="foto">${id==="pdvs"||id==="almacenes" ? "foto de la última carga" : ""}</span>`
+      + `<div class="pie"><span class="foto">${FOTO.has(id) ? "foto de la última carga" : ""}</span>`
       + `<span>${va ? (dest.url ? "Ver detalle →" : "Ver sección →") : dest ? "" : "Sin sección todavía"}</span></div>`;
     if(va) el.setAttribute("aria-label", `${TITULO[id]}: ${c.sin ? c.sin : c.vl}. Abrir la sección.`);
     cont.appendChild(el);
@@ -348,7 +368,7 @@ function avisa(texto, mal){
   const gen = DATOS.generado ? new Date(DATOS.generado) : null;
   $("#pie").innerHTML = "Datos de VenCloud, filtrados por el ámbito de tu perfil y servidos desde este "
     + "mismo dominio." + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "")
-    + " Puntos de venta y almacenes son la foto de esa noche; el valor de los almacenes es el del "
+    + " Puntos de venta, almacenes y tarifas son la foto de esa noche; el valor de los almacenes es el del "
     + "último cierre mensual de inventario. Donde no hay dato, se dice en vez de estimarse.";
   $("#pie").hidden = false;
 })();
