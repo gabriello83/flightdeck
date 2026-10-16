@@ -763,13 +763,26 @@ def rutas_del_dia(d, ubicaciones=None):
     return out
 
 
+def _de_la_delegacion(festivos, delegacion):
+    """Locales y autonomicos de una delegacion. La lista sola es el formato de
+    antes, cuando solo habia locales."""
+    d = (festivos.get("delegaciones") or {}).get(delegacion)
+    if isinstance(d, dict):
+        auto = (festivos.get("autonomicos") or {}).get(d.get("comunidad")) or []
+        return list(d.get("locales") or []), list(auto), d
+    return list(d or []), [], {}
+
+
 def es_festivo(fecha, delegacion, festivos):
-    """'nacional', 'local' o None, segun el calendario de config/festivos.json."""
+    """'nacional', 'autonómico', 'local' o None, segun config/festivos.json."""
     if not festivos:
         return None
     if fecha in (festivos.get("nacional") or []):
         return "nacional"
-    if fecha in ((festivos.get("delegaciones") or {}).get(delegacion) or []):
+    locales, auto, _ = _de_la_delegacion(festivos, delegacion)
+    if fecha in auto:
+        return "autonómico"
+    if fecha in locales:
         return "local"
     return None
 
@@ -778,8 +791,13 @@ def resumen_festivos(festivos):
     """Lo que la pagina dice del calendario: que hay apuntado y que no."""
     if not festivos:
         return None
-    locales = {k: sorted(v) for k, v in (festivos.get("delegaciones") or {}).items() if v}
-    return {"nacional": sorted(festivos.get("nacional") or []), "delegaciones": locales,
+    deleg = {}
+    for k in (festivos.get("delegaciones") or {}):
+        locales, auto, d = _de_la_delegacion(festivos, k)
+        if locales or auto:
+            deleg[k] = {"ciudad": d.get("ciudad"), "comunidad": d.get("comunidad"),
+                        "autonomico": sorted(auto), "local": sorted(locales)}
+    return {"nacional": sorted(festivos.get("nacional") or []), "delegaciones": deleg,
             "nota": festivos.get("nota", "")}
 
 
