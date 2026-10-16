@@ -2058,7 +2058,7 @@ order by del.nombre, v.matricula
 
 ## M13 · EXT_SAT_INCIDENCIAS  *(sin parámetros)*
 
-La foto de las incidencias de la SAT, para la página de Incidencias (docs/56). Son las tareas de
+Informe 192 (16-oct-2026: 48.120 filas, 775 sin cerrar; las abiertas traen `fecha_fin` 1900, que se lee como «sin fecha»). La foto de las incidencias de la SAT, para la página de Incidencias (docs/56). Son las tareas de
 los últimos 400 días y **todas las que siguen sin cerrar**, sean de cuando sean, con su estado de
 hoy y la hora de apertura y de cierre sacadas del registro de eventos.
 
