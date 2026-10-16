@@ -371,7 +371,8 @@
   function Serie(opciones) {
     const o = opciones || {};
     this.getJson = o.getJson || (url => fetch(url, { credentials: "same-origin" }).then(r => {
-      if (r.status === 401) { location.href = "/"; throw new Error("Sin sesión"); }
+      // Sin sesion: a la entrada, con una promesa que no se resuelve (ni sigue nada ni sale un error).
+      if (r.status === 401) { location.href = "/"; return new Promise(() => {}); }
       return r.json();
     }));
     this.ruta = o.ruta || "/api/serie";
