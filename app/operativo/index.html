@@ -21,7 +21,7 @@
   /* Los cuadrados sin semaforo, cada uno de su color. Ninguno es verde, ni
      ambar ni rojo, para que no se confundan con un estado. */
   --c-almacenes:#6d4fc2; --c-furgonetas:#1f6f8b; --c-pdvs:#2a62c9;
-  --c-ventas:#a63d84; --c-reposiciones:#4a5568;
+  --c-ventas:#a63d84; --c-reposiciones:#4a5568; --c-devoluciones:#7a4e1d;
 }
 @media (prefers-color-scheme: dark){
   :root:where(:not([data-theme="light"])){
@@ -31,7 +31,7 @@
     --s1:#3987e5; --sombra:none;
     --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
     --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
-    --c-ventas:#9c3a7c; --c-reposiciones:#4b5563;
+    --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d;
   }
 }
 :root[data-theme="dark"]{
@@ -41,7 +41,7 @@
   --s1:#3987e5; --sombra:none;
   --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
   --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
-  --c-ventas:#9c3a7c; --c-reposiciones:#4b5563;
+  --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -193,7 +193,10 @@ $("#bSalir").addEventListener("click", async ()=>{
    seccion en el panel, y se dice en vez de llevar a cualquier sitio. */
 const DESTINO = {
   rutas:        {sesion:"resumen",       panel:"visitas_dia"},
-  averias:      {sesion:"disponibilidad",panel:"sat"},
+  // Incidencias tiene su propia pagina, como el Power BI de Gabriele (docs/56).
+  averias:      {url:"/incidencias/"},
+  // Las devoluciones de dinero, con su pagina de tablas y graficos (docs/57).
+  devoluciones: {url:"/devoluciones/"},
   // Almacenes tiene su propia pagina: productos, fotos, packs y bajo minimo (docs/54).
   almacenes:    {url:"/almacenes/"},
   furgonetas:   null,
@@ -205,13 +208,13 @@ const DESTINO = {
   tarifas:      {url:"/tarifas/"},
 };
 const TITULO = {
-  rutas:"Rutas", averias:"Averías", almacenes:"Almacenes", furgonetas:"Furgonetas",
+  rutas:"Rutas", averias:"Incidencias", devoluciones:"Devoluciones", almacenes:"Almacenes", furgonetas:"Furgonetas",
   pdvs:"Puntos de venta activos", ventas:"Ventas", reposiciones:"Reposiciones", telemetria:"Telemetría",
   tarifas:"Tarifas",
 };
 
 // Los cuadrados que no son de un dia sino la foto de la noche.
-const FOTO = new Set(["pdvs", "almacenes", "tarifas"]);
+const FOTO = new Set(["pdvs", "almacenes", "tarifas", "devoluciones"]);
 let YO=null, DATOS=null;
 
 function fechaLarga(s){
@@ -248,6 +251,14 @@ function contenido(id, d, f){
       return {vl:pct(x.pct), pct:x.pct,
         sub:`${num(x.con_dex)} de ${num(x.auditables)} máquinas mandaron su lectura (DEX)`
           + (df ? ` · ${num(n)} diferencias con Nayax, Prodelfi y Nebula` : "")};
+    }
+    case "devoluciones": {
+      /* El mes de ayer hasta ayer, contra los mismos dias del mes anterior. */
+      const dia = Number(String(x.hasta).slice(8,10));
+      return {vl:num(x.total),
+        sub:`en ${mesLargo(x.mes)}, hasta el día ${num(dia)} · ${num(x.mes_anterior)} el mes anterior a estas alturas`
+          + (x.sin_cerrar ? ` · ${num(x.sin_cerrar)} sin cerrar` : "")
+          + (x.especiales!=null ? ` · ${num(x.especiales)} de solicitudes especiales` : "")};
     }
     case "almacenes": return {vl:eur(x.valor),
       sub:`Cierre de ${mesLargo(x.periodo)} · ${num((x.por_almacen||[]).length)} almacenes`

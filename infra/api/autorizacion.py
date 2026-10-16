@@ -326,6 +326,8 @@ def recorta_dia(fila, perfil):
 CUADRADOS = (
     ("rutas", "servicio"),
     ("averias", "sat"),
+    # Las devoluciones de dinero, sacadas de incidencias (docs/57): tambien SAT.
+    ("devoluciones", "sat"),
     ("almacenes", "inventario"),
     ("furgonetas", "servicio"),
     ("pdvs", "instalaciones"),
