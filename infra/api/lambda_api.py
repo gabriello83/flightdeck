@@ -227,6 +227,21 @@ def encamina(evento, metodo, ruta):
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
         return _comprimido(comprimido)
 
+    # La pagina de devoluciones (docs/57): igual que la de incidencias, de la
+    # misma foto, con su propio cuadrado.
+    if ruta == "/api/devoluciones" and metodo == "GET":
+        if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
+            raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
+        if "devoluciones" not in A.cuadrados_de(perfil):
+            raise PermissionError("Este perfil no ve las devoluciones.")
+        try:
+            comprimido = s3.get_object(Bucket=BUCKET, Key=f"cabina/{perfil.get('perfil_id', '')}/"
+                                                           "devoluciones.json.gz")["Body"].read()
+        except Exception:
+            return r(503, {"error": "Las devoluciones todavía no se han calculado.",
+                           "_nota": "Lo escriben los agregados cada noche (4:45)."})
+        return _comprimido(comprimido)
+
     # Los almacenes por dentro (docs/54): el fichero del perfil, y la foto de un
     # producto. Quien ve el cuadrado de almacenes ve la pagina; la foto solo si
     # el fichero de SU perfil cita ese producto con foto.

@@ -74,6 +74,7 @@ import tarifas as TA
 import telemetria as TE
 import almacenes as AL
 import incidencias as IN
+import devoluciones as DV
 from cuadro import Cuadro
 
 s3 = boto3.client("s3")
@@ -1203,18 +1204,25 @@ def escribe_incidencias(acumuladores, operativos, incidencias, mapa, hoy):
     recibe las aperturas y los cierres de hoy: sin ella solo ve los cierres de
     los tres primeros dias de cada tarea, que son los que vuelve a bajar la
     extraccion. Va antes de escribir el operativo.
+
+    De la misma foto salen las devoluciones (docs/57): su cuadrado y su pagina.
     """
     foto = _filas(_json_de(CLAVE_SAT_INCIDENCIAS))
     for acu in acumuladores:
         inc = incidencias[acu.perfil["id"]]
+        dev = DV.Devoluciones()
+        op = operativos[acu.perfil["id"]]
         if foto:
             propias = [f for f in foto if en_ambito(f, acu.ambito, mapa)]
             inc.come_foto(propias)
-            op = operativos[acu.perfil["id"]]
+            dev.come_foto(propias)
             op.come_sat(propias)
             op.come_sat_eventos(inc.eventos_de_la_foto())
         escribe_comprimido(f"cabina/{acu.perfil['id']}/incidencias.json.gz",
                            inc.fichero(acu.perfil["id"], hoy))
+        escribe_comprimido(f"cabina/{acu.perfil['id']}/devoluciones.json.gz",
+                           dev.fichero(acu.perfil["id"], hoy))
+        op.foto["devoluciones"] = dev.cuadrado(hoy)
 
 
 def escribe_almacenes(acumuladores, operativos, existencias, rutas, hoy):

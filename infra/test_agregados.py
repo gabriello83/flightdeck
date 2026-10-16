@@ -631,6 +631,12 @@ ALMACEN["maestros/sat_incidencias/m_sat_incidencias.json.gz"] = gzip.compress(js
      "cliente": "CONSUM S COOP V", "delegacion": "Levante - Murcia", "titulo": "pantalla negra"},
     {"id": 503, "serie": "A", "numero": 9003, "fecha_alta": str(AYER), "tipo_estado": 1,
      "matricula": "00SE0000", "centro": "CENTRO TEST", "apertura": f"{AYER} 10:00:00"},
+    # Una devolucion de AIRBUS, abierta: va a su pagina, no a la de incidencias (docs/57).
+    {"id": 504, "serie": "A", "numero": 9004, "fecha_alta": str(AYER), "tipo_estado": 1, "estado": 1,
+     "apertura": f"{AYER} 11:00:00", "cierre": None, "cod_operacion": "D03",
+     "operacion": "DEVOLUCION - Transferencia Bancaria", "categoria": "ATENCION AL CLIENTE",
+     "matricula": "A1", "num_centro": "1001", "centro": "AIRBUS GETAFE", "cod_cliente": "C7",
+     "cliente": "AIRBUS OPERATIONS SL", "delegacion": "Madrid - Leganes", "titulo": "IBAN ES00 1111"},
 ]).encode())
 L.lambda_handler({}, None)
 _inc = json.loads(gzip.decompress(ALMACEN["cabina/interno/incidencias.json.gz"]))
@@ -646,6 +652,12 @@ _op = json.loads(ALMACEN["cabina/cli-airbus/operativo.json"])
 comprueba("y el cuadrado de AIRBUS ve el cierre del decimo dia, fuera de 24 h",
           (_op["dias"][AYER.isoformat()]["averias"]["cerradas"],
            _op["dias"][AYER.isoformat()]["averias"]["a_tiempo"]), (1, 0))
+_dev = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/devoluciones.json.gz"]))
+comprueba("la devolucion va a su fichero, sin el IBAN del titulo",
+          ([x["n"] for x in _dev["devoluciones"]], "ES00" in json.dumps(_dev)), (["A-9004"], False))
+comprueba("y el cuadrado de AIRBUS cuenta la del mes, sin cerrar",
+          (_op["foto"]["devoluciones"]["total"], _op["foto"]["devoluciones"]["sin_cerrar"]), (1, 1))
+comprueba("y no entra en las incidencias", "A-9004" in [x["n"] for x in _inc_air["incidencias"]], False)
 del ALMACEN["maestros/sat_incidencias/m_sat_incidencias.json.gz"]
 
 print("\nEl perfiles.json de verdad coge lo que tiene que coger")
