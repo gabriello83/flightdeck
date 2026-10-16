@@ -161,7 +161,7 @@ const API = {
       }
     },
     foto: { pdvs: { activos: 3195, maquinas: 3165 },
-            devoluciones: { mes: iso(AYER).slice(0, 7), hasta: iso(AYER), total: 518, mes_anterior: 569, sin_cerrar: 76,
+            devoluciones: { mes: iso(AYER).slice(0, 7), hasta: iso(AYER), total: 518, mes_anterior: 569, sin_cerrar: 76, especiales: 92,
                             por_canal: [['En el sitio', 244], ['Transferencia', 181]] },
             tarifas: { pct: 81.3, color: 'amarillo', coinciden: 13, controlados: 16, sin_tarifa: 2, sin_dato_productos: 1, desde: '2026-04-14' },
             almacenes: { valor: 502429.74, periodo: '2026-09', por_almacen: [{ almacen: 'A', delegacion: '', valor: 1 }] } }
@@ -225,6 +225,7 @@ const API = {
       centros: [['1001', 'AIRBUS GETAFE', 'C7', 'AIRBUS'], ['2002', 'CONSUM <MURCIA>', '10002', 'SERUNION']],
       delegaciones: ['Madrid - Leganes', 'Levante - Murcia'],
       canales: ['En el sitio', 'Transferencia', 'Tarjeta de crédito', 'Tarjeta de empleado', 'Otra'],
+      origenes: ['Atención al cliente', 'Solicitud especial'],
       tecnicos: ['Javier', 'Miguel'],
       devoluciones: [
         { n: 'A-90', a: d(70), x: d(70, '10:00'), h: 1, m: 'M1', c: 0, d: 0, k: 0, t: 0 },
@@ -232,6 +233,7 @@ const API = {
         { n: 'A-92', a: d(0, '08:00'), x: d(0, '10:00'), h: 2, m: 'M1', c: 0, d: 0, k: 0, t: 0 },
         { n: 'A-93', a: d(0, '11:00'), m: 'M1', c: 0, d: 0, k: 1, t: 1 },
         { n: 'A-94', a: d(0, '12:00'), x: d(0, '16:00'), h: 4, m: 'C1', c: 1, d: 1, k: 2, t: 1 },
+        { n: 'E-97', a: d(0, '13:00'), x: d(0, '14:00'), h: 1, m: 'C1', c: 1, d: 1, k: 0, t: 1, e: 1 },
         { n: 'A-95', a: d(400), m: 'C1', c: 1, d: 1, k: 3, t: 1 },
         // De hoy: la foto ya la trae, pero las cifras llegan hasta ayer.
         { n: 'A-96', a: d(-1), m: 'M1', c: 0, d: 0, k: 1, t: 0 }]
@@ -740,7 +742,9 @@ const servidor = http.createServer((pet, res) => {
       [(await pagina.textContent('.cuadro[data-id="devoluciones"] .vl')).trim(),
        await pagina.$eval('.cuadro[data-id="devoluciones"]', c => ['verde', 'amarillo', 'rojo'].some(k => c.classList.contains(k))),
        await pagina.getAttribute('.cuadro[data-id="devoluciones"]', 'href')], ['518', false, '/devoluciones/']);
-    comprueba_que('y lo compara con el mes anterior', (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('569 el mes anterior'));
+    comprueba_que('y lo compara con el mes anterior, y dice cuantas son especiales',
+      (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('569 el mes anterior')
+      && (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('92 de solicitudes especiales'));
     comprueba('tarifas al 81,3 % en amarillo y lleva a su pagina',
       [await pagina.$eval('.cuadro[data-id="tarifas"]', c => c.classList.contains('amarillo')),
        await pagina.getAttribute('.cuadro[data-id="tarifas"]', 'href')], [true, '/tarifas/']);
@@ -998,8 +1002,14 @@ const servidor = http.createServer((pet, res) => {
     await pagina.waitForSelector('#kpis .kpi');
     comprueba('arranca en el mes corriente, como el cuadrado', await pagina.inputValue('#periodo'), 'mes');
     const kpi = async i => (await pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent)).trim();
-    comprueba('las tres de ayer, una sin cerrar', [await kpi(1), await kpi(2)], ['3', '1']);
-    comprueba('la mediana hasta cerrar: 2 y 4 horas, 3', await kpi(3), '3 h');
+    comprueba('las cuatro de ayer, una sin cerrar', [await kpi(1), await kpi(2)], ['4', '1']);
+    comprueba('la mediana hasta cerrar: 1, 2 y 4 horas, 2', await kpi(3), '2 h');
+    comprueba('por origen: tres de atencion al cliente y una especial',
+      await pagina.$$eval('#gOrigen .fb', x => x.map(e => [e.dataset.o, e.querySelector('.v').textContent.split(' ')[0]])),
+      [['Atención al cliente', '3'], ['Solicitud especial', '1']]);
+    await pagina.click('#gOrigen .fb[data-o="Solicitud especial"]');
+    comprueba('pulsar el origen filtra por el', [await pagina.inputValue('#origen'), await kpi(1)], ['Solicitud especial', '1']);
+    await pagina.click('#bLimpiar');
     comprueba_que('sin cerrar hoy cuenta tambien la vieja', (await pagina.textContent('#kpis .kpi:nth-child(2)')).includes('3 en total hoy'));
     comprueba('un mes por columna, trece', await pagina.locator('#gMeses .golpe').count(), 13);
     comprueba('la leyenda con los canales que hay', await pagina.$$eval('#leyenda span', x => x.map(e => e.textContent)),
@@ -1008,7 +1018,7 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('pasar por encima dice el reparto del mes', !(await pagina.$eval('#punta', e => e.hidden))
       && (await pagina.textContent('#punta')).includes('Transferencia'));
     comprueba_que('y el mes llega hasta ayer, como las cifras: tres, sin la de hoy',
-      (await pagina.textContent('#punta')).endsWith('Total3'), await pagina.textContent('#punta'));
+      (await pagina.textContent('#punta')).endsWith('Total4'), await pagina.textContent('#punta'));
     await pagina.click('#bVista');
     comprueba('y la misma cifra en tabla', await pagina.locator('#tMeses tbody tr').count(), 13);
     await pagina.click('#bVista');

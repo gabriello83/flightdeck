@@ -35,6 +35,21 @@ corriente, que es la cifra del cuadrado.
 
 Pulsar un canal, una delegación o un centro filtra la página por él.
 
+## Dos orígenes
+
+Gabriele, 16-oct-2026: «las devoluciones en VenCloud las puedes encontrar en solicitudes
+especiales». Están en dos sitios:
+
+- en **solicitudes especiales** (serie E, categoría «Devolución dinero»: DEV01 in situ, DEV05,
+  DEV06), que en lo que va de octubre son 92;
+- en **atención al cliente** (serie A: D01 in situ, D03 transferencia, C24 tarjeta de crédito, D04
+  tarjeta de empleado), que son 426.
+
+La página cuenta las dos, y un filtro y unas barras «Por origen» las separan. El cuadrado dice
+cuántas son especiales. Desde septiembre, 107 de las 356 especiales tienen una de atención al
+cliente en la misma máquina y el mismo día, así que puede que algunas estén apuntadas dos veces.
+Está pendiente que Gabriele decida si se queda una sola fuente.
+
 ## Las cuentas
 
 | | |

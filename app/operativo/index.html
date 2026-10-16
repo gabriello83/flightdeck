@@ -257,7 +257,8 @@ function contenido(id, d, f){
       const dia = Number(String(x.hasta).slice(8,10));
       return {vl:num(x.total),
         sub:`en ${mesLargo(x.mes)}, hasta el día ${num(dia)} · ${num(x.mes_anterior)} el mes anterior a estas alturas`
-          + (x.sin_cerrar ? ` · ${num(x.sin_cerrar)} sin cerrar` : "")};
+          + (x.sin_cerrar ? ` · ${num(x.sin_cerrar)} sin cerrar` : "")
+          + (x.especiales!=null ? ` · ${num(x.especiales)} de solicitudes especiales` : "")};
     }
     case "almacenes": return {vl:eur(x.valor),
       sub:`Cierre de ${mesLargo(x.periodo)} · ${num((x.por_almacen||[]).length)} almacenes`

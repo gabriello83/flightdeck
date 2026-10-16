@@ -16,6 +16,13 @@ el importe: VenCloud no tiene un campo para el, solo lo que el tecnico escribe
 en el titulo («0,80€», «DEV. 1,50», «Devolución = 60 centimos»), y sacarlo de ahi
 seria adivinar. Se cuentan devoluciones, no euros.
 
+DOS ORIGENES. Gabriele (16-oct-2026): «las devoluciones en VenCloud las puedes
+encontrar en solicitudes especiales». Estan en la serie E (categoria
+«Devolución dinero», DEV01...) y tambien en la serie A de atencion al cliente
+(D01, D03, C24, D04). Se guardan las dos con su origen (`e`: 1 si es solicitud
+especial), y la pagina deja separarlas: en 107 de 356 especiales desde
+septiembre hay una de atencion al cliente en la misma maquina y el mismo dia.
+
 LA MATRICULA FICTICIA (00SE0000) se queda fuera, como en el resto de la
 plataforma: son un tercio de las devoluciones y todas cuelgan de «CENTRO TEST»
 en la central, sin maquina ni sitio.
@@ -41,6 +48,8 @@ CANALES = (
     ("TARJETA EMPLEADO", "Tarjeta de empleado"),
 )
 OTRO_CANAL = "Otra"
+# El origen de cada devolucion: `e` es la posicion en esta lista.
+ORIGENES = ("Atención al cliente", "Solicitud especial")
 ORDEN_CANALES = ("En el sitio", "Transferencia", "Tarjeta de crédito", "Tarjeta de empleado", OTRO_CANAL)
 
 # Lo que se guarda: trece meses enteros, para comparar un mes con el del ano
@@ -104,6 +113,8 @@ class Devoluciones:
                 "k": canales(canal_de(R.v(t, "operacion", ""))),
                 "t": tecnicos(str(R.v(t, "tecnico_asignado", "") or "")),
             }
+            if R.es_solicitud_especial(t):
+                fila["e"] = 1
             if cerrada:
                 cierre = IN._fecha_hora(R.v(t, "cierre", "")) or \
                     (IN._fecha_hora(R.v(t, "fecha_fin", "")) or "")[:10] or None
@@ -139,6 +150,7 @@ class Devoluciones:
             "total": len(del_mes),
             "mes_anterior": len(antes),
             "sin_cerrar": sum(1 for f in del_mes if "x" not in f),
+            "especiales": sum(1 for f in del_mes if f.get("e")),
             "por_canal": [[k, por_canal[k]] for k in ORDEN_CANALES if k in por_canal],
         }
 
@@ -161,11 +173,12 @@ class Devoluciones:
             "centros": [list(c) for c in centros.lista],
             "delegaciones": delegs.lista,
             "canales": canales.lista,
+            "origenes": list(ORIGENES),
             "tecnicos": tecnicos.lista,
             "devoluciones": filas,
             "_nota": ("Una fila por devolución de dinero de la SAT, sin la matrícula ficticia. "
                       "a = apertura; x = cierre (sin x, sin cerrar; x vacía: cerrada sin fecha); "
-                      "h = horas hasta el cierre; k = canal; c, d, t = posición en centros, "
+                      "h = horas hasta el cierre; k = canal; e = 1 si es solicitud especial (serie E); c, d, t = posición en centros, "
                       "delegaciones y técnicos. Ni título ni notas: traen datos del cliente. "
                       "Sin importe: VenCloud no lo guarda en ningún campo."),
         }

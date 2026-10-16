@@ -57,7 +57,8 @@ dv.come_foto([
     tarea(3, "CAFÉ - Distribuidor fuera de servicio", "T08"),
     tarea(4, matricula="00SE0000"),
     tarea(5, alta="2026-09-12 10:00:00", cierre="2026-09-12 11:00:00"),
-    tarea(6, alta="2026-09-15 10:00:00", cierre="2026-09-15 11:00:00"),
+    tarea(6, "Devolución dinero IN SITU", "DEV01", alta="2026-09-15 10:00:00", cierre="2026-09-15 11:00:00",
+          tipo_tarea="E", serie="A", categoria="Devolución dinero"),
     tarea(7, alta="2026-09-16 10:00:00", cierre="2026-09-16 11:00:00"),
     tarea(8, alta="2025-01-10 10:00:00", cierre="2025-01-10 11:00:00"),
     tarea(9, alta="2024-07-05 10:00:00"),
@@ -69,6 +70,9 @@ comprueba("ni la averia ni la ficticia ni la cerrada de hace mas de 13 meses",
 comprueba("la que sigue sin cerrar va aunque sea vieja", "x" in por["A-80009"], False)
 comprueba("la cerrada, con sus horas", (por["A-80001"]["x"], por["A-80001"]["h"]), ("2026-10-10 12:00", 4.0))
 comprueba("el canal por indice", f["canales"][por["A-80002"]["k"]], "Transferencia")
+comprueba("solo la de la serie E va marcada como solicitud especial",
+          sorted(n for n, x in por.items() if x.get("e")), ["A-80006"])
+comprueba("y su nombre viaja", f["origenes"][1], "Solicitud especial")
 comprueba_texto = any(k in x for x in f["devoluciones"] for k in ("tx", "titulo", "ultima_nota"))
 comprueba("ni titulo ni notas: llevan el IBAN y el telefono", comprueba_texto, False)
 comprueba("tampoco escondido en otra columna", "ES00" in str(f) or "600 000" in str(f), False)
@@ -78,6 +82,7 @@ c = dv.cuadrado(HOY)
 comprueba("octubre, hasta el 15", (c["mes"], c["hasta"]), ("2026-10", "2026-10-15"))
 comprueba("dos en octubre, una sin cerrar", (c["total"], c["sin_cerrar"]), (2, 1))
 comprueba("del 1 al 15 de septiembre, dos (la del 16 no)", c["mes_anterior"], 2)
+comprueba("ninguna especial en octubre", c["especiales"], 0)
 comprueba("por canal", c["por_canal"], [["En el sitio", 1], ["Transferencia", 1]])
 comprueba("el dia 1 cuenta el mes anterior entero",
           dv.cuadrado(datetime.date(2026, 10, 1))["mes"], "2026-09")

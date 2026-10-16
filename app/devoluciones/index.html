@@ -218,6 +218,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
       </select></label>
       <label class="solo-panel libre" hidden>Desde <input type="date" id="desde"></label>
       <label class="solo-panel libre" hidden>Hasta <input type="date" id="hasta"></label>
+      <label>Origen <select id="origen"></select></label>
       <label>Canal <select id="canal"></select></label>
       <label>Zona <select id="zona"></select></label>
       <label>Delegación <select id="deleg"></select></label>
@@ -244,6 +245,9 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
           <div class="cabsec"><h2>Por canal</h2><span class="tenue">Pulsa un canal para filtrar por él</span></div>
           <p class="sub" id="sCanal"></p>
           <div id="gCanal"></div>
+          <div class="cabsec" style="margin-top:16px"><h2>Por origen</h2><span class="tenue">Pulsa uno para filtrar por él</span></div>
+          <p class="sub">En VenCloud están en solicitudes especiales (serie E) y en atención al cliente (serie A).</p>
+          <div id="gOrigen"></div>
         </section>
         <section class="caja">
           <div class="cabsec"><h2>Por zona y delegación</h2><span class="tenue">Pulsa una delegación para filtrar</span></div>
@@ -375,14 +379,15 @@ function prepara(){
     const c = D.centros[r.c] || [], dl = D.delegaciones[r.d] || "";
     r._ = {dia: r.a.slice(0,10), mes: r.a.slice(0,7), deleg: dl, zona: (D.zonas||{})[dl] || "Otra zona",
            num_centro: c[0]||"", centro: c[1]||"", cod_cliente: c[2]||"", cliente: c[3]||"",
-           canal: (D.canales||[])[r.k] || "Otra", tecnico: (D.tecnicos||[])[r.t] || ""};
+           canal: (D.canales||[])[r.k] || "Otra", tecnico: (D.tecnicos||[])[r.t] || "",
+           origen: (D.origenes||["Atención al cliente","Solicitud especial"])[r.e ? 1 : 0]};
     return r;
   });
 }
 const colorCanal = k => `var(--k${Math.max(0, (D.canales||[]).indexOf(k))})`;
 function enLugar(r){
-  const k = $("#canal").value, z = $("#zona").value, dl = $("#deleg").value, c = $("#centro").value, x = fila(r);
-  return (!k || x.canal===k) && (!z || x.zona===z) && (!dl || x.deleg===dl) && (!c || x.num_centro===c);
+  const o = $("#origen").value, k = $("#canal").value, z = $("#zona").value, dl = $("#deleg").value, c = $("#centro").value, x = fila(r);
+  return (!o || x.origen===o) && (!k || x.canal===k) && (!z || x.zona===z) && (!dl || x.deleg===dl) && (!c || x.num_centro===c);
 }
 const entre = (r, d, h) => fila(r).dia >= d && fila(r).dia <= h;
 
@@ -393,6 +398,8 @@ function opciones(sel, valores, todas, etiqueta){
   sel.value = valores.some(v => String(v[0])===antes) ? antes : "";
 }
 function pintaFiltros(){
+  const origenes = [...new Set(DEV.map(r=>fila(r).origen))].sort((a,b)=>a.localeCompare(b,"es"));
+  opciones($("#origen"), origenes.map(o=>[o,o]), "Todos");
   const hay = new Set(DEV.map(r=>fila(r).canal));
   opciones($("#canal"), (D.canales||[]).filter(k=>hay.has(k)).map(k=>[k,k]), "Todos");
   const zonas = [...new Set(DEV.map(r=>fila(r).zona))].sort((a,b)=>a.localeCompare(b,"es"));
@@ -576,6 +583,13 @@ function pintaCanal(lista){
     : `<p class="vacio">Ninguna devolución con estos filtros.</p>`;
   $("#gCanal").querySelectorAll(".fb").forEach(b=>b.addEventListener("click", ()=>{
     $("#canal").value = $("#canal").value===b.dataset.k ? "" : b.dataset.k; pintaTodo(); }));
+  const po = new Map();
+  lista.forEach(r => { const o = fila(r).origen; po.set(o, (po.get(o)||0)+1); });
+  const fo = [...po].sort((a,b)=>b[1]-a[1]).map(([o,n])=>[o, o, n, o, ` · ${fpct(100*n/lista.length)}`]);
+  $("#gOrigen").innerHTML = fo.length ? barras(fo, fo[0][2], "data-o", $("#origen").value)
+    : `<p class="vacio">Ninguna devolución con estos filtros.</p>`;
+  $("#gOrigen").querySelectorAll(".fb").forEach(b=>b.addEventListener("click", ()=>{
+    $("#origen").value = $("#origen").value===b.dataset.o ? "" : b.dataset.o; pintaTodo(); }));
 }
 function pintaZonas(lista){
   const porZona = new Map();
@@ -655,7 +669,7 @@ const colorDias = d => d <= 1 ? "verde" : d <= 3 ? "amarillo" : "rojo";
 function filasPendientes(){
   const q = $("#busca").value.trim().toLowerCase();
   return DEV.filter(r => abierta(r) && enLugar(r)).filter(r => { if(!q) return true; const x = fila(r);
-      return [r.n, r.m, x.centro, x.num_centro, x.cliente, x.deleg, x.tecnico, x.canal].join(" ").toLowerCase().includes(q); })
+      return [r.n, r.m, x.centro, x.num_centro, x.cliente, x.deleg, x.tecnico, x.canal, x.origen].join(" ").toLowerCase().includes(q); })
     .sort((a,b)=>a.a.localeCompare(b.a));
 }
 function pintaPendientes(){
@@ -678,9 +692,9 @@ function pintaPendientes(){
 function csv(){
   const filas = filasPendientes();
   const q = v => { const s = String(v==null?"":v); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
-  const cab = ["Nº","Entró","Días esperando","Canal","Máquina","Nº centro","Centro","Cliente","Delegación","Zona","Técnico"];
+  const cab = ["Nº","Entró","Días esperando","Origen","Canal","Máquina","Nº centro","Centro","Cliente","Delegación","Zona","Técnico"];
   const texto = "﻿" + [cab.join(";"), ...filas.map(r=>{ const x = fila(r);
-    return [r.n, r.a, diasEsperando(r), x.canal, r.m, x.num_centro, x.centro, x.cliente, x.deleg, x.zona, x.tecnico].map(q).join(";"); })].join("\r\n");
+    return [r.n, r.a, diasEsperando(r), x.origen, x.canal, r.m, x.num_centro, x.centro, x.cliente, x.deleg, x.zona, x.tecnico].map(q).join(";"); })].join("\r\n");
   const url = URL.createObjectURL(new Blob([texto], {type:"text/csv;charset=utf-8"}));
   const a = document.createElement("a");
   a.href = url; a.download = `devoluciones_sin_cerrar_${D.ultimo_dia}.csv`;
@@ -734,11 +748,11 @@ function pintaTodo(){
   if(q.get("ver") === "pendientes") HOJA = "pendientes";
   pintaFiltros();
   document.querySelectorAll(".hojas button").forEach(b=>b.addEventListener("click", ()=>{ HOJA = b.dataset.h; pintaTodo(); }));
-  ["#periodo","#desde","#hasta","#canal","#centro"].forEach(s=>$(s).addEventListener("change", pintaTodo));
+  ["#periodo","#desde","#hasta","#origen","#canal","#centro"].forEach(s=>$(s).addEventListener("change", pintaTodo));
   $("#zona").addEventListener("change", ()=>{ pintaFiltros(); pintaTodo(); });
   $("#deleg").addEventListener("change", ()=>{ pintaFiltros(); pintaTodo(); });
   $("#bLimpiar").addEventListener("click", ()=>{
-    ["#canal","#zona","#deleg","#centro"].forEach(s=>$(s).value=""); pintaFiltros(); pintaTodo(); });
+    ["#origen","#canal","#zona","#deleg","#centro"].forEach(s=>$(s).value=""); pintaFiltros(); pintaTodo(); });
   $("#bVista").addEventListener("click", ()=>{ TABLA = !TABLA; pintaTodo(); });
   $("#busca").addEventListener("input", ()=>{ TODAS_FILAS = false; pintaPendientes(); });
   $("#bCsv").addEventListener("click", csv);
