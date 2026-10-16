@@ -141,7 +141,7 @@ const API = {
   // infra/operativo.py ya recortada por la API: un dia con todo y uno sin plan.
   '/api/operativo': {
     generado: new Date().toISOString(), ultimo_dia: iso(AYER), umbrales: { verde: 95, amarillo: 75 },
-    cuadrados: ['rutas', 'averias', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas'],
+    cuadrados: ['rutas', 'averias', 'devoluciones', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas'],
     dias: {
       [iso(AYER)]: {
         rutas: { previstas: 400, hechas: 350, pct: 87.5, color: 'amarillo', visitas: 1100, fuera_de_plan: 12 },
@@ -161,6 +161,8 @@ const API = {
       }
     },
     foto: { pdvs: { activos: 3195, maquinas: 3165 },
+            devoluciones: { mes: iso(AYER).slice(0, 7), hasta: iso(AYER), total: 518, mes_anterior: 569, sin_cerrar: 76, especiales: 92,
+                            por_canal: [['En el sitio', 244], ['Transferencia', 181]] },
             tarifas: { pct: 81.3, color: 'amarillo', coinciden: 13, controlados: 16, sin_tarifa: 2, sin_dato_productos: 1, desde: '2026-04-14' },
             almacenes: { valor: 502429.74, periodo: '2026-09', por_almacen: [{ almacen: 'A', delegacion: '', valor: 1 }] } }
   },
@@ -186,6 +188,57 @@ const API = {
           { cod: '119162', nombre: 'CAFE GARIBALDI ESPRESSO BAR 1000GR', existencias: 60, de: 'cierre', fecha: '2026-10-05',
             categoria: 'Café', unid_pack: 6, unid_caja: 6, ean_unidad: ['8000000000001'], otros_codigos: [], foto: false }] }]
   },
+  // Las incidencias (docs/56), con la forma que escribe infra/incidencias.py.
+  '/api/incidencias': (() => {
+    const d = (n, h = '09:00') => `${iso(new Date(AYER.getTime() - n * 86400000))} ${h}`;
+    return {
+      generado: new Date().toISOString(), perfil: 'interno', estado_al_dia: true, sin_estado: null,
+      fuente: 'M13 · EXT_SAT_INCIDENCIAS', ultimo_dia: iso(AYER), desde: '2026-01-26', horas_sla: 24,
+      umbrales: { verde: 95, amarillo: 75 },
+      marcas: { tecnica: 1, reposicion: 4, caducado: 8, higiene: 16, bloqueante: 32, especial: 64 },
+      zonas: { 'Levante - Valencia': 'Levante', 'Madrid - Leganes': 'Centro', 'Levante - Murcia': 'Levante' },
+      centros: [['500073', 'INDUSTRIA DEL CURTIDO', '32072', 'CURTIDO SA'], ['1001', 'AIRBUS GETAFE', 'C7', 'AIRBUS'],
+                ['2002', 'CONSUM MURCIA', '10002', 'SERUNION']],
+      delegaciones: ['Levante - Valencia', 'Madrid - Leganes', 'Levante - Murcia'],
+      operaciones: [['T08', 'CAFÉ - Distribuidor fuera de servicio', 'AVERIAS TECNICAS'],
+                    ['D01', 'DEVOLUCION - Transferencia Bancaria', 'Devolución dinero'],
+                    ['S010', 'Reponer distribuidor automatico', 'Solicitudes cliente'],
+                    ['T31', 'CAFÉ - Grupo café averiado', 'AVERIAS TECNICAS']],
+      tecnicos: ['Javier', 'Miguel'],
+      incidencias: [
+        { n: 'A-7', a: d(35), x: d(35, '19:00'), h: 10, m: 'A1', c: 1, d: 1, o: 3, t: 1, f: 1 },
+        { n: 'A-6', a: d(6), m: 'C1', c: 2, d: 2, o: 0, t: 1, f: 33, tx: 'fuera de servicio', u: 'Hall', p: 'C09' },
+        { n: 'A-1', a: d(5), x: d(5, '14:00'), h: 5, m: 'M1', c: 0, d: 0, o: 0, t: 0, f: 33 },
+        { n: 'A-2', a: d(4), x: d(3, '15:00'), h: 30, m: 'M1', c: 0, d: 0, o: 3, t: 0, f: 1 },
+        { n: 'A-3', a: d(2), m: 'M1', c: 0, d: 0, o: 3, t: 0, f: 1, tx: 'no sale café · vuelve a fallar', u: 'Comedor', p: 'C01502' },
+        { n: 'A-4', a: d(1), x: d(1, '11:00'), h: 2, m: 'A1', c: 1, d: 1, o: 3, t: 1, f: 1 },
+        { n: 'E-5', a: d(0), m: 'C1', c: 2, d: 2, o: 2, t: 1, f: 68, tx: 'máquina vacía', u: 'Hall', p: 'C09' }]
+    };
+  })(),
+  // Las devoluciones (docs/57), con la forma que escribe infra/devoluciones.py.
+  '/api/devoluciones': (() => {
+    const d = (n, h = '09:00') => `${iso(new Date(AYER.getTime() - n * 86400000))} ${h}`;
+    return {
+      generado: new Date().toISOString(), perfil: 'interno', ultimo_dia: iso(AYER),
+      fuente: 'M13 · EXT_SAT_INCIDENCIAS', desde: iso(new Date(AYER.getFullYear(), AYER.getMonth() - 12, 1)),
+      zonas: { 'Madrid - Leganes': 'Centro', 'Levante - Murcia': 'Levante' },
+      centros: [['1001', 'AIRBUS GETAFE', 'C7', 'AIRBUS'], ['2002', 'CONSUM <MURCIA>', '10002', 'SERUNION']],
+      delegaciones: ['Madrid - Leganes', 'Levante - Murcia'],
+      canales: ['En el sitio', 'Transferencia', 'Tarjeta de crédito', 'Tarjeta de empleado', 'Otra'],
+      origenes: ['Atención al cliente', 'Solicitud especial'],
+      tecnicos: ['Javier', 'Miguel'],
+      devoluciones: [
+        { n: 'A-90', a: d(70), x: d(70, '10:00'), h: 1, m: 'M1', c: 0, d: 0, k: 0, t: 0 },
+        { n: 'A-91', a: d(40), x: d(39, '09:00'), h: 24, m: 'M1', c: 0, d: 0, k: 1, t: 0 },
+        { n: 'A-92', a: d(0, '08:00'), x: d(0, '10:00'), h: 2, m: 'M1', c: 0, d: 0, k: 0, t: 0 },
+        { n: 'A-93', a: d(0, '11:00'), m: 'M1', c: 0, d: 0, k: 1, t: 1 },
+        { n: 'A-94', a: d(0, '12:00'), x: d(0, '16:00'), h: 4, m: 'C1', c: 1, d: 1, k: 2, t: 1 },
+        { n: 'E-97', a: d(0, '13:00'), x: d(0, '14:00'), h: 1, m: 'C1', c: 1, d: 1, k: 0, t: 1, e: 1 },
+        { n: 'A-95', a: d(400), m: 'C1', c: 1, d: 1, k: 3, t: 1 },
+        // De hoy: la foto ya la trae, pero las cifras llegan hasta ayer.
+        { n: 'A-96', a: d(-1), m: 'M1', c: 0, d: 0, k: 1, t: 0 }]
+    };
+  })(),
   '/api/estado-carga': { ultima_carga: new Date().toISOString(), dias_pedidos: [iso(AYER)], descargas_ok: 75, descargas_fallidas: 0, bytes: 12345678, filas_por_informe: { visita_cabecera: 1000 }, errores: [], retraso_dias: 0 },
   '/api/admin/usuarios': { usuarios: [{ _id: 'eva@airbus.com', nombre: 'Eva', perfil_id: 'cli-airbus', estado: 'activo' }] },
   '/api/admin/perfiles': {
@@ -728,9 +781,16 @@ const servidor = http.createServer((pet, res) => {
     const { pagina, errores, fuera } = await abre('/operativo/');
     await pagina.waitForSelector('#cuadros .cuadro');
     comprueba('arranca en ayer', await pagina.inputValue('#dia'), iso(AYER));
-    comprueba('los nueve cuadrados, en su orden',
+    comprueba('los diez cuadrados, en su orden',
       await pagina.$$eval('#cuadros .cuadro', x => x.map(c => c.dataset.id)),
-      ['rutas', 'averias', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas']);
+      ['rutas', 'averias', 'devoluciones', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas']);
+    comprueba('devoluciones: el total del mes, sin semaforo, y lleva a su pagina',
+      [(await pagina.textContent('.cuadro[data-id="devoluciones"] .vl')).trim(),
+       await pagina.$eval('.cuadro[data-id="devoluciones"]', c => ['verde', 'amarillo', 'rojo'].some(k => c.classList.contains(k))),
+       await pagina.getAttribute('.cuadro[data-id="devoluciones"]', 'href')], ['518', false, '/devoluciones/']);
+    comprueba_que('y lo compara con el mes anterior, y dice cuantas son especiales',
+      (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('569 el mes anterior')
+      && (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('92 de solicitudes especiales'));
     comprueba('tarifas al 81,3 % en amarillo y lleva a su pagina',
       [await pagina.$eval('.cuadro[data-id="tarifas"]', c => c.classList.contains('amarillo')),
        await pagina.getAttribute('.cuadro[data-id="tarifas"]', 'href')], [true, '/tarifas/']);
@@ -753,10 +813,11 @@ const servidor = http.createServer((pet, res) => {
     comprueba('y ese cuadrado no lleva color de semaforo',
       await pagina.$eval('.cuadro[data-id="rutas"]', c => c.classList.contains('sin')), true);
     await pagina.selectOption('#dia', iso(AYER));
-    await Promise.all([pagina.waitForURL('**/panel/**'), pagina.click('.cuadro[data-id="averias"]')]);
-    await pagina.waitForSelector('#rejilla .panel');
-    comprueba('al pulsar averias, el panel abre filtrado en su seccion',
-      await pagina.$$eval('#filtros button[aria-pressed="true"]', x => x.map(b => b.dataset.f)), ['disponibilidad']);
+    comprueba('el cuadrado de averias se llama Incidencias',
+      await pagina.textContent('.cuadro[data-id="averias"] .et'), 'Incidencias');
+    await Promise.all([pagina.waitForURL('**/incidencias/**'), pagina.click('.cuadro[data-id="averias"]')]);
+    await pagina.waitForSelector('#kpis .kpi');
+    comprueba_que('y al pulsarlo abre su pagina', pagina.url().includes('/incidencias/'), pagina.url());
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
@@ -993,6 +1054,128 @@ const servidor = http.createServer((pet, res) => {
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nLas incidencias, como el Power BI (docs/56)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre('/incidencias/');
+    await pagina.waitForSelector('#kpis .kpi');
+    comprueba('arranca en los ultimos 3 meses: el ano no esta entero', await pagina.inputValue('#periodo'), 'tres');
+    const kpi = async i => pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent);
+    comprueba('siete incidencias, sin el preventivo que la noche ya quito', await kpi(1), '7');
+    comprueba('tasa de resolucion: 4 de 7', await kpi(2), '57,1 %');
+    comprueba('SLA: 3 de las 4 cerradas en menos de 24 h', await kpi(4), '75 %');
+    comprueba('y en amarillo, como el cuadrado', await pagina.$eval('#kpis .kpi:nth-child(4)', e => e.className), 'kpi amarillo');
+    comprueba('el centro con mas averias tecnicas va primero',
+      await pagina.$eval('#gTecnicas .fb .nom', e => e.textContent), 'INDUSTRIA DEL CURTIDO');
+    comprueba('y sin el grafico de devoluciones', await pagina.locator('#gDevol').count(), 0);
+    await pagina.click('#gZonas .fb[data-d="Levante - Murcia"]');
+    comprueba('pulsar una delegacion filtra por ella', [await pagina.inputValue('#deleg'), await kpi(1)], ['Levante - Murcia', '2']);
+    await pagina.click('#bLimpiar');
+    await pagina.selectOption('#estado', 'abierta');
+    comprueba('solo las abiertas: la tasa no aplica', [await kpi(1), await kpi(2)], ['3', '—']);
+    await pagina.selectOption('#estado', '');
+    await pagina.click('.hojas button[data-h="abiertas"]');
+    await pagina.waitForSelector('#tarjetas .kpi');
+    comprueba('las seis tarjetas', await pagina.$$eval('#tarjetas .kpi .vl', x => x.map(e => e.textContent)),
+      ['2', '1', '0', '0', '1', '1']);
+    comprueba('la que lleva mas dias, sin vender y de Serunion va primero',
+      await pagina.$$eval('#tLista tr.elige .mat', x => x.filter((_, i) => i % 2 === 0).map(e => e.textContent)), ['A-6', 'A-3']);
+    comprueba_que('la maquina critica va marcada', (await pagina.textContent('#tLista')).includes('crítica'));
+    await pagina.click('#tLista tr.elige:nth-child(2)');
+    comprueba_que('la ficha ensena sus notas', (await pagina.textContent('#ficha')).includes('vuelve a fallar'));
+    await pagina.click('#tarjetas button[data-t="criticas"]');
+    comprueba('maquinas criticas: las tres averias de M1',
+      await pagina.$$eval('#tLista tr.elige .mat', x => x.filter((_, i) => i % 2 === 0).map(e => e.textContent)).then(l => l.sort()),
+      ['A-1', 'A-2', 'A-3']);
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+
+    // Sin M13 no se ensena un estado que no se sabe: se dice por que.
+    const antes = API['/api/incidencias'];
+    API['/api/incidencias'] = { ...antes, estado_al_dia: false, fuente: 'D7 · EXT_SAT_AVERIAS y D8 · EXT_SAT_EVENTOS',
+      sin_estado: 'Falta el informe M13 · EXT_SAT_INCIDENCIAS de VenCloud (docs/17).',
+      incidencias: antes.incidencias.map(r => { const q = { ...r }; ['x', 'h', 'tx', 'u', 'p'].forEach(k => delete q[k]); return q; }) };
+    const b = await abre('/incidencias/?ver=abiertas');
+    await b.pagina.waitForSelector('#tarjetas .kpi');
+    comprueba_que('sin M13 lo dice arriba', (await b.pagina.textContent('#notaEstado')).includes('M13'));
+    comprueba('las abiertas sin dato, las criticas si', await b.pagina.$$eval('#tarjetas .kpi .vl', x => x.map(e => e.textContent)),
+      ['—', '—', '—', '—', '—', '1']);
+    await b.pagina.click('.hojas button[data-h="panel"]');
+    comprueba('el total si, la tasa no', [await b.pagina.$eval('#kpis .kpi:nth-child(1) .vl', e => e.textContent),
+      await b.pagina.$eval('#kpis .kpi:nth-child(2) .vl', e => e.textContent)], ['7', '—']);
+    comprueba('sin un solo error en la consola del navegador', b.errores, []);
+    await b.pagina.close();
+    API['/api/incidencias'] = antes;
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nLas devoluciones (docs/57)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre('/devoluciones/');
+    await pagina.waitForSelector('#kpis .kpi');
+    comprueba('arranca en el mes corriente, como el cuadrado', await pagina.inputValue('#periodo'), 'mes');
+    const kpi = async i => (await pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent)).trim();
+    comprueba('las cuatro de ayer, una sin cerrar', [await kpi(1), await kpi(2)], ['4', '1']);
+    comprueba('la mediana hasta cerrar: 1, 2 y 4 horas, 2', await kpi(3), '2 h');
+    comprueba('por origen: tres de atencion al cliente y una especial',
+      await pagina.$$eval('#gOrigen .fb', x => x.map(e => [e.dataset.o, e.querySelector('.v').textContent.split(' ')[0]])),
+      [['Atención al cliente', '3'], ['Solicitud especial', '1']]);
+    await pagina.click('#gOrigen .fb[data-o="Solicitud especial"]');
+    comprueba('pulsar el origen filtra por el', [await pagina.inputValue('#origen'), await kpi(1)], ['Solicitud especial', '1']);
+    await pagina.click('#bLimpiar');
+    comprueba_que('sin cerrar hoy cuenta tambien la vieja', (await pagina.textContent('#kpis .kpi:nth-child(2)')).includes('3 en total hoy'));
+    comprueba('un mes por columna, trece', await pagina.locator('#gMeses .golpe').count(), 13);
+    comprueba('la leyenda con los canales que hay', await pagina.$$eval('#leyenda span', x => x.map(e => e.textContent)),
+      ['En el sitio', 'Transferencia', 'Tarjeta de crédito']);
+    await pagina.hover('#gMeses .golpe[data-i="12"]');
+    comprueba_que('pasar por encima dice el reparto del mes', !(await pagina.$eval('#punta', e => e.hidden))
+      && (await pagina.textContent('#punta')).includes('Transferencia'));
+    comprueba_que('y el mes llega hasta ayer, como las cifras: tres, sin la de hoy',
+      (await pagina.textContent('#punta')).endsWith('Total4'), await pagina.textContent('#punta'));
+    await pagina.click('#bVista');
+    comprueba('y la misma cifra en tabla', await pagina.locator('#tMeses tbody tr').count(), 13);
+    await pagina.click('#bVista');
+    comprueba('por canal', await pagina.$$eval('#gCanal .fb .nom', x => x.map(e => e.textContent)),
+      ['En el sitio', 'Transferencia', 'Tarjeta de crédito']);
+    comprueba_que('el nombre del centro va escapado', (await pagina.innerHTML('#tCentros')).includes('CONSUM &lt;MURCIA&gt;'));
+    await pagina.click('#gCanal .fb[data-k="Transferencia"]');
+    comprueba('pulsar un canal filtra por el', [await pagina.inputValue('#canal'), await kpi(1)], ['Transferencia', '1']);
+    await pagina.click('#bLimpiar');
+    await pagina.click('#tCentros tr[data-c="1001"]');
+    comprueba('pulsar un centro filtra por el', [await pagina.inputValue('#centro'), await kpi(1)], ['1001', '2']);
+    await pagina.click('#bLimpiar');
+    await pagina.click('.hojas button[data-h="pendientes"]');
+    comprueba('sin cerrar: las tres, tambien la de hoy, la mas vieja primero',
+      await pagina.$$eval('#tLista tbody .mat', x => x.filter((_, i) => i % 2 === 0).map(e => e.textContent)), ['A-95', 'A-93', 'A-96']);
+    const [descarga] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bCsv')]);
+    comprueba('el CSV', descarga.suggestedFilename(), `devoluciones_sin_cerrar_${iso(AYER)}.csv`);
+    await pagina.click('.hojas button[data-h="panel"]');
+    await pagina.setViewportSize({ width: 380, height: 800 });
+    await pagina.waitForTimeout(250);
+    comprueba('en movil no se sale de la pantalla',
+      await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await pagina.emulateMedia({ colorScheme: 'dark' });
+    comprueba_que('en oscuro el fondo es oscuro',
+      (await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(18, 18, 17)');
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+
+    // Sin M13 no se cuenta nada: se dice por que.
+    const antes = API['/api/devoluciones'];
+    API['/api/devoluciones'] = { generado: antes.generado, perfil: 'interno', ultimo_dia: iso(AYER),
+      sin_dato: 'Falta el informe M13 · EXT_SAT_INCIDENCIAS de VenCloud (docs/17).', devoluciones: [] };
+    const b = await abre('/devoluciones/');
+    await b.pagina.waitForSelector('#aviso:not([hidden])');
+    comprueba_que('sin M13 lo dice', (await b.pagina.textContent('#aviso')).includes('M13'));
+    comprueba('sin un solo error en la consola del navegador', b.errores, []);
+    await b.pagina.close();
+    API['/api/devoluciones'] = antes;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 

@@ -316,6 +316,30 @@
       "clave_fecha": "ninguna",
       "destino": "maestros/articulos_fotos",
       "filas_mes": 355
+    },
+    {
+      "id": "m_empleados",
+      "nombre": "M11_EXT_MAESTRO_EMPLEADOS",
+      "informe": 190,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/empleados",
+      "filas_mes": 177
+    },
+    {
+      "id": "m_vehiculos",
+      "nombre": "M12_EXT_MAESTRO_VEHICULOS",
+      "informe": 191,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/vehiculos",
+      "filas_mes": 124
+    },
+    {
+      "id": "m_sat_incidencias",
+      "nombre": "M13_EXT_SAT_INCIDENCIAS",
+      "informe": 192,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/sat_incidencias",
+      "filas_mes": 48120
     }
   ],
   "descartados": {

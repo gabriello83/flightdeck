@@ -114,6 +114,19 @@ for _ in range(6):
     llama("POST", "/api/acceso", {"correo": "ana@airbus.com", "clave": "mala"})
 comprueba("bloqueado con 429",
           llama("POST", "/api/acceso", {"correo": "ana@airbus.com", "clave": "ClaveLarga123"})["statusCode"], 429)
+# El bloqueo caduca a su hora, aunque DynamoDB no haya borrado la fila: su TTL
+# llega cuando llega, a veces horas despues.
+import time as _t
+_fila = L.lee("FALLOS#ana@airbus.com", "CUENTA")
+comprueba("el contador guarda hasta cuando cuenta", _fila["hasta"] > _t.time(), True)
+L.escribe("FALLOS#ana@airbus.com", dict(_fila, hasta=int(_t.time()) - 1), "CUENTA")
+comprueba("pasada esa hora vuelve a entrar, aunque la fila siga ahi",
+          llama("POST", "/api/acceso", {"correo": "ana@airbus.com", "clave": "ClaveLarga123"})["statusCode"], 200)
+L.escribe("FALLOS#ana@airbus.com", {"n": 9}, "CUENTA")
+comprueba("una fila vieja, sin hora, ya no bloquea",
+          llama("POST", "/api/acceso", {"correo": "ana@airbus.com", "clave": "ClaveLarga123"})["statusCode"], 200)
+for _ in range(6):
+    llama("POST", "/api/acceso", {"correo": "ana@airbus.com", "clave": "mala"})
 falsos.TABLA.pop(("FALLOS#ana@airbus.com", "CUENTA"), None)
 comprueba("y al limpiar el contador vuelve a entrar",
           llama("POST", "/api/acceso", {"correo": "ana@airbus.com", "clave": "ClaveLarga123"})["statusCode"], 200)
@@ -239,6 +252,14 @@ comprueba("una clave inicial corta falla",
           llama("POST", "/api/admin/usuarios",
                 {"correo": "z@y.com", "nombre": "Z", "perfil_id": "cli-airbus",
                  "clave": "corta"}, cookie=COOKIE_JEFE)["statusCode"], 400)
+for _ in range(6):
+    llama("POST", "/api/acceso", {"correo": "pepe@airbus.com", "clave": "mala"})
+comprueba("Pepe se bloquea a los 6 intentos",
+          llama("POST", "/api/acceso", {"correo": "pepe@airbus.com", "clave": "ClaveInicial12"})["statusCode"], 429)
+comprueba("darle clave nueva desde la consola",
+          llama("POST", "/api/admin/usuarios/pepe@airbus.com/clave", {"clave": "OtraInicial123"},
+                cookie=COOKIE_JEFE)["statusCode"], 200)
+comprueba("le desbloquea en el acto", ("FALLOS#pepe@airbus.com", "CUENTA") in falsos.TABLA, False)
 comprueba("no puede borrarse a si mismo",
           llama("DELETE", "/api/admin/usuarios/jefe@serunion.es", cookie=COOKIE_JEFE)["statusCode"], 400)
 
@@ -497,7 +518,7 @@ comprueba("un cliente no lo tiene: solo el cuadro",
           llama("GET", "/api/operativo", cookie=COOKIE_ANA)["statusCode"], 403)
 o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA))
 comprueba("operaciones: los de sus sesiones (servicio, dinero y sat)", o["cuadrados"],
-          ["rutas", "averias", "furgonetas", "ventas", "reposiciones"])
+          ["rutas", "averias", "devoluciones", "furgonetas", "ventas", "reposiciones"])
 comprueba("sin almacenes: es nuestro stock, solo direccion", "almacenes" in o["foto"], False)
 comprueba("ni telemetria ni puntos de venta, que piden instalaciones",
           sorted(o["dias"]["2026-10-12"]), ["averias", "furgonetas", "reposiciones", "rutas", "ventas"])
@@ -505,8 +526,8 @@ comprueba("y el fichero es el de su perfil, aunque pida otro",
           cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA,
                           query={"perfil": "interno"}))["ultimo_dia"], "2026-10-12")
 o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_JEFE))
-comprueba("el administrador ve los nueve, tarifas la ultima", (len(o["cuadrados"]), o["cuadrados"][-1]),
-          (9, "tarifas"))
+comprueba("el administrador ve los diez, tarifas la ultima", (len(o["cuadrados"]), o["cuadrados"][-1]),
+          (10, "tarifas"))
 comprueba("almacenes incluido", o["foto"]["almacenes"]["valor"], 500000.0)
 del falsos.OBJETOS["cabina/ope-sur/operativo.json"]
 comprueba("sin calcular todavia, 503",
@@ -590,6 +611,46 @@ del falsos.OBJETOS["cabina/ope-sur/rutas.json.gz"]
 comprueba("sin calcular todavia, 503",
           llama("GET", "/api/rutas", cookie=COOKIE_OLGA)["statusCode"], 503)
 del falsos.OBJETOS["cabina/interno/rutas.json.gz"]
+
+print("\nLa pagina de incidencias (docs/56): el fichero del perfil de la sesion, comprimido")
+import base64 as _b64i  # noqa: E402
+falsos.OBJETOS["cabina/interno/incidencias.json.gz"] = gzip.compress(json.dumps({"perfil": "interno"}).encode())
+falsos.OBJETOS["cabina/ope-sur/incidencias.json.gz"] = gzip.compress(json.dumps({"perfil": "ope-sur"}).encode())
+
+
+def _inc(**kw):
+    x = llama("GET", "/api/incidencias", **kw)
+    if x["statusCode"] != 200:
+        return x["statusCode"]
+    return (x["headers"].get("content-encoding"),
+            json.loads(gzip.decompress(_b64i.b64decode(x["body"])))["perfil"])
+
+
+comprueba("un cliente no ve la pagina de incidencias", _inc(cookie=COOKIE_ANA), 403)
+comprueba("operaciones ve la de SU perfil, tal cual comprimida", _inc(cookie=COOKIE_OLGA), ("gzip", "ope-sur"))
+comprueba("y no hay parametro con el que pedir otra",
+          _inc(cookie=COOKIE_OLGA, query={"perfil": "interno"}), ("gzip", "ope-sur"))
+del falsos.OBJETOS["cabina/ope-sur/incidencias.json.gz"]
+comprueba("sin calcular todavia, 503", _inc(cookie=COOKIE_OLGA), 503)
+del falsos.OBJETOS["cabina/interno/incidencias.json.gz"]
+
+print("\nLa pagina de devoluciones (docs/57): igual, con su propio fichero")
+falsos.OBJETOS["cabina/ope-sur/devoluciones.json.gz"] = gzip.compress(json.dumps({"perfil": "ope-sur"}).encode())
+
+
+def _dev(**kw):
+    x = llama("GET", "/api/devoluciones", **kw)
+    if x["statusCode"] != 200:
+        return x["statusCode"]
+    return (x["headers"].get("content-encoding"),
+            json.loads(gzip.decompress(_b64i.b64decode(x["body"])))["perfil"])
+
+
+comprueba("un cliente no ve la pagina de devoluciones", _dev(cookie=COOKIE_ANA), 403)
+comprueba("operaciones ve la de SU perfil", _dev(cookie=COOKIE_OLGA, query={"perfil": "interno"}),
+          ("gzip", "ope-sur"))
+del falsos.OBJETOS["cabina/ope-sur/devoluciones.json.gz"]
+comprueba("sin calcular todavia, 503", _dev(cookie=COOKIE_OLGA), 503)
 
 print("\nLos almacenes por dentro (docs/54): solo quien ve su cuadrado")
 _alm = {"umbral_pct": 15, "almacenes": [{"almacen": "Sevilla", "productos": [

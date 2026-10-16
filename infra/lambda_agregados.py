@@ -73,6 +73,8 @@ import operativo as OP
 import tarifas as TA
 import telemetria as TE
 import almacenes as AL
+import incidencias as IN
+import devoluciones as DV
 from cuadro import Cuadro
 
 s3 = boto3.client("s3")
@@ -88,6 +90,11 @@ TABLA = os.environ.get("TABLA", f"{_PREFIJO}-plataforma")
 CLAVE_CENSO = os.environ.get("CENSO", "maestros/instalaciones/m_instalaciones.json.gz")
 # Donde se guarda el censo de la ultima ejecucion, para saber que es nuevo.
 CLAVE_CENSO_ANTERIOR = "cabina/_censo/anterior.json"
+# La foto de las incidencias de la SAT (M13, docs/56): las tareas de los ultimos
+# 400 dias y las que siguen abiertas, con su estado de hoy. Mientras VenCloud no
+# tenga el informe, la pagina de incidencias sale sin el estado y lo dice.
+CLAVE_SAT_INCIDENCIAS = os.environ.get("SAT_INCIDENCIAS",
+                                       "maestros/sat_incidencias/m_sat_incidencias.json.gz")
 # El maestro de rutas: lo unico que dice de que delegacion es cada almacen
 # (informe general operativo, docs/51).
 CLAVE_RUTAS = os.environ.get("RUTAS", "maestros/rutas/m_rutas.json.gz")
@@ -1193,6 +1200,34 @@ def escribe_tarifas(acu, op, tarifas, censo, observador, hoy):
             "sin_dato": t["sin_dato"], "centros": len(detalle)}
 
 
+def escribe_incidencias(acumuladores, operativos, incidencias, mapa, hoy):
+    """La pagina de incidencias (docs/56): un fichero por perfil.
+
+    Con la foto de M13, ademas, el cuadrado de Incidencias del informe general
+    recibe las aperturas y los cierres de hoy: sin ella solo ve los cierres de
+    los tres primeros dias de cada tarea, que son los que vuelve a bajar la
+    extraccion. Va antes de escribir el operativo.
+
+    De la misma foto salen las devoluciones (docs/57): su cuadrado y su pagina.
+    """
+    foto = _filas(_json_de(CLAVE_SAT_INCIDENCIAS))
+    for acu in acumuladores:
+        inc = incidencias[acu.perfil["id"]]
+        dev = DV.Devoluciones()
+        op = operativos[acu.perfil["id"]]
+        if foto:
+            propias = [f for f in foto if en_ambito(f, acu.ambito, mapa)]
+            inc.come_foto(propias)
+            dev.come_foto(propias)
+            op.come_sat(propias)
+            op.come_sat_eventos(inc.eventos_de_la_foto())
+        escribe_comprimido(f"cabina/{acu.perfil['id']}/incidencias.json.gz",
+                           inc.fichero(acu.perfil["id"], hoy))
+        escribe_comprimido(f"cabina/{acu.perfil['id']}/devoluciones.json.gz",
+                           dev.fichero(acu.perfil["id"], hoy))
+        op.foto["devoluciones"] = dev.cuadrado(hoy)
+
+
 def escribe_almacenes(acumuladores, operativos, existencias, rutas, hoy):
     """Los almacenes por dentro (docs/54): un fichero por perfil y las fotos.
 
@@ -1312,6 +1347,8 @@ def lambda_handler(event, context):
     # describen un dia de enero de 2025.
     publicar = [] if historico else dias[:OP.DIAS_NOCHE]
     operativos = {acu.perfil["id"]: OP.Operativo(publicar) for acu in acumuladores}
+    # La pagina de incidencias (docs/56): las tareas de la SAT de toda la ventana.
+    incidencias = {acu.perfil["id"]: IN.Incidencias() for acu in acumuladores}
 
     leidas = defaultdict(int)
     mapa = MapaCentros()
@@ -1409,6 +1446,10 @@ def lambda_handler(event, context):
                 acu.filas_en_ambito += len(propias)
                 if propias and not historico:
                     come_operativo(op, dia, nombre, propias, clase_de)
+                    if nombre == "sat":
+                        incidencias[acu.perfil["id"]].come_tareas(propias)
+                    elif nombre == "sat_eventos":
+                        incidencias[acu.perfil["id"]].come_eventos(propias)
                 if propias and metodo and not historico:
                     getattr(acu, metodo)(propias)
                 if propias:
@@ -1460,6 +1501,7 @@ def lambda_handler(event, context):
         maestro_tarifas = _filas(_json_de(CLAVE_TARIFAS))
         tarifas = TA.Tarifas(maestro_tarifas) if maestro_tarifas else None
         censo = _filas(_json_de(CLAVE_CENSO)) if tarifas else []
+        escribe_incidencias(acumuladores, operativos, incidencias, mapa, hoy)
         for acu in acumuladores:
             op = operativos[acu.perfil["id"]]
             op.pon_almacenes(OP.almacenes(op.balance, rutas, acu.ambito))

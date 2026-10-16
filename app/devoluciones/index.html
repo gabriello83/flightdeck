@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devoluciones · digivend</title>
+<!-- Un solo origen. Esta pagina habla con /api/* del mismo dominio y con nadie
+     mas: hay redes de cliente que cortan las paginas que llaman fuera. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%237a4e1d'/%3E%3Ccircle cx='8' cy='8' r='4.2' fill='none' stroke='white' stroke-width='1.4'/%3E%3Cpath d='M8 5.8v4.4' stroke='white' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6; --barra:#2a78d6; --pista:#ebeae6; --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+  /* El semaforo, el mismo del informe general. El amarillo lleva texto oscuro. */
+  --verde:#15803d; --amarillo:#f2b705; --rojo:#c62828; --sin:#d9d8d2;
+  --t-verde:#ffffff; --t-amarillo:#1b1b1b; --t-rojo:#ffffff; --t-sin:#52514e;
+  --texto-verde:#15803d; --texto-rojo:#c62828;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --barra:#3987e5; --pista:#262624; --sombra:none;
+    --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b; --sin:#3a3a36;
+    --t-sin:#c3c2b7; --texto-verde:#4ade80; --texto-rojo:#f87171;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --barra:#3987e5; --pista:#262624; --sombra:none;
+  --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b; --sin:#3a3a36;
+  --t-sin:#c3c2b7; --texto-verde:#4ade80; --texto-rojo:#f87171;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1240px;margin:0 auto;padding:18px 16px 72px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+.marca{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn,a.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);text-decoration:none;
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
+button.btn:hover,a.btn:hover{border-color:var(--tinta-3)}
+button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);color:#fff}
+button.btn:disabled{opacity:.5;cursor:default}
+.hojas{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 0}
+.barra{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:14px 0 6px}
+.barra label{font-size:13px;color:var(--tinta-2);display:flex;align-items:center;gap:8px;min-width:0}
+.barra select,.barra input{
+  font:inherit;font-size:14px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:5px 8px;max-width:100%
+}
+.barra select{max-width:260px}
+.barra input[type=search]{min-width:220px}
+.nota{
+  margin:12px 0 4px;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+.nota.mal{border-left-color:var(--rojo)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:14px}
+.kpi{background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:11px 13px;box-shadow:var(--sombra);
+     text-align:left;font:inherit;color:inherit}
+.kpi .et{font-size:12px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
+.kpi .vl{font-size:26px;font-weight:650;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .nt{font-size:12px;color:var(--tinta-3);margin-top:2px}
+.kpi .dl{font-size:12.5px;color:var(--tinta-2);margin-top:4px;font-variant-numeric:tabular-nums}
+.kpi.verde{background:var(--verde);border-color:var(--verde)}
+.kpi.amarillo{background:var(--amarillo);border-color:var(--amarillo)}
+.kpi.rojo{background:var(--rojo);border-color:var(--rojo)}
+.kpi.verde *,.kpi.rojo *{color:var(--t-verde)!important}
+.kpi.amarillo *{color:var(--t-amarillo)!important}
+button.kpi{cursor:pointer}
+button.kpi:hover{border-color:var(--tinta-3)}
+button.kpi[aria-pressed="true"]{border-color:var(--s1);box-shadow:0 0 0 2px var(--s1) inset}
+.mejor{color:var(--texto-verde);font-weight:600}
+.peor{color:var(--texto-rojo);font-weight:600}
+section.caja{
+  background:var(--tarjeta);border:1px solid var(--borde);border-radius:12px;
+  padding:12px 16px 14px;box-shadow:var(--sombra);margin-top:14px;min-width:0
+}
+.cabsec{display:flex;align-items:baseline;gap:12px;justify-content:space-between;flex-wrap:wrap}
+section.caja h2{font-size:15px;margin:0;font-weight:650}
+section.caja .sub{font-size:12.5px;color:var(--tinta-2);margin:2px 0 10px}
+.dos{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.dos > section.caja{margin-top:14px}
+.ficha-y-tabla{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:14px;align-items:start}
+/* Barras: una sola serie, del color de la marca. El numero va siempre escrito
+   al lado, asi que la barra no es la unica forma de leerlo. */
+.barras{display:flex;flex-direction:column;gap:3px}
+.fb{display:grid;grid-template-columns:minmax(120px,240px) 1fr;gap:10px;align-items:center;
+    padding:3px 4px;border-radius:6px;cursor:pointer;background:none;border:0;font:inherit;color:inherit;text-align:left;width:100%}
+.fb:hover{background:color-mix(in srgb, var(--s1) 6%, transparent)}
+.fb.elegida{background:color-mix(in srgb, var(--s1) 12%, transparent)}
+.fb .nom{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fb .pis{display:flex;align-items:center;gap:8px;min-width:0}
+.fb .b{height:14px;border-radius:0 4px 4px 0;background:var(--barra);min-width:2px}
+.fb .v{font-size:12.5px;color:var(--tinta-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.zona{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--tinta-3);margin:8px 0 2px 4px;
+      display:flex;gap:8px}
+.zona:first-child{margin-top:0}
+.tabla{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--tinta-2);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;
+   padding:6px 10px 6px 0;border-bottom:1px solid var(--borde);white-space:nowrap}
+td{padding:7px 10px 7px 0;border-bottom:1px solid var(--borde);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.elige{cursor:pointer}
+tr.elige:hover td{background:color-mix(in srgb, var(--s1) 6%, transparent)}
+tr.elegida td{background:color-mix(in srgb, var(--s1) 12%, transparent)}
+.mat{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;white-space:nowrap}
+.tenue{color:var(--tinta-3);font-size:12px}
+.etq{display:inline-block;font-size:11.5px;border-radius:5px;padding:0 6px;border:1px solid var(--borde-fuerte);
+     color:var(--tinta-2);white-space:nowrap}
+.dias{display:inline-block;min-width:44px;white-space:nowrap;text-align:center;border-radius:6px;padding:0 6px;font-weight:650;
+      font-variant-numeric:tabular-nums;background:var(--sin);color:var(--t-sin)}
+.dias.verde{background:var(--verde);color:var(--t-verde)}
+.dias.amarillo{background:var(--amarillo);color:var(--t-amarillo)}
+.dias.rojo{background:var(--rojo);color:var(--t-rojo)}
+.ficha{position:sticky;top:12px}
+.ficha dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13.5px}
+.ficha dt{color:var(--tinta-3);font-size:12px;text-transform:uppercase;letter-spacing:.03em;padding-top:2px}
+.ficha dd{margin:0;overflow-wrap:anywhere}
+.ficha .texto{margin-top:10px;padding:9px 11px;border-radius:8px;background:var(--fondo);font-size:13.5px;white-space:pre-wrap;overflow-wrap:anywhere}
+.vacio{color:var(--tinta-3);font-size:13.5px;padding:8px 0}
+footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+#cargando{padding:40px 0;color:var(--tinta-2)}
+@media (max-width:900px){
+  .dos,.ficha-y-tabla{grid-template-columns:1fr}
+  .ficha{position:static}
+}
+@media (max-width:700px){
+  .tabla table,.tabla tbody,.tabla tr,.tabla td{display:block;width:100%}
+  .tabla thead{display:none}
+  .tabla tr{border-bottom:1px solid var(--borde);padding:9px 0}
+  .tabla tr:last-child{border-bottom:0}
+  .tabla td{border:0;padding:2px 0;text-align:left!important;overflow-wrap:anywhere}
+  .tabla td[data-et]:not(:empty)::before{content:attr(data-et) " · ";color:var(--tinta-3);font-size:12px}
+  .barra input[type=search]{min-width:0;width:100%}
+  .barra label.busca{flex:1 1 100%}
+  .barra select{max-width:100%;min-width:0}
+  .barra label{flex:1 1 calc(50% - 8px)}
+  .barra label select{flex:1}
+  .fb{grid-template-columns:minmax(90px,40%) 1fr}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kpi .vl{font-size:22px}
+}
+/* Los canales de devolucion: la paleta categorica de la plataforma, en orden
+   fijo (el color va con el canal, no con su puesto). Validada con el
+   comprobador de paletas en claro y en oscuro; en claro tres quedan por debajo
+   de 3:1 contra el fondo, y por eso cada cifra va escrita y hay vista de tabla. */
+:root{ --k0:#2a78d6; --k1:#eb6834; --k2:#1baf7a; --k3:#eda100; --k4:#e87ba4; --rejilla:#e1e0d9; --eje:#c3c2b7; --tenue-eje:#898781; }
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){ --k0:#3987e5; --k1:#d95926; --k2:#199e70; --k3:#c98500; --k4:#d55181; --rejilla:#2c2c2a; --eje:#383835; }
+}
+:root[data-theme="dark"]{ --k0:#3987e5; --k1:#d95926; --k2:#199e70; --k3:#c98500; --k4:#d55181; --rejilla:#2c2c2a; --eje:#383835; }
+.leyenda{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0 0 8px;font-size:12.5px;color:var(--tinta-2)}
+.leyenda span{display:inline-flex;align-items:center;gap:6px}
+.leyenda i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.grafico{position:relative}
+.grafico svg{display:block;width:100%;overflow:visible}
+.grafico svg text{font-family:inherit}
+.punta{position:absolute;pointer-events:none;background:var(--tarjeta);border:1px solid var(--borde-fuerte);border-radius:8px;
+       padding:8px 10px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.12);min-width:170px;z-index:2}
+.punta b{display:block;margin-bottom:3px}
+.punta .l{display:flex;justify-content:space-between;gap:12px;font-variant-numeric:tabular-nums}
+.punta .l span:first-child{display:inline-flex;align-items:center;gap:6px;color:var(--tinta-2)}
+.punta i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.fb.canal .b{background:var(--kc)}
+</style>
+</head>
+<body>
+<div class="env">
+  <header class="top">
+    <div class="marca">
+      <b>Devoluciones</b>
+      <span id="quien"></span>
+    </div>
+    <div class="acciones">
+      <a class="btn" href="/operativo/">Informe general</a>
+      <a class="btn" href="/incidencias/">Incidencias</a>
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn" id="bSalir" type="button">Salir</button>
+    </div>
+  </header>
+
+  <div id="cargando">Cargando…</div>
+  <div class="nota" id="aviso" hidden></div>
+
+  <div id="todo" hidden>
+    <div class="hojas" role="tablist">
+      <button class="btn" type="button" role="tab" data-h="panel">Panel de control</button>
+      <button class="btn" type="button" role="tab" data-h="pendientes">Sin cerrar</button>
+    </div>
+
+    <div class="barra">
+      <label class="solo-panel">Periodo <select id="periodo">
+        <option value="mes">Mes corriente</option>
+        <option value="ultimo">Último mes</option>
+        <option value="tres">Últimos 3 meses</option>
+        <option value="anio">Último año</option>
+        <option value="libre">Intervalo libre</option>
+      </select></label>
+      <label class="solo-panel libre" hidden>Desde <input type="date" id="desde"></label>
+      <label class="solo-panel libre" hidden>Hasta <input type="date" id="hasta"></label>
+      <label>Origen <select id="origen"></select></label>
+      <label>Canal <select id="canal"></select></label>
+      <label>Zona <select id="zona"></select></label>
+      <label>Delegación <select id="deleg"></select></label>
+      <label>Centro <select id="centro"></select></label>
+      <button class="btn" id="bLimpiar" type="button">Limpiar filtros</button>
+    </div>
+
+    <!-- ============================ hoja 1 ============================ -->
+    <div id="hPanel">
+      <p class="tenue" id="rango"></p>
+      <div class="kpis" id="kpis"></div>
+
+      <section class="caja">
+        <div class="cabsec"><h2>Devoluciones por mes y canal</h2>
+          <button class="btn" id="bVista" type="button" aria-pressed="false">Ver como tabla</button></div>
+        <p class="sub" id="sMeses"></p>
+        <div class="leyenda" id="leyenda"></div>
+        <div class="grafico" id="gMeses"></div>
+        <div class="tabla" id="tMeses" hidden></div>
+      </section>
+
+      <div class="dos">
+        <section class="caja">
+          <div class="cabsec"><h2>Por canal</h2><span class="tenue">Pulsa un canal para filtrar por él</span></div>
+          <p class="sub" id="sCanal"></p>
+          <div id="gCanal"></div>
+          <div class="cabsec" style="margin-top:16px"><h2>Por origen</h2><span class="tenue">Pulsa uno para filtrar por él</span></div>
+          <p class="sub">En VenCloud están en solicitudes especiales (serie E) y en atención al cliente (serie A).</p>
+          <div id="gOrigen"></div>
+        </section>
+        <section class="caja">
+          <div class="cabsec"><h2>Por zona y delegación</h2><span class="tenue">Pulsa una delegación para filtrar</span></div>
+          <p class="sub" id="sZonas"></p>
+          <div id="gZonas"></div>
+        </section>
+      </div>
+
+      <section class="caja">
+        <div class="cabsec"><h2>Los 15 centros con más devoluciones</h2><span class="tenue">Pulsa un centro para filtrar por él</span></div>
+        <p class="sub">Cada canal en su columna. «Sin cerrar» son las del periodo que siguen abiertas hoy.</p>
+        <div class="tabla" id="tCentros"></div>
+      </section>
+
+      <div class="dos">
+        <section class="caja">
+          <div class="cabsec"><h2>Las 15 máquinas con más devoluciones</h2></div>
+          <p class="sub">Muchas devoluciones en la misma máquina suelen apuntar al monedero, al lector de tarjetas o a un carril que no suelta el producto.</p>
+          <div class="tabla" id="tMaquinas"></div>
+        </section>
+        <section class="caja">
+          <div class="cabsec"><h2>Por técnico</h2></div>
+          <p class="sub">El técnico asignado a cada devolución y lo que tarda en cerrarlas.</p>
+          <div class="tabla" id="tTecnicos"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ============================ hoja 2 ============================ -->
+    <div id="hPendientes" hidden>
+      <section class="caja">
+        <div class="cabsec"><h2>Devoluciones sin cerrar</h2><span class="tenue" id="cLista"></span></div>
+        <p class="sub">Todas las que siguen abiertas hoy, sean de cuando sean, la que más lleva esperando primero.</p>
+        <div class="barra" style="margin-top:0">
+          <label class="busca">Buscar <input id="busca" type="search" placeholder="Nº, máquina, centro, técnico…"></label>
+          <button class="btn" id="bCsv" type="button">Descargar CSV</button>
+        </div>
+        <div class="tabla" id="tLista"></div>
+      </section>
+    </div>
+  </div>
+
+  <footer id="pie" hidden></footer>
+</div>
+
+<script>
+/* ===================================================================
+   Devoluciones · digivend.es  (docs/57)
+
+   Lo que abre el cuadrado de Devoluciones del informe general: las
+   devoluciones de dinero de la SAT, que Gabriele sacó del estudio de
+   incidencias el 16-oct-2026 para verlas aparte. Se cuentan devoluciones, no
+   euros: VenCloud no guarda el importe en ningún campo.
+
+   El fichero ya llega con el ámbito del perfil aplicado: lo escribió la noche
+   para este perfil, y la API no deja pedir otro. Esta página no decide qué
+   ve nadie: filtra, cuenta y dibuja.
+   =================================================================== */
+const CLAVE_TEMA = "digivend.tema";
+const nf = new Intl.NumberFormat("es-ES");
+const num = n => nf.format(Math.round(n||0));
+const dec = (n, d=1) => n==null ? "—" : new Intl.NumberFormat("es-ES",{maximumFractionDigits:d, minimumFractionDigits:0}).format(n);
+const fpct = p => p==null ? "—" : dec(p) + " %";
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = s => document.querySelector(s);
+const PRIMERAS = 100;
+
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = $("#bTema");
+  const oscuro = () => document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const pinta = () => { b.textContent = oscuro() ? "Modo claro" : "Modo oscuro"; };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const n = oscuro() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+  });
+})();
+$("#bSalir").addEventListener("click", async ()=>{
+  try{ await fetch("/api/salir", {method:"POST", credentials:"same-origin"}); }catch(e){}
+  location.href = "/";
+});
+
+let D = null, DEV = [], HOJA = "panel", TODAS_FILAS = false, TABLA = false;
+
+/* ------------------------------------------------------------ fechas */
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const deIso = s => { const [a,m,d] = String(s).slice(0,10).split("-").map(Number); return new Date(a, m-1, d); };
+const sumaDias = (s, n) => { const d = deIso(s); d.setDate(d.getDate()+n); return iso(d); };
+const inicioMes = (s, menos=0) => { const d = deIso(s); return iso(new Date(d.getFullYear(), d.getMonth()-menos, 1)); };
+const finMes = (s, menos=0) => { const d = deIso(s); return iso(new Date(d.getFullYear(), d.getMonth()-menos+1, 0)); };
+/* El mismo dia unos meses antes, sin pasarse del final de ese mes. */
+const mismoDia = (s, menos) => { const d = deIso(s), f = new Date(d.getFullYear(), d.getMonth()-menos+1, 0);
+  return iso(new Date(f.getFullYear(), f.getMonth(), Math.min(d.getDate(), f.getDate()))); };
+function fechaCorta(s){
+  const d = deIso(s);
+  return Number.isNaN(d.getTime()) ? String(s) : d.toLocaleDateString("es-ES",{day:"numeric", month:"short", year:"numeric"});
+}
+function fechaHora(s){
+  if(!s) return "—";
+  return String(s).length > 10 ? `${fechaCorta(s)} ${String(s).slice(11,16)}` : fechaCorta(s);
+}
+const nombreMes = (p, largo) => deIso(p + "-01").toLocaleDateString("es-ES", largo ? {month:"long", year:"numeric"} : {month:"short"}).replace(".", "");
+
+/* Los periodos, contados hasta ayer (el último día que trae el fichero), cada
+   uno con el periodo con el que se compara. Arranca en el mes corriente: es la
+   cifra del cuadrado. */
+function periodo(){
+  const fm = D.ultimo_dia, p = $("#periodo").value;
+  if(p === "mes") return {d: inicioMes(fm), h: fm, pd: inicioMes(fm,1), ph: mismoDia(fm,1), nombre:"los mismos días del mes anterior"};
+  if(p === "ultimo") return {d: inicioMes(fm,1), h: finMes(fm,1), pd: inicioMes(fm,2), ph: finMes(fm,2), nombre:"el mes de antes"};
+  if(p === "tres") return {d: inicioMes(fm,2), h: fm, pd: inicioMes(fm,5), ph: mismoDia(fm,3), nombre:"los tres meses de antes"};
+  if(p === "anio") return {d: inicioMes(fm,11), h: fm, pd: inicioMes(fm,23), ph: mismoDia(fm,12), nombre:"el año de antes"};
+  let d = $("#desde").value || inicioMes(fm), h = $("#hasta").value || fm;
+  if(h < d) [d, h] = [h, d];
+  const largo = Math.round((deIso(h) - deIso(d)) / 864e5) + 1;
+  return {d, h, pd: sumaDias(d, -largo), ph: sumaDias(d, -1), nombre:`los ${num(largo)} días de antes`};
+}
+
+/* ------------------------------------------------------------ filtros */
+const abierta = r => !("x" in r);
+const fila = r => r._;
+function prepara(){
+  DEV = (D.devoluciones||[]).map(r => {
+    const c = D.centros[r.c] || [], dl = D.delegaciones[r.d] || "";
+    r._ = {dia: r.a.slice(0,10), mes: r.a.slice(0,7), deleg: dl, zona: (D.zonas||{})[dl] || "Otra zona",
+           num_centro: c[0]||"", centro: c[1]||"", cod_cliente: c[2]||"", cliente: c[3]||"",
+           canal: (D.canales||[])[r.k] || "Otra", tecnico: (D.tecnicos||[])[r.t] || "",
+           origen: (D.origenes||["Atención al cliente","Solicitud especial"])[r.e ? 1 : 0]};
+    return r;
+  });
+}
+const colorCanal = k => `var(--k${Math.max(0, (D.canales||[]).indexOf(k))})`;
+function enLugar(r){
+  const o = $("#origen").value, k = $("#canal").value, z = $("#zona").value, dl = $("#deleg").value, c = $("#centro").value, x = fila(r);
+  return (!o || x.origen===o) && (!k || x.canal===k) && (!z || x.zona===z) && (!dl || x.deleg===dl) && (!c || x.num_centro===c);
+}
+const entre = (r, d, h) => fila(r).dia >= d && fila(r).dia <= h;
+
+function opciones(sel, valores, todas, etiqueta){
+  const antes = sel.value;
+  sel.innerHTML = `<option value="">${esc(todas)}</option>` + valores.map(v =>
+    `<option value="${esc(v[0])}">${esc(etiqueta ? etiqueta(v) : v[1])}</option>`).join("");
+  sel.value = valores.some(v => String(v[0])===antes) ? antes : "";
+}
+function pintaFiltros(){
+  const origenes = [...new Set(DEV.map(r=>fila(r).origen))].sort((a,b)=>a.localeCompare(b,"es"));
+  opciones($("#origen"), origenes.map(o=>[o,o]), "Todos");
+  const hay = new Set(DEV.map(r=>fila(r).canal));
+  opciones($("#canal"), (D.canales||[]).filter(k=>hay.has(k)).map(k=>[k,k]), "Todos");
+  const zonas = [...new Set(DEV.map(r=>fila(r).zona))].sort((a,b)=>a.localeCompare(b,"es"));
+  opciones($("#zona"), zonas.map(z=>[z,z]), "Todas");
+  const z = $("#zona").value;
+  const delegs = [...new Set(DEV.filter(r=>!z || fila(r).zona===z).map(r=>fila(r).deleg))].filter(Boolean)
+    .sort((a,b)=>a.localeCompare(b,"es"));
+  opciones($("#deleg"), delegs.map(d=>[d,d]), "Todas");
+  const dl = $("#deleg").value, centros = new Map();
+  DEV.forEach(r => { const x = fila(r);
+    if((!z || x.zona===z) && (!dl || x.deleg===dl) && x.num_centro) centros.set(x.num_centro, x.centro); });
+  opciones($("#centro"), [...centros].sort((a,b)=>a[1].localeCompare(b[1],"es")), "Todos",
+    v => `${v[1]} (${v[0]})`);
+}
+
+/* ------------------------------------------------------------ hoja 1 */
+function mediana(xs){
+  const s = xs.slice().sort((a,b)=>a-b);
+  return s.length ? (s.length%2 ? s[(s.length-1)/2] : (s[s.length/2-1]+s[s.length/2])/2) : null;
+}
+function medidas(lista){
+  const hs = lista.filter(r=>r.h!=null).map(r=>r.h);
+  const porMaq = new Map();
+  lista.forEach(r => { if(r.m) porMaq.set(r.m, (porMaq.get(r.m)||0)+1); });
+  return {
+    total: lista.length,
+    sin_cerrar: lista.filter(abierta).length,
+    mediana: mediana(hs),
+    media: hs.length ? hs.reduce((a,b)=>a+b,0)/hs.length : null,
+    con_horas: hs.length,
+    maquinas: porMaq.size,
+    repetidas: [...porMaq.values()].filter(n=>n>=3).length,
+  };
+}
+/* La flecha dice hacia donde va; el color, si es para bien. Mas devoluciones,
+   mas horas o mas maquinas es peor. */
+function delta(actual, previo){
+  if(actual==null || previo==null) return `<div class="dl tenue">sin periodo anterior con que comparar</div>`;
+  if(!previo) return `<div class="dl tenue">el periodo anterior está a cero</div>`;
+  const v = 100*(actual-previo)/previo;
+  if(Math.abs(v) < 0.05) return `<div class="dl">= igual que ${esc(periodo().nombre)}</div>`;
+  return `<div class="dl"><span class="${v<0?"mejor":"peor"}">${v>0?"▲":"▼"} ${dec(Math.abs(v))} %</span> contra ${esc(periodo().nombre)}</div>`;
+}
+function pintaPanel(){
+  const p = periodo(), desde = D.desde || p.d;
+  const lugar = DEV.filter(enLugar);
+  const ahora = lugar.filter(r=>entre(r, p.d, p.h));
+  const hayPrevio = p.pd >= desde;
+  const antes = hayPrevio ? lugar.filter(r=>entre(r, p.pd, p.ph)) : null;
+  const a = medidas(ahora), b = antes ? medidas(antes) : {};
+  $("#rango").textContent = `Del ${fechaCorta(p.d)} al ${fechaCorta(p.h)}, por la fecha en que entró cada devolución.`
+    + (p.d < desde ? ` Ojo: los datos empiezan el ${fechaCorta(desde)}.` : "");
+  const kpi = (et, vl, nt, dl) => `<div class="kpi"><div class="et">${esc(et)}</div>
+    <div class="vl">${vl}</div><div class="nt">${nt}</div>${dl||""}</div>`;
+  const pendientesHoy = lugar.filter(abierta).length;
+  $("#kpis").innerHTML =
+    kpi("Devoluciones", num(a.total), "entradas en el periodo", delta(a.total, antes ? b.total : null))
+    + kpi("Sin cerrar", num(a.sin_cerrar), `de las del periodo · ${num(pendientesHoy)} en total hoy`,
+          `<div class="dl tenue">${a.total ? fpct(100*a.sin_cerrar/a.total) + " de las del periodo" : ""}</div>`)
+    + kpi("Tiempo hasta cerrar", a.mediana==null ? "—" : `${dec(a.mediana)} h`,
+          a.media==null ? "mediana de las cerradas con hora" : `mediana · la media es ${dec(a.media)} h`,
+          delta(a.mediana, antes ? b.mediana : null))
+    + kpi("Máquinas", num(a.maquinas), `con alguna devolución · ${num(a.repetidas)} con 3 o más`,
+          delta(a.maquinas, antes ? b.maquinas : null));
+  pintaMeses(lugar, p);
+  pintaCanal(ahora);
+  pintaZonas(ahora);
+  pintaCentros(ahora);
+  pintaMaquinas(ahora);
+  pintaTecnicos(ahora);
+}
+
+/* Las barras horizontales: una serie, el numero siempre escrito al lado. */
+function barras(filas, max, attr, elegido, color){
+  return `<div class="barras">${filas.map(([clave, nombre, n, titulo, extra])=>
+    `<button type="button" class="fb${color?" canal":""}${clave===elegido?" elegida":""}" ${attr}="${esc(clave)}" title="${esc(titulo||nombre)}: ${num(n)}"
+      ${color ? `style="--kc:${color(clave)}"` : ""}>
+      <span class="nom">${esc(nombre)}</span>
+      <span class="pis"><span class="b" style="width:${max ? Math.max(.5, 100*n/max) : 0}%"></span><span class="v">${num(n)}${extra||""}</span></span>
+    </button>`).join("")}</div>`;
+}
+
+/* ---- el grafico de meses: columnas apiladas por canal, una por mes de los
+   trece que trae el fichero. Respeta canal y lugar, no el periodo: es la
+   historia entera, con el periodo elegido marcado debajo. */
+function meses(){
+  const out = [], fin = D.ultimo_dia.slice(0,7);
+  let m = (D.desde || inicioMes(D.ultimo_dia, 12)).slice(0,7);
+  while(m <= fin){ out.push(m); const d = deIso(m+"-01"); m = iso(new Date(d.getFullYear(), d.getMonth()+1, 1)).slice(0,7); }
+  return out;
+}
+function ticks(max){
+  if(max <= 0) return [0];
+  const paso0 = max / 4, pot = Math.pow(10, Math.floor(Math.log10(paso0)));
+  const paso = [1,2,2.5,5,10].map(f=>f*pot).find(s=>s >= paso0);
+  const out = []; for(let v=0; v <= max + paso*0.001; v += paso) out.push(v);
+  if(out[out.length-1] < max) out.push(out[out.length-1] + paso);
+  return out;
+}
+/* Rectangulo con las esquinas de arriba redondeadas: el final del dato. */
+function colTop(x, y, w, h, r){
+  r = Math.min(r, w/2, h);
+  return `M${x},${y+h}V${y+r}Q${x},${y} ${x+r},${y}H${x+w-r}Q${x+w},${y} ${x+w},${y+r}V${y+h}Z`;
+}
+function pintaMeses(lugar, p){
+  const ms = meses(), canales = D.canales || [];
+  const cuenta = new Map(ms.map(m=>[m, new Map()]));
+  /* Hasta ayer, como las cifras de arriba: la foto de la noche ya trae las de hoy. */
+  lugar.forEach(r => { const x = fila(r), c = cuenta.get(x.mes);
+    if(c && x.dia <= D.ultimo_dia) c.set(x.canal, (c.get(x.canal)||0)+1); });
+  const usados = canales.filter(k => ms.some(m => cuenta.get(m).get(k)));
+  const totales = ms.map(m => [...cuenta.get(m).values()].reduce((a,b)=>a+b,0));
+  const parcial = D.ultimo_dia.slice(0,7);
+  $("#sMeses").textContent = `${num(totales.reduce((a,b)=>a+b,0))} devoluciones en ${num(ms.length)} meses. `
+    + `${nombreMes(parcial, true).replace(/^./, c=>c.toUpperCase())} va hasta el ${fechaCorta(D.ultimo_dia)}. Pasa por encima de una columna para ver su reparto.`;
+  $("#leyenda").innerHTML = usados.map(k => `<span><i style="background:${colorCanal(k)}"></i>${esc(k)}</span>`).join("");
+  /* La vista de tabla: la misma cifra, para quien no distingue los colores. */
+  $("#tMeses").innerHTML = `<table><thead><tr><th>Mes</th>${usados.map(k=>`<th class="n">${esc(k)}</th>`).join("")}<th class="n">Total</th></tr></thead><tbody>
+    ${ms.map((m,i)=>`<tr><td data-et="Mes">${esc(nombreMes(m, true))}${m===parcial?" <span class=\"tenue\">(hasta ayer)</span>":""}</td>
+      ${usados.map(k=>`<td class="n" data-et="${esc(k)}">${num(cuenta.get(m).get(k)||0)}</td>`).join("")}
+      <td class="n" data-et="Total"><b>${num(totales[i])}</b></td></tr>`).join("")}</tbody></table>`;
+  $("#gMeses").hidden = TABLA; $("#tMeses").hidden = !TABLA;
+  $("#bVista").textContent = TABLA ? "Ver como gráfico" : "Ver como tabla";
+  $("#bVista").setAttribute("aria-pressed", String(TABLA));
+  if(TABLA) return;
+
+  const caja = $("#gMeses"), W = Math.max(280, caja.clientWidth || 600), H = 240;
+  const izq = 40, der = 6, arr = 18, abj = 34, ancho = W - izq - der, alto = H - arr - abj;
+  const tk = ticks(Math.max(...totales, 0)), tope = tk[tk.length-1] || 1;
+  const banda = ancho / ms.length, w = Math.max(6, Math.min(44, banda * 0.62));
+  const y = v => arr + alto - alto * v / tope;
+  const movil = W < 520;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Devoluciones por mes y canal">`;
+  tk.forEach(v => { svg += `<line x1="${izq}" x2="${W-der}" y1="${y(v)}" y2="${y(v)}" style="stroke:${v?"var(--rejilla)":"var(--eje)"}" stroke-width="1"/>`
+    + `<text x="${izq-6}" y="${y(v)+4}" text-anchor="end" font-size="11" style="fill:var(--tenue-eje)">${num(v)}</text>`; });
+  ms.forEach((m, i) => {
+    const cx = izq + banda*i + banda/2, x0 = cx - w/2, enPeriodo = m >= p.d.slice(0,7) && m <= p.h.slice(0,7);
+    let base = 0;
+    const segs = usados.map(k => [k, cuenta.get(m).get(k)||0]).filter(s=>s[1]);
+    segs.forEach(([k, n], j) => {
+      const y1 = y(base + n), y0 = y(base), h = Math.max(0, y0 - y1 - (j ? 2 : 0));
+      const top = j === segs.length - 1;
+      svg += top ? `<path d="${colTop(x0, y1, w, h, 4)}" style="fill:${colorCanal(k)}"/>`
+                 : `<rect x="${x0}" y="${y1}" width="${w}" height="${h}" style="fill:${colorCanal(k)}"/>`;
+      base += n;
+    });
+    if(!movil && totales[i]) svg += `<text x="${cx}" y="${y(totales[i])-5}" text-anchor="middle" font-size="11" style="fill:var(--tinta-2)">${num(totales[i])}</text>`;
+    const mostrar = !movil || i % 2 === (ms.length-1) % 2;
+    if(mostrar) svg += `<text x="${cx}" y="${H-abj+15}" text-anchor="middle" font-size="11" style="fill:${enPeriodo?"var(--tinta)":"var(--tenue-eje)"}"${enPeriodo?' font-weight="600"':""}>${esc(nombreMes(m))}</text>`;
+    if(mostrar && (i === 0 || m.endsWith("-01"))) svg += `<text x="${cx}" y="${H-abj+28}" text-anchor="middle" font-size="10.5" style="fill:var(--tenue-eje)">${m.slice(0,4)}</text>`;
+    if(enPeriodo) svg += `<rect x="${izq + banda*i + 1}" y="${H-abj+2}" width="${banda-2}" height="2" rx="1" style="fill:var(--s1)"/>`;
+    svg += `<rect class="golpe" data-i="${i}" x="${izq + banda*i}" y="${arr}" width="${banda}" height="${alto}" fill="transparent" tabindex="0" aria-label="${esc(nombreMes(m, true))}: ${num(totales[i])} devoluciones"/>`;
+  });
+  svg += `</svg><div class="punta" id="punta" hidden></div>`;
+  caja.innerHTML = svg;
+  const punta = $("#punta");
+  const ensena = (el) => {
+    const i = +el.dataset.i, m = ms[i], c = cuenta.get(m);
+    punta.innerHTML = `<b>${esc(nombreMes(m, true))}${m===parcial ? " (hasta ayer)" : ""}</b>`
+      + usados.filter(k=>c.get(k)).map(k=>`<div class="l"><span><i style="background:${colorCanal(k)}"></i>${esc(k)}</span><span>${num(c.get(k))}</span></div>`).join("")
+      + `<div class="l" style="margin-top:3px"><span>Total</span><span><b style="display:inline">${num(totales[i])}</b></span></div>`;
+    punta.hidden = false;
+    const cx = izq + banda*i + banda/2, pw = punta.offsetWidth;
+    punta.style.left = `${Math.min(Math.max(0, cx - pw/2), W - pw)}px`;
+    punta.style.top = `${Math.max(0, y(totales[i]) - punta.offsetHeight - 10)}px`;
+  };
+  caja.querySelectorAll(".golpe").forEach(el => {
+    el.addEventListener("mouseenter", ()=>ensena(el)); el.addEventListener("focus", ()=>ensena(el));
+    el.addEventListener("mouseleave", ()=>{ punta.hidden = true; }); el.addEventListener("blur", ()=>{ punta.hidden = true; });
+  });
+}
+
+function pintaCanal(lista){
+  const por = new Map();
+  lista.forEach(r => { const k = fila(r).canal; por.set(k, (por.get(k)||0)+1); });
+  const filas = (D.canales||[]).filter(k=>por.get(k)).map(k=>[k, k, por.get(k), k,
+    ` · ${fpct(100*por.get(k)/lista.length)}`]);
+  $("#sCanal").textContent = lista.length ? "Cómo se le devolvió el dinero a cada usuario." : "";
+  $("#gCanal").innerHTML = filas.length
+    ? barras(filas, Math.max(...filas.map(f=>f[2])), "data-k", $("#canal").value, colorCanal)
+    : `<p class="vacio">Ninguna devolución con estos filtros.</p>`;
+  $("#gCanal").querySelectorAll(".fb").forEach(b=>b.addEventListener("click", ()=>{
+    $("#canal").value = $("#canal").value===b.dataset.k ? "" : b.dataset.k; pintaTodo(); }));
+  const po = new Map();
+  lista.forEach(r => { const o = fila(r).origen; po.set(o, (po.get(o)||0)+1); });
+  const fo = [...po].sort((a,b)=>b[1]-a[1]).map(([o,n])=>[o, o, n, o, ` · ${fpct(100*n/lista.length)}`]);
+  $("#gOrigen").innerHTML = fo.length ? barras(fo, fo[0][2], "data-o", $("#origen").value)
+    : `<p class="vacio">Ninguna devolución con estos filtros.</p>`;
+  $("#gOrigen").querySelectorAll(".fb").forEach(b=>b.addEventListener("click", ()=>{
+    $("#origen").value = $("#origen").value===b.dataset.o ? "" : b.dataset.o; pintaTodo(); }));
+}
+function pintaZonas(lista){
+  const porZona = new Map();
+  lista.forEach(r => { const x = fila(r);
+    if(!porZona.has(x.zona)) porZona.set(x.zona, new Map());
+    const m = porZona.get(x.zona); m.set(x.deleg, (m.get(x.deleg)||0)+1); });
+  const zonas = [...porZona].map(([z, m]) => [z, [...m].sort((a,b)=>b[1]-a[1]), [...m.values()].reduce((a,b)=>a+b,0)])
+    .sort((a,b)=>b[2]-a[2]);
+  const max = Math.max(0, ...zonas.flatMap(z=>z[1].map(d=>d[1])));
+  $("#sZonas").textContent = `${num(lista.length)} devoluciones en ${num(zonas.length)} ${zonas.length===1?"zona":"zonas"}.`;
+  if(!lista.length){ $("#gZonas").innerHTML = `<p class="vacio">Ninguna devolución con estos filtros.</p>`; return; }
+  $("#gZonas").innerHTML = zonas.map(([z, ds, t]) =>
+    `<div class="zona"><span>${esc(z)}</span><span>${num(t)}</span></div>`
+    + barras(ds.map(([d,n])=>[d, d||"Sin delegación", n]), max, "data-d", $("#deleg").value)).join("");
+  $("#gZonas").querySelectorAll(".fb").forEach(b=>b.addEventListener("click", ()=>{
+    const d = b.dataset.d;
+    if($("#deleg").value === d){ $("#deleg").value = ""; }
+    else { $("#zona").value = ""; pintaFiltros(); $("#deleg").value = d; }
+    pintaTodo();
+  }));
+}
+function pintaCentros(lista){
+  const canales = (D.canales||[]).filter(k => lista.some(r=>fila(r).canal===k));
+  const m = new Map();
+  lista.forEach(r => { const x = fila(r);
+    const v = m.get(x.num_centro) || {nc:x.num_centro, centro:x.centro, cliente:x.cliente, deleg:x.deleg, total:0, abiertas:0, k:new Map()};
+    v.total++; if(abierta(r)) v.abiertas++; v.k.set(x.canal, (v.k.get(x.canal)||0)+1); m.set(x.num_centro, v); });
+  const filas = [...m.values()].sort((a,b)=>b.total-a.total || a.centro.localeCompare(b.centro,"es")).slice(0,15);
+  if(!filas.length){ $("#tCentros").innerHTML = `<p class="vacio">Ninguna devolución con estos filtros.</p>`; return; }
+  $("#tCentros").innerHTML = `<table><thead><tr><th>Centro</th><th>Delegación</th>${canales.map(k=>`<th class="n">${esc(k)}</th>`).join("")}
+    <th class="n">Total</th><th class="n">Sin cerrar</th></tr></thead><tbody>
+    ${filas.map(v=>`<tr class="elige${v.nc===$("#centro").value?" elegida":""}" data-c="${esc(v.nc)}">
+      <td data-et="Centro">${esc(v.centro)}<br><span class="tenue">nº ${esc(v.nc)}${v.cliente ? " · " + esc(v.cliente) : ""}</span></td>
+      <td data-et="Delegación">${esc(v.deleg)}</td>
+      ${canales.map(k=>`<td class="n" data-et="${esc(k)}">${v.k.get(k) ? num(v.k.get(k)) : ""}</td>`).join("")}
+      <td class="n" data-et="Total"><b>${num(v.total)}</b></td><td class="n" data-et="Sin cerrar">${v.abiertas ? num(v.abiertas) : ""}</td></tr>`).join("")}
+    </tbody></table>`;
+  $("#tCentros").querySelectorAll("tr.elige").forEach(tr=>tr.addEventListener("click", ()=>{
+    const c = tr.dataset.c;
+    if($("#centro").value === c) $("#centro").value = "";
+    else { $("#zona").value = ""; $("#deleg").value = ""; pintaFiltros(); $("#centro").value = c; }
+    pintaTodo();
+  }));
+}
+function pintaMaquinas(lista){
+  const m = new Map();
+  lista.filter(r=>r.m).forEach(r => { const x = fila(r);
+    const v = m.get(r.m) || {m:r.m, centro:x.centro, nc:x.num_centro, total:0, ultima:"", k:new Map()};
+    v.total++; if(r.a > v.ultima) v.ultima = r.a; v.k.set(x.canal, (v.k.get(x.canal)||0)+1); m.set(r.m, v); });
+  const filas = [...m.values()].sort((a,b)=>b.total-a.total || b.ultima.localeCompare(a.ultima)).slice(0,15);
+  if(!filas.length){ $("#tMaquinas").innerHTML = `<p class="vacio">Ninguna devolución con estos filtros.</p>`; return; }
+  $("#tMaquinas").innerHTML = `<table><thead><tr><th>Máquina</th><th>Centro</th><th class="n">Devoluciones</th><th>La última</th></tr></thead><tbody>
+    ${filas.map(v=>{ const k = [...v.k].sort((a,b)=>b[1]-a[1])[0];
+      return `<tr><td data-et="Máquina"><span class="mat">${esc(v.m)}</span></td>
+      <td data-et="Centro">${esc(v.centro)}<br><span class="tenue">nº ${esc(v.nc)} · sobre todo ${esc(k[0].toLowerCase())}</span></td>
+      <td class="n" data-et="Devoluciones"><b>${num(v.total)}</b></td><td data-et="La última">${esc(fechaCorta(v.ultima))}</td></tr>`; }).join("")}
+    </tbody></table>`;
+}
+function pintaTecnicos(lista){
+  const m = new Map();
+  lista.forEach(r => { const t = fila(r).tecnico || "Sin técnico";
+    const v = m.get(t) || {t, total:0, abiertas:0, hs:[]};
+    v.total++; if(abierta(r)) v.abiertas++; if(r.h!=null) v.hs.push(r.h); m.set(t, v); });
+  const filas = [...m.values()].sort((a,b)=>b.total-a.total || a.t.localeCompare(b.t,"es")).slice(0,15);
+  if(!filas.length){ $("#tTecnicos").innerHTML = `<p class="vacio">Ninguna devolución con estos filtros.</p>`; return; }
+  $("#tTecnicos").innerHTML = `<table><thead><tr><th>Técnico</th><th class="n">Devoluciones</th><th class="n">Sin cerrar</th><th class="n">Mediana hasta cerrar</th></tr></thead><tbody>
+    ${filas.map(v=>{ const md = mediana(v.hs);
+      return `<tr><td data-et="Técnico">${esc(v.t)}</td><td class="n" data-et="Devoluciones"><b>${num(v.total)}</b></td>
+      <td class="n" data-et="Sin cerrar">${v.abiertas ? num(v.abiertas) : ""}</td>
+      <td class="n" data-et="Mediana hasta cerrar">${md==null ? "—" : `${dec(md)} h`}</td></tr>`; }).join("")}
+    </tbody></table>`;
+}
+
+/* ------------------------------------------------------------ hoja 2 */
+const diasEsperando = r => Math.max(0, Math.floor((deIso(D.ultimo_dia) - deIso(r.a)) / 864e5) + 1);
+const colorDias = d => d <= 1 ? "verde" : d <= 3 ? "amarillo" : "rojo";
+function filasPendientes(){
+  const q = $("#busca").value.trim().toLowerCase();
+  return DEV.filter(r => abierta(r) && enLugar(r)).filter(r => { if(!q) return true; const x = fila(r);
+      return [r.n, r.m, x.centro, x.num_centro, x.cliente, x.deleg, x.tecnico, x.canal, x.origen].join(" ").toLowerCase().includes(q); })
+    .sort((a,b)=>a.a.localeCompare(b.a));
+}
+function pintaPendientes(){
+  const filas = filasPendientes();
+  $("#bCsv").disabled = !filas.length;
+  $("#cLista").textContent = `${num(filas.length)} ${filas.length===1?"devolución":"devoluciones"}`;
+  if(!filas.length){ $("#tLista").innerHTML = `<p class="vacio">Ninguna sin cerrar con estos filtros.</p>`; return; }
+  const vis = filas.slice(0, TODAS_FILAS ? filas.length : PRIMERAS), resto = filas.length - vis.length;
+  $("#tLista").innerHTML = `<table><thead><tr><th>Entró</th><th>Nº</th><th>Canal</th><th>Máquina</th><th>Centro</th><th>Técnico</th><th>Esperando</th></tr></thead><tbody>
+    ${vis.map(r=>{ const x = fila(r), d = diasEsperando(r);
+      return `<tr><td data-et="Entró">${esc(fechaHora(r.a))}</td><td data-et="Nº"><span class="mat">${esc(r.n)}</span></td>
+        <td data-et="Canal"><span class="leyenda" style="margin:0"><span><i style="background:${colorCanal(x.canal)}"></i>${esc(x.canal)}</span></span></td>
+        <td data-et="Máquina"><span class="mat">${esc(r.m)}</span></td>
+        <td data-et="Centro">${esc(x.centro)}<br><span class="tenue">nº ${esc(x.num_centro)} · ${esc(x.deleg)}</span></td>
+        <td data-et="Técnico">${esc(x.tecnico)}</td>
+        <td data-et="Esperando"><span class="dias ${colorDias(d)}">${num(d)} ${d===1?"día":"días"}</span></td></tr>`; }).join("")}</tbody></table>`
+    + (resto > 0 ? `<p class="vacio">Y ${num(resto)} más. <button class="btn" id="bMas" type="button">Ver todas</button> o bájalas en CSV.</p>` : "");
+  const mas = $("#bMas"); if(mas) mas.addEventListener("click", ()=>{ TODAS_FILAS = true; pintaPendientes(); });
+}
+function csv(){
+  const filas = filasPendientes();
+  const q = v => { const s = String(v==null?"":v); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
+  const cab = ["Nº","Entró","Días esperando","Origen","Canal","Máquina","Nº centro","Centro","Cliente","Delegación","Zona","Técnico"];
+  const texto = "﻿" + [cab.join(";"), ...filas.map(r=>{ const x = fila(r);
+    return [r.n, r.a, diasEsperando(r), x.origen, x.canal, r.m, x.num_centro, x.centro, x.cliente, x.deleg, x.zona, x.tecnico].map(q).join(";"); })].join("\r\n");
+  const url = URL.createObjectURL(new Blob([texto], {type:"text/csv;charset=utf-8"}));
+  const a = document.createElement("a");
+  a.href = url; a.download = `devoluciones_sin_cerrar_${D.ultimo_dia}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+/* ------------------------------------------------------------ todo */
+function pintaHoja(){
+  document.querySelectorAll(".hojas button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.h===HOJA)));
+  $("#hPanel").hidden = HOJA !== "panel";
+  $("#hPendientes").hidden = HOJA !== "pendientes";
+  document.querySelectorAll(".solo-panel").forEach(l => {
+    l.hidden = HOJA !== "panel" || (l.classList.contains("libre") && $("#periodo").value !== "libre"); });
+}
+function pintaTodo(){
+  pintaHoja();
+  if(HOJA === "panel") pintaPanel(); else pintaPendientes();
+}
+
+(async function arranca(){
+  let r;
+  try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(r.status === 401){ location.href = "/"; return; }
+  if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
+  const yo = await r.json();
+  if(yo.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  $("#quien").textContent = (yo.perfil ? yo.perfil + " · " : "") + (yo.nombre || yo.correo);
+
+  let ri;
+  try{ ri = await fetch("/api/devoluciones", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(ri.status === 401){ location.href = "/"; return; }
+  $("#cargando").hidden = true;
+  const mal = t => { $("#aviso").textContent = t; $("#aviso").classList.add("mal"); $("#aviso").hidden = false; };
+  if(!ri.ok){
+    let d={}; try{ d = await ri.json(); }catch(e){}
+    mal(d.error || "Las devoluciones no están disponibles ahora mismo.");
+    return;
+  }
+  D = await ri.json();
+  if(D.sin_dato){ mal(D.sin_dato); return; }
+  prepara();
+  const q = new URLSearchParams(location.search);
+  const pedido = q.get("periodo");
+  $("#periodo").value = ["anio","tres","ultimo","mes","libre"].includes(pedido) ? pedido : "mes";
+  const desde = D.desde || D.ultimo_dia;
+  $("#desde").value = inicioMes(D.ultimo_dia); $("#hasta").value = D.ultimo_dia;
+  $("#desde").min = $("#hasta").min = desde; $("#desde").max = $("#hasta").max = D.ultimo_dia;
+  if(q.get("ver") === "pendientes") HOJA = "pendientes";
+  pintaFiltros();
+  document.querySelectorAll(".hojas button").forEach(b=>b.addEventListener("click", ()=>{ HOJA = b.dataset.h; pintaTodo(); }));
+  ["#periodo","#desde","#hasta","#origen","#canal","#centro"].forEach(s=>$(s).addEventListener("change", pintaTodo));
+  $("#zona").addEventListener("change", ()=>{ pintaFiltros(); pintaTodo(); });
+  $("#deleg").addEventListener("change", ()=>{ pintaFiltros(); pintaTodo(); });
+  $("#bLimpiar").addEventListener("click", ()=>{
+    ["#origen","#canal","#zona","#deleg","#centro"].forEach(s=>$(s).value=""); pintaFiltros(); pintaTodo(); });
+  $("#bVista").addEventListener("click", ()=>{ TABLA = !TABLA; pintaTodo(); });
+  $("#busca").addEventListener("input", ()=>{ TODAS_FILAS = false; pintaPendientes(); });
+  $("#bCsv").addEventListener("click", csv);
+  let espera = null;
+  addEventListener("resize", ()=>{ clearTimeout(espera); espera = setTimeout(()=>{ if(HOJA==="panel" && !TABLA) pintaPanel(); }, 150); });
+  $("#todo").hidden = false;
+  pintaTodo();
+  const gen = D.generado ? new Date(D.generado) : null;
+  $("#pie").innerHTML = `Devoluciones de dinero de la SAT de VenCloud (${esc(D.fuente)}), sin la matrícula ficticia del centro de pruebas. `
+    + "Se cuentan devoluciones, no euros: VenCloud no guarda el importe en ningún campo, solo en el texto que escribe el técnico. "
+    + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
+    + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
+  $("#pie").hidden = false;
+})();
+</script>
+</body>
+</html>
