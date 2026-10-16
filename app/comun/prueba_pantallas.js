@@ -174,7 +174,32 @@ const API = {
   },
   '/api/admin/config': { asistente_global: true, limite_preguntas_dia: 40, umbral_rentabilidad_mes: 350 },
   '/api/admin/telefonos': { telefonos: [] },
-  '/api/admin/cola': { cola: [] }
+  '/api/admin/cola': { cola: [] },
+  // Los ficheros de telemetria de la consola y su cruce (docs/53), con la forma
+  // que escriben lambda_api.py y operativo.detalle_telemetria.
+  '/api/admin/telemetria': {
+    ficheros: { nayax: { _id: 'nayax', tipo: 'nayax', nombre: 'MachineStatus.xlsx', subido: new Date().toISOString(),
+                         por: 'g@serunion.es', resumen: { filas: 2301, con_matricula: 2252, exportado: iso(HOY) } } },
+    tipos: { nayax: 'Nayax', prodelfi: 'Prodelfi', nebula: 'Nebula (Coges)', grupos: 'Grupos de Prodelfi' }
+  },
+  '/api/telemetria': {
+    generado: new Date().toISOString(), perfil: 'interno', ultimo_dia: iso(AYER),
+    dias: {
+      [iso(new Date(HOY.getTime() - 3 * 86400000))]: { venta: ['20SE0003'], dex: ['20SE0003'] },
+      [iso(AYER)]: { venta: ['20SE0001', '20SE0002', '18CE4507'], dex: ['20SE0001'] }
+    },
+    ficheros: { ficheros: { nayax: { nombre: 'MachineStatus.xlsx', subido: new Date().toISOString(), resumen: { exportado: iso(HOY) } },
+                            prodelfi: { nombre: 'Maquinas 1.xlsx', subido: new Date().toISOString(), resumen: {} } },
+                faltan: ['nebula', 'grupos'] },
+    maquinas: [
+      { matricula: '20SE0001', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P1', ubicacion: 'Hall', vencloud: true, nayax: { id: '20SE0001', ultima: `${iso(HOY)}T10:00:00` } },
+      { matricula: '20SE0002', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P2', ubicacion: 'Planta 1', vencloud: true, nayax: { id: '20SE0002', ultima: `${iso(HOY)}T09:00:00` } },
+      { matricula: '20SE0003', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P3', ubicacion: 'Urgencias', vencloud: false, nayax: { id: '20SE0003', ultima: '2026-10-01T09:00:00' } },
+      { matricula: '18CE4507', sistema: 'prodelfi', tambien: ['nayax'], delegacion: 'Madrid', cliente: 'RTVE', num_centro: 200, centro: 'TORRESPAÑA', cod_pdv: 'P4', ubicacion: 'Planta 2', vencloud: true, prodelfi: { codigo: 4, grupo: 138, descripcion: 'CE4507 Torrespaña', como: 'tipo y número CE4507' }, nayax: { id: '18CE4507', ultima: '2026-10-01T09:00:00' } },
+      { matricula: '24SE0777', sistema: 'solo_vencloud', tambien: [], vencloud: true, delegacion: 'Andalucía', cliente: 'AIRBUS', num_centro: 300, centro: 'SAN PABLO SUR', cod_pdv: 'P5', ubicacion: 'Comedor' }
+    ],
+    fuera: [{ sistema: 'nayax', id: '99XX9999', nombre: 'FANTASMA', detalle: 'Serunion / Sur', ultima: `${iso(HOY)}T10:00:00`, motivo: 'La matrícula 99XX9999 no está instalada en VenCloud.' }]
+  }
 };
 
 // El cuadro: el indice y un fichero por mes, con la forma que escribe cuadro.py.
@@ -610,6 +635,72 @@ const servidor = http.createServer((pet, res) => {
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nLa telemetria cruzada con los ficheros (docs/53)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno',
+      sesiones: ['resumen', 'instalaciones'], catalogo_sesiones: { resumen: 'Resumen', instalaciones: 'Instalaciones y altas' } };
+    const op = API['/api/operativo'];
+    const antes = JSON.stringify(op);
+    // El dato sigue siendo el de VenCloud; los ficheros solo anaden las diferencias.
+    op.dias[iso(AYER)].telemetria = { auditables: 2254, con_dex: 975, pct: 43.3, color: 'rojo',
+      diferencias: { en_sistemas: 2504, sin_marca: 300, solo_vencloud: 20, fuera: 218 } };
+    op.foto.telemetria = { ficheros: { nayax: { nombre: 'MachineStatus.xlsx' } }, faltan: [] };
+    const { pagina, errores, fuera } = await abre('/operativo/');
+    await pagina.waitForSelector('.cuadro[data-id="telemetria"]');
+    comprueba('el cuadrado sigue con el DEX de VenCloud, en rojo',
+      [(await pagina.textContent('.cuadro[data-id="telemetria"] .vl')).trim(),
+       await pagina.$eval('.cuadro[data-id="telemetria"]', c => c.classList.contains('rojo'))], ['43,3 %', true]);
+    const sub = await pagina.textContent('.cuadro[data-id="telemetria"] .sub');
+    comprueba_que('y debajo las diferencias con los ficheros',
+      sub.includes('975 de 2254') && sub.includes('538 diferencias con Nayax, Prodelfi y Nebula'));
+    comprueba('lleva a la pagina de telemetria, con el dia',
+      await pagina.getAttribute('.cuadro[data-id="telemetria"]', 'href'), `/telemetria/?dia=${iso(AYER)}`);
+    await Promise.all([pagina.waitForURL('**/telemetria/**'), pagina.click('.cuadro[data-id="telemetria"]')]);
+    await pagina.waitForSelector('#tabla table');
+    comprueba('pestañas: Nayax, Prodelfi, solo en VenCloud y las que no estan en VenCloud',
+      await pagina.$$eval('#pestanas button', x => x.map(b => b.dataset.p)), ['nayax', 'prodelfi', 'solo_vencloud', 'fuera']);
+    comprueba('Nayax: las que tienen alguna diferencia ayer',
+      await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(t => t.textContent.trim())), ['20SE0002', '20SE0003']);
+    comprueba_que('con el ultimo dia que si mando', (await pagina.textContent('#tabla tbody tr:nth-child(2)')).match(/\d+ \w+/));
+    comprueba_que('y dice que fichero falta', (await pagina.textContent('#ficheros')).includes('Falta Nebula (Coges), Grupos de Prodelfi'));
+    await pagina.selectOption('#filtro', 'sin_marca');
+    comprueba('sin telemetria en VenCloud: la que Nayax tiene y VenCloud no marca',
+      await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(t => t.textContent.trim())), ['20SE0003']);
+    await pagina.selectOption('#filtro', 'todas');
+    comprueba('todas: las tres', await pagina.locator('#tabla tbody tr').count(), 3);
+    await pagina.fill('#busca', 'urgencias');
+    comprueba('el buscador', await pagina.locator('#tabla tbody tr').count(), 1);
+    await pagina.fill('#busca', '');
+    await pagina.click('#pestanas button[data-p="fuera"]');
+    comprueba_que('las de Nayax que no estan en VenCloud, con el motivo',
+      (await pagina.textContent('#tabla')).includes('no está instalada en VenCloud'));
+    const [descarga] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bCsv')]);
+    comprueba('el CSV de la pestaña', descarga.suggestedFilename(), `telemetria_fuera_${iso(AYER)}.csv`);
+    await pagina.setViewportSize({ width: 380, height: 800 });
+    await pagina.click('#pestanas button[data-p="nayax"]');
+    comprueba('en movil no se sale de la pantalla',
+      await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await pagina.emulateMedia({ colorScheme: 'dark' });
+    comprueba_que('en oscuro el fondo es oscuro',
+      (await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(18, 18, 17)');
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+
+    const c = await abre('/consola/');
+    await c.pagina.waitForSelector('#pestanas button[data-s="telemetria"]');
+    await c.pagina.click('#pestanas button[data-s="telemetria"]');
+    await c.pagina.waitForSelector('#bTele');
+    comprueba_que('la consola dice que fichero hay y cuales faltan',
+      (await c.pagina.textContent('#vista')).includes('MachineStatus.xlsx')
+      && (await c.pagina.textContent('#vista')).includes('Falta: Prodelfi, Nebula (Coges), Grupos de Prodelfi'));
+    comprueba('ni una peticion fuera del dominio', c.fuera, []);
+    comprueba('sin un solo error en la consola del navegador', c.errores, []);
+    await c.pagina.close();
+    Object.assign(op, JSON.parse(antes));
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 

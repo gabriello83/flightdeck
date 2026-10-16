@@ -23,6 +23,10 @@ a la sección del panel que ya existe.
 | Reposiciones | unidades de producto repuestas, por clase de máquina | líneas CM de la reposición; los carriles de café van aparte | propio | Venta y consumo · Carga |
 | Telemetría | % de máquinas con telemetría que mandaron su lectura (DEX) | partes de SYSTEM con lectura, sobre las máquinas del censo con telemetría | semáforo | Instalaciones · Incidencias |
 
+El de telemetría sale siempre de VenCloud. Si en la consola se han subido los ficheros de Nayax,
+Prodelfi y Nebula, debajo dice cuántas diferencias hay con ellos y lleva a `/telemetria/`, que las
+enseña máquina a máquina. Ver docs/53.
+
 Semáforo: **verde por encima del 95 %, amarillo del 75 al 95 %, rojo por debajo del 75 %**. El
 mensaje original decía «amarillo >95 % <75 %»; se ha leído como el tramo entre los dos.
 
