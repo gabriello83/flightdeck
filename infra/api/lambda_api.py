@@ -53,14 +53,25 @@ MINUTOS_BLOQUEO = int(os.environ.get("MINUTOS_BLOQUEO", "15"))
 # freno a la fuerza bruta
 # ----------------------------------------------------------------------
 def _fallos(correo):
-    return int((lee(f"FALLOS#{correo}", "CUENTA") or {}).get("n", 0))
+    """Los intentos fallidos que siguen contando.
+
+    La caducidad se mira AQUI, con la hora que va dentro de la fila. El TTL de
+    DynamoDB borra la fila cuando le viene bien, a veces horas despues; si se
+    esperara a eso, «prueba en 15 minutos» podia ser media tarde. Una fila sin
+    hora (de antes de este cambio) ya no cuenta.
+    """
+    import time
+    fila = lee(f"FALLOS#{correo}", "CUENTA") or {}
+    if int(fila.get("hasta", 0)) <= time.time():
+        return 0
+    return int(fila.get("n", 0))
 
 
 def _suma_fallo(correo):
     import time
     n = _fallos(correo) + 1
-    escribe(f"FALLOS#{correo}", {"n": n}, "CUENTA",
-            expira=int(time.time()) + MINUTOS_BLOQUEO * 60)
+    hasta = int(time.time()) + MINUTOS_BLOQUEO * 60
+    escribe(f"FALLOS#{correo}", {"n": n, "hasta": hasta}, "CUENTA", expira=hasta)
     return n
 
 
@@ -695,6 +706,9 @@ def administra(evento, metodo, ruta, admin):
             raise ValueError("La contrasena necesita 12 caracteres.")
         cog.admin_set_user_password(UserPoolId=POOL, Username=correo,
                                    Password=clave, Permanent=False)
+        # Darle clave nueva es tambien desbloquearlo: si no, entraria con ella
+        # y le contestaria «demasiados intentos» hasta que caducara el contador.
+        _limpia_fallos(correo)
         return r(200, {"ok": True, "_nota": "El usuario la cambiara al entrar."})
 
     if resto.startswith("usuarios/") and metodo == "DELETE":
