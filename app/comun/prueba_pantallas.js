@@ -193,7 +193,7 @@ const API = {
       generado: new Date().toISOString(), perfil: 'interno', estado_al_dia: true, sin_estado: null,
       fuente: 'M13 · EXT_SAT_INCIDENCIAS', ultimo_dia: iso(AYER), desde: '2026-01-26', horas_sla: 24,
       umbrales: { verde: 95, amarillo: 75 },
-      marcas: { tecnica: 1, devolucion: 2, reposicion: 4, caducado: 8, higiene: 16, bloqueante: 32, especial: 64 },
+      marcas: { tecnica: 1, reposicion: 4, caducado: 8, higiene: 16, bloqueante: 32, especial: 64 },
       zonas: { 'Levante - Valencia': 'Levante', 'Madrid - Leganes': 'Centro', 'Levante - Murcia': 'Levante' },
       centros: [['500073', 'INDUSTRIA DEL CURTIDO', '32072', 'CURTIDO SA'], ['1001', 'AIRBUS GETAFE', 'C7', 'AIRBUS'],
                 ['2002', 'CONSUM MURCIA', '10002', 'SERUNION']],
@@ -209,7 +209,7 @@ const API = {
         { n: 'A-1', a: d(5), x: d(5, '14:00'), h: 5, m: 'M1', c: 0, d: 0, o: 0, t: 0, f: 33 },
         { n: 'A-2', a: d(4), x: d(3, '15:00'), h: 30, m: 'M1', c: 0, d: 0, o: 3, t: 0, f: 1 },
         { n: 'A-3', a: d(2), m: 'M1', c: 0, d: 0, o: 3, t: 0, f: 1, tx: 'no sale café · vuelve a fallar', u: 'Comedor', p: 'C01502' },
-        { n: 'A-4', a: d(1), x: d(1, '11:00'), h: 2, m: 'A1', c: 1, d: 1, o: 1, t: 1, f: 2 },
+        { n: 'A-4', a: d(1), x: d(1, '11:00'), h: 2, m: 'A1', c: 1, d: 1, o: 3, t: 1, f: 1 },
         { n: 'E-5', a: d(0), m: 'C1', c: 2, d: 2, o: 2, t: 1, f: 68, tx: 'máquina vacía', u: 'Hall', p: 'C09' }]
     };
   })(),
@@ -919,7 +919,7 @@ const servidor = http.createServer((pet, res) => {
     comprueba('y en amarillo, como el cuadrado', await pagina.$eval('#kpis .kpi:nth-child(4)', e => e.className), 'kpi amarillo');
     comprueba('el centro con mas averias tecnicas va primero',
       await pagina.$eval('#gTecnicas .fb .nom', e => e.textContent), 'INDUSTRIA DEL CURTIDO');
-    comprueba('las devoluciones, el suyo', await pagina.$$eval('#gDevol .fb .nom', x => x.map(e => e.textContent)), ['AIRBUS GETAFE']);
+    comprueba('y sin el grafico de devoluciones', await pagina.locator('#gDevol').count(), 0);
     await pagina.click('#gZonas .fb[data-d="Levante - Murcia"]');
     comprueba('pulsar una delegacion filtra por ella', [await pagina.inputValue('#deleg'), await kpi(1)], ['Levante - Murcia', '2']);
     await pagina.click('#bLimpiar');

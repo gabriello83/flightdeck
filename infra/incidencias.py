@@ -4,7 +4,7 @@ La pagina de incidencias: lo que abre el cuadrado de Incidencias (docs/56).
 Lo pidio Gabriele el 16 de octubre de 2026 con un Power BI suyo («Control
 operativo Incidencias 2») como modelo: un panel de control con el total, la
 tasa de resolucion, el tiempo medio y el SLA de 24 horas, por zona y por
-delegacion, con los diez centros con mas averias y con mas devoluciones; y una
+delegacion, con los diez centros con mas averias; y una
 segunda hoja con las incidencias ABIERTAS en seis tarjetas (tecnicas,
 reposicion, caducados, emergencia sanitaria, fuera de servicio y maquinas
 criticas), una tabla y la ficha de la que se pulsa.
@@ -239,6 +239,10 @@ class Incidencias:
                 "t": tecnicos(str(R.v(t, "tecnico_asignado", "") or "")),
                 "f": marcas(t, texto),
             }
+            if fila["f"] & DEVOLUCION:
+                # Las devoluciones de dinero no entran en el estudio: lo pidio
+                # Gabriele el 16-oct-2026. Ni se cuentan ni viajan.
+                continue
             if al_dia:
                 cerrada = (int(R.v(t, "tipo_estado", -1) or -1) == TIPO_ESTADO_FINALIZADA
                            or int(R.v(t, "estado", -1) or -1) == ESTADO_FINALIZADA)
@@ -251,10 +255,8 @@ class Incidencias:
                     h = _horas(alta, cierre)
                     if h is not None:
                         fila["h"] = h
-                elif not fila["f"] & DEVOLUCION:
+                else:
                     # La ficha de una abierta: lo que se lee para ir a arreglarla.
-                    # Las devoluciones no llevan texto: es el cliente pidiendo su
-                    # dinero y alguna nota trae sus datos.
                     fila["tx"] = texto[:LARGO_TEXTO]
                     fila["u"] = str(R.v(t, "ubicacion", "") or "")[:80]
                     fila["p"] = str(R.v(t, "cod_pdv", "") or "")
@@ -273,7 +275,7 @@ class Incidencias:
             # El semaforo del informe general, para que el SLA de la pagina y el
             # del cuadrado salgan del mismo color.
             "umbrales": {"verde": OP.VERDE, "amarillo": OP.AMARILLO},
-            "marcas": {"tecnica": TECNICA, "devolucion": DEVOLUCION, "reposicion": REPOSICION,
+            "marcas": {"tecnica": TECNICA, "reposicion": REPOSICION,
                        "caducado": CADUCADO, "higiene": HIGIENE, "bloqueante": BLOQUEANTE,
                        "especial": ESPECIAL},
             "zonas": {d: zona_de(d) for d in delegs.lista},
@@ -283,7 +285,7 @@ class Incidencias:
             "tecnicos": tecnicos.lista,
             "incidencias": filas,
             "_nota": ("Una fila por incidencia de la SAT, sin la matrícula ficticia ni los "
-                      "preventivos. a = apertura; x = cierre (sin x, abierta); h = horas hasta el "
+                      "preventivos ni las devoluciones. a = apertura; x = cierre (sin x, abierta); h = horas hasta el "
                       "cierre, solo si el cierre trae hora (x vacía: cerrada sin fecha); f = marcas; c, d, o, t = posición en "
                       "centros, delegaciones, operaciones y técnicos."),
         }

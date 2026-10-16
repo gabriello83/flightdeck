@@ -12,7 +12,9 @@ octubre de 2026 se llamaba Averías. Gabriele lo pidió ese día con un Power BI
 
 - **Panel de control.** Total de incidencias, tasa de resolución, tiempo de resolución y SLA de 24
   horas, cada uno contra el periodo anterior; el total por zona y delegación; y los diez centros
-  con más averías técnicas y con más devoluciones. Pulsar una delegación o un centro filtra por él.
+  con más averías técnicas. Pulsar una delegación o un centro filtra por él. Las devoluciones de
+  dinero no entran en ninguna cuenta (Gabriele, 16-oct-2026): el Power BI las tenía como un
+  gráfico aparte, y aquí se quitan del estudio entero.
 - **Incidencias abiertas.** Seis tarjetas que se pulsan (técnicas, reposición, caducados,
   emergencia sanitaria, fuera de servicio y máquinas críticas), la lista ordenada por prioridad y
   la ficha de la incidencia que se pulsa, con sus notas. La lista se baja en CSV.
@@ -41,7 +43,7 @@ Las marcas de cada incidencia (`infra/incidencias.py`):
 | Emergencia sanitaria | operación de insectos, o insecto, bicho, hormiga, cucaracha, hongos o moho en el texto |
 | Fuera de servicio | técnica con una de las operaciones bloqueantes del Power BI. Se buscan por un trozo del nombre, porque VenCloud les pone delante el tipo de máquina |
 | Máquinas críticas | tres o más averías técnicas entradas en los últimos 30 días, abiertas o cerradas |
-| Devoluciones | los códigos de devolución del catálogo (D01, D03, DEV01…) o «DEVOLUC» en la operación |
+| Devoluciones (fuera) | los códigos de devolución del catálogo (D01, D03, DEV01…) o «DEVOLUC» en la operación. No se escriben en el fichero |
 
 La zona sale del nombre de la delegación: Madrid es Centro, Andalucía es Sur, y Cataluña, Levante y
 Norte son ellas mismas. La central es «Otra zona».
@@ -70,8 +72,8 @@ cuenta las que se cierran tarde.
 `cabina/<perfil>/incidencias.json.gz` lo escriben los agregados cada noche, con el ámbito del perfil
 aplicado al escribir. Una fila por incidencia, con los centros, delegaciones, operaciones y técnicos
 en listas aparte. El texto (título y última nota), la ubicación y el punto de venta solo viajan en
-las abiertas, y nunca en las devoluciones: es el cliente pidiendo su dinero y alguna nota trae sus
-datos.
+las abiertas. Las devoluciones no van: ni se cuentan ni se escriben (y sus notas traían datos del
+cliente).
 
 Se sirve por `/api/incidencias` tal cual está comprimido, sin abrirlo: con un año del perfil interno
 pasaría del límite de respuesta de una Lambda. La misma regla que el cuadrado: perfil de

@@ -3,8 +3,7 @@ La pagina de incidencias: las cuentas de cada fila (docs/56).
 
 Cada caso de aqui sale del dato de verdad: la operacion con el tipo de maquina
 delante, la nota que dice «caducado» en una tarea de otra cosa, el cierre sin
-hora, el preventivo que no es una incidencia, la devolucion con datos del
-cliente en la nota.
+hora, el preventivo que no es una incidencia, la devolucion, que no entra.
 
     python3 infra/test_incidencias.py
 """
@@ -82,14 +81,15 @@ inc.come_foto([
 f = inc.fichero("interno", HOY)
 por = {x["n"]: x for x in f["incidencias"]}
 comprueba("al dia", f["estado_al_dia"], True)
-comprueba("sin el preventivo ni la ficticia", sorted(por), ["A-70001", "A-70002", "A-70003", "A-70004"])
+comprueba("sin el preventivo, la ficticia ni la devolucion", sorted(por), ["A-70001", "A-70002", "A-70003"])
 comprueba("cerrada con hora: 12 horas", (por["A-70001"]["x"], por["A-70001"]["h"]), ("2026-10-10 20:00", 12.0))
 comprueba("cerrada sin evento: la fecha, sin horas", (por["A-70002"]["x"], "h" in por["A-70002"]),
           ("2026-10-12", False))
 comprueba("abierta: sin cierre, con texto, ubicacion y punto de venta",
           ("x" in por["A-70003"], por["A-70003"]["tx"], por["A-70003"]["u"], por["A-70003"]["p"]),
           (False, "no sale café · vuelve a fallar", "Comedor", "C01502"))
-comprueba("la devolucion abierta no lleva el texto", "tx" in por["A-70004"], False)
+comprueba("las devoluciones no entran en el estudio, ni su marca", ("A-70004" in por, "devolucion" in f["marcas"]),
+          (False, False))
 comprueba("el centro va por indice", f["centros"][por["A-70003"]["c"]][:2], ["500073", "INDUSTRIA DEL CURTIDO, S.A."])
 comprueba("la zona de cada delegacion viaja", f["zonas"], {"Levante - Valencia": "Levante"})
 comprueba("arranca en ayer", f["ultimo_dia"], "2026-10-15")

@@ -215,18 +215,11 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
         <p class="sub" id="sZonas"></p>
         <div id="gZonas"></div>
       </section>
-      <div class="dos">
-        <section class="caja">
-          <div class="cabsec"><h2>Los 10 centros con más averías técnicas</h2></div>
-          <p class="sub">Fallos técnicos por operación, sin las solicitudes especiales. Pulsa un centro para filtrar por él.</p>
-          <div id="gTecnicas"></div>
-        </section>
-        <section class="caja">
-          <div class="cabsec"><h2>Los 10 centros con más devoluciones</h2></div>
-          <p class="sub">Devoluciones de dinero: en el sitio, por transferencia o a tarjeta.</p>
-          <div id="gDevol"></div>
-        </section>
-      </div>
+      <section class="caja">
+        <div class="cabsec"><h2>Los 10 centros con más averías técnicas</h2></div>
+        <p class="sub">Fallos técnicos por operación, sin las solicitudes especiales. Pulsa un centro para filtrar por él.</p>
+        <div id="gTecnicas"></div>
+      </section>
     </div>
 
     <!-- ============================ hoja 2 ============================ -->
@@ -258,7 +251,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
    del Power BI «Control operativo Incidencias 2» de Gabriele: un panel de
    control (total, tasa de resolución, tiempo de resolución y SLA de 24 horas
    contra el periodo anterior, por zona y delegación, y los diez centros con
-   más averías y con más devoluciones) y una hoja de incidencias abiertas con
+   más averías; sin las devoluciones de dinero) y una hoja de incidencias abiertas con
    seis tarjetas, la lista ordenada por prioridad y la ficha de la que se pulsa.
 
    El fichero ya llega con el ámbito del perfil aplicado: lo escribió la noche
@@ -437,8 +430,7 @@ function pintaPanel(){
       : kpi(`SLA ${D.horas_sla} h`, "—", soloAbiertas ? "no aplica a las abiertas" : sinEstado, ""));
   pintaZonas(ahora);
   $("#gTecnicas").innerHTML = topCentros(ahora.filter(tecnica));
-  $("#gDevol").innerHTML = topCentros(ahora.filter(r=>tiene(r,"devolucion")));
-  document.querySelectorAll("#gTecnicas .fb, #gDevol .fb").forEach(b=>b.addEventListener("click", ()=>{
+  document.querySelectorAll("#gTecnicas .fb").forEach(b=>b.addEventListener("click", ()=>{
     $("#centro").value = $("#centro").value===b.dataset.c ? "" : b.dataset.c; pintaTodo();
   }));
 }
@@ -600,7 +592,7 @@ function pintaFicha(){
       ${dd("Categoría", esc(x.cat))}
       ${dd("Técnico", esc(x.tecnico))}
     </dl>
-    ${r.tx ? `<div class="texto">${esc(r.tx)}</div>` : `<p class="tenue" style="margin-top:10px">${ab ? (tiene(r,"devolucion") ? "Las devoluciones no traen sus notas: pueden llevar datos del cliente." : "Sin notas.") : "Las notas solo se guardan de las incidencias abiertas."}</p>`}`;
+    ${r.tx ? `<div class="texto">${esc(r.tx)}</div>` : `<p class="tenue" style="margin-top:10px">${ab ? "Sin notas." : "Las notas solo se guardan de las incidencias abiertas."}</p>`}`;
 }
 
 function csv(){
