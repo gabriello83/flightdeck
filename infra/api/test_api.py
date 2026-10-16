@@ -114,6 +114,19 @@ for _ in range(6):
     llama("POST", "/api/acceso", {"correo": "ana@airbus.com", "clave": "mala"})
 comprueba("bloqueado con 429",
           llama("POST", "/api/acceso", {"correo": "ana@airbus.com", "clave": "ClaveLarga123"})["statusCode"], 429)
+# El bloqueo caduca a su hora, aunque DynamoDB no haya borrado la fila: su TTL
+# llega cuando llega, a veces horas despues.
+import time as _t
+_fila = L.lee("FALLOS#ana@airbus.com", "CUENTA")
+comprueba("el contador guarda hasta cuando cuenta", _fila["hasta"] > _t.time(), True)
+L.escribe("FALLOS#ana@airbus.com", dict(_fila, hasta=int(_t.time()) - 1), "CUENTA")
+comprueba("pasada esa hora vuelve a entrar, aunque la fila siga ahi",
+          llama("POST", "/api/acceso", {"correo": "ana@airbus.com", "clave": "ClaveLarga123"})["statusCode"], 200)
+L.escribe("FALLOS#ana@airbus.com", {"n": 9}, "CUENTA")
+comprueba("una fila vieja, sin hora, ya no bloquea",
+          llama("POST", "/api/acceso", {"correo": "ana@airbus.com", "clave": "ClaveLarga123"})["statusCode"], 200)
+for _ in range(6):
+    llama("POST", "/api/acceso", {"correo": "ana@airbus.com", "clave": "mala"})
 falsos.TABLA.pop(("FALLOS#ana@airbus.com", "CUENTA"), None)
 comprueba("y al limpiar el contador vuelve a entrar",
           llama("POST", "/api/acceso", {"correo": "ana@airbus.com", "clave": "ClaveLarga123"})["statusCode"], 200)
@@ -239,6 +252,14 @@ comprueba("una clave inicial corta falla",
           llama("POST", "/api/admin/usuarios",
                 {"correo": "z@y.com", "nombre": "Z", "perfil_id": "cli-airbus",
                  "clave": "corta"}, cookie=COOKIE_JEFE)["statusCode"], 400)
+for _ in range(6):
+    llama("POST", "/api/acceso", {"correo": "pepe@airbus.com", "clave": "mala"})
+comprueba("Pepe se bloquea a los 6 intentos",
+          llama("POST", "/api/acceso", {"correo": "pepe@airbus.com", "clave": "ClaveInicial12"})["statusCode"], 429)
+comprueba("darle clave nueva desde la consola",
+          llama("POST", "/api/admin/usuarios/pepe@airbus.com/clave", {"clave": "OtraInicial123"},
+                cookie=COOKIE_JEFE)["statusCode"], 200)
+comprueba("le desbloquea en el acto", ("FALLOS#pepe@airbus.com", "CUENTA") in falsos.TABLA, False)
 comprueba("no puede borrarse a si mismo",
           llama("DELETE", "/api/admin/usuarios/jefe@serunion.es", cookie=COOKIE_JEFE)["statusCode"], 400)
 
