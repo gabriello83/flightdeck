@@ -73,7 +73,7 @@ vez para todos en `cabina/_articulos/fotos/<código>`, y solo se reescriben si c
    Apuntar el número que les dé VenCloud.
 2. Con esos números se añaden al manifiesto (`maestros/articulos`, `maestros/articulos_fotos`) y
    se sube `config/manifiesto.json` al bucket de DATOS. Sin números no se pueden poner: la
-   extracción se niega a arrancar con un informe sin número.
+   extracción se niega a arrancar con un informe sin número. (16-oct: M8 = informe 188, M9 = informe 189.)
 3. Subir `agregados.zip` y `api.zip`, y a la web `almacenes/index.html` y
    `operativo/index.html` (con `--cache-control no-cache`).
 
