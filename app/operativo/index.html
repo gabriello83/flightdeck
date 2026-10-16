@@ -189,12 +189,13 @@ $("#bSalir").addEventListener("click", async ()=>{
 
 /* A donde lleva cada cuadrado: la sesion del panel y el panel dentro de ella.
    Gabriele decidira en un segundo paso que se ve al pulsar cada uno; hasta
-   entonces, la seccion que ya existe. Almacenes y furgonetas no tienen todavia
-   ninguna seccion en el panel, y se dice en vez de llevar a cualquier sitio. */
+   entonces, la seccion que ya existe. Furgonetas no tiene todavia ninguna
+   seccion en el panel, y se dice en vez de llevar a cualquier sitio. */
 const DESTINO = {
   rutas:        {sesion:"resumen",       panel:"visitas_dia"},
   averias:      {sesion:"disponibilidad",panel:"sat"},
-  almacenes:    null,
+  // Almacenes tiene su propia pagina: productos, fotos, packs y bajo minimo (docs/54).
+  almacenes:    {url:"/almacenes/"},
   furgonetas:   null,
   pdvs:         {sesion:"instalaciones", panel:"censo"},
   ventas:       {sesion:"venta_consumo", panel:"recaudacion"},
@@ -249,7 +250,8 @@ function contenido(id, d, f){
           + (df ? ` · ${num(n)} diferencias con Nayax, Prodelfi y Nebula` : "")};
     }
     case "almacenes": return {vl:eur(x.valor),
-      sub:`Cierre de ${mesLargo(x.periodo)} · ${num((x.por_almacen||[]).length)} almacenes`};
+      sub:`Cierre de ${mesLargo(x.periodo)} · ${num((x.por_almacen||[]).length)} almacenes`
+        + (x.bajo_minimo ? ` · ${num(x.bajo_minimo)} productos bajo mínimo` : "")};
     case "furgonetas": return {vl:num(x.activas),
       sub:`con visitas ese día · ${num(x.visitas)} visitas`
         + (x.visitas_sin_vehiculo ? ` (${num(x.visitas_sin_vehiculo)} sin vehículo)` : "")};

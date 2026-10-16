@@ -296,10 +296,26 @@
     {
       "id": "m_tarifas",
       "nombre": "M10_EXT_MAESTRO_TARIFAS",
-      "informe": 186,
+      "informe": 187,
       "clave_fecha": "ninguna",
       "destino": "maestros/tarifas",
       "filas_mes": 93532
+    },
+    {
+      "id": "m_articulos",
+      "nombre": "M8_EXT_MAESTRO_ARTICULOS",
+      "informe": 188,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/articulos",
+      "filas_mes": 28571
+    },
+    {
+      "id": "m_articulos_fotos",
+      "nombre": "M9_EXT_MAESTRO_ARTICULOS_FOTOS",
+      "informe": 189,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/articulos_fotos",
+      "filas_mes": 355
     }
   ],
   "descartados": {

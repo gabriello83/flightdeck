@@ -72,6 +72,7 @@ import cuadro as CU
 import operativo as OP
 import tarifas as TA
 import telemetria as TE
+import almacenes as AL
 from cuadro import Cuadro
 
 s3 = boto3.client("s3")
@@ -94,6 +95,15 @@ CLAVE_RUTAS = os.environ.get("RUTAS", "maestros/rutas/m_rutas.json.gz")
 # sin fichero (los anteriores al 13-oct-2026) no tiene plan, y el cuadrado de
 # rutas lo dice.
 PLAN_VISITAS = ("crudo/rutas_plan_visitas", "rutas_plan_visitas")
+# Los almacenes por dentro (docs/54): los movimientos de almacen (C1), que traen
+# la existencia que deja cada uno; el detalle del ultimo cierre (C10), para lo
+# que no se ha movido; el maestro de articulos y sus fotos, cuando existan en
+# VenCloud. Las fotos se guardan una vez para todos los perfiles.
+MOV_ALMACEN = ("crudo/stock_almacen", "stock_almacen")
+DETALLE_CIERRE = ("crudo/stock_balance_prod", "stock_balance_prod")
+CLAVE_ARTICULOS = os.environ.get("ARTICULOS", "maestros/articulos/m_articulos.json.gz")
+CLAVE_FOTOS = os.environ.get("FOTOS", "maestros/articulos_fotos/m_articulos_fotos.json.gz")
+CARPETA_FOTOS = "cabina/_articulos/fotos/"
 # Tarifas contra venta real (docs/52). El maestro M10 · EXT_MAESTRO_TARIFAS, y lo que se
 # guarda de una noche a otra: la ultima carga de cada producto y el ultimo precio
 # cobrado, seis meses (tarifas.py explica por que no se relee todo).
@@ -1180,6 +1190,58 @@ def escribe_tarifas(acu, op, tarifas, censo, observador, hoy):
             "sin_dato": t["sin_dato"], "centros": len(detalle)}
 
 
+def escribe_almacenes(acumuladores, operativos, existencias, rutas, hoy):
+    """Los almacenes por dentro (docs/54): un fichero por perfil y las fotos.
+
+    Devuelve lo que va en la respuesta: productos y bajo minimo por perfil, y
+    cuantas fotos se han escrito.
+    """
+    balance = next(iter(operativos.values())).balance if operativos else {}
+    elementos, periodo = AL.ultimo_cierre(balance)
+    detalle = []
+    for d in AL.dias_del_cierre(elementos):
+        detalle += lee_dia(*DETALLE_CIERRE, d)
+    cierre = AL.cantidades_del_cierre(elementos, detalle)
+    del detalle
+    maestro = _filas(_json_de(CLAVE_ARTICULOS))
+    articulos = AL.Articulos(maestro) if maestro else None
+    imagenes = AL.fotos(_filas(_json_de(CLAVE_FOTOS)))
+    nombres = {a for a, _ in existencias.ultimo} | {a for a, _ in cierre}
+    out, citadas = {}, set()
+    for acu in acumuladores:
+        visibles, motivo = AL.almacenes_del_perfil(nombres, rutas, acu.ambito)
+        if motivo or not visibles:
+            out[acu.perfil["id"]] = {"sin_dato": motivo or "Ningún almacén de sus delegaciones."}
+            continue
+        fich = AL.fichero(existencias, cierre, periodo, visibles, articulos, set(imagenes), hoy)
+        escribe_comprimido(f"cabina/{acu.perfil['id']}/almacenes.json.gz", fich)
+        citadas |= AL.fotos_citadas(fich)
+        t = fich["total"]
+        cuadrado = operativos[acu.perfil["id"]].foto.get("almacenes")
+        if isinstance(cuadrado, dict) and "sin_dato" not in cuadrado:
+            cuadrado["bajo_minimo"] = t["bajo_minimo"]
+            cuadrado["productos"] = t["productos"]
+        out[acu.perfil["id"]] = {"productos": t["productos"], "bajo_minimo": t["bajo_minimo"]}
+    # Las fotos: solo las de productos que algun perfil tiene en sus almacenes,
+    # y solo las que han cambiado desde la noche anterior.
+    indice = _json_de(CARPETA_FOTOS + "indice.json") or {}
+    nuevas = 0
+    for cod in sorted(citadas):
+        datos, tipo = imagenes[cod]
+        h = AL.huella(datos)
+        if indice.get(cod) == h:
+            continue
+        s3.put_object(Bucket=BUCKET, Key=CARPETA_FOTOS + cod, Body=datos, ContentType=tipo,
+                      CacheControl="max-age=86400", ServerSideEncryption="AES256")
+        indice[cod] = h
+        nuevas += 1
+    if nuevas:
+        escribe(CARPETA_FOTOS + "indice.json", indice)
+    return {"perfiles": out, "cierre": periodo, "maestro": bool(articulos),
+            "fotos_en_maestro": len(imagenes), "fotos_escritas": nuevas,
+            "movimientos": existencias.leidas}
+
+
 def come_serie(dia, nombre, filas):
     metodo = SERIE_COME.get(nombre)
     if metodo:
@@ -1307,6 +1369,7 @@ def lambda_handler(event, context):
     observador = TA.Observador(_json_de(CLAVE_ESTADO_TARIFAS))
     series, series_centros = defaultdict(list), defaultdict(list)
     leidos, parado_en = [], None
+    existencias = AL.Existencias()
     for dia in dias:
         if not _queda_tiempo(context):
             parado_en = dia.isoformat()
@@ -1353,6 +1416,10 @@ def lambda_handler(event, context):
             # El trozo se suelta aqui: en ningun momento hay mas de un informe
             # de un dia en memoria.
             del filas
+        if not historico:
+            # Los movimientos de almacen no traen centro ni pasan por el
+            # ambito: solo se guarda el ultimo de cada producto (docs/54).
+            existencias.come(lee_dia(*MOV_ALMACEN, dia))
         leidos.append(dia)
         for pid, op in operativos.items():
             od = op.dia(dia)
@@ -1384,7 +1451,7 @@ def lambda_handler(event, context):
     observador.poda(hoy)
     escribe_comprimido(CLAVE_ESTADO_TARIFAS, observador.estado())
 
-    escritos, cuadros, resumen_operativo, resumen_tarifas = [], {}, {}, {}
+    escritos, cuadros, resumen_operativo, resumen_tarifas, resumen_almacenes = [], {}, {}, {}, {}
     if not historico:
         rutas = _filas(_json_de(CLAVE_RUTAS))
         maestro_tarifas = _filas(_json_de(CLAVE_TARIFAS))
@@ -1396,6 +1463,9 @@ def lambda_handler(event, context):
             resumen_tarifas[acu.perfil["id"]] = escribe_tarifas(
                 acu, op, tarifas, [f for f in censo if en_ambito(f, acu.ambito, mapa)],
                 observador, hoy)
+        resumen_almacenes = escribe_almacenes(acumuladores, operativos, existencias, rutas, hoy)
+        for acu in acumuladores:
+            op = operativos[acu.perfil["id"]]
             clave = f"cabina/{acu.perfil['id']}/operativo.json"
             fichero = op.fichero(acu.perfil["id"], _json_de(clave))
             escribe(clave, fichero)
@@ -1481,6 +1551,9 @@ def lambda_handler(event, context):
         # Los ficheros de telemetria de la consola con los que se ha cruzado, y
         # los que faltan (docs/53).
         "telemetria_externa": externa,
+        # Los almacenes por dentro (docs/54): productos y bajo minimo por perfil,
+        # y si han llegado el maestro de articulos y las fotos.
+        "almacenes": resumen_almacenes,
     }
     if parado_en:
         # Esto tiene que verse en la RESPUESTA, no solo en el registro: es la

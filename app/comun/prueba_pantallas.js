@@ -164,6 +164,28 @@ const API = {
             tarifas: { pct: 81.3, color: 'amarillo', coinciden: 13, controlados: 16, sin_tarifa: 2, sin_dato_productos: 1, desde: '2026-04-14' },
             almacenes: { valor: 502429.74, periodo: '2026-09', por_almacen: [{ almacen: 'A', delegacion: '', valor: 1 }] } }
   },
+  // Los almacenes por dentro (docs/54), con la forma que escribe infra/almacenes.py.
+  '/api/almacenes': {
+    generado: new Date().toISOString(), umbral_pct: 15, periodo_cierre: '2026-09', maestro: true, fotos: true,
+    avisos: [], total: { productos: 3, bajo_minimo: 1, sin_codigo_unidad: 1, sin_foto: 2, sin_pack: 1, almacenes: 2 },
+    almacenes: [
+      { almacen: 'Sevilla CECO L0K071', delegacion: 'Andalucia - Sevilla',
+        resumen: { productos: 2, bajo_minimo: 1, sin_compra: 0, sin_foto: 1, sin_codigo_unidad: 1, sin_pack: 1 },
+        productos: [
+          { cod: '5322', nombre: 'AGUA FONT VELLA PET 50CL', existencias: 80, de: 'movimiento', fecha: iso(AYER),
+            compra: { fecha: iso(AYER), cantidad: 600, proveedor: 'FONT VELLA', documento: 'Albarán de compra: 77' },
+            pct: 13.3, bajo: true, categoria: 'Agua', unid_pack: 24, unid_caja: 24,
+            ean_unidad: ['8410000000016'], otros_codigos: [{ codigo: '8410000000023', cantidad: 24 }], foto: true },
+          { cod: '5961', nombre: 'AZUCAR 1KG', existencias: 100, de: 'movimiento', fecha: iso(AYER),
+            compra: { fecha: iso(AYER), cantidad: 200, proveedor: 'AZUCARERA', documento: '' },
+            pct: 50, bajo: false, categoria: '', unid_pack: null, unid_caja: 10,
+            ean_unidad: [], otros_codigos: [{ codigo: '8410000000030', cantidad: 10 }], foto: false }] },
+      { almacen: 'Madrid - Leganes CECO L0H036', delegacion: 'Madrid - Leganes',
+        resumen: { productos: 1, bajo_minimo: 0, sin_compra: 1, sin_foto: 1, sin_codigo_unidad: 0, sin_pack: 0 },
+        productos: [
+          { cod: '119162', nombre: 'CAFE GARIBALDI ESPRESSO BAR 1000GR', existencias: 60, de: 'cierre', fecha: '2026-10-05',
+            categoria: 'Café', unid_pack: 6, unid_caja: 6, ean_unidad: ['8000000000001'], otros_codigos: [], foto: false }] }]
+  },
   '/api/estado-carga': { ultima_carga: new Date().toISOString(), dias_pedidos: [iso(AYER)], descargas_ok: 75, descargas_fallidas: 0, bytes: 12345678, filas_por_informe: { visita_cabecera: 1000 }, errores: [], retraso_dias: 0 },
   '/api/admin/usuarios': { usuarios: [{ _id: 'eva@airbus.com', nombre: 'Eva', perfil_id: 'cli-airbus', estado: 'activo' }] },
   '/api/admin/perfiles': {
@@ -314,6 +336,11 @@ const servidor = http.createServer((pet, res) => {
       if (!mes) return json(conVenta ? INDICE_CUADRO : { ...sinVenta(INDICE_CUADRO), meses: INDICE_CUADRO.meses.map(m => ({ mes: m.mes, visitas: m.visitas, incidencias: m.incidencias })) });
       if (!CUADRO[mes]) { res.writeHead(400); return res.end('{"error":"mes"}'); }
       return json(conVenta ? CUADRO[mes] : sinVenta(CUADRO[mes]));
+    }
+    if (u.pathname === '/api/almacenes/foto') {
+      // Un PNG de un pixel: lo que importa es que la pagina la pide aqui.
+      res.writeHead(200, { 'content-type': 'image/png' });
+      return res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'));
     }
     if (u.pathname === '/api/tarifas') {
       const c = u.searchParams.get('centro');
@@ -669,9 +696,11 @@ const servidor = http.createServer((pet, res) => {
       ['amarillo', 'rojo', 'verde']);
     comprueba('rutas lleva a su seccion del panel',
       await pagina.getAttribute('.cuadro[data-id="rutas"]', 'href'), '/panel/?ver=resumen#visitas_dia');
-    comprueba_que('almacenes no tiene seccion todavia, y lo dice',
-      (await pagina.evaluate(() => document.querySelector('.cuadro[data-id="almacenes"]').tagName)) === 'DIV'
-      && (await pagina.textContent('.cuadro[data-id="almacenes"]')).includes('Sin sección todavía'));
+    comprueba('almacenes lleva a su pagina',
+      await pagina.getAttribute('.cuadro[data-id="almacenes"]', 'href'), '/almacenes/');
+    comprueba_que('furgonetas no tiene seccion todavia, y lo dice',
+      (await pagina.evaluate(() => document.querySelector('.cuadro[data-id="furgonetas"]').tagName)) === 'DIV'
+      && (await pagina.textContent('.cuadro[data-id="furgonetas"]')).includes('Sin sección todavía'));
     await pagina.selectOption('#dia', '2026-10-01');
     comprueba_que('un dia sin plan dice el motivo, no un cero',
       (await pagina.textContent('.cuadro[data-id="rutas"]')).includes('Falta el plan de visitas'));
@@ -791,6 +820,61 @@ const servidor = http.createServer((pet, res) => {
     comprueba('sin un solo error en la consola del navegador', c.errores, []);
     await c.pagina.close();
     Object.assign(op, JSON.parse(antes));
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nLos almacenes por dentro');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre('/almacenes/');
+    await pagina.waitForSelector('#filas tr[data-cod]');
+    comprueba('todos los almacenes: los tres productos, el bajo minimo primero',
+      await pagina.$$eval('#filas tr[data-cod]', x => x.map(t => t.dataset.cod)), ['5322', '5961', '119162']);
+    comprueba('el bajo minimo va marcado',
+      await pagina.$$eval('#filas tr.bajo', x => x.map(t => t.dataset.cod)), ['5322']);
+    comprueba_que('con su porcentaje de la ultima compra',
+      (await pagina.textContent('tr[data-cod="5322"]')).includes('13 %'));
+    comprueba('la foto se pide a la API del mismo dominio',
+      await pagina.getAttribute('tr[data-cod="5322"] img.foto', 'src'), '/api/almacenes/foto?art=5322');
+    comprueba_que('el azucar sin codigo de la unidad, y lo dice',
+      (await pagina.textContent('tr[data-cod="5961"]')).includes('Sin código de unidad'));
+    comprueba_que('las unidades por pack, y los packs que hay',
+      (await pagina.textContent('tr[data-cod="5322"]')).includes('3 packs de 24'));
+    comprueba_que('el cafe sin compra lo dice, sin porcentaje inventado',
+      (await pagina.textContent('tr[data-cod="119162"]')).includes('Sin compra en la ventana'));
+    await pagina.click('#resumen button[data-f="sin_codigo"]');
+    comprueba('el filtro de sin codigo de la unidad',
+      await pagina.$$eval('#filas tr[data-cod]', x => x.map(t => t.dataset.cod)), ['5961']);
+    await pagina.click('#resumen button[data-f="bajo"]');
+    comprueba('el de bajo minimo',
+      await pagina.$$eval('#filas tr[data-cod]', x => x.map(t => t.dataset.cod)), ['5322']);
+    await pagina.click('#resumen button[data-f="todos"]');
+    await pagina.selectOption('#almacen', 'Madrid - Leganes CECO L0H036');
+    comprueba('un almacen solo ensena lo suyo',
+      await pagina.$$eval('#filas tr[data-cod]', x => x.map(t => t.dataset.cod)), ['119162']);
+    await pagina.selectOption('#almacen', '');
+    await pagina.fill('#buscar', '8410000000016');
+    comprueba('se busca por EAN',
+      await pagina.$$eval('#filas tr[data-cod]', x => x.map(t => t.dataset.cod)), ['5322']);
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+
+    // Sin el maestro de articulos no se ensena a nadie «sin codigo»: se dice que falta.
+    const antes = API['/api/almacenes'];
+    API['/api/almacenes'] = { ...antes, maestro: false, fotos: false,
+      avisos: ['Falta el maestro de artículos de VenCloud (M8 · EXT_MAESTRO_ARTICULOS): sin él no hay unidades por pack ni códigos de barras.'],
+      almacenes: antes.almacenes.map(a => ({ ...a, productos: a.productos.map(p => {
+        const q = { ...p, foto: false }; ['unid_pack', 'unid_caja', 'ean_unidad', 'otros_codigos', 'categoria'].forEach(k => delete q[k]); return q; }) })) };
+    const b = await abre('/almacenes/');
+    await b.pagina.waitForSelector('#filas tr[data-cod]');
+    comprueba_que('sin maestro lo dice arriba', (await b.pagina.textContent('#avisos')).includes('M8 · EXT_MAESTRO_ARTICULOS'));
+    comprueba('y no hay filtro de sin codigo',
+      await b.pagina.$$eval('#resumen button', x => x.map(t => t.dataset.f)), ['todos', 'bajo']);
+    comprueba_que('ni nadie sale sin codigo', !(await b.pagina.textContent('#filas')).includes('Sin código de unidad'));
+    comprueba('sin un solo error en la consola del navegador', b.errores, []);
+    await b.pagina.close();
+    API['/api/almacenes'] = antes;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 

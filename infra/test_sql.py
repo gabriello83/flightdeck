@@ -31,7 +31,7 @@ RE_ALIAS = re.compile(r"(?:from|join)\s+[\w.]+\s+(?:as\s+)?(\w+)", re.I)
 RE_SUB = re.compile(r"\)\s*(\w+)\s*(?:on\b|\n|$)", re.I)
 RE_ESQUEMA = re.compile(r"(?:from|join)\s+(\w+)\.", re.I)
 RE_USO = re.compile(r"\b(\w+)\.\w+")
-RE_BLOQUE = re.compile(r"## ([A-Z0-9]+) · (EXT_[A-Z_0-9]+)(.*?)\n```sql\n(.*?)\n```", re.S)
+RE_BLOQUE = re.compile(r"## ([A-Z0-9]+) · ((?:[A-Z]\d+_)?EXT_[A-Z_0-9]+)(.*?)\n```sql\n(.*?)\n```", re.S)
 
 # Palabras que llevan punto y no son un alias.
 NO_ALIAS = {"cast", "count", "coalesce", "sum", "min", "max", "avg", "extract"}
