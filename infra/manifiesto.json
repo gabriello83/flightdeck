@@ -296,7 +296,7 @@
     {
       "id": "m_tarifas",
       "nombre": "M10_EXT_MAESTRO_TARIFAS",
-      "informe": 186,
+      "informe": 187,
       "clave_fecha": "ninguna",
       "destino": "maestros/tarifas",
       "filas_mes": 93532
