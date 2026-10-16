@@ -16,6 +16,32 @@ de octubre de 2026 como primer cuadrado con página propia. El 13 de octubre hab
   plan, con centro, ruta y reponedor. Se pueden buscar y bajar en CSV.
 - **El control de festivos**, delegación por delegación.
 
+## La misma estructura que el Power BI de visitas pendientes
+
+El 16 de octubre Gabriele pidió que la página tuviera *«la misma estructura de este Power BI»*:
+el informe «Control operativo Visitas Pendientes», que leía cada día la exportación del informe 69
+de VenCloud (control diario de ruta) desde SharePoint. Lo que tenía y dónde está ahora:
+
+| Power BI | Aquí |
+|---|---|
+| Filtros de fecha, delegación y ruta | Día, Delegación y Ruta |
+| Visitas pendientes · Cumplimiento ruta · Visitas en ruta · Visitas efectuadas · Visitas no planificadas · Pasaje vacío | Los seis indicadores, en ese orden y con esos colores |
+| Matriz ruta × estado (hecha, pendiente, fuera de ruta) | «Visitas por ruta», con el total, el cumplimiento y el pasaje vacío de cada ruta; pulsar una filtra por ella |
+| Donut «Estado visitas» | «Estado de las visitas» |
+| Página «Máquinas no visitadas»: fecha, ruta, centro cliente, matrícula | La pestaña «Pendientes», con la ubicación de la máquina; las otras pestañas dan las hechas, las fuera de ruta, los pasajes vacíos y todas |
+| Motivo y comentario de cada máquina no visitada (lista de SharePoint, rellenada con Power Apps) | **No está.** La plataforma no guarda justificaciones; sería una función nueva con escritura |
+
+Dos diferencias a propósito, las mismas que señala docs/04 del informe 69:
+
+- **Se cuenta por punto de venta, no por fila.** El Power BI contaba filas: un punto de venta
+  planificado en dos rutas eran dos pendientes, y uno visitado dos veces, dos hechas.
+- **Las lecturas automáticas de SYSTEM no son visita.** En el informe 69 un punto de venta del plan
+  con un parte de SYSTEM no salía en ninguna parte; aquí cae en pendiente.
+
+**Pasaje vacío** = el punto de venta tuvo visita y ninguno de sus partes de persona de ese día
+tiene una sola línea de reposición (A2, de cualquier tipo): «fue y no hizo nada». Si ese día no ha
+llegado ninguna línea, no se sabe y se dice, en vez de marcar todas las visitas como vacías.
+
 ## Las cuentas
 
 Son las mismas del cuadrado, partidas:
@@ -65,8 +91,11 @@ con el ámbito del perfil aplicado al escribir. Se sirve por `/api/rutas`, con l
 cuadrado: hace falta perfil de operaciones o más y la sesión de servicio. Lo que guarda:
 
 - las cifras de cada día durante 62 días, que son las que hacen falta para el día normal;
-- las listas punto a punto sólo de los últimos siete días. Un día más viejo enseña las cifras y
-  avisa de que no tiene lista.
+- la lista máquina a máquina (`visitas`) sólo de los últimos siete días: una fila por punto de
+  venta con su estado, matrícula, delegación, ruta, centro, ubicación (del censo), hora del
+  primer parte, reponedor y pasaje vacío. Un día más viejo enseña las cifras y avisa de que no
+  tiene lista. Los días escritos antes del 16 de octubre traían dos listas (`no_visitados` y
+  `fuera`) sin hechas ni pasaje vacío; la página las lee igual y lo dice.
 
 Sale en unos 50 KB comprimidos para el perfil interno.
 

@@ -75,6 +75,14 @@ def porcentaje(parte, total):
     return round(100.0 * parte / total, 1) if total else None
 
 
+def hora(fecha):
+    """«HH:MM» de una fecha de VenCloud («2026-10-15 08:12:31» o con T); «» si no trae."""
+    s = str(fecha or "")
+    if len(s) >= 16 and s[10] in " T" and s[13] == ":":
+        return s[11:16]
+    return ""
+
+
 def nombre_clase(clase):
     try:
         c = int(clase)
@@ -131,9 +139,15 @@ class DiaOperativo:
         # Para la pagina de rutas (docs/55): de que delegacion, ruta y centro es
         # cada punto de venta del plan y cada uno visitado, y cuantas visitas
         # hizo cada delegacion. Un punto de venta, una entrada: no guarda filas.
-        self.plan_de = {}            # pdv -> {"d","r":[rutas],"n","c"}
-        self.visita_de = {}          # pdv -> {"d","r","e","n","c"}, la primera visita
+        self.plan_de = {}            # pdv -> {"d","r":[rutas],"n","c","m"}
+        self.visita_de = {}          # pdv -> {"d","r","e","n","c","m","h"}, la primera visita
         self.visitas_deleg = {}      # delegacion -> visitas reales
+        # El pasaje vacio (informe 69 de VenCloud, docs/04): una visita sin
+        # ninguna linea de reposicion. Que parte es de que punto de venta, y
+        # que partes tienen alguna linea; se cruza al final, porque las lineas
+        # llegan en otro informe y en cualquier orden.
+        self.partes_pdv = {}         # parte_id -> pdv, solo visitas reales
+        self.partes_con_lineas = set()
 
     def come_partes(self, filas):
         for p in filas:
@@ -144,11 +158,19 @@ class DiaOperativo:
                 self.visitas_deleg[deleg] = self.visitas_deleg.get(deleg, 0) + 1
                 if pdv:
                     self.visitados.add(pdv)
-                    self.visita_de.setdefault(pdv, {
-                        "d": deleg, "r": str(R.v(p, "ruta", "") or "").strip(),
-                        "e": str(R.v(p, "empleado", "") or "").strip(),
-                        "n": str(R.v(p, "num_centro", "") or ""),
-                        "c": str(R.v(p, "centro", "") or "").strip()})
+                    pid = R.v(p, "parte_id", None)
+                    if pid not in (None, ""):
+                        self.partes_pdv[str(pid)] = pdv
+                    x = {"d": deleg, "r": str(R.v(p, "ruta", "") or "").strip(),
+                         "e": str(R.v(p, "empleado", "") or "").strip(),
+                         "n": str(R.v(p, "num_centro", "") or ""),
+                         "c": str(R.v(p, "centro", "") or "").strip(),
+                         "m": str(R.v(p, "matricula", "") or "").strip(),
+                         "h": hora(R.v(p, "fecha_ini", ""))}
+                    # La primera visita del dia es la que se ensena.
+                    antes = self.visita_de.get(pdv)
+                    if antes is None or (x["h"] and (not antes["h"] or x["h"] < antes["h"])):
+                        self.visita_de[pdv] = x
                 v = R.v(p, "vehiculo", "")
                 if vehiculo_real(v):
                     self.vehiculos.add(str(v).strip())
@@ -182,7 +204,8 @@ class DiaOperativo:
                 x = self.plan_de.setdefault(pdv, {
                     "d": str(R.v(f, "delegacion", "") or ""), "r": [],
                     "n": str(R.v(f, "num_centro", "") or ""),
-                    "c": str(R.v(f, "centro", "") or "").strip()})
+                    "c": str(R.v(f, "centro", "") or "").strip(),
+                    "m": str(R.v(f, "matricula", "") or "").strip()})
                 if ruta and ruta not in x["r"]:
                     x["r"].append(ruta)
 
@@ -197,6 +220,9 @@ class DiaOperativo:
         """
         self.repo_valor += R.valor_cargado(filas)
         for l in filas:
+            pid = R.v(l, "parte_id", None)
+            if pid not in (None, ""):
+                self.partes_con_lineas.add(str(pid))
             if R.v(l, "tipo_linea") != "CM":
                 continue
             u = float(R.v(l, "cantidad", 0) or 0)
@@ -495,7 +521,7 @@ class Operativo:
                       "VenCloud; null si el perfil está acotado (no tienen centro)."),
         }
 
-    def detalle_rutas(self, perfil_id, anterior=None, festivos=None):
+    def detalle_rutas(self, perfil_id, anterior=None, festivos=None, ubicaciones=None):
         """El fichero de la pagina de rutas (docs/55).
 
         Cada dia, por delegacion y por ruta, lo previsto y lo hecho; y los puntos
@@ -508,13 +534,16 @@ class Operativo:
         dias = dict((anterior or {}).get("dias") or {})
         for f, d in self.dias.items():
             if d is not None:
-                dias[f] = rutas_del_dia(d)
+                dias[f] = rutas_del_dia(d, ubicaciones)
         dias = dict(sorted(dias.items())[-DIAS_GUARDADOS:])
         recientes = set(sorted(dias)[-DIAS_NOCHE:])
         for f, v in dias.items():
+            # Las listas de antes del 16-oct-2026 se llamaban no_visitados y
+            # fuera: tambien se sueltan.
+            v.pop("no_visitados", None)
+            v.pop("fuera", None)
             if f not in recientes:
-                v.pop("no_visitados", None)
-                v.pop("fuera", None)
+                v.pop("visitas", None)
         return {
             "generado": datetime.datetime.utcnow().isoformat() + "Z",
             "perfil": perfil_id,
@@ -525,8 +554,10 @@ class Operativo:
             "control_festivos": control_festivos(dias, festivos),
             "_nota": ("Cada día, lo previsto en el plan de visitas (D12, informe 184) contra las "
                       "visitas reales, por delegación y por ruta, contando por punto de venta. "
-                      "no_visitados: [pdv, delegación, rutas, nº centro, centro]. fuera: [pdv, "
-                      "delegación, ruta, reponedor, nº centro, centro]. control_festivos compara "
+                      "visitas: [estado (HECHA, PENDIENTE, FUERA DE RUTA), pdv, matrícula, "
+                      "delegación, ruta(s), nº centro, centro, ubicación, hora, reponedor, "
+                      "pasaje vacío (1, 0 o null)]. vacio: visitas sin ninguna línea de "
+                      "reposición; null si no llegaron las líneas. control_festivos compara "
                       "cada festivo y cada día laborable flojo con el día normal de su delegación."),
         }
 
@@ -617,8 +648,37 @@ FESTIVO_BAJO = 0.5
 MIN_DIAS_NORMALES = 3
 
 
-def rutas_del_dia(d):
-    """Lo de un dia: total, delegaciones, rutas y las dos listas."""
+# Los tres estados de una visita, como el informe 69 de VenCloud y el Power BI
+# «Control operativo Visitas Pendientes» que se usaba antes de esta pagina.
+HECHA, PENDIENTE, FUERA = "HECHA", "PENDIENTE", "FUERA DE RUTA"
+SIN_LINEAS = ("No ha llegado ninguna línea de reposición de ese día (A2): sin ellas no se "
+              "sabe qué visita fue un pasaje vacío.")
+
+
+def pasajes_vacios(d):
+    """Los puntos de venta visitados ese dia en los que NINGUN parte de persona
+    tiene una sola linea de reposicion: «fue y no hizo nada» (docs/04, informe 69).
+
+    None si ese dia no llego ninguna linea: con visitas y sin lineas lo que
+    falta es el informe, no el trabajo, y no se marca a todos como vacios.
+    """
+    if d.visitados and not d.partes_con_lineas:
+        return None
+    con_algo = {pdv for pid, pdv in d.partes_pdv.items() if pid in d.partes_con_lineas}
+    # Un punto de venta cuyo parte no trae id no se puede cruzar: no se marca.
+    con_id = set(d.partes_pdv.values())
+    return {pdv for pdv in d.visitados if pdv in con_id and pdv not in con_algo}
+
+
+def rutas_del_dia(d, ubicaciones=None):
+    """Lo de un dia: total, delegaciones, rutas y la lista maquina a maquina.
+
+    La lista `visitas` lleva una fila por punto de venta y estado, como el
+    informe 69: [estado, pdv, matricula, delegacion, ruta(s), nº centro, centro,
+    ubicacion, hora, reponedor, pasaje_vacio]. pasaje_vacio es 1, 0 o None (no
+    se sabe); en una PENDIENTE no aplica y va None.
+    """
+    ubicaciones = ubicaciones or {}
     out = {"visitas_deleg": dict(sorted(d.visitas_deleg.items()))}
     if d.plan is None or not d.plan:
         out["sin_dato"] = (SIN_PLAN if d.plan is None
@@ -627,56 +687,79 @@ def rutas_del_dia(d):
         return out
     hechas = d.plan & d.visitados
     fuera = d.visitados - d.plan
+    vacios = pasajes_vacios(d)
+
+    def es_vacio(pdv):
+        return None if vacios is None else int(pdv in vacios)
 
     deleg, rutas = {}, {}
 
     def fila_deleg(nombre):
         return deleg.setdefault(nombre, {"delegacion": nombre, "previstas": 0, "hechas": 0,
-                                         "fuera": 0, "visitas": d.visitas_deleg.get(nombre, 0)})
+                                         "fuera": 0, "vacio": 0,
+                                         "visitas": d.visitas_deleg.get(nombre, 0)})
 
     def fila_ruta(dl, ruta):
         return rutas.setdefault((dl, ruta), {"delegacion": dl, "ruta": ruta or "Sin ruta",
-                                             "previstas": 0, "hechas": 0, "fuera": 0})
+                                             "previstas": 0, "hechas": 0, "fuera": 0, "vacio": 0})
 
-    no_visitados = []
+    lista = []
     for pdv in sorted(d.plan):
-        x = d.plan_de.get(pdv, {"d": "", "r": [], "n": "", "c": ""})
+        x = d.plan_de.get(pdv, {"d": "", "r": [], "n": "", "c": "", "m": ""})
         hecho = pdv in hechas
+        vacio = es_vacio(pdv) if hecho else None
         g = fila_deleg(x["d"])
         g["previstas"] += 1
         g["hechas"] += hecho
+        g["vacio"] += bool(vacio)
         # Un punto de venta en dos rutas cuenta en las dos rutas, y una sola
         # vez en su delegacion y en el total.
         for r in x["r"] or [""]:
             fr = fila_ruta(x["d"], r)
             fr["previstas"] += 1
             fr["hechas"] += hecho
-        if not hecho:
-            no_visitados.append([pdv, x["d"], " / ".join(x["r"]), x["n"], x["c"]])
-    lista_fuera = []
+            fr["vacio"] += bool(vacio)
+        v = d.visita_de.get(pdv, {}) if hecho else {}
+        # La ruta es la del plan; el reponedor, el que fue, que puede ser de
+        # otra ruta (docs/04, informe 69).
+        mat = x.get("m") or v.get("m", "")
+        lista.append([HECHA if hecho else PENDIENTE, pdv, mat, x["d"], " / ".join(x["r"]),
+                      x["n"], x["c"], ubicaciones.get(mat, ""), v.get("h", ""), v.get("e", ""), vacio])
     for pdv in sorted(fuera):
-        x = d.visita_de.get(pdv, {"d": "", "r": "", "e": "", "n": "", "c": ""})
-        fila_deleg(x["d"])["fuera"] += 1
-        fila_ruta(x["d"], x["r"])["fuera"] += 1
-        lista_fuera.append([pdv, x["d"], x["r"], x["e"], x["n"], x["c"]])
+        x = d.visita_de.get(pdv, {"d": "", "r": "", "e": "", "n": "", "c": "", "m": "", "h": ""})
+        vacio = es_vacio(pdv)
+        g = fila_deleg(x["d"])
+        g["fuera"] += 1
+        g["vacio"] += bool(vacio)
+        fr = fila_ruta(x["d"], x["r"])
+        fr["fuera"] += 1
+        fr["vacio"] += bool(vacio)
+        lista.append([FUERA, pdv, x.get("m", ""), x["d"], x["r"], x["n"], x["c"],
+                      ubicaciones.get(x.get("m", ""), ""), x.get("h", ""), x["e"], vacio])
     for nombre, n in d.visitas_deleg.items():
         fila_deleg(nombre)
 
     def con_pct(f):
         p = porcentaje(f["hechas"], f["previstas"])
-        return dict(f, pct=p, color=semaforo(p))
+        f = dict(f, pct=p, color=semaforo(p))
+        if vacios is None:
+            f["vacio"] = None
+        return f
 
     pct = porcentaje(len(hechas), len(d.plan))
+    orden = {PENDIENTE: 0, HECHA: 1, FUERA: 2}
     out.update({
         "total": {"previstas": len(d.plan), "hechas": len(hechas), "pct": pct,
-                  "color": semaforo(pct), "fuera": len(fuera), "visitas": d.visitas},
+                  "color": semaforo(pct), "fuera": len(fuera), "visitas": d.visitas,
+                  "vacio": None if vacios is None else len(vacios & d.visitados)},
         "delegaciones": sorted((con_pct(f) for f in deleg.values()),
                                key=lambda f: (f["pct"] is None, f["pct"] or 0, f["delegacion"])),
         "rutas": sorted((con_pct(f) for f in rutas.values()),
                         key=lambda f: (f["delegacion"], f["pct"] is None, f["pct"] or 0, f["ruta"])),
-        "no_visitados": sorted(no_visitados, key=lambda x: (x[1], x[2], x[4], x[0])),
-        "fuera": sorted(lista_fuera, key=lambda x: (x[1], x[2], x[5], x[0])),
+        "visitas": sorted(lista, key=lambda x: (orden[x[0]], x[3], x[4], x[6], x[1])),
     })
+    if vacios is None:
+        out["sin_vacio"] = SIN_LINEAS
     return out
 
 

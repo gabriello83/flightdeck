@@ -18,6 +18,9 @@
   --verde:#15803d; --amarillo:#f2b705; --rojo:#c62828; --sin:#d9d8d2;
   --t-verde:#ffffff; --t-amarillo:#1b1b1b; --t-rojo:#ffffff; --t-sin:#52514e;
   --texto-verde:#15803d; --texto-rojo:#c62828;
+  /* Los estados de una visita, los del Power BI de visitas pendientes. */
+  --hecha:#2e7d32; --pendiente:#c62828; --fuera:#ef6c00; --vacio:#ffeb3b; --t-vacio:#1b1b1b;
+  --fila-vacio:#fff7c2;
 }
 @media (prefers-color-scheme: dark){
   :root:where(:not([data-theme="light"])){
@@ -27,6 +30,7 @@
     --s1:#3987e5; --sombra:none;
     --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b; --sin:#3a3a36;
     --t-sin:#c3c2b7; --texto-verde:#4ade80; --texto-rojo:#f87171;
+    --hecha:#3f9a45; --pendiente:#d9443a; --fuera:#f0802a; --vacio:#e8d43a; --fila-vacio:#3b3613;
   }
 }
 :root[data-theme="dark"]{
@@ -36,6 +40,7 @@
   --s1:#3987e5; --sombra:none;
   --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b; --sin:#3a3a36;
   --t-sin:#c3c2b7; --texto-verde:#4ade80; --texto-rojo:#f87171;
+  --hecha:#3f9a45; --pendiente:#d9443a; --fuera:#f0802a; --vacio:#e8d43a; --fila-vacio:#3b3613;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -79,6 +84,30 @@ button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);colo
 .kpi.rojo{background:var(--rojo);border-color:var(--rojo)}
 .kpi.verde *,.kpi.rojo *{color:var(--t-verde)}
 .kpi.amarillo *{color:var(--t-amarillo)}
+/* Los indicadores de cada estado llevan su color en el borde, como en el Power BI. */
+.kpi.e-pendiente{border-top:4px solid var(--pendiente)}
+.kpi.e-hecha{border-top:4px solid var(--hecha)}
+.kpi.e-fuera{border-top:4px solid var(--fuera)}
+.kpi.e-vacio{border-top:4px solid var(--vacio)}
+.kpi.e-ruta{border-top:4px solid var(--s1)}
+.dos{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);gap:14px}
+.dos > section.caja{margin-top:14px}
+.dona{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:center;padding:6px 0}
+.dona svg{width:190px;height:190px;flex:0 0 auto}
+.dona .centro{font-size:22px;font-weight:650;fill:var(--tinta)}
+.dona .centro2{font-size:11px;fill:var(--tinta-2)}
+.leyenda{display:grid;gap:8px;font-size:13px}
+.leyenda div{display:flex;align-items:center;gap:8px}
+.leyenda i{display:block;width:12px;height:12px;border-radius:3px}
+.est{display:inline-block;font-size:11.5px;font-weight:650;border-radius:5px;padding:1px 7px;white-space:nowrap;color:#fff}
+.est.HECHA{background:var(--hecha)} .est.PENDIENTE{background:var(--pendiente)}
+.est.FUERA{background:var(--fuera)}
+.vac{display:inline-block;font-size:11.5px;font-weight:650;border-radius:5px;padding:1px 7px;background:var(--vacio);color:var(--t-vacio);white-space:nowrap}
+tr.vacio td{background:var(--fila-vacio)}
+td.c-hecha{color:var(--hecha);font-weight:600} td.c-pendiente{color:var(--pendiente);font-weight:600}
+td.c-fuera{color:var(--fuera);font-weight:600}
+tfoot td{font-weight:650;border-top:1px solid var(--borde-fuerte);border-bottom:0}
+@media (max-width:900px){ .dos{grid-template-columns:minmax(0,1fr)} }
 section.caja{
   background:var(--tarjeta);border:1px solid var(--borde);border-radius:12px;
   padding:12px 16px 14px;box-shadow:var(--sombra);margin-top:14px
@@ -118,6 +147,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   .tabla thead{display:none}
   .tabla tr{border-bottom:1px solid var(--borde);padding:9px 0}
   .tabla tr:last-child{border-bottom:0}
+  .tabla tfoot{display:block}
   .tabla td{border:0;padding:2px 0;text-align:left!important;overflow-wrap:anywhere}
   .tabla td[data-et]:not(:empty)::before{content:attr(data-et) " · ";color:var(--tinta-3);font-size:12px}
   .barra input{min-width:0;width:100%}
@@ -130,7 +160,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 <div class="env">
   <header class="top">
     <div class="marca">
-      <b>Rutas: visitas hechas contra el plan</b>
+      <b>Resumen operativo de rutas</b>
       <span id="quien"></span>
     </div>
     <div class="acciones">
@@ -147,31 +177,38 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
     <div class="barra">
       <label>Día <select id="dia"></select></label>
       <label>Delegación <select id="deleg"></select></label>
+      <label>Ruta <select id="ruta"></select></label>
     </div>
     <div class="nota" id="festivoDia" hidden></div>
     <div class="kpis" id="kpis"></div>
 
-    <section class="caja" id="sDeleg">
-      <div class="cabsec"><h2>Por delegación</h2><span class="tenue">Pulsa una para ver sus rutas y sus puntos de venta</span></div>
-      <p class="sub">Puntos de venta del plan del día que tuvieron visita. Un punto de venta en dos rutas es una sola visita prevista. Los cuadritos son los últimos siete días; el recuadrado es festivo.</p>
-      <div class="tabla" id="tDeleg"></div>
-    </section>
+    <div class="dos">
+      <section class="caja">
+        <div class="cabsec"><h2 id="hRutas">Visitas por ruta</h2><span class="tenue" id="cRutas"></span></div>
+        <p class="sub">Puntos de venta de cada ruta por estado. Uno que está en dos rutas cuenta en las dos; las visitas fuera de ruta van a la ruta con la que se hizo el parte. Pulsa una ruta para filtrar.</p>
+        <div class="tabla" id="tRutas"></div>
+      </section>
+      <section class="caja">
+        <div class="cabsec"><h2>Estado de las visitas</h2></div>
+        <div id="dona"></div>
+      </section>
+    </div>
 
     <section class="caja">
-      <div class="cabsec"><h2 id="hRutas">Por ruta</h2><span class="tenue" id="cRutas"></span></div>
-      <p class="sub">Un punto de venta que está en dos rutas cuenta en las dos. Las visitas fuera de plan van a la ruta con la que se hizo el parte.</p>
-      <div class="tabla" id="tRutas"></div>
-    </section>
-
-    <section class="caja">
-      <div class="cabsec"><h2 id="hPdv">Puntos de venta</h2><span class="tenue" id="cPdv"></span></div>
+      <div class="cabsec"><h2 id="hPdv">Máquinas no visitadas</h2><span class="tenue" id="cPdv"></span></div>
       <div class="pestanas" id="pestanas" role="tablist"></div>
       <div class="barra" style="margin-top:0">
-        <label class="busca">Buscar <input id="busca" type="search" placeholder="Punto de venta, centro, ruta, reponedor…"></label>
+        <label class="busca">Buscar <input id="busca" type="search" placeholder="Matrícula, centro, ruta, reponedor…"></label>
         <button class="btn" id="bCsv" type="button">Descargar CSV</button>
       </div>
       <p class="sub" id="sPdv"></p>
       <div class="tabla" id="tPdv"></div>
+    </section>
+
+    <section class="caja" id="sDeleg">
+      <div class="cabsec"><h2>Por delegación</h2><span class="tenue">Pulsa una para ver sus rutas y sus máquinas</span></div>
+      <p class="sub">Cumplimiento de ruta de cada delegación. Los cuadritos son los últimos siete días; el recuadrado es festivo.</p>
+      <div class="tabla" id="tDeleg"></div>
     </section>
 
     <section class="caja">
@@ -229,7 +266,7 @@ $("#bSalir").addEventListener("click", async ()=>{
   location.href = "/";
 });
 
-let D=null, PESTANA="no_visitados";
+let D=null;
 
 function fechaLarga(s){
   const d = new Date(String(s)+"T00:00:00");
@@ -258,30 +295,88 @@ function festivo(f, dl){
 const dia = () => D.dias[$("#dia").value] || {};
 const deleg = () => $("#deleg").value;
 const deLaDeleg = x => deleg()===TODAS || x===deleg();
+/* La ruta elegida va como «delegación␁ruta»: dos delegaciones pueden tener
+   una ruta con el mismo nombre. */
+const SEP = "\u0001";
+const rutaSel = () => { const v = $("#ruta").value; return v ? v.split(SEP) : null; };
+const nombreRuta = r => r || "Sin ruta";
 
+/* Los estados, con los colores del Power BI de visitas pendientes. */
+const HECHA = "HECHA", PENDIENTE = "PENDIENTE", FUERA = "FUERA DE RUTA";
+const NOMBRE_ESTADO = { [HECHA]: "Hecha", [PENDIENTE]: "Pendiente", [FUERA]: "Fuera de ruta" };
+const CLASE_ESTADO = { [HECHA]: "HECHA", [PENDIENTE]: "PENDIENTE", [FUERA]: "FUERA" };
+
+/* La lista máquina a máquina del día. Los ficheros escritos antes del 16 de
+   octubre de 2026 traían dos listas (no_visitados y fuera) sin matrícula ni
+   hechas: se leen igual, y lo que no traen sale vacío. */
+function visitasDia(d){
+  if(Array.isArray(d.visitas)) return d.visitas;
+  if(!Array.isArray(d.no_visitados)) return null;
+  return [
+    ...d.no_visitados.map(x=>[PENDIENTE, x[0], "", x[1], x[2], x[3], x[4], "", "", "", null]),
+    ...(d.fuera||[]).map(x=>[FUERA, x[0], "", x[1], x[2], x[4], x[5], "", "", x[3], null]),
+  ];
+}
+function enFiltro(x){
+  if(!deLaDeleg(x[3])) return false;
+  const rs = rutaSel();
+  return !rs || (x[3]===rs[0] && String(x[4]||"").split(" / ").map(nombreRuta).includes(rs[1]));
+}
+
+/* La fila con las cifras de lo elegido: el total, una delegación o una ruta. */
+function filaElegida(d){
+  const rs = rutaSel(), dl = deleg();
+  if(rs) return (d.rutas||[]).find(x=>x.delegacion===rs[0] && x.ruta===rs[1]);
+  return dl===TODAS ? d.total : (d.delegaciones||[]).find(x=>x.delegacion===dl);
+}
+
+function kpi(clase, et, vl, nt){
+  return `<div class="kpi ${clase}"><div class="et">${esc(et)}</div><div class="vl">${vl}</div><div class="nt">${nt}</div></div>`;
+}
 function pintaKpis(){
   const d = dia(), dl = deleg();
-  const fila = dl===TODAS ? d.total : (d.delegaciones||[]).find(x=>x.delegacion===dl);
   if(d.sin_dato){
-    $("#kpis").innerHTML = `<div class="kpi"><div class="et">Visitas del plan</div><div class="vl">Sin dato</div>
-      <div class="nt">${esc(d.sin_dato)}</div></div>
-      <div class="kpi"><div class="et">Visitas hechas</div><div class="vl">${num(dl===TODAS ? (d.total||{}).visitas : (d.visitas_deleg||{})[dl])}</div>
-      <div class="nt">partes de reponedor ese día</div></div>`;
+    $("#kpis").innerHTML = kpi("", "Visitas en ruta", "Sin dato", esc(d.sin_dato))
+      + kpi("", "Visitas", num(dl===TODAS ? (d.total||{}).visitas : (d.visitas_deleg||{})[dl]), "partes de reponedor ese día");
     return;
   }
-  if(!fila){
-    $("#kpis").innerHTML = `<div class="kpi"><div class="et">Visitas del plan</div><div class="vl">Sin dato</div>
-      <div class="nt">Esta delegación no tiene plan ni visitas ese día.</div></div>`;
+  const f = filaElegida(d);
+  if(!f){
+    $("#kpis").innerHTML = kpi("", "Visitas en ruta", "Sin dato", "No hay plan ni visitas de lo elegido ese día.");
     return;
   }
-  const nv = (d.no_visitados||[]).filter(x=>deLaDeleg(x[1])).length;
-  $("#kpis").innerHTML = `
-    <div class="kpi ${esc(fila.color||"")}"><div class="et">Visitas del plan</div><div class="vl">${fpct(fila.pct)}</div>
-      <div class="nt">${num(fila.hechas)} de ${num(fila.previstas)} puntos de venta</div></div>
-    <div class="kpi"><div class="et">Previstas</div><div class="vl">${num(fila.previstas)}</div><div class="nt">puntos de venta en el plan</div></div>
-    <div class="kpi"><div class="et">Sin visitar</div><div class="vl">${num(d.no_visitados ? nv : fila.previstas - fila.hechas)}</div><div class="nt">del plan, sin parte ese día</div></div>
-    <div class="kpi"><div class="et">Fuera de plan</div><div class="vl">${num(fila.fuera)}</div><div class="nt">visitados sin estar en el plan</div></div>
-    <div class="kpi"><div class="et">Visitas</div><div class="vl">${num(fila.visitas)}</div><div class="nt">partes de reponedor</div></div>`;
+  const pend = f.previstas - f.hechas;
+  const vacio = f.vacio==null
+    ? kpi("e-vacio", "Pasaje vacío", "Sin dato", esc(d.sin_vacio || "Este día no trae el pasaje vacío."))
+    : kpi("e-vacio", "Pasaje vacío", num(f.vacio), "visitas sin ninguna línea de reposición");
+  $("#kpis").innerHTML =
+      kpi("e-pendiente", "Visitas pendientes", num(pend), "del plan, sin parte ese día")
+    + kpi(esc(f.color||""), "Cumplimiento de ruta", fpct(f.pct), `${num(f.hechas)} de ${num(f.previstas)} en ruta`)
+    + kpi("e-ruta", "Visitas en ruta", num(f.previstas), "las del plan: hechas y pendientes")
+    + kpi("e-hecha", "Visitas efectuadas", num(f.hechas), "del plan, con parte ese día")
+    + kpi("e-fuera", "Visitas no planificadas", num(f.fuera), "con parte y fuera de ruta")
+    + vacio;
+}
+
+function pintaDona(){
+  const d = dia();
+  const f = d.sin_dato ? null : filaElegida(d);
+  if(!f){ $("#dona").innerHTML = `<p class="vacio">${esc(d.sin_dato || "Sin dato de lo elegido ese día.")}</p>`; return; }
+  const partes = [[HECHA, f.hechas, "--hecha"], [PENDIENTE, f.previstas - f.hechas, "--pendiente"], [FUERA, f.fuera, "--fuera"]];
+  const total = partes.reduce((s,p)=>s+p[1], 0);
+  if(!total){ $("#dona").innerHTML = `<p class="vacio">Ninguna visita ni ninguna prevista.</p>`; return; }
+  const R = 70, C = 2*Math.PI*R;
+  let ac = 0;
+  const arcos = partes.filter(p=>p[1]>0).map(p=>{
+    const l = C*p[1]/total, s = `<circle cx="95" cy="95" r="${R}" fill="none" stroke="var(${p[2]})" stroke-width="34"
+      stroke-dasharray="${l.toFixed(2)} ${(C-l).toFixed(2)}" stroke-dashoffset="${(-ac).toFixed(2)}" transform="rotate(-90 95 95)"><title>${esc(NOMBRE_ESTADO[p[0]])}: ${num(p[1])}</title></circle>`;
+    ac += l; return s;
+  }).join("");
+  $("#dona").innerHTML = `<div class="dona"><svg viewBox="0 0 190 190" role="img" aria-label="Estado de las visitas">${arcos}
+      <text x="95" y="96" text-anchor="middle" class="centro">${num(total)}</text>
+      <text x="95" y="114" text-anchor="middle" class="centro2">puntos de venta</text></svg>
+    <div class="leyenda">${partes.map(p=>`<div><i style="background:var(${p[2]})"></i>${esc(NOMBRE_ESTADO[p[0]])}
+      <b>${num(p[1])}</b><span class="tenue">${fpct(100*p[1]/total)}</span></div>`).join("")}</div></div>`;
 }
 
 function semana(dl){
@@ -298,81 +393,126 @@ function pintaDeleg(){
   const d = dia();
   if(d.sin_dato){ $("#tDeleg").innerHTML = `<p class="vacio">${esc(d.sin_dato)}</p>`; return; }
   const filas = d.delegaciones||[];
-  $("#tDeleg").innerHTML = `<table><thead><tr><th>Delegación</th><th class="n">Previstas</th><th class="n">Hechas</th>
-    <th class="n">%</th><th class="n">Fuera de plan</th><th class="n">Visitas</th><th>Últimos 7 días</th></tr></thead><tbody>
+  $("#tDeleg").innerHTML = `<table><thead><tr><th>Delegación</th><th class="n">En ruta</th><th class="n">Efectuadas</th>
+    <th class="n">Cumplimiento</th><th class="n">Fuera de ruta</th><th class="n">Pasaje vacío</th><th class="n">Visitas</th><th>Últimos 7 días</th></tr></thead><tbody>
     ${filas.map(x=>{
       const fe = festivo($("#dia").value, x.delegacion);
       return `<tr class="elige${x.delegacion===deleg()?" elegida":""}" data-d="${esc(x.delegacion)}">
       <td data-et="Delegación">${esc(x.delegacion||"Sin delegación")}${fe?` <span class="etq">festivo ${esc(fe)}</span>`:""}</td>
-      <td class="n" data-et="Previstas">${num(x.previstas)}</td><td class="n" data-et="Hechas">${num(x.hechas)}</td>
-      <td class="n" data-et="%">${pill(x.pct, x.color)}</td><td class="n" data-et="Fuera de plan">${num(x.fuera)}</td>
+      <td class="n" data-et="En ruta">${num(x.previstas)}</td><td class="n" data-et="Efectuadas">${num(x.hechas)}</td>
+      <td class="n" data-et="Cumplimiento">${pill(x.pct, x.color)}</td><td class="n" data-et="Fuera de ruta">${num(x.fuera)}</td>
+      <td class="n" data-et="Pasaje vacío">${x.vacio==null?"—":num(x.vacio)}</td>
       <td class="n" data-et="Visitas">${num(x.visitas)}</td><td data-et="Últimos 7 días">${semana(x.delegacion)}</td></tr>`;
     }).join("")}</tbody></table>`;
   $("#tDeleg").querySelectorAll("tr.elige").forEach(tr=>tr.addEventListener("click", ()=>{
-    $("#deleg").value = tr.dataset.d===deleg() ? TODAS : tr.dataset.d; pintaTodo();
+    $("#deleg").value = tr.dataset.d===deleg() ? TODAS : tr.dataset.d; pintaOpcionesRuta(); pintaTodo();
   }));
 }
 
+/* La matriz del Power BI: cada ruta, sus visitas por estado. */
 function pintaRutas(){
-  const d = dia(), dl = deleg();
-  $("#hRutas").textContent = dl===TODAS ? "Por ruta" : `Rutas de ${dl}`;
+  const d = dia(), dl = deleg(), rs = rutaSel();
+  $("#hRutas").textContent = dl===TODAS ? "Visitas por ruta" : `Visitas por ruta · ${dl}`;
   if(d.sin_dato){ $("#tRutas").innerHTML = `<p class="vacio">${esc(d.sin_dato)}</p>`; $("#cRutas").textContent=""; return; }
-  const filas = (d.rutas||[]).filter(x=>deLaDeleg(x.delegacion));
+  const filas = (d.rutas||[]).filter(x=>deLaDeleg(x.delegacion) && (!rs || (x.delegacion===rs[0] && x.ruta===rs[1])));
   $("#cRutas").textContent = `${num(filas.length)} ${filas.length===1?"ruta":"rutas"}`;
   if(!filas.length){ $("#tRutas").innerHTML = `<p class="vacio">Ninguna ruta ese día.</p>`; return; }
-  $("#tRutas").innerHTML = `<table><thead><tr>${dl===TODAS?"<th>Delegación</th>":""}<th>Ruta</th><th class="n">Previstas</th>
-    <th class="n">Hechas</th><th class="n">%</th><th class="n">Fuera de plan</th></tr></thead><tbody>
-    ${filas.map(x=>`<tr>${dl===TODAS?`<td data-et="Delegación">${esc(x.delegacion)}</td>`:""}
-      <td data-et="Ruta">${esc(x.ruta)}</td><td class="n" data-et="Previstas">${num(x.previstas)}</td>
-      <td class="n" data-et="Hechas">${num(x.hechas)}</td><td class="n" data-et="%">${x.previstas ? pill(x.pct, x.color) : '<span class="tenue">sin plan</span>'}</td>
-      <td class="n" data-et="Fuera de plan">${num(x.fuera)}</td></tr>`).join("")}</tbody></table>`;
+  const conDeleg = dl===TODAS;
+  const sinVacio = filas.some(x=>x.vacio==null);
+  const suma = k => filas.reduce((s,x)=>s+(x[k]||0), 0);
+  const tH = suma("hechas"), tP = suma("previstas") - tH, tF = suma("fuera");
+  const vac = x => x.vacio==null ? "—" : num(x.vacio);
+  $("#tRutas").innerHTML = `<table><thead><tr>${conDeleg?"<th>Delegación</th>":""}<th>Ruta</th>
+    <th class="n">Hecha</th><th class="n">Pendiente</th><th class="n">Fuera de ruta</th><th class="n">Total</th>
+    <th class="n">Cumplimiento</th><th class="n">Pasaje vacío</th></tr></thead><tbody>
+    ${filas.map(x=>`<tr class="elige${rs && x.delegacion===rs[0] && x.ruta===rs[1] ? " elegida" : ""}" data-r="${esc(x.delegacion + SEP + x.ruta)}">
+      ${conDeleg?`<td data-et="Delegación">${esc(x.delegacion)}</td>`:""}
+      <td data-et="Ruta">${esc(x.ruta)}</td>
+      <td class="n c-hecha" data-et="Hecha">${num(x.hechas)}</td>
+      <td class="n c-pendiente" data-et="Pendiente">${num(x.previstas - x.hechas)}</td>
+      <td class="n c-fuera" data-et="Fuera de ruta">${num(x.fuera)}</td>
+      <td class="n" data-et="Total">${num(x.previstas + x.fuera)}</td>
+      <td class="n" data-et="Cumplimiento">${x.previstas ? pill(x.pct, x.color) : '<span class="tenue">sin plan</span>'}</td>
+      <td class="n" data-et="Pasaje vacío">${vac(x)}</td></tr>`).join("")}</tbody>
+    ${filas.length>1 ? `<tfoot><tr>${conDeleg?"<td></td>":""}<td data-et="">Total</td>
+      <td class="n c-hecha" data-et="Hecha">${num(tH)}</td><td class="n c-pendiente" data-et="Pendiente">${num(tP)}</td>
+      <td class="n c-fuera" data-et="Fuera de ruta">${num(tF)}</td><td class="n" data-et="Total">${num(tH+tP+tF)}</td>
+      <td class="n" data-et="Cumplimiento"></td><td class="n" data-et="Pasaje vacío">${sinVacio ? "—" : num(suma("vacio"))}</td></tr></tfoot>` : ""}
+    </table>`;
+  $("#tRutas").querySelectorAll("tr.elige").forEach(tr=>tr.addEventListener("click", ()=>{
+    const [dlx] = tr.dataset.r.split(SEP);
+    if($("#ruta").value === tr.dataset.r){ $("#ruta").value = ""; }
+    else { if(deleg()!==dlx){ $("#deleg").value = dlx; pintaOpcionesRuta(); } $("#ruta").value = tr.dataset.r; }
+    pintaTodo();
+  }));
 }
 
-const COLS = {
-  no_visitados: [
-    ["Punto de venta", x=>`<span class="mat">${esc(x[0])}</span>`, x=>x[0]],
-    ["Centro", x=>`${esc(x[4])}<br><span class="tenue">nº ${esc(x[3])}</span>`, x=>`${x[3]} ${x[4]}`],
-    ["Ruta del plan", x=>esc(x[2]), x=>x[2]],
-    ["Delegación", x=>esc(x[1]), x=>x[1]],
-  ],
-  fuera: [
-    ["Punto de venta", x=>`<span class="mat">${esc(x[0])}</span>`, x=>x[0]],
-    ["Centro", x=>`${esc(x[5])}<br><span class="tenue">nº ${esc(x[4])}</span>`, x=>`${x[4]} ${x[5]}`],
-    ["Ruta del parte", x=>esc(x[2]), x=>x[2]],
-    ["Reponedor", x=>esc(x[3]), x=>x[3]],
-    ["Delegación", x=>esc(x[1]), x=>x[1]],
-  ],
+/* Máquina a máquina: [estado, pdv, matrícula, delegación, ruta(s), nº centro,
+   centro, ubicación, hora, reponedor, pasaje vacío]. */
+const C_RUTA = ["Ruta", x=>esc(x[4]), x=>x[4]];
+const C_CENTRO = ["Centro cliente", x=>`${esc(x[6])}${x[5]?`<br><span class="tenue">nº ${esc(x[5])}</span>`:""}`, x=>`${x[5]} ${x[6]}`];
+const C_MAT = ["Matrícula", x=>`<span class="mat">${esc(x[2]||"—")}</span><br><span class="tenue">PDV ${esc(x[1])}</span>`, x=>x[2]];
+const C_PDV = ["Punto de venta", x=>"", x=>x[1]];
+const C_UBI = ["Ubicación", x=>esc(x[7]), x=>x[7]];
+const C_DEL = ["Delegación", x=>esc(x[3]), x=>x[3]];
+const C_HORA = ["Hora", x=>esc(x[8]), x=>x[8]];
+const C_REP = ["Reponedor", x=>esc(x[9]), x=>x[9]];
+const C_EST = ["Estado", x=>`<span class="est ${CLASE_ESTADO[x[0]]||""}">${esc(NOMBRE_ESTADO[x[0]]||x[0])}</span>`, x=>NOMBRE_ESTADO[x[0]]||x[0]];
+const C_VAC = ["Pasaje vacío", x=>x[10]===1?'<span class="vac">Pasaje vacío</span>':x[10]===0?"No":'<span class="tenue">—</span>',
+               x=>x[10]===1?"Sí":x[10]===0?"No":""];
+const PESTANAS = {
+  pendientes: { t: "Máquinas no visitadas", corto: "Pendientes", f: x=>x[0]===PENDIENTE,
+    cols: [C_RUTA, C_CENTRO, C_MAT, C_UBI, C_DEL],
+    sub: "Estaban en el plan del día y no tienen ningún parte de reponedor ese día." },
+  hechas: { t: "Visitas efectuadas", corto: "Hechas", f: x=>x[0]===HECHA,
+    cols: [C_HORA, C_RUTA, C_CENTRO, C_MAT, C_UBI, C_REP, C_VAC],
+    sub: "Del plan y con parte de reponedor ese día. La ruta es la del plan; el reponedor, el que fue, que puede ser de otra ruta." },
+  fuera: { t: "Visitas no planificadas", corto: "Fuera de ruta", f: x=>x[0]===FUERA,
+    cols: [C_HORA, C_RUTA, C_CENTRO, C_MAT, C_UBI, C_REP, C_VAC],
+    sub: "Tienen parte de reponedor ese día y no estaban en el plan. La ruta es la del parte." },
+  vacio: { t: "Pasajes vacíos", corto: "Pasaje vacío", f: x=>x[10]===1,
+    cols: [C_EST, C_HORA, C_RUTA, C_CENTRO, C_MAT, C_UBI, C_REP],
+    sub: "Se fue y no se hizo nada: el parte no tiene ninguna línea de reposición." },
+  todas: { t: "Todas las visitas", corto: "Todas", f: ()=>true,
+    cols: [C_EST, C_HORA, C_RUTA, C_CENTRO, C_MAT, C_UBI, C_REP, C_VAC],
+    sub: "Cada punto de venta del día con su estado, como el informe de control diario de ruta." },
 };
+let PESTANA = "pendientes";
 function filasPdv(){
   const q = $("#busca").value.trim().toLowerCase();
-  return (dia()[PESTANA]||[]).filter(x=>deLaDeleg(x[1]) && (!q || x.join(" ").toLowerCase().includes(q)));
+  const v = visitasDia(dia()) || [];
+  return v.filter(x=>enFiltro(x) && PESTANAS[PESTANA].f(x) && (!q || x.join(" ").toLowerCase().includes(q)));
 }
 function pintaPdv(){
-  const d = dia(), dl = deleg();
-  $("#hPdv").textContent = dl===TODAS ? "Puntos de venta" : `Puntos de venta de ${dl}`;
-  const tiene = Array.isArray(d.no_visitados);
-  const cuenta = k => (d[k]||[]).filter(x=>deLaDeleg(x[1])).length;
-  $("#pestanas").innerHTML = [["no_visitados","Sin visitar"],["fuera","Fuera de plan"]].map(([id,t])=>
-    `<button class="btn" type="button" role="tab" data-p="${id}" aria-pressed="${id===PESTANA}">${esc(t)}${tiene?" · "+num(cuenta(id)):""}</button>`).join("");
-  $("#pestanas").querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{ PESTANA=b.dataset.p; pintaPdv(); }));
-  $("#sPdv").textContent = PESTANA==="no_visitados"
-    ? "Estaban en el plan del día y no tienen ningún parte de reponedor ese día."
-    : "Tienen parte de reponedor ese día y no estaban en el plan.";
-  $("#bCsv").disabled = !tiene;
+  const d = dia(), v = visitasDia(d), P = PESTANAS[PESTANA];
+  $("#hPdv").textContent = P.t;
+  const cuenta = k => (v||[]).filter(x=>enFiltro(x) && PESTANAS[k].f(x)).length;
+  $("#pestanas").innerHTML = Object.entries(PESTANAS).map(([id,p])=>
+    `<button class="btn" type="button" role="tab" data-p="${id}" aria-pressed="${id===PESTANA}">${esc(p.corto)}${v?" · "+num(cuenta(id)):""}</button>`).join("");
+  $("#pestanas").querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{ PESTANA=b.dataset.p; TODAS_PDV=false; pintaPdv(); }));
+  $("#sPdv").textContent = P.sub;
+  $("#bCsv").disabled = !v;
   if(d.sin_dato){ $("#tPdv").innerHTML = `<p class="vacio">${esc(d.sin_dato)}</p>`; $("#cPdv").textContent=""; return; }
-  if(!tiene){
-    $("#tPdv").innerHTML = `<p class="vacio">La lista punto a punto se guarda solo de la última semana; de este día quedan las cifras de arriba.</p>`;
+  if(!v){
+    $("#tPdv").innerHTML = `<p class="vacio">La lista máquina a máquina se guarda solo de la última semana; de este día quedan las cifras de arriba.</p>`;
     $("#cPdv").textContent = ""; return;
   }
-  const filas = filasPdv(), cols = COLS[PESTANA];
-  $("#cPdv").textContent = `${num(filas.length)} ${filas.length===1?"punto de venta":"puntos de venta"}`;
-  if(!filas.length){ $("#tPdv").innerHTML = `<p class="vacio">Ninguno.</p>`; return; }
+  if(!Array.isArray(d.visitas) && PESTANA!=="pendientes" && PESTANA!=="fuera"){
+    $("#tPdv").innerHTML = `<p class="vacio">Este día se calculó antes de que la lista trajera las visitas hechas y el pasaje vacío.</p>`;
+    $("#cPdv").textContent = ""; return;
+  }
+  if(PESTANA==="vacio" && d.sin_vacio){
+    $("#tPdv").innerHTML = `<p class="vacio">${esc(d.sin_vacio)}</p>`; $("#cPdv").textContent = ""; return;
+  }
+  const filas = filasPdv(), cols = P.cols;
+  $("#cPdv").textContent = `${num(filas.length)} ${filas.length===1?"máquina":"máquinas"}`;
+  if(!filas.length){ $("#tPdv").innerHTML = `<p class="vacio">Ninguna.</p>`; return; }
   const vis = filas.slice(0, TODAS_PDV ? MAX_FILAS : PRIMERAS);
   const resto = filas.length - vis.length;
   $("#tPdv").innerHTML = `<table><thead><tr>${cols.map(c=>`<th>${esc(c[0])}</th>`).join("")}</tr></thead><tbody>
-    ${vis.map(f=>`<tr>${cols.map(c=>`<td data-et="${esc(c[0])}">${c[1](f)}</td>`).join("")}</tr>`).join("")}</tbody></table>`
-    + (resto > 0 ? `<p class="vacio">Y ${num(resto)} más. ${TODAS_PDV ? "Están todos en el CSV."
-        : `<button class="btn" id="bMas" type="button">Ver ${resto + vis.length > MAX_FILAS ? "los " + num(MAX_FILAS) + " primeros" : "todos"}</button> o bájalos en CSV.`}</p>` : "");
+    ${vis.map(f=>`<tr${f[10]===1?' class="vacio"':""}>${cols.map(c=>`<td data-et="${esc(c[0])}">${c[1](f)}</td>`).join("")}</tr>`).join("")}</tbody></table>`
+    + (resto > 0 ? `<p class="vacio">Y ${num(resto)} más. ${TODAS_PDV ? "Están todas en el CSV."
+        : `<button class="btn" id="bMas" type="button">Ver ${resto + vis.length > MAX_FILAS ? "las " + num(MAX_FILAS) + " primeras" : "todas"}</button> o bájalas en CSV.`}</p>` : "");
   const mas = $("#bMas");
   if(mas) mas.addEventListener("click", ()=>{ TODAS_PDV = true; pintaPdv(); });
 }
@@ -418,18 +558,30 @@ function pintaFestivoDia(){
 
 function pintaTodo(){
   TODAS_PDV = false;
-  pintaFestivoDia(); pintaKpis(); pintaDeleg(); pintaRutas(); pintaPdv(); pintaFest();
+  pintaFestivoDia(); pintaKpis(); pintaRutas(); pintaDona(); pintaPdv(); pintaDeleg(); pintaFest();
 }
 
 function csv(){
-  const cols = COLS[PESTANA], filas = filasPdv();
+  const P = PESTANAS[PESTANA], filas = filasPdv();
+  const cols = [C_EST, C_HORA, C_DEL, C_RUTA, C_CENTRO, C_MAT, C_PDV, C_UBI, C_REP, C_VAC];
   const q = v => { const s = String(v==null?"":v); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
   const texto = "﻿" + [cols.map(c=>q(c[0])).join(";"), ...filas.map(f=>cols.map(c=>q(c[2](f))).join(";"))].join("\r\n");
   const url = URL.createObjectURL(new Blob([texto], {type:"text/csv;charset=utf-8"}));
   const a = document.createElement("a");
-  a.href = url; a.download = `rutas_${PESTANA}_${$("#dia").value}${deleg() ? "_" + deleg().replace(/[^\w]+/g,"_") : ""}.csv`;
+  const rs = rutaSel();
+  a.href = url; a.download = `rutas_${PESTANA}_${$("#dia").value}${deleg() ? "_" + deleg().replace(/[^\w]+/g,"_") : ""}${rs ? "_" + rs[1].replace(/[^\w]+/g,"_") : ""}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+/* Las rutas del día de la delegación elegida, para el desplegable. */
+function pintaOpcionesRuta(){
+  const antes = $("#ruta").value;
+  const rutas = (dia().rutas||[]).filter(x=>deLaDeleg(x.delegacion))
+    .sort((a,b)=>a.ruta.localeCompare(b.ruta,"es") || a.delegacion.localeCompare(b.delegacion,"es"));
+  $("#ruta").innerHTML = `<option value="">Todas</option>` + rutas.map(x=>
+    `<option value="${esc(x.delegacion + SEP + x.ruta)}">${esc(x.ruta)}${deleg()===TODAS?" · "+esc(x.delegacion):""}</option>`).join("");
+  $("#ruta").value = rutas.some(x=>x.delegacion + SEP + x.ruta===antes) ? antes : "";
 }
 
 function pintaDelegaciones(){
@@ -478,14 +630,18 @@ function pintaDelegaciones(){
     avisa(`Todavía no hay datos de ayer: lo último calculado es del ${fechaLarga(dias[0])}.`, true);
   pintaDelegaciones();
   if(q.get("delegacion")) $("#deleg").value = q.get("delegacion");
-  ["#dia","#deleg"].forEach(s=>$(s).addEventListener("change", pintaTodo));
+  pintaOpcionesRuta();
+  ["#dia","#deleg"].forEach(s=>$(s).addEventListener("change", ()=>{ pintaOpcionesRuta(); pintaTodo(); }));
+  $("#ruta").addEventListener("change", pintaTodo);
   $("#busca").addEventListener("input", pintaPdv);
   $("#bCsv").addEventListener("click", csv);
   $("#todo").hidden = false;
   pintaTodo();
   const gen = D.generado ? new Date(D.generado) : null;
-  $("#pie").innerHTML = "Plan = el informe D12 de VenCloud (informe 184), un día por fecha. "
-    + "Hecha = el punto de venta tiene ese día un parte de reponedor (no cuentan las lecturas automáticas). "
+  $("#pie").innerHTML = "Visitas en ruta = el plan del día, informe D12 de VenCloud (184). "
+    + "Efectuada = el punto de venta del plan tiene ese día un parte de reponedor (no cuentan las lecturas automáticas); "
+    + "pendiente = no lo tiene; no planificada = parte sin estar en el plan. Pasaje vacío = parte sin ninguna línea de reposición. "
+    + "Se cuenta por punto de venta: uno planificado en dos rutas, o visitado dos veces, cuenta una vez. "
     + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
     + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;

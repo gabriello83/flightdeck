@@ -1468,6 +1468,12 @@ def lambda_handler(event, context):
                 observador, hoy)
         resumen_almacenes = escribe_almacenes(acumuladores, operativos, existencias, rutas, hoy)
         festivos = _json_de(CLAVE_FESTIVOS)
+        # Donde esta cada maquina dentro del centro («Planta 4»), para la lista de
+        # la pagina de rutas: el plan y los partes no lo traen, el censo si.
+        ubicaciones = {str(R.v(f, "matricula", "") or "").strip():
+                       str(R.v(f, "ubicacion", "") or "").strip()[:60]
+                       for f in _filas(_json_de(CLAVE_CENSO))
+                       if R.v(f, "matricula", "") and R.v(f, "ubicacion", "")}
         for acu in acumuladores:
             op = operativos[acu.perfil["id"]]
             clave = f"cabina/{acu.perfil['id']}/operativo.json"
@@ -1481,7 +1487,7 @@ def lambda_handler(event, context):
             # La pagina de rutas (docs/55): delegaciones, rutas y puntos de venta.
             clave_r = f"cabina/{acu.perfil['id']}/rutas.json.gz"
             escribe_comprimido(clave_r, op.detalle_rutas(acu.perfil["id"], _json_de(clave_r),
-                                                         festivos))
+                                                         festivos, ubicaciones))
             # Lo que falta, a la vista en la respuesta: un cuadrado sin dato
             # todos los dias es un informe que no llega, no un dia flojo.
             ultimo = fichero["dias"].get(fichero["ultimo_dia"] or "", {})

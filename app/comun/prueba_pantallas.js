@@ -244,18 +244,25 @@ API['/api/rutas'] = {
     },
     [iso(AYER)]: {
       visitas_deleg: { 'Madrid - Leganes': 6, 'Andalucía - Málaga': 3 },
-      total: { previstas: 8, hechas: 6, pct: 75, color: 'amarillo', fuera: 2, visitas: 9 },
+      total: { previstas: 8, hechas: 6, pct: 75, color: 'amarillo', fuera: 2, visitas: 9, vacio: 2 },
       delegaciones: [
-        { delegacion: 'Madrid - Leganes', previstas: 6, hechas: 4, fuera: 2, visitas: 6, pct: 66.7, color: 'rojo' },
-        { delegacion: 'Andalucía - Málaga', previstas: 2, hechas: 2, fuera: 0, visitas: 3, pct: 100, color: 'verde' }],
+        { delegacion: 'Madrid - Leganes', previstas: 6, hechas: 4, fuera: 2, vacio: 2, visitas: 6, pct: 66.7, color: 'rojo' },
+        { delegacion: 'Andalucía - Málaga', previstas: 2, hechas: 2, fuera: 0, vacio: 0, visitas: 3, pct: 100, color: 'verde' }],
       rutas: [
-        { delegacion: 'Andalucía - Málaga', ruta: 'Málaga 1', previstas: 2, hechas: 2, fuera: 0, pct: 100, color: 'verde' },
-        { delegacion: 'Madrid - Leganes', ruta: 'Ruta Getafe <Airbus>', previstas: 4, hechas: 2, fuera: 2, pct: 50, color: 'rojo' },
-        { delegacion: 'Madrid - Leganes', ruta: 'Ruta Leganés', previstas: 2, hechas: 2, fuera: 0, pct: 100, color: 'verde' }],
-      no_visitados: [['P7', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1001', 'AIRBUS GETAFE'],
-                     ['P8', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1002', 'AIRBUS ILLESCAS']],
-      fuera: [['P9', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', 'Ana Pérez', '1001', 'AIRBUS GETAFE'],
-              ['P10', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', 'Ana Pérez', '1003', 'CONSUM ALCORCÓN']]
+        { delegacion: 'Andalucía - Málaga', ruta: 'Málaga 1', previstas: 2, hechas: 2, fuera: 0, vacio: 0, pct: 100, color: 'verde' },
+        { delegacion: 'Madrid - Leganes', ruta: 'Ruta Getafe <Airbus>', previstas: 4, hechas: 2, fuera: 2, vacio: 2, pct: 50, color: 'rojo' },
+        { delegacion: 'Madrid - Leganes', ruta: 'Ruta Leganés', previstas: 2, hechas: 2, fuera: 0, vacio: 0, pct: 100, color: 'verde' }],
+      visitas: [
+        ['PENDIENTE', 'P7', '19FP1530', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1001', 'AIRBUS GETAFE', 'Planta 8', '', '', null],
+        ['PENDIENTE', 'P8', '24CE4842', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1002', 'AIRBUS ILLESCAS', '', '', '', null],
+        ['HECHA', 'P1', '10CE5680', 'Andalucía - Málaga', 'Málaga 1', '2001', 'HOSPITAL MÁLAGA', 'Hall', '08:05', 'Luis Gil', 0],
+        ['HECHA', 'P2', '10CE5681', 'Andalucía - Málaga', 'Málaga 1', '2001', 'HOSPITAL MÁLAGA', '', '08:20', 'Luis Gil', 0],
+        ['HECHA', 'P3', '11AA0001', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1001', 'AIRBUS GETAFE', '', '09:10', 'Ana Pérez', 1],
+        ['HECHA', 'P4', '11AA0002', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1001', 'AIRBUS GETAFE', '', '09:30', 'Ana Pérez', 0],
+        ['HECHA', 'P5', '11AA0003', 'Madrid - Leganes', 'Ruta Leganés', '1004', 'HOSPITAL SEVERO OCHOA', '', '10:00', 'Rosa Gil', 0],
+        ['HECHA', 'P6', '11AA0004', 'Madrid - Leganes', 'Ruta Leganés', '1004', 'HOSPITAL SEVERO OCHOA', '', '10:15', 'Rosa Gil', 0],
+        ['FUERA DE RUTA', 'P9', '12BB0001', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1001', 'AIRBUS GETAFE', '', '11:00', 'Ana Pérez', 1],
+        ['FUERA DE RUTA', 'P10', '12BB0002', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1003', 'CONSUM ALCORCÓN', '', '12:00', 'Ana Pérez', 0]]
     }
   },
   control_festivos: [
@@ -923,19 +930,42 @@ const servidor = http.createServer((pet, res) => {
     const { pagina, errores, fuera } = await abre(`/rutas/?dia=${iso(AYER)}`);
     await pagina.waitForSelector('#tDeleg table');
     comprueba('arranca en el dia que trae la direccion', await pagina.inputValue('#dia'), iso(AYER));
-    comprueba('el total, en amarillo', [(await pagina.textContent('#kpis .kpi .vl')).trim(),
-      await pagina.$eval('#kpis .kpi', k => k.classList.contains('amarillo'))], ['75 %', true]);
+    comprueba('los seis indicadores del Power BI, en su orden',
+      await pagina.$$eval('#kpis .kpi .et', x => x.map(e => e.textContent.trim())),
+      ['Visitas pendientes', 'Cumplimiento de ruta', 'Visitas en ruta', 'Visitas efectuadas',
+       'Visitas no planificadas', 'Pasaje vacío']);
+    comprueba('las cifras: 2 pendientes, 75 % en amarillo, 8, 6, 2 y 2',
+      [await pagina.$$eval('#kpis .kpi .vl', x => x.map(e => e.textContent.trim())),
+       await pagina.$eval('#kpis .kpi:nth-child(2)', k => k.classList.contains('amarillo'))],
+      [['2', '75 %', '8', '6', '2', '2'], true]);
     comprueba('las dos delegaciones', await pagina.$$eval('#tDeleg tbody tr', x => x.map(t => t.dataset.d)),
       ['Madrid - Leganes', 'Andalucía - Málaga']);
     comprueba('las tres rutas, con el nombre escapado', await pagina.locator('#tRutas tbody tr').count(), 3);
     comprueba_que('sin colar HTML del nombre', (await pagina.textContent('#tRutas')).includes('Ruta Getafe <Airbus>'));
-    comprueba('sin visitar: los dos de Getafe', await pagina.locator('#tPdv tbody tr').count(), 2);
+    comprueba('la matriz: Getafe 2 hechas, 2 pendientes, 2 fuera, 6 en total',
+      await pagina.$$eval('#tRutas tbody tr', x => {
+        const t = x.find(r => r.textContent.includes('Getafe'));
+        return [...t.querySelectorAll('td.n')].slice(0, 4).map(c => c.textContent.trim()); }),
+      ['2', '2', '2', '6']);
+    comprueba('el donut con los tres estados', await pagina.locator('#dona svg circle').count(), 3);
+    comprueba('maquinas no visitadas: las dos de Getafe', await pagina.locator('#tPdv tbody tr').count(), 2);
+    comprueba_que('con matricula y ubicacion', (await pagina.textContent('#tPdv')).includes('19FP1530')
+      && (await pagina.textContent('#tPdv')).includes('Planta 8'));
+    await pagina.click('#tRutas tbody tr[data-r$="Ruta Leganés"]');
+    comprueba('al pulsar una ruta, todo se filtra a ella',
+      [await pagina.inputValue('#deleg'), await pagina.locator('#tRutas tbody tr').count(),
+       (await pagina.textContent('#kpis .kpi:nth-child(2) .vl')).trim(),
+       (await pagina.textContent('#tPdv')).includes('Ninguna')],
+      ['Madrid - Leganes', 1, '100 %', true]);
+    await pagina.selectOption('#ruta', '');
     await pagina.click('#tDeleg tbody tr[data-d="Andalucía - Málaga"]');
     comprueba('al pulsar una delegacion, se filtra todo',
       [await pagina.inputValue('#deleg'), await pagina.locator('#tRutas tbody tr').count(),
-       (await pagina.textContent('#tPdv')).includes('Ninguno')], ['Andalucía - Málaga', 1, true]);
+       (await pagina.textContent('#tPdv')).includes('Ninguna')], ['Andalucía - Málaga', 1, true]);
     await pagina.click('#tDeleg tbody tr[data-d="Andalucía - Málaga"]');
     comprueba('y al volver a pulsarla, todas', await pagina.inputValue('#deleg'), '');
+    await pagina.click('#pestanas button[data-p="vacio"]');
+    comprueba('pasaje vacio: las dos, resaltadas', await pagina.locator('#tPdv tbody tr.vacio').count(), 2);
     await pagina.click('#pestanas button[data-p="fuera"]');
     comprueba_que('fuera de plan, con el reponedor', (await pagina.textContent('#tPdv')).includes('Ana Pérez'));
     await pagina.fill('#busca', 'consum');
@@ -948,8 +978,12 @@ const servidor = http.createServer((pet, res) => {
     await pagina.selectOption('#dia', HACE3);
     comprueba_que('un festivo lo dice arriba', !(await pagina.$eval('#festivoDia', n => n.hidden))
       && (await pagina.textContent('#festivoDia')).includes('festivo nacional'));
-    comprueba_que('y de un dia viejo, sin lista, lo dice', (await pagina.textContent('#tPdv')).includes('Ninguno')
-      || (await pagina.textContent('#tPdv')).includes('última semana'));
+    await pagina.fill('#busca', '');
+    await pagina.click('#pestanas button[data-p="hechas"]');
+    comprueba_que('y de un dia calculado antes, sin hechas en la lista, lo dice',
+      (await pagina.textContent('#tPdv')).includes('antes de que la lista'));
+    comprueba('sin pasaje vacio en ese dia, sin dato y no un cero',
+      (await pagina.textContent('#kpis .kpi:nth-child(6) .vl')).trim(), 'Sin dato');
     await pagina.setViewportSize({ width: 380, height: 800 });
     comprueba('en movil no se sale de la pantalla',
       await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
