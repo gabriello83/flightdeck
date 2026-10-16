@@ -2005,6 +2005,57 @@ where a.obsoleto = false
                  and d.fecha >= current_date - 120)
 ```
 
+## M11 · EXT_MAESTRO_EMPLEADOS  *(sin parámetros)*
+
+Informe 190. Los empleados con su cargo y sus marcas de rol, sin teléfono, email ni DNI. El
+`cargo` llega como número, sin nombre: el **8 es técnico**, el **9 responsable SAT** y el 7
+reponedor (16-oct-2026: deducido de quién hace las visitas SAT y confirmado por Gabriele). Hay personas con dos fichas
+(Meliton Pizarroso: una de cargo 8 inactiva y otra de cargo 9 activa).
+
+```sql
+select
+  e.id               as id,
+  e.codigo           as cod_empleado,
+  e.nombre           as empleado,
+  e.cargo            as cargo,
+  del.nombre         as delegacion,
+  e.activo           as activo,
+  e.responsablesat   as responsable_sat,
+  e.incluirsat       as incluir_sat,
+  e.responsableven   as responsable_vending,
+  e.incluirven       as incluir_vending,
+  e.esoperaciones    as es_operaciones,
+  e.escallcenter     as es_callcenter,
+  e.esinstalaciones  as es_instalaciones,
+  e.taller           as taller,
+  e.directivo        as directivo
+from recursos.empleados e
+left join general.delegaciones del on del.id = e.delegacionid
+order by del.nombre, e.nombre
+```
+
+## M12 · EXT_MAESTRO_VEHICULOS  *(sin parámetros)*
+
+Informe 191. Es el M4 de más arriba, creado con este número porque M4 podía estar ocupado.
+`modelo` viene vacío en los 124 vehículos (16-oct-2026).
+
+```sql
+select
+  v.id        as id,
+  v.codigo    as cod_vehiculo,
+  v.denomina  as denominacion,
+  v.matricula as matricula,
+  v.activo    as activo,
+  v.obsoleto  as obsoleto,
+  v.ceco      as centro_coste,
+  mo.nombre   as modelo,
+  del.nombre  as delegacion
+from recursos.vehiculos v
+left join recursos.vehiculosmodelos mo on mo.id = v.vehiculomodeloid
+left join general.delegaciones del     on del.id = v.delegacionid
+order by del.nombre, v.matricula
+```
+
 ---
 
 # El manifiesto para la Lambda
