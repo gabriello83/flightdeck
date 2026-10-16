@@ -1,0 +1,35 @@
+{
+  "_comentario": [
+    "Los festivos que lee la pagina de rutas (docs/55) para comprobar, delegacion",
+    "por delegacion, que un festivo tiene muchas menos visitas que un dia normal.",
+    "Va en el bucket de datos, en config/festivos.json, como perfiles.json.",
+    "",
+    "nacional: los de toda España. delegaciones: los locales y autonomicos de la",
+    "ciudad de cada delegacion, con el nombre EXACTO que trae VenCloud. Una lista",
+    "vacia es que no se han apuntado todavia, no que no haya."
+  ],
+  "nota": "Nacionales de 2026 apuntados. Los locales de cada delegación, todavía no.",
+  "nacional": [
+    "2026-01-01", "2026-01-06", "2026-04-03", "2026-05-01", "2026-08-15",
+    "2026-10-12", "2026-11-01", "2026-12-06", "2026-12-08", "2026-12-25"
+  ],
+  "delegaciones": {
+    "Andalucia - Sevilla": [],
+    "Andalucía - Cádiz": [],
+    "Andalucía - Granada": [],
+    "Andalucía - La Línea": [],
+    "Andalucía - Málaga": [],
+    "Cataluña - Amazon (Girona)": [],
+    "Cataluña - Cornella": [],
+    "Cataluña - Tarragona": [],
+    "Levante - Murcia": [],
+    "Levante - Valencia": [],
+    "Madrid - Hospital La Paz": [],
+    "Madrid - Leganes": [],
+    "Norte - Bilbao": [],
+    "Norte - Cantabria": [],
+    "Norte - León": [],
+    "Norte - Oviedo": [],
+    "Serunion Vending - CENTRAL": []
+  }
+}

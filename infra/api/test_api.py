@@ -576,6 +576,21 @@ del falsos.OBJETOS["cabina/interno/telemetria.json"]
 comprueba("sin cruce todavia, 503",
           llama("GET", "/api/telemetria", cookie=COOKIE_JEFE)["statusCode"], 503)
 
+print("\nLa pagina de rutas (docs/55): el fichero del perfil de la sesion")
+falsos.OBJETOS["cabina/interno/rutas.json.gz"] = gzip.compress(json.dumps({"perfil": "interno"}).encode())
+falsos.OBJETOS["cabina/ope-sur/rutas.json.gz"] = gzip.compress(json.dumps({"perfil": "ope-sur"}).encode())
+comprueba("un cliente no ve la pagina de rutas",
+          llama("GET", "/api/rutas", cookie=COOKIE_ANA)["statusCode"], 403)
+comprueba("operaciones ve la de SU perfil, descomprimida",
+          cuerpo_de(llama("GET", "/api/rutas", cookie=COOKIE_OLGA))["perfil"], "ope-sur")
+comprueba("y no hay parametro con el que pedir otra",
+          cuerpo_de(llama("GET", "/api/rutas", cookie=COOKIE_OLGA,
+                          query={"perfil": "interno"}))["perfil"], "ope-sur")
+del falsos.OBJETOS["cabina/ope-sur/rutas.json.gz"]
+comprueba("sin calcular todavia, 503",
+          llama("GET", "/api/rutas", cookie=COOKIE_OLGA)["statusCode"], 503)
+del falsos.OBJETOS["cabina/interno/rutas.json.gz"]
+
 print("\nLos almacenes por dentro (docs/54): solo quien ve su cuadrado")
 _alm = {"umbral_pct": 15, "almacenes": [{"almacen": "Sevilla", "productos": [
     {"cod": "5322", "nombre": "AGUA", "foto": True},

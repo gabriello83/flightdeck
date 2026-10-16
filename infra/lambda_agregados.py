@@ -95,6 +95,9 @@ CLAVE_RUTAS = os.environ.get("RUTAS", "maestros/rutas/m_rutas.json.gz")
 # sin fichero (los anteriores al 13-oct-2026) no tiene plan, y el cuadrado de
 # rutas lo dice.
 PLAN_VISITAS = ("crudo/rutas_plan_visitas", "rutas_plan_visitas")
+# El calendario de festivos, nacional y de cada delegacion, para el control de
+# la pagina de rutas (docs/55). Lo mantenemos a mano: VenCloud no lo tiene.
+CLAVE_FESTIVOS = os.environ.get("FESTIVOS", "config/festivos.json")
 # Los almacenes por dentro (docs/54): los movimientos de almacen (C1), que traen
 # la existencia que deja cada uno; el detalle del ultimo cierre (C10), para lo
 # que no se ha movido; el maestro de articulos y sus fotos, cuando existan en
@@ -1464,6 +1467,7 @@ def lambda_handler(event, context):
                 acu, op, tarifas, [f for f in censo if en_ambito(f, acu.ambito, mapa)],
                 observador, hoy)
         resumen_almacenes = escribe_almacenes(acumuladores, operativos, existencias, rutas, hoy)
+        festivos = _json_de(CLAVE_FESTIVOS)
         for acu in acumuladores:
             op = operativos[acu.perfil["id"]]
             clave = f"cabina/{acu.perfil['id']}/operativo.json"
@@ -1474,6 +1478,10 @@ def lambda_handler(event, context):
             detalle = op.detalle_telemetria(acu.perfil["id"], _json_de(clave_t))
             if detalle is not None:
                 escribe(clave_t, detalle)
+            # La pagina de rutas (docs/55): delegaciones, rutas y puntos de venta.
+            clave_r = f"cabina/{acu.perfil['id']}/rutas.json.gz"
+            escribe_comprimido(clave_r, op.detalle_rutas(acu.perfil["id"], _json_de(clave_r),
+                                                         festivos))
             # Lo que falta, a la vista en la respuesta: un cuadrado sin dato
             # todos los dias es un informe que no llega, no un dia flojo.
             ultimo = fichero["dias"].get(fichero["ultimo_dia"] or "", {})

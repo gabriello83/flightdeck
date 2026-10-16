@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rutas · digivend</title>
+<!-- Un solo origen. Esta pagina habla con /api/* del mismo dominio y con nadie
+     mas: hay redes de cliente que cortan las paginas que llaman fuera. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M3 12.5a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm7-9a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zM5.2 11.3 10.8 4.7l.8.7-5.6 6.6z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6; --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+  /* El semaforo, el mismo del informe general. El amarillo lleva texto oscuro. */
+  --verde:#15803d; --amarillo:#f2b705; --rojo:#c62828; --sin:#d9d8d2;
+  --t-verde:#ffffff; --t-amarillo:#1b1b1b; --t-rojo:#ffffff; --t-sin:#52514e;
+  --texto-verde:#15803d; --texto-rojo:#c62828;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --sombra:none;
+    --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b; --sin:#3a3a36;
+    --t-sin:#c3c2b7; --texto-verde:#4ade80; --texto-rojo:#f87171;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --sombra:none;
+  --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b; --sin:#3a3a36;
+  --t-sin:#c3c2b7; --texto-verde:#4ade80; --texto-rojo:#f87171;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1240px;margin:0 auto;padding:18px 16px 72px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+.marca{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn,a.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);text-decoration:none;
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
+button.btn:hover,a.btn:hover{border-color:var(--tinta-3)}
+button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);color:#fff}
+.barra{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:16px 0 6px}
+.barra label{font-size:13px;color:var(--tinta-2);display:flex;align-items:center;gap:8px;min-width:0}
+.barra select,.barra input{
+  font:inherit;font-size:14px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:5px 8px;max-width:100%
+}
+.barra input{min-width:200px}
+.nota{
+  margin:12px 0 4px;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+.nota.mal{border-left-color:var(--rojo)}
+.pestanas{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:14px}
+.kpi{background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:11px 13px;box-shadow:var(--sombra)}
+.kpi .et{font-size:12px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
+.kpi .vl{font-size:24px;font-weight:650;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .nt{font-size:12px;color:var(--tinta-3);margin-top:2px}
+.kpi.verde{background:var(--verde);border-color:var(--verde)}
+.kpi.amarillo{background:var(--amarillo);border-color:var(--amarillo)}
+.kpi.rojo{background:var(--rojo);border-color:var(--rojo)}
+.kpi.verde *,.kpi.rojo *{color:var(--t-verde)}
+.kpi.amarillo *{color:var(--t-amarillo)}
+section.caja{
+  background:var(--tarjeta);border:1px solid var(--borde);border-radius:12px;
+  padding:12px 16px 14px;box-shadow:var(--sombra);margin-top:14px
+}
+.cabsec{display:flex;align-items:baseline;gap:12px;justify-content:space-between;flex-wrap:wrap}
+section.caja h2{font-size:15px;margin:0;font-weight:650}
+section.caja .sub{font-size:12.5px;color:var(--tinta-2);margin:2px 0 10px}
+.tabla{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--tinta-2);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;
+   padding:6px 10px 6px 0;border-bottom:1px solid var(--borde);white-space:nowrap}
+td{padding:7px 10px 7px 0;border-bottom:1px solid var(--borde);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.elige{cursor:pointer}
+tr.elige:hover td{background:color-mix(in srgb, var(--s1) 6%, transparent)}
+tr.elegida td{background:color-mix(in srgb, var(--s1) 10%, transparent)}
+.mat{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;white-space:nowrap}
+.tenue{color:var(--tinta-3);font-size:12px}
+.pct{display:inline-block;min-width:56px;text-align:center;border-radius:6px;padding:1px 7px;font-weight:650;
+     font-variant-numeric:tabular-nums;background:var(--sin);color:var(--t-sin)}
+.pct.verde{background:var(--verde);color:var(--t-verde)}
+.pct.amarillo{background:var(--amarillo);color:var(--t-amarillo)}
+.pct.rojo{background:var(--rojo);color:var(--t-rojo)}
+.semana{display:flex;gap:3px}
+.semana i{display:block;width:16px;height:16px;border-radius:3px;background:var(--sin)}
+.semana i.verde{background:var(--verde)} .semana i.amarillo{background:var(--amarillo)} .semana i.rojo{background:var(--rojo)}
+.semana i.fest{outline:2px solid var(--tinta-2);outline-offset:-2px}
+.etq{display:inline-block;font-size:11.5px;border-radius:5px;padding:0 6px;border:1px solid var(--borde-fuerte);color:var(--tinta-2);white-space:nowrap}
+.bien{color:var(--texto-verde);font-weight:600}
+.mal{color:var(--texto-rojo);font-weight:600}
+.vacio{color:var(--tinta-3);font-size:13.5px;padding:8px 0}
+footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+#cargando{padding:40px 0;color:var(--tinta-2)}
+@media (max-width:700px){
+  .tabla table,.tabla tbody,.tabla tr,.tabla td{display:block;width:100%}
+  .tabla thead{display:none}
+  .tabla tr{border-bottom:1px solid var(--borde);padding:9px 0}
+  .tabla tr:last-child{border-bottom:0}
+  .tabla td{border:0;padding:2px 0;text-align:left!important;overflow-wrap:anywhere}
+  .tabla td[data-et]:not(:empty)::before{content:attr(data-et) " · ";color:var(--tinta-3);font-size:12px}
+  .barra input{min-width:0;width:100%}
+  .barra label.busca{flex:1 1 100%}
+  .barra label select{min-width:0}
+}
+</style>
+</head>
+<body>
+<div class="env">
+  <header class="top">
+    <div class="marca">
+      <b>Rutas: visitas hechas contra el plan</b>
+      <span id="quien"></span>
+    </div>
+    <div class="acciones">
+      <a class="btn" href="/operativo/">Informe general</a>
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn" id="bSalir" type="button">Salir</button>
+    </div>
+  </header>
+
+  <div id="cargando">Cargando…</div>
+  <div class="nota" id="aviso" hidden></div>
+
+  <div id="todo" hidden>
+    <div class="barra">
+      <label>Día <select id="dia"></select></label>
+      <label>Delegación <select id="deleg"></select></label>
+    </div>
+    <div class="nota" id="festivoDia" hidden></div>
+    <div class="kpis" id="kpis"></div>
+
+    <section class="caja" id="sDeleg">
+      <div class="cabsec"><h2>Por delegación</h2><span class="tenue">Pulsa una para ver sus rutas y sus puntos de venta</span></div>
+      <p class="sub">Puntos de venta del plan del día que tuvieron visita. Un punto de venta en dos rutas es una sola visita prevista. Los cuadritos son los últimos siete días; el recuadrado es festivo.</p>
+      <div class="tabla" id="tDeleg"></div>
+    </section>
+
+    <section class="caja">
+      <div class="cabsec"><h2 id="hRutas">Por ruta</h2><span class="tenue" id="cRutas"></span></div>
+      <p class="sub">Un punto de venta que está en dos rutas cuenta en las dos. Las visitas fuera de plan van a la ruta con la que se hizo el parte.</p>
+      <div class="tabla" id="tRutas"></div>
+    </section>
+
+    <section class="caja">
+      <div class="cabsec"><h2 id="hPdv">Puntos de venta</h2><span class="tenue" id="cPdv"></span></div>
+      <div class="pestanas" id="pestanas" role="tablist"></div>
+      <div class="barra" style="margin-top:0">
+        <label class="busca">Buscar <input id="busca" type="search" placeholder="Punto de venta, centro, ruta, reponedor…"></label>
+        <button class="btn" id="bCsv" type="button">Descargar CSV</button>
+      </div>
+      <p class="sub" id="sPdv"></p>
+      <div class="tabla" id="tPdv"></div>
+    </section>
+
+    <section class="caja">
+      <div class="cabsec"><h2>Festivos por delegación</h2><span class="tenue" id="cFest"></span></div>
+      <p class="sub" id="sFest"></p>
+      <div class="tabla" id="tFest"></div>
+    </section>
+  </div>
+
+  <footer id="pie" hidden></footer>
+</div>
+
+<script>
+/* ===================================================================
+   Rutas · digivend.es  (docs/55)
+
+   Lo que abre el cuadrado de Rutas del informe general: el plan de visitas
+   del día (D12, informe 184 de VenCloud) contra las visitas reales, por
+   delegación, por ruta y punto de venta a punto de venta; y el control de
+   festivos que pidió Gabriele el 13 de octubre: que un festivo de cada
+   ciudad tenga muchas menos visitas que un día normal de su delegación.
+
+   El fichero ya llega con el ámbito del perfil aplicado: lo escribió la noche
+   para este perfil, y la API no deja pedir otro. Esta página no decide qué
+   ve nadie: filtra y dibuja.
+   =================================================================== */
+const CLAVE_TEMA = "digivend.tema";
+const num = n => new Intl.NumberFormat("es-ES").format(Math.round(n||0));
+const fpct = p => p==null ? "—" : new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(p) + " %";
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = s => document.querySelector(s);
+/* Las listas de puntos de venta pasan de 400 filas un dia normal: se ensenan
+   las primeras y el resto con un boton, o entero en el CSV. */
+const PRIMERAS = 50, MAX_FILAS = 1000;
+let TODAS_PDV = false;
+const TODAS = "";
+
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = $("#bTema");
+  const oscuro = () => document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const pinta = () => { b.textContent = oscuro() ? "Modo claro" : "Modo oscuro"; };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const n = oscuro() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+  });
+})();
+$("#bSalir").addEventListener("click", async ()=>{
+  try{ await fetch("/api/salir", {method:"POST", credentials:"same-origin"}); }catch(e){}
+  location.href = "/";
+});
+
+let D=null, PESTANA="no_visitados";
+
+function fechaLarga(s){
+  const d = new Date(String(s)+"T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(s)
+    : d.toLocaleDateString("es-ES",{weekday:"long", day:"numeric", month:"long", year:"numeric"});
+}
+function fechaCorta(s){
+  const d = new Date(String(s)+"T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(s)
+    : d.toLocaleDateString("es-ES",{weekday:"short", day:"numeric", month:"short"});
+}
+function isoLocal(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function avisa(t, mal){ const a=$("#aviso"); a.textContent=t; a.hidden=!t; a.classList.toggle("mal", !!mal); }
+const pill = (p, color) => `<span class="pct ${esc(color||"")}">${fpct(p)}</span>`;
+
+/* El festivo de una delegación ese día, según el calendario que trae el fichero. */
+function festivo(f, dl){
+  const c = D.festivos;
+  if(!c) return null;
+  if((c.nacional||[]).includes(f)) return "nacional";
+  if(((c.delegaciones||{})[dl]||[]).includes(f)) return "local";
+  return null;
+}
+const dia = () => D.dias[$("#dia").value] || {};
+const deleg = () => $("#deleg").value;
+const deLaDeleg = x => deleg()===TODAS || x===deleg();
+
+function pintaKpis(){
+  const d = dia(), dl = deleg();
+  const fila = dl===TODAS ? d.total : (d.delegaciones||[]).find(x=>x.delegacion===dl);
+  if(d.sin_dato){
+    $("#kpis").innerHTML = `<div class="kpi"><div class="et">Visitas del plan</div><div class="vl">Sin dato</div>
+      <div class="nt">${esc(d.sin_dato)}</div></div>
+      <div class="kpi"><div class="et">Visitas hechas</div><div class="vl">${num(dl===TODAS ? (d.total||{}).visitas : (d.visitas_deleg||{})[dl])}</div>
+      <div class="nt">partes de reponedor ese día</div></div>`;
+    return;
+  }
+  if(!fila){
+    $("#kpis").innerHTML = `<div class="kpi"><div class="et">Visitas del plan</div><div class="vl">Sin dato</div>
+      <div class="nt">Esta delegación no tiene plan ni visitas ese día.</div></div>`;
+    return;
+  }
+  const nv = (d.no_visitados||[]).filter(x=>deLaDeleg(x[1])).length;
+  $("#kpis").innerHTML = `
+    <div class="kpi ${esc(fila.color||"")}"><div class="et">Visitas del plan</div><div class="vl">${fpct(fila.pct)}</div>
+      <div class="nt">${num(fila.hechas)} de ${num(fila.previstas)} puntos de venta</div></div>
+    <div class="kpi"><div class="et">Previstas</div><div class="vl">${num(fila.previstas)}</div><div class="nt">puntos de venta en el plan</div></div>
+    <div class="kpi"><div class="et">Sin visitar</div><div class="vl">${num(d.no_visitados ? nv : fila.previstas - fila.hechas)}</div><div class="nt">del plan, sin parte ese día</div></div>
+    <div class="kpi"><div class="et">Fuera de plan</div><div class="vl">${num(fila.fuera)}</div><div class="nt">visitados sin estar en el plan</div></div>
+    <div class="kpi"><div class="et">Visitas</div><div class="vl">${num(fila.visitas)}</div><div class="nt">partes de reponedor</div></div>`;
+}
+
+function semana(dl){
+  const fechas = Object.keys(D.dias).filter(f=>f<=$("#dia").value).sort().slice(-7);
+  return `<span class="semana">${fechas.map(f=>{
+    const v = D.dias[f], x = (v.delegaciones||[]).find(y=>y.delegacion===dl);
+    const fe = festivo(f, dl);
+    const t = `${fechaCorta(f)}: ${x && x.pct!=null ? fpct(x.pct) : "sin dato"}${fe ? " · festivo "+fe : ""}`;
+    return `<i class="${esc((x&&x.color)||"")}${fe?" fest":""}" title="${esc(t)}"></i>`;
+  }).join("")}</span>`;
+}
+
+function pintaDeleg(){
+  const d = dia();
+  if(d.sin_dato){ $("#tDeleg").innerHTML = `<p class="vacio">${esc(d.sin_dato)}</p>`; return; }
+  const filas = d.delegaciones||[];
+  $("#tDeleg").innerHTML = `<table><thead><tr><th>Delegación</th><th class="n">Previstas</th><th class="n">Hechas</th>
+    <th class="n">%</th><th class="n">Fuera de plan</th><th class="n">Visitas</th><th>Últimos 7 días</th></tr></thead><tbody>
+    ${filas.map(x=>{
+      const fe = festivo($("#dia").value, x.delegacion);
+      return `<tr class="elige${x.delegacion===deleg()?" elegida":""}" data-d="${esc(x.delegacion)}">
+      <td data-et="Delegación">${esc(x.delegacion||"Sin delegación")}${fe?` <span class="etq">festivo ${esc(fe)}</span>`:""}</td>
+      <td class="n" data-et="Previstas">${num(x.previstas)}</td><td class="n" data-et="Hechas">${num(x.hechas)}</td>
+      <td class="n" data-et="%">${pill(x.pct, x.color)}</td><td class="n" data-et="Fuera de plan">${num(x.fuera)}</td>
+      <td class="n" data-et="Visitas">${num(x.visitas)}</td><td data-et="Últimos 7 días">${semana(x.delegacion)}</td></tr>`;
+    }).join("")}</tbody></table>`;
+  $("#tDeleg").querySelectorAll("tr.elige").forEach(tr=>tr.addEventListener("click", ()=>{
+    $("#deleg").value = tr.dataset.d===deleg() ? TODAS : tr.dataset.d; pintaTodo();
+  }));
+}
+
+function pintaRutas(){
+  const d = dia(), dl = deleg();
+  $("#hRutas").textContent = dl===TODAS ? "Por ruta" : `Rutas de ${dl}`;
+  if(d.sin_dato){ $("#tRutas").innerHTML = `<p class="vacio">${esc(d.sin_dato)}</p>`; $("#cRutas").textContent=""; return; }
+  const filas = (d.rutas||[]).filter(x=>deLaDeleg(x.delegacion));
+  $("#cRutas").textContent = `${num(filas.length)} ${filas.length===1?"ruta":"rutas"}`;
+  if(!filas.length){ $("#tRutas").innerHTML = `<p class="vacio">Ninguna ruta ese día.</p>`; return; }
+  $("#tRutas").innerHTML = `<table><thead><tr>${dl===TODAS?"<th>Delegación</th>":""}<th>Ruta</th><th class="n">Previstas</th>
+    <th class="n">Hechas</th><th class="n">%</th><th class="n">Fuera de plan</th></tr></thead><tbody>
+    ${filas.map(x=>`<tr>${dl===TODAS?`<td data-et="Delegación">${esc(x.delegacion)}</td>`:""}
+      <td data-et="Ruta">${esc(x.ruta)}</td><td class="n" data-et="Previstas">${num(x.previstas)}</td>
+      <td class="n" data-et="Hechas">${num(x.hechas)}</td><td class="n" data-et="%">${x.previstas ? pill(x.pct, x.color) : '<span class="tenue">sin plan</span>'}</td>
+      <td class="n" data-et="Fuera de plan">${num(x.fuera)}</td></tr>`).join("")}</tbody></table>`;
+}
+
+const COLS = {
+  no_visitados: [
+    ["Punto de venta", x=>`<span class="mat">${esc(x[0])}</span>`, x=>x[0]],
+    ["Centro", x=>`${esc(x[4])}<br><span class="tenue">nº ${esc(x[3])}</span>`, x=>`${x[3]} ${x[4]}`],
+    ["Ruta del plan", x=>esc(x[2]), x=>x[2]],
+    ["Delegación", x=>esc(x[1]), x=>x[1]],
+  ],
+  fuera: [
+    ["Punto de venta", x=>`<span class="mat">${esc(x[0])}</span>`, x=>x[0]],
+    ["Centro", x=>`${esc(x[5])}<br><span class="tenue">nº ${esc(x[4])}</span>`, x=>`${x[4]} ${x[5]}`],
+    ["Ruta del parte", x=>esc(x[2]), x=>x[2]],
+    ["Reponedor", x=>esc(x[3]), x=>x[3]],
+    ["Delegación", x=>esc(x[1]), x=>x[1]],
+  ],
+};
+function filasPdv(){
+  const q = $("#busca").value.trim().toLowerCase();
+  return (dia()[PESTANA]||[]).filter(x=>deLaDeleg(x[1]) && (!q || x.join(" ").toLowerCase().includes(q)));
+}
+function pintaPdv(){
+  const d = dia(), dl = deleg();
+  $("#hPdv").textContent = dl===TODAS ? "Puntos de venta" : `Puntos de venta de ${dl}`;
+  const tiene = Array.isArray(d.no_visitados);
+  const cuenta = k => (d[k]||[]).filter(x=>deLaDeleg(x[1])).length;
+  $("#pestanas").innerHTML = [["no_visitados","Sin visitar"],["fuera","Fuera de plan"]].map(([id,t])=>
+    `<button class="btn" type="button" role="tab" data-p="${id}" aria-pressed="${id===PESTANA}">${esc(t)}${tiene?" · "+num(cuenta(id)):""}</button>`).join("");
+  $("#pestanas").querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{ PESTANA=b.dataset.p; pintaPdv(); }));
+  $("#sPdv").textContent = PESTANA==="no_visitados"
+    ? "Estaban en el plan del día y no tienen ningún parte de reponedor ese día."
+    : "Tienen parte de reponedor ese día y no estaban en el plan.";
+  $("#bCsv").disabled = !tiene;
+  if(d.sin_dato){ $("#tPdv").innerHTML = `<p class="vacio">${esc(d.sin_dato)}</p>`; $("#cPdv").textContent=""; return; }
+  if(!tiene){
+    $("#tPdv").innerHTML = `<p class="vacio">La lista punto a punto se guarda solo de la última semana; de este día quedan las cifras de arriba.</p>`;
+    $("#cPdv").textContent = ""; return;
+  }
+  const filas = filasPdv(), cols = COLS[PESTANA];
+  $("#cPdv").textContent = `${num(filas.length)} ${filas.length===1?"punto de venta":"puntos de venta"}`;
+  if(!filas.length){ $("#tPdv").innerHTML = `<p class="vacio">Ninguno.</p>`; return; }
+  const vis = filas.slice(0, TODAS_PDV ? MAX_FILAS : PRIMERAS);
+  const resto = filas.length - vis.length;
+  $("#tPdv").innerHTML = `<table><thead><tr>${cols.map(c=>`<th>${esc(c[0])}</th>`).join("")}</tr></thead><tbody>
+    ${vis.map(f=>`<tr>${cols.map(c=>`<td data-et="${esc(c[0])}">${c[1](f)}</td>`).join("")}</tr>`).join("")}</tbody></table>`
+    + (resto > 0 ? `<p class="vacio">Y ${num(resto)} más. ${TODAS_PDV ? "Están todos en el CSV."
+        : `<button class="btn" id="bMas" type="button">Ver ${resto + vis.length > MAX_FILAS ? "los " + num(MAX_FILAS) + " primeros" : "todos"}</button> o bájalos en CSV.`}</p>` : "");
+  const mas = $("#bMas");
+  if(mas) mas.addEventListener("click", ()=>{ TODAS_PDV = true; pintaPdv(); });
+}
+
+const ESTADO = {
+  bien: ["Bien", "bien", "muchas menos visitas que un día normal"],
+  festivo_con_visitas: ["Visitas de día normal", "mal", "es festivo y se visitó como un día normal"],
+  pocas_sin_festivo: ["¿Festivo sin apuntar?", "mal", "laborable sin festivo apuntado y con menos de la mitad de visitas"],
+  sin_normal: ["Sin día normal", "", "esta delegación no tiene visitas en sus días normales con los que comparar"],
+};
+function pintaFest(){
+  const c = D.festivos, u = D.umbrales||{};
+  const locales = c ? Object.keys(c.delegaciones||{}) : [];
+  $("#sFest").textContent = (c
+    ? `Calendario: ${num((c.nacional||[]).length)} festivos nacionales; locales apuntados en ${locales.length ? locales.length + " " + (locales.length===1?"delegación":"delegaciones") : "ninguna delegación todavía"}. `
+    : "No hay calendario de festivos cargado: solo se pueden ver los laborables con muy pocas visitas. ")
+    + `Un día normal es la mediana de visitas de los laborables de la delegación sin festivo; «muchas menos» es menos del ${fpct(100*(u.festivo_bajo||.5))} de eso.`;
+  const filas = (D.control_festivos||[]).filter(x=>deLaDeleg(x.delegacion) && x.fecha<=$("#dia").value).slice().reverse();
+  $("#cFest").textContent = `${num(filas.length)} ${filas.length===1?"día":"días"}`;
+  if(!filas.length){ $("#tFest").innerHTML = `<p class="vacio">Ningún festivo ni ningún laborable flojo en los días guardados.</p>`; return; }
+  $("#tFest").innerHTML = `<table><thead><tr><th>Día</th><th>Delegación</th><th>Festivo</th><th class="n">Visitas</th>
+    <th class="n">Un día normal</th><th>Plan</th><th>Control</th></tr></thead><tbody>
+    ${filas.map(x=>{
+      const e = ESTADO[x.estado] || [x.estado, "", ""];
+      const plan = x.previstas==null ? '<span class="tenue">sin plan</span>'
+        : x.plan_sin_descontar ? `<span class="mal">${num(x.previstas)} previstas: sin descontar</span>`
+        : `${num(x.previstas)} previstas`;
+      return `<tr><td data-et="Día">${esc(fechaCorta(x.fecha))}</td><td data-et="Delegación">${esc(x.delegacion)}</td>
+        <td data-et="Festivo">${x.festivo ? esc(x.festivo) : '<span class="tenue">no apuntado</span>'}</td>
+        <td class="n" data-et="Visitas">${num(x.visitas)}</td><td class="n" data-et="Un día normal">${x.normal==null?"—":num(x.normal)}</td>
+        <td data-et="Plan">${plan}</td>
+        <td data-et="Control"><span class="${e[1]}">${esc(e[0])}</span><br><span class="tenue">${esc(e[2])}</span></td></tr>`;
+    }).join("")}</tbody></table>`;
+}
+
+function pintaFestivoDia(){
+  const f = $("#dia").value, dl = deleg();
+  const fe = dl===TODAS ? ((D.festivos && (D.festivos.nacional||[]).includes(f)) ? "nacional" : null) : festivo(f, dl);
+  const n = $("#festivoDia");
+  n.hidden = !fe;
+  if(fe) n.textContent = `El ${fechaLarga(f)} es festivo ${fe}. El plan de VenCloud no descuenta los festivos: el porcentaje sale bajo porque se visita menos, como debe ser. El control está abajo, en Festivos por delegación.`;
+}
+
+function pintaTodo(){
+  TODAS_PDV = false;
+  pintaFestivoDia(); pintaKpis(); pintaDeleg(); pintaRutas(); pintaPdv(); pintaFest();
+}
+
+function csv(){
+  const cols = COLS[PESTANA], filas = filasPdv();
+  const q = v => { const s = String(v==null?"":v); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
+  const texto = "﻿" + [cols.map(c=>q(c[0])).join(";"), ...filas.map(f=>cols.map(c=>q(c[2](f))).join(";"))].join("\r\n");
+  const url = URL.createObjectURL(new Blob([texto], {type:"text/csv;charset=utf-8"}));
+  const a = document.createElement("a");
+  a.href = url; a.download = `rutas_${PESTANA}_${$("#dia").value}${deleg() ? "_" + deleg().replace(/[^\w]+/g,"_") : ""}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+function pintaDelegaciones(){
+  const nombres = new Set();
+  Object.values(D.dias).forEach(v=>{
+    (v.delegaciones||[]).forEach(x=>nombres.add(x.delegacion));
+    Object.keys(v.visitas_deleg||{}).forEach(x=>nombres.add(x));
+  });
+  const antes = $("#deleg").value;
+  $("#deleg").innerHTML = `<option value="">Todas</option>` +
+    [...nombres].filter(Boolean).sort((a,b)=>a.localeCompare(b,"es")).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");
+  if(antes) $("#deleg").value = antes;
+}
+
+(async function arranca(){
+  let r;
+  try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(r.status === 401){ location.href = "/"; return; }
+  if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
+  const yo = await r.json();
+  if(yo.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  $("#quien").textContent = (yo.perfil ? yo.perfil + " · " : "") + (yo.nombre || yo.correo);
+
+  let rt;
+  try{ rt = await fetch("/api/rutas", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(rt.status === 401){ location.href = "/"; return; }
+  $("#cargando").hidden = true;
+  if(!rt.ok){
+    let d={}; try{ d = await rt.json(); }catch(e){}
+    avisa(d.error || "Las rutas no están disponibles ahora mismo.", true);
+    return;
+  }
+  D = await rt.json();
+  D.dias = D.dias || {};
+  const dias = Object.keys(D.dias).sort().reverse();
+  if(!dias.length){ avisa("Todavía no hay ningún día calculado.", true); return; }
+  $("#dia").innerHTML = dias.map(f=>`<option value="${esc(f)}">${esc(fechaLarga(f))}</option>`).join("");
+  /* El día que llega en la dirección (desde el cuadrado), o ayer, o el último. */
+  const q = new URLSearchParams(location.search);
+  const pedido = q.get("dia");
+  const hoy = new Date(), ayer = isoLocal(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()-1));
+  $("#dia").value = dias.includes(pedido) ? pedido : dias.includes(ayer) ? ayer : dias[0];
+  if(!dias.includes(pedido) && !dias.includes(ayer))
+    avisa(`Todavía no hay datos de ayer: lo último calculado es del ${fechaLarga(dias[0])}.`, true);
+  pintaDelegaciones();
+  if(q.get("delegacion")) $("#deleg").value = q.get("delegacion");
+  ["#dia","#deleg"].forEach(s=>$(s).addEventListener("change", pintaTodo));
+  $("#busca").addEventListener("input", pintaPdv);
+  $("#bCsv").addEventListener("click", csv);
+  $("#todo").hidden = false;
+  pintaTodo();
+  const gen = D.generado ? new Date(D.generado) : null;
+  $("#pie").innerHTML = "Plan = el informe D12 de VenCloud (informe 184), un día por fecha. "
+    + "Hecha = el punto de venta tiene ese día un parte de reponedor (no cuentan las lecturas automáticas). "
+    + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
+    + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
+  $("#pie").hidden = false;
+})();
+</script>
+</body>
+</html>

@@ -299,6 +299,16 @@ comprueba("la reposicion de AIRBUS no lleva la de Consum",
 comprueba("el resumen dice que cuadrados se quedaron sin dato",
           "almacenes" not in res["operativo"]["interno"]["sin_dato"], True)
 
+print("\nLa pagina de rutas (docs/55): un fichero por perfil, con su ambito")
+_ri = json.loads(gzip.decompress(ALMACEN["cabina/interno/rutas.json.gz"]))
+_ra = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/rutas.json.gz"]))
+comprueba("el interno, los dos puntos de venta del plan", _ri["dias"][_ayer]["total"]["previstas"], 2)
+comprueba("AIRBUS, solo el suyo, y en su lista no sale Consum",
+          (_ra["dias"][_ayer]["total"]["previstas"],
+           all("CONSUM" not in " ".join(map(str, x)).upper()
+               for x in _ra["dias"][_ayer]["no_visitados"] + _ra["dias"][_ayer]["fuera"])), (1, True))
+comprueba("sin calendario de festivos subido, se dice (null)", _ri["festivos"], None)
+
 print("\nLos almacenes por dentro (docs/54)")
 _al = json.loads(gzip.decompress(ALMACEN["cabina/interno/almacenes.json.gz"]))
 _sev = {p["cod"]: p for p in _al["almacenes"][0]["productos"]}
