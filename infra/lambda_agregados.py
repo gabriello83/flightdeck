@@ -70,6 +70,7 @@ import reglas as R
 import serie as S
 import cuadro as CU
 import operativo as OP
+import tarifas as TA
 import telemetria as TE
 from cuadro import Cuadro
 
@@ -93,6 +94,15 @@ CLAVE_RUTAS = os.environ.get("RUTAS", "maestros/rutas/m_rutas.json.gz")
 # sin fichero (los anteriores al 13-oct-2026) no tiene plan, y el cuadrado de
 # rutas lo dice.
 PLAN_VISITAS = ("crudo/rutas_plan_visitas", "rutas_plan_visitas")
+# Tarifas contra venta real (docs/52). El maestro M10 · EXT_MAESTRO_TARIFAS, y lo que se
+# guarda de una noche a otra: la ultima carga de cada producto y el ultimo precio
+# cobrado, seis meses (tarifas.py explica por que no se relee todo).
+CLAVE_TARIFAS = os.environ.get("TARIFAS", "maestros/tarifas/m_tarifas.json.gz")
+CLAVE_ESTADO_TARIFAS = "cabina/_tarifas/estado.json.gz"
+# Que hace el observador de tarifas con cada fuente. Va con el fichero ENTERO,
+# antes de filtrar por perfil: el estado es uno para todos.
+TARIFAS_COME = {"lineas": "come_cargas", "telemetria": "come_telemetria",
+                "ventas_parte": "come_audit"}
 # Los ficheros de los sistemas de telemetria que se suben desde la consola
 # (docs/53): uno por sistema, el ultimo que se subio, ya leido por la API.
 EXTERNO = "externo/telemetria"
@@ -1150,6 +1160,26 @@ def come_operativo(op, dia, nombre, filas, clase_de):
         od.come_telemetria(filas)
 
 
+def escribe_tarifas(acu, op, tarifas, censo, observador, hoy):
+    """Las tarifas de un perfil: el cuadrado, el resumen y un fichero por centro.
+
+    Sin el maestro de tarifas no se calcula nada: todo saldria «sin tarifa», y
+    eso no es lo que pasa, es que el dato no esta.
+    """
+    if tarifas is None:
+        op.foto["tarifas"] = {"sin_dato": TA.SIN_MAESTRO}
+        return {"sin_dato": TA.SIN_MAESTRO}
+    resumen, detalle = TA.calcula(censo, tarifas, observador, hoy, OP.semaforo)
+    base = f"cabina/{acu.perfil['id']}/tarifas"
+    for num, d in detalle.items():
+        escribe_comprimido(f"{base}/centros/{num}.json.gz", d)
+    escribe_comprimido(f"{base}/resumen.json.gz", resumen)
+    op.foto["tarifas"] = TA.cuadrado(resumen, OP.semaforo)
+    t = resumen["total"]
+    return {"pct": t["pct"], "controlados": t["controlados"], "sin_tarifa": t["sin_tarifa"],
+            "sin_dato": t["sin_dato"], "centros": len(detalle)}
+
+
 def come_serie(dia, nombre, filas):
     metodo = SERIE_COME.get(nombre)
     if metodo:
@@ -1270,10 +1300,11 @@ def lambda_handler(event, context):
     # las filas sin centro. Y la telemetria de un dia se lee antes que la venta
     # del parte de ese dia, que es lo que evita contar la venta dos veces.
     con_cuadro = any(acu.cuadro for acu in acumuladores)
-    # La telemetria la quiere tambien el informe operativo (que maquinas mandaron
-    # venta), que no se escribe en un relleno historico.
-    fuentes = [f for f in FUENTES
-               if f[3] is not None or con_cuadro or (f[0] == "telemetria" and not historico)]
+    # La venta (telemetria y parte) la necesitan el cuadro y las tarifas, que la
+    # leen siempre, tambien en un relleno historico. La telemetria la quiere
+    # ademas el informe operativo (que maquinas mandaron venta, docs/53).
+    fuentes = [f for f in FUENTES if f[3] is not None or con_cuadro or f[0] in TARIFAS_COME]
+    observador = TA.Observador(_json_de(CLAVE_ESTADO_TARIFAS))
     series, series_centros = defaultdict(list), defaultdict(list)
     leidos, parado_en = [], None
     for dia in dias:
@@ -1291,6 +1322,8 @@ def lambda_handler(event, context):
             # de todos, porque una maquina de AIRBUS se conoce igual leyendo el
             # informe completo.
             mapa.aprende(filas)
+            if nombre in TARIFAS_COME:
+                getattr(observador, TARIFAS_COME[nombre])(filas)
             if nombre == "telemetria":
                 # Con el fichero ENTERO, antes de filtrar, y por lo mismo que en
                 # el cuadro: si solo se marcara cuando al perfil le tocan filas,
@@ -1346,12 +1379,23 @@ def lambda_handler(event, context):
     periodo = {"desde": min(leidos).isoformat(), "hasta": max(leidos).isoformat(),
                "dias": len(dias_leidos)}
 
-    escritos, cuadros, resumen_operativo = [], {}, {}
+    # El estado de las tarifas se guarda tambien en un relleno historico: es
+    # como se arrancan los seis meses la primera vez.
+    observador.poda(hoy)
+    escribe_comprimido(CLAVE_ESTADO_TARIFAS, observador.estado())
+
+    escritos, cuadros, resumen_operativo, resumen_tarifas = [], {}, {}, {}
     if not historico:
         rutas = _filas(_json_de(CLAVE_RUTAS))
+        maestro_tarifas = _filas(_json_de(CLAVE_TARIFAS))
+        tarifas = TA.Tarifas(maestro_tarifas) if maestro_tarifas else None
+        censo = _filas(_json_de(CLAVE_CENSO)) if tarifas else []
         for acu in acumuladores:
             op = operativos[acu.perfil["id"]]
             op.pon_almacenes(OP.almacenes(op.balance, rutas, acu.ambito))
+            resumen_tarifas[acu.perfil["id"]] = escribe_tarifas(
+                acu, op, tarifas, [f for f in censo if en_ambito(f, acu.ambito, mapa)],
+                observador, hoy)
             clave = f"cabina/{acu.perfil['id']}/operativo.json"
             fichero = op.fichero(acu.perfil["id"], _json_de(clave))
             escribe(clave, fichero)
@@ -1427,6 +1471,13 @@ def lambda_handler(event, context):
         "serie": series_escritas,
         # El informe general operativo (docs/51): ultimo dia y cuadrados sin dato.
         "operativo": resumen_operativo,
+        # Tarifas contra venta (docs/52): el porcentaje de cada perfil, o por que
+        # no lo hay. Y lo que lleva guardado el estado de seis meses.
+        "tarifas": {"perfiles": resumen_tarifas,
+                    "estado": {"cargas": len(observador.cargas),
+                               "precios": len(observador.ventas),
+                               "ventas_sin_articulo": observador.sin_articulo,
+                               "medio_desconocido": observador.medio_desconocido}},
         # Los ficheros de telemetria de la consola con los que se ha cruzado, y
         # los que faltan (docs/53).
         "telemetria_externa": externa,

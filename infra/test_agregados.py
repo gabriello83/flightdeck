@@ -484,6 +484,49 @@ comprueba("sale el punto de venta nuevo", _inst2["nuevos"]["pdvs"], ["P9"])
 comprueba("y su maquina", _inst2["nuevos"]["maquinas"], ["A9"])
 comprueba("y nada mas", _inst2["nuevos"]["clientes"], [])
 
+print("\nTarifas (docs/52): sin maestro se dice; con maestro, resumen y un fichero por centro")
+_op = json.loads(ALMACEN["cabina/interno/operativo.json"])
+comprueba("sin el maestro, el cuadrado dice por que", "M10 · EXT_MAESTRO_TARIFAS" in _op["foto"]["tarifas"]["sin_dato"], True)
+comprueba("y no se escribe ningun resumen que parezca bueno",
+          [k for k in ALMACEN if "/tarifas/" in k and k.startswith("cabina/interno")], [])
+comprueba("el estado de seis meses se guarda igual", "cabina/_tarifas/estado.json.gz" in ALMACEN, True)
+_dia = AYER - datetime.timedelta(days=2)
+pon("crudo/visita_reposiciones", "visita_reposiciones", _dia,
+    [{"tipo_linea": "CM", "cantidad": 5, "etiq_canal": "11", "matricula": "A1",
+      "cod_articulo": "9354", "fecha": f"{_dia} 09:00:00"},
+     {"tipo_linea": "CM", "cantidad": 5, "etiq_canal": "12", "matricula": "A1",
+      "cod_articulo": "7777", "fecha": f"{_dia} 09:00:00"},
+     {"tipo_linea": "CM", "cantidad": 5, "etiq_canal": "11", "matricula": "C1",
+      "cod_articulo": "9354", "fecha": f"{_dia} 09:00:00"}])
+pon("crudo/telemetria_ventas", "telemetria_ventas", _dia,
+    [{"matricula": "A1", "cod_articulo": "9354", "precio": 1.3, "linea_precio": 2,
+      "fecha_venta": f"{_dia} 10:00:00", "num_centro": "1001", "centro": "AIRBUS GETAFE"},
+     {"matricula": "A1", "cod_articulo": "7777", "precio": 2.0, "linea_precio": 2,
+      "fecha_venta": f"{_dia} 10:00:00", "num_centro": "1001", "centro": "AIRBUS GETAFE"}])
+ALMACEN["maestros/tarifas/m_tarifas.json.gz"] = gzip.compress(json.dumps([
+    {"id": "T1", "origen": "tarifa", "nivel": "tarifa", "tarifa_id": 9, "tarifa": "AIRBUS 2026",
+     "cod_articulo": "9354", "precio_ef": 1.2, "precio_tp": 1.2, "precio_tc": 1.2,
+     "fecha_cambio": "2026-01-01 00:00:00"},
+    {"id": "A1", "origen": "articulo", "nivel": "articulo", "cod_articulo": "9354",
+     "articulo": "COCA COLA LATA 33CL"}]).encode())
+L.lambda_handler({}, None)
+_res = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/tarifas/resumen.json.gz"]))
+_cen = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/tarifas/centros/1001.json.gz"]))
+comprueba("AIRBUS: 9354 cobra 1,30 con tarifa de 1,20, y 7777 no tiene tarifa",
+          sorted((f["cod_articulo"], f["estado"]) for f in _cen["filas"]),
+          [("7777", "sin_tarifa"), ("9354", "no_coincide")])
+comprueba("con el nombre del articulo, del maestro",
+          [f["articulo"] for f in _cen["filas"] if f["cod_articulo"] == "9354"], ["COCA COLA LATA 33CL"])
+comprueba("el resumen: 0 de 1, y uno sin tarifa",
+          (_res["total"]["coincide"], _res["total"]["controlados"], _res["total"]["sin_tarifa"]), (0, 1, 1))
+comprueba("la maquina de Consum no es de AIRBUS",
+          [k for k in ALMACEN if k.startswith("cabina/cli-airbus/tarifas/centros/")],
+          ["cabina/cli-airbus/tarifas/centros/1001.json.gz"])
+_op = json.loads(ALMACEN["cabina/cli-airbus/operativo.json"])
+comprueba("el cuadrado del informe operativo: 0 %, rojo",
+          (_op["foto"]["tarifas"]["pct"], _op["foto"]["tarifas"]["color"]), (0.0, "rojo"))
+del ALMACEN["maestros/tarifas/m_tarifas.json.gz"]
+
 print("\nEl perfiles.json de verdad coge lo que tiene que coger")
 # Con los datos como los devolvio VenCloud el 4 de octubre de 2026, y con el
 # fichero tal cual se despliega: si alguien le cambia un numero, esto lo dice.

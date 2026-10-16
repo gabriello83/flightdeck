@@ -33,6 +33,7 @@ ESPERADO = {
                       "cuadro.py": "infra/cuadro.py",
                       "serie.py": "infra/serie.py",
                       "operativo.py": "infra/operativo.py",
+                      "tarifas.py": "infra/tarifas.py",
                       "telemetria.py": "infra/telemetria.py"},
     "api.zip": {"comun.py": "infra/api/comun.py",
                 "autorizacion.py": "infra/api/autorizacion.py",

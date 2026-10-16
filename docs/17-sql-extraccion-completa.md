@@ -1544,6 +1544,334 @@ where (c.table_schema = 'comercial' and c.table_name in ('clientes', 'clientesce
 order by c.table_schema, c.table_name, c.ordinal_position
 ```
 
+## M7 · EXT_PLANOGRAMA  *(sin parámetros)*  ·  **informe 178**
+
+El planograma de **espirales** de todas las máquinas: cada canal activo con su artículo, su
+capacidad y los precios que guarda. Es la otra mitad de M1 (los carriles de las calientes). Nació
+como `M7 · EXT_AIRBUS_PLANOGRAMA`, que en realidad ya traía toda la red; Gabriele lo renombró el
+15-oct-2026. Se baja cada noche a `maestros/planograma/` (`m_planograma` en el manifiesto).
+
+Dos cambios sobre aquel SQL:
+
+- El punto de venta se cruza por **`m.pdvid`**, el PDV donde está instalada la máquina, y no por
+  `pdv.maquinaid`: una máquina con un PDV antiguo dado de baja salía dos veces.
+- Trae los **tres precios** y `preciotpdto`, la categoría de precio del canal y si la máquina usa
+  precios en canales o planograma por categorías. **El precio del canal no es el que cobra la
+  máquina** salvo con `precios_en_canales` (docs/19): es una copia que se queda vieja.
+
+```sql
+select
+  c.id                           as id,
+  cast(cli.codigo as text)       as cod_cliente,
+  cli.nombre                     as cliente,
+  cast(cen.numcentro as text)    as num_centro,
+  cen.denomina                   as centro,
+  pdv.codigo                     as cod_pdv,
+  pdv.ubicacion                  as ubicacion,
+  m.codigo                       as matricula,
+  m.preciosencanales             as precios_en_canales,
+  m.planogporcategorias          as planograma_por_categorias,
+  c.numero                       as numero,
+  c.etiqueta                     as canal,
+  c.capacmax                     as capacidad_max,
+  c.stockrecom                   as stock_recomendado,
+  c.cargaminima                  as carga_minima,
+  a.codigo                       as cod_articulo,
+  a.denomina                     as articulo,
+  k.codigo                       as cod_categoria_precio,
+  c.precioef                     as precio_canal_ef,
+  c.preciotp                     as precio_canal_tp,
+  c.preciotc                     as precio_canal_tc,
+  c.preciotpdto                  as precio_canal_tpdto
+from recursos.maquinascanales c
+join recursos.maquinas m                       on m.id = c.maquinaid
+left join vending.pdvs pdv                     on pdv.id = m.pdvid
+left join comercial.clientescentros cen        on cen.id = pdv.clientecentroid
+left join comercial.clientes cli               on cli.id = cen.clienteid
+left join stocks.articulos a                   on a.id = c.articuloid
+left join stocks.articuloscategoriasprecios k  on k.id = c.articulocategoriaprecioid
+where c.activo is true
+order by cli.codigo, cen.numcentro, pdv.codigo, m.codigo, c.etiqueta
+```
+
+## M10 · EXT_MAESTRO_TARIFAS  *(sin parámetros)*
+
+Todas las líneas de **precio de venta** que VenCloud usa para decidir qué cobra cada máquina, en una
+sola tabla y cada una con el nivel del que cuelga. Es lo que necesita el cuadrado de tarifas del
+informe general operativo ([52-tarifas.md](52-tarifas.md)): hasta ahora sólo sabíamos **qué tarifa**
+tiene asignada cada cliente, centro y punto de venta (M5), pero no **qué precio** pone a cada
+producto.
+
+Lleva exactamente lo que mira `vending.getprecioscanal` (leída con la sonda M10Z el 15-oct-2026) y
+nada más: siete trozos unidos con `union all`.
+
+| `origen` | tabla | qué es |
+|---|---|---|
+| `tarifa` | `tarifasvending` + `tarifasvendingdetalle` | las tarifas estándar con nombre, que se asignan al punto de venta o al cliente |
+| `productos` | `tarifasvendingproductos` | precios sueltos por artículo, colgados de un PDV, centro, cliente o grupo |
+| `categorias` | `tarifasvendingcategorias` | lo mismo, por categoría de precio |
+| `articulo` | `stocks.articulos` | el nombre del artículo y su categoría de precio |
+| `cliente_grupo` | `comercial.clientes` | a qué grupo pertenece cada cliente |
+| `canal` | `recursos.maquinascanales` | sólo de las máquinas con **precios en canales** (`nivel` = `canal`) o con **planograma por categorías** (`nivel` = `planograma`): el precio o la categoría puestos en cada canal |
+| `pdv` | `vending.pdvs` | los puntos de venta de **venta gratuita** (`nivel` = `gratuito`) y los que tienen una **subvención en vigor** (`nivel` = `subvencion`) |
+
+Lo que VenCloud no mira para el precio no viene: la ficha del centro y del cliente
+(`clientescentrostarifas*`, `clientestarifasvending`), el precio base de la categoría y el de la
+ficha del artículo (sólo valdrían con `usatarifavendingglobal`, apagado en Serunion) y los precios
+sueltos que no cuelgan de nadie.
+
+El `id` lleva delante la letra de su origen (`T`, `P`, `C`, `A`, `G`, `M`, `V`): los ids de tablas
+distintas se repiten entre sí.
+
+```sql
+select
+  'T' || cast(d.id as text)          as id,
+  'tarifa'                           as origen,
+  'tarifa'                           as nivel,
+  t.id                               as tarifa_id,
+  t.nombre                           as tarifa,
+  t.activa                           as activa,
+  cast(null as bigint)               as grupo_id,
+  cast(null as text)                 as cod_cliente,
+  cast(null as text)                 as num_centro,
+  cast(null as text)                 as cod_pdv,
+  cast(null as text)                 as matricula,
+  a.codigo                           as cod_articulo,
+  a.denomina                         as articulo,
+  cast(null as text)                 as cod_categoria,
+  d.precioef                         as precio_ef,
+  d.preciotp                         as precio_tp,
+  d.preciotc                         as precio_tc,
+  d.preciotpdto                      as precio_tpdto,
+  cast(t.fechaactualiza as text)     as fecha_cambio
+from comercial.tarifasvendingdetalle d
+join comercial.tarifasvending t   on t.id = d.tarifavendingid
+left join stocks.articulos a      on a.id = d.articuloid
+
+union all
+select
+  'P' || cast(p.id as text),
+  'productos',
+  case when coalesce(p.pdvid, 0) <> 0           then 'pdv'
+       when coalesce(p.clientecentroid, 0) <> 0 then 'centro'
+       when coalesce(p.clienteid, 0) <> 0       then 'cliente'
+       else 'grupo' end,
+  cast(null as bigint),
+  cast(null as text),
+  cast(null as boolean),
+  p.clientegrupoid,
+  cast(cli.codigo as text),
+  cast(cen.numcentro as text),
+  pdv.codigo,
+  cast(null as text),
+  a.codigo,
+  a.denomina,
+  cast(null as text),
+  p.precioef,
+  p.preciotp,
+  p.preciotc,
+  p.preciotpdto,
+  cast(p.fechaultcambio as text)
+from comercial.tarifasvendingproductos p
+left join comercial.clientes cli        on cli.id = p.clienteid
+left join comercial.clientescentros cen on cen.id = p.clientecentroid
+left join vending.pdvs pdv              on pdv.id = p.pdvid
+left join stocks.articulos a            on a.id = p.articuloid
+where coalesce(p.pdvid, 0) <> 0 or coalesce(p.clientecentroid, 0) <> 0
+   or coalesce(p.clienteid, 0) <> 0 or coalesce(p.clientegrupoid, 0) <> 0
+
+union all
+select
+  'C' || cast(c.id as text),
+  'categorias',
+  case when coalesce(c.pdvid, 0) <> 0           then 'pdv'
+       when coalesce(c.clientecentroid, 0) <> 0 then 'centro'
+       when coalesce(c.clienteid, 0) <> 0       then 'cliente'
+       else 'grupo' end,
+  cast(null as bigint),
+  cast(null as text),
+  cast(null as boolean),
+  c.clientegrupoid,
+  cast(cli.codigo as text),
+  cast(cen.numcentro as text),
+  pdv.codigo,
+  cast(null as text),
+  cast(null as text),
+  cast(null as text),
+  k.codigo,
+  c.precioef,
+  c.preciotp,
+  c.preciotc,
+  c.preciotpdto,
+  cast(c.fechaultcambio as text)
+from comercial.tarifasvendingcategorias c
+left join comercial.clientes cli               on cli.id = c.clienteid
+left join comercial.clientescentros cen        on cen.id = c.clientecentroid
+left join vending.pdvs pdv                     on pdv.id = c.pdvid
+left join stocks.articuloscategoriasprecios k  on k.id = c.categoriaid
+where coalesce(c.pdvid, 0) <> 0 or coalesce(c.clientecentroid, 0) <> 0
+   or coalesce(c.clienteid, 0) <> 0 or coalesce(c.clientegrupoid, 0) <> 0
+
+union all
+select
+  'A' || cast(a.id as text),
+  'articulo',
+  'articulo',
+  cast(null as bigint),
+  cast(null as text),
+  cast(null as boolean),
+  cast(null as bigint),
+  cast(null as text),
+  cast(null as text),
+  cast(null as text),
+  cast(null as text),
+  a.codigo,
+  a.denomina,
+  k.codigo,
+  cast(null as numeric),
+  cast(null as numeric),
+  cast(null as numeric),
+  cast(null as numeric),
+  cast(null as text)
+from stocks.articulos a
+left join stocks.articuloscategoriasprecios k on k.id = a.articulocategoriaprecioid
+
+union all
+select
+  'G' || cast(cli.id as text),
+  'cliente_grupo',
+  'grupo',
+  cast(null as bigint),
+  cast(null as text),
+  cast(null as boolean),
+  cli.clientegrupoid,
+  cast(cli.codigo as text),
+  cast(null as text),
+  cast(null as text),
+  cast(null as text),
+  cast(null as text),
+  cast(null as text),
+  cast(null as text),
+  cast(null as numeric),
+  cast(null as numeric),
+  cast(null as numeric),
+  cast(null as numeric),
+  cast(null as text)
+from comercial.clientes cli
+where coalesce(cli.clientegrupoid, 0) <> 0
+
+union all
+select
+  'M' || cast(c.id as text),
+  'canal',
+  case when m.preciosencanales is true then 'canal' else 'planograma' end,
+  cast(null as bigint),
+  cast(null as text),
+  c.activo,
+  cast(null as bigint),
+  cast(null as text),
+  cast(null as text),
+  cast(null as text),
+  m.codigo,
+  a.codigo,
+  a.denomina,
+  k.codigo,
+  c.precioef,
+  c.preciotp,
+  c.preciotc,
+  c.preciotpdto,
+  cast(m.fechaultcambioplanograma as text)
+from recursos.maquinascanales c
+join recursos.maquinas m                       on m.id = c.maquinaid
+left join stocks.articulos a                   on a.id = c.articuloid
+left join stocks.articuloscategoriasprecios k  on k.id = c.articulocategoriaprecioid
+where (m.preciosencanales is true or m.planogporcategorias is true)
+  and c.activo is true
+
+union all
+select
+  'V' || cast(p.id as text),
+  'pdv',
+  case when p.vtagratuita is true then 'gratuito' else 'subvencion' end,
+  cast(null as bigint),
+  cast(null as text),
+  cast(null as boolean),
+  cast(null as bigint),
+  cast(null as text),
+  cast(null as text),
+  p.codigo,
+  cast(null as text),
+  cast(null as text),
+  cast(null as text),
+  cast(null as text),
+  cast(null as numeric),
+  cast(null as numeric),
+  cast(null as numeric),
+  cast(null as numeric),
+  cast(p.fechafinsubvencion as text)
+from vending.pdvs p
+where p.vtagratuita is true
+   or (p.acuerdosubvencion is true
+       and cast(p.fechainisubvencion as date) <= current_date
+       and cast(p.fechafinsubvencion as date) >= current_date)
+```
+
+## M10Z · EXT_SONDA_PRECIOS  *(sin parámetros, se lanza una vez)*
+
+No es un informe de datos: es la pregunta «¿cómo decide VenCloud qué precio rige en cada
+máquina?». Lo calcula su función `vending.getprecioscanal` (la del informe 37), y dentro está el
+orden entre punto de venta, centro, cliente, grupo y estándar. Se lee una vez y se copia a
+`tarifas.ORDEN`.
+
+**Leída el 15-oct-2026.** El orden que sale está en [52-tarifas.md](52-tarifas.md) y en
+`infra/tarifas.py`. La configuración de Serunion: `usatarifavendingglobal=false
+tarifvtamodo=0 modoasignacambioprecio=0 aplicarcambiosclienteacentro=false
+acttprivadadtogrupocliente=false`. Sólo hay que volver a lanzarla si VenCloud se actualiza y
+cambia la función.
+
+```sql
+select
+  n.nspname                        as esquema,
+  p.proname                        as funcion,
+  pg_get_function_arguments(p.oid) as argumentos,
+  pg_get_function_result(p.oid)    as devuelve,
+  pg_get_functiondef(p.oid)        as definicion
+from pg_catalog.pg_proc p
+join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+where n.nspname in ('vending', 'comercial', 'recursos', 'utils', 'stocks')
+  and (p.proname ilike '%precio%' or p.proname ilike '%tarif%')
+  and p.oid not in (select cast(a.aggfnoid as oid) from pg_catalog.pg_aggregate a)
+union all
+select
+  'configuracion'                  as esquema,
+  'confcomercial'                  as funcion,
+  'usatarifavendingglobal=' || cast(c.usatarifavendingglobal as text)
+    || ' tarifvtamodo=' || cast(c.tarifvtamodo as text)
+    || ' modoasignacambioprecio=' || cast(c.modoasignacambioprecio as text)
+    || ' aplicarcambiosclienteacentro=' || cast(c.aplicarcambiosclienteacentro as text)
+    || ' acttprivadadtogrupocliente=' || cast(c.acttprivadadtogrupocliente as text)
+                                   as argumentos,
+  ''                               as devuelve,
+  ''                               as definicion
+from configuracion.confcomercial c
+order by 1, 2
+```
+
+Si el validador rechaza `pg_catalog`, el plan B por `information_schema` (el texto de la función
+puede salir vacío si el usuario del informe no es su dueño):
+
+```sql
+select
+  r.routine_schema     as esquema,
+  r.routine_name       as funcion,
+  r.data_type          as devuelve,
+  r.routine_definition as definicion
+from information_schema.routines r
+where r.routine_schema in ('vending', 'comercial', 'recursos', 'utils', 'stocks')
+  and (r.routine_name ilike '%precio%' or r.routine_name ilike '%tarif%')
+order by r.routine_schema, r.routine_name
+```
+
 ## M1 · EXT_MAESTRO_CARRILES  *(sin parámetros)*
 
 El planograma de las máquinas calientes, que es la mitad que faltaba.

@@ -174,6 +174,16 @@ def encamina(evento, metodo, ruta):
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
         return r(200, A.recorta_operativo(datos, perfil))
 
+    # Tarifas contra venta real (docs/52): el resumen del perfil, o un centro.
+    # El centro no abre la puerta a otro perfil: el fichero se busca DENTRO del
+    # perfil de la sesion, y solo si su resumen de esta noche lo cita.
+    if ruta == "/api/tarifas" and metodo == "GET":
+        if "tarifas" not in A.cuadrados_de(perfil) or \
+                A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
+            raise PermissionError("Este perfil no tiene el cuadrado de tarifas.")
+        q = evento.get("queryStringParameters") or {}
+        return tarifas(perfil, q.get("centro") if "centro" in q else None)
+
     # La pagina de telemetria (docs/53): maquina a maquina, de las del perfil.
     # La misma regla que el cuadrado que lleva a ella: si no lo ve, no la ve.
     if ruta == "/api/telemetria" and metodo == "GET":
@@ -368,6 +378,24 @@ def serie(perfil, mes=None):
     datos = json.loads(_crudo(f"{base}{mes}.json.gz"))
     return r(200, {"mes": mes,
                    "filas": [A.recorta_dia(f, perfil) for f in datos.get("filas", [])]})
+
+
+def tarifas(perfil, centro=None):
+    """El resumen de tarifas del perfil de la sesion, o el detalle de un centro."""
+    base = f"cabina/{perfil.get('perfil_id', '')}/tarifas/"
+    try:
+        resumen = _crudo(base + "resumen.json.gz")
+    except Exception:
+        return r(503, {"error": "Las tarifas todavía no se han calculado: falta el maestro "
+                                "de tarifas (M10 · EXT_MAESTRO_TARIFAS) o la carga de esta noche.",
+                       "_nota": "Lo escriben los agregados cada noche (4:45)."})
+    if centro is None:
+        return _como_json(resumen)
+    citados = {str(c.get("num_centro")) for d in json.loads(resumen).get("delegaciones", [])
+               for c in d.get("centros", [])}
+    if not str(centro).isdigit() or str(centro) not in citados:
+        raise ValueError("Ese centro no está en las tarifas de este perfil.")
+    return _como_json(_crudo(f"{base}centros/{centro}.json.gz"))
 
 
 def ve_delegaciones(perfil):
