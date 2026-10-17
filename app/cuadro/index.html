@@ -845,9 +845,26 @@
       const monthTo=selectedMonth?(state.to&&state.to<selectedMonth[1]?state.to:selectedMonth[1]):'';
       return [state.day||monthFrom||state.from||model.minDate,topeHasta(state.day||monthTo||state.to||model.maxDate)];
     }
+    /* Los meses del periodo, en fraccion: cada mes cuenta por los dias que el
+       periodo cubre de el. Contar meses tocados hacia que del 1 al 16 de un mes
+       fuese «1 mes», y la venta por maquina y mes salia a la mitad de la real:
+       media flota parecia por debajo de 350 €/mes solo porque el mes no habia
+       acabado. Con meses enteros da lo mismo que antes. */
     function activePeriodMonths() {
       const [from,to]=activeDateBounds();
-      return monthRange(from,to).length||1;
+      let months=0;
+      for(const month of monthRange(from,to)) {
+        const [first,last]=monthBounds(month);
+        const a=from>first?from:first, b=to<last?to:last;
+        const days=Math.round((new Date(`${b}T12:00:00`)-new Date(`${a}T12:00:00`))/86400000)+1;
+        const inMonth=Number(last.slice(8,10));
+        if(days>0) months+=days/inMonth;
+      }
+      return months>0?months:1;
+    }
+    function fmtMonths(months) {
+      const shown=Math.round(months*10)/10;
+      return `${Number.isInteger(shown)?fmtInteger.format(shown):fmtDecimal.format(shown)} mes${shown===1?'':'es'}`;
     }
     function businessDaysInPeriod(from,to) {
       if(!from||!to||from>to) return 0;
@@ -887,7 +904,7 @@
       const covered = [...salesMachines].filter(key => visitMachines.has(key)).length;
       const coverage = percent(covered, salesMachines.size);
       const items = [
-        ['revenue','Venta por máquina y mes', fmtCurrency.format(revenuePerMachineMonth), `${fmtCurrency.format(revenue)} · ${fmtInteger.format(totalMachines.size)} máquinas instaladas · ${fmtInteger.format(periodMonths)} mes${periodMonths===1?'':'es'}`],
+        ['revenue','Venta por máquina y mes', fmtCurrency.format(revenuePerMachineMonth), `${fmtCurrency.format(revenue)} · ${fmtInteger.format(totalMachines.size)} máquinas instaladas · ${fmtMonths(periodMonths)}`],
         ['units','Unidades', fmtInteger.format(units), `${fmtCurrency.format(units ? revenue / units : 0)} por unidad`],
         ['visits','Visitas', fmtInteger.format(visits), `${fmtDecimal.format(visits / Math.max(totalMachines.size,1))} por máquina instalada`],
         ['incidents','Incidencias', fmtInteger.format(incidents), `${fmtDecimal.format(units ? incidents / units * 1000 : 0)} por 1.000 ud.`],
@@ -1156,14 +1173,14 @@
       const machineRowStart=item=>`<tr tabindex="0" class="${state.machines.includes(machineIdentity(item))?'selected':''}" data-machine="${escapeHtml(machineIdentity(item))}" aria-label="Filtrar máquina ${escapeHtml(item.machine)}, ${escapeHtml(model.centerLabels.get(item.center)||item.center)}"><td><span class="truncate" title="${escapeHtml(item.machine)}">${escapeHtml(item.machine)}</span></td>${centerLabelCell(item.center)}`;
       $('#noSalesTitle').textContent=salesPartial()?'Máquinas sin dato de venta':'Máquinas sin venta';
       $('#noSalesSubtitle').textContent=salesPartial()?`${fmtInteger.format(audit.withoutSales.length)} máquinas · sin venta en la fuente parcial: puede que vendan y no se lea aquí`:`${fmtInteger.format(audit.withoutSales.length)} máquinas · sin registros de venta en el periodo filtrado`;
-      $('#lowSalesSubtitle').textContent=`${fmtInteger.format(audit.lowSales.length)} máquinas con venta · importe ÷ ${audit.months} mes${audit.months===1?'':'es'} · de menor a mayor`;
+      $('#lowSalesSubtitle').textContent=`${fmtInteger.format(audit.lowSales.length)} máquinas con venta · importe ÷ ${fmtMonths(audit.months)} · de menor a mayor`;
       $('#centerMachinesSubtitle').textContent=`${fmtInteger.format(audit.machines.length)} máquinas totales · ${fmtInteger.format(audit.withoutSales.length)} ${noSalesWord()} · según filtros`;
 
       const noSales=$('#noSalesTable');
       noSales.innerHTML=audit.withoutSales.length?`<table><colgroup><col style="width:16%"><col style="width:25%"><col style="width:13%"><col style="width:18%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr><th>Máquina</th><th>Centro</th><th class="num">Unidades</th><th class="num">Importe</th><th class="num">Visitas</th><th class="num">Incidencias</th></tr></thead><tbody>${audit.withoutSales.map(item=>`${machineRowStart(item)}<td class="num">${fmtInteger.format(item.qty)}</td><td class="num" title="${fmtCurrency.format(item.revenue)}">${fmtCurrency.format(item.revenue)}</td><td class="num">${fmtInteger.format(item.visits)}</td><td class="num">${fmtInteger.format(item.incidents)}</td></tr>`).join('')}</tbody></table>`:'<div class="audit-empty">No hay máquinas sin venta para este filtro.</div>';
 
       const lowSales=$('#lowSalesTable');
-      lowSales.innerHTML=audit.lowSales.length?`<table><colgroup><col style="width:24%"><col style="width:42%"><col style="width:34%"></colgroup><thead><tr><th>Máquina</th><th>Centro</th><th class="num" title="Importe total de la máquina dividido entre los meses del periodo filtrado">Importe €/mes</th></tr></thead><tbody>${audit.lowSales.map(item=>`${machineRowStart(item)}<td class="num" title="${fmtCurrency.format(item.revenue)} del periodo ÷ ${audit.months} meses">${fmtCurrency.format(item.monthlyRevenue)}</td></tr>`).join('')}</tbody></table>`:'<div class="audit-empty">No hay máquinas con venta inferior a 350 €/mes para este filtro.</div>';
+      lowSales.innerHTML=audit.lowSales.length?`<table><colgroup><col style="width:24%"><col style="width:42%"><col style="width:34%"></colgroup><thead><tr><th>Máquina</th><th>Centro</th><th class="num" title="Importe total de la máquina dividido entre los meses del periodo filtrado">Importe €/mes</th></tr></thead><tbody>${audit.lowSales.map(item=>`${machineRowStart(item)}<td class="num" title="${fmtCurrency.format(item.revenue)} del periodo ÷ ${fmtMonths(audit.months)}">${fmtCurrency.format(item.monthlyRevenue)}</td></tr>`).join('')}</tbody></table>`:'<div class="audit-empty">No hay máquinas con venta inferior a 350 €/mes para este filtro.</div>';
 
       const centerMachines=$('#centerMachinesTable');
       centerMachines.innerHTML=audit.centers.length?`<table><colgroup><col style="width:50%"><col style="width:26%"><col style="width:24%"></colgroup><thead><tr><th>Centro</th><th class="num">Máquinas total</th><th class="num">${salesPartial()?'Sin dato de venta':'Sin venta'}</th></tr></thead><tbody>${audit.centers.map(item=>`<tr tabindex="0" class="${state.centers.includes(item.center)?'selected':''}" data-center="${escapeHtml(item.center)}" aria-label="Filtrar centro ${escapeHtml(model.centerLabels.get(item.center)||item.center)}">${centerLabelCell(item.center)}<td class="num">${fmtInteger.format(item.total)}</td><td class="num">${fmtInteger.format(item.withoutSales)}</td></tr>`).join('')}</tbody></table>`:'<div class="audit-empty">No hay máquinas para este filtro.</div>';

@@ -921,7 +921,7 @@ function vistaCarga(){
   return `<section class="caja">
     <h2>La carga de esta noche</h2>
     <p class="sub">Corre a las 3:15 y los agregados a las 4:45. La última dejó escrito esto
-      ${r.ejecucion ? "el " + esc(cuando(r.ejecucion)) : ""}.</p>
+      ${(r.ultima_carga || r.ejecucion) ? "el " + esc(cuando(r.ultima_carga || r.ejecucion)) : ""}.</p>
     <div class="kpis">
       <div class="kpi"><div class="et">Descargas</div><div class="vl">${num(r.descargas_ok)}</div>
         <div class="nt">correctas</div></div>
@@ -1029,8 +1029,19 @@ async function subeTelemetria(ficheros){
    sale de /api/serie, una fila por día, y la suma la hace /comun/periodos.js:
    el mismo fichero que usan el panel y el cuadro, para que «este mes» signifique
    lo mismo en las tres pantallas. */
+/* Un mes esta a medias si le faltan dias. Al ultimo mes de la serie solo se le
+   piden los que ya han pasado (hasta su ultimo dia escrito): el mes corriente
+   con todos los dias hasta ayer esta completo, no a medias. */
+function aMedias(m, ultimoMes){
+  const [a, mm] = String(m.mes).split("-").map(Number);
+  const delMes = new Date(Date.UTC(a, mm, 0)).getUTCDate();
+  const debe = m.mes === ultimoMes && m.hasta ? Number(String(m.hasta).slice(8, 10)) : delMes;
+  return (m.dias || 0) < debe;
+}
+
 function vistaHistorico(){
   const sinHistoria = SERIE && !SERIE.mesesConDato().length;
+  const ultimoMes = SERIE ? ((SERIE.indice.meses||[]).map(m=>m.mes).sort().pop() || null) : null;
   return `<section class="caja">
     <h2>Histórico</h2>
     <p class="sub">Desde el 1 de enero de 2025, día a día. Elige el tiempo que quieras mirar:
@@ -1050,7 +1061,7 @@ function vistaHistorico(){
     <div class="tabla"><table><thead><tr><th>Mes</th><th class="n">Días</th>
       <th class="n">Visitas</th><th class="n">Venta</th><th class="n">Tareas SAT</th></tr></thead><tbody>
     ${(SERIE.indice.meses||[]).slice().reverse().map(m=>`<tr>
-      <td><span class="cond">${esc(m.mes)}</span>${m.dias<20?' <span class="pill c">a medias</span>':""}${m.imposibles?` <span class="pill a" title="Lecturas de venta con un precio por unidad imposible: apartadas, no sumadas">${num(m.imposibles)} imposibles</span>`:""}</td>
+      <td><span class="cond">${esc(m.mes)}</span>${aMedias(m, ultimoMes)?' <span class="pill c">a medias</span>':""}${m.imposibles?` <span class="pill a" title="Lecturas de venta con un precio por unidad imposible: apartadas, no sumadas">${num(m.imposibles)} ${m.imposibles===1?"imposible":"imposibles"}</span>`:""}</td>
       <td class="n" data-et="Días">${num(m.dias)}</td>
       <td class="n" data-et="Visitas">${num(m.visitas)}</td>
       <td class="n" data-et="Venta">${eur(m.importe)}</td>
@@ -1078,7 +1089,7 @@ function pintaCifrasPeriodo(){
       <div class="kpi"><div class="et">Visitas</div><div class="vl">${num(T.servicio.visitas)}</div>
         <div class="nt">de persona</div></div>
       <div class="kpi"><div class="et">Venta</div><div class="vl">${eur(T.venta.importe)}</div>
-        <div class="nt">${T.venta.fuentes.includes("visita_ventas")?"del parte: parcial":"telemetría"}${T.venta.imposibles?` · ${num(T.venta.imposibles)} lecturas imposibles apartadas`:""}</div></div>
+        <div class="nt">${T.venta.fuentes.includes("visita_ventas")?"del parte: parcial":"telemetría"}${T.venta.imposibles?` · ${num(T.venta.imposibles)} ${T.venta.imposibles===1?"lectura imposible apartada":"lecturas imposibles apartadas"}`:""}</div></div>
       <div class="kpi"><div class="et">Cargado</div><div class="vl">${eur(T.servicio.carga.valor)}</div>
         <div class="nt">${num(T.servicio.carga.unidades)} unidades</div></div>
       <div class="kpi"><div class="et">Merma</div>
