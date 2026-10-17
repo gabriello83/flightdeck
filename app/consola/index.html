@@ -238,7 +238,8 @@ async function api(metodo, ruta, cuerpo){
   const o = {method: metodo, credentials: "same-origin"};
   if(cuerpo !== undefined){ o.headers = {"content-type":"application/json"}; o.body = JSON.stringify(cuerpo); }
   const r = await fetch(ruta, o);
-  if(r.status === 401){ location.href = "/"; throw new Error("sin sesion"); }
+  // Sin sesion se va a la entrada; la promesa no se resuelve, para que no salga ningun aviso de error mientras navega.
+  if(r.status === 401){ location.href = "/"; return new Promise(() => {}); }
   let d = {};
   try{ d = await r.json(); }catch(e){}
   if(!r.ok) throw new Error(d.error || `Error ${r.status}`);
