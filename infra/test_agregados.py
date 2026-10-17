@@ -311,6 +311,15 @@ comprueba("cada maquina de la lista, con su ubicacion del censo",
           {x[2]: x[7] for x in _ra["dias"][_ayer]["visitas"]}.get("A1"), "Hall")
 comprueba("sin calendario de festivos subido, se dice (null)", _ri["festivos"], None)
 
+print("\nLa pagina de furgonetas (docs/58): un fichero por perfil, con su ambito")
+_fi = json.loads(gzip.decompress(ALMACEN["cabina/interno/furgonetas.json.gz"]))
+_fa = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/furgonetas.json.gz"]))
+comprueba("las mismas furgonetas que el cuadrado, en cada perfil",
+          (_fi["dias"][_ayer]["activas"], _fa["dias"][_ayer]["activas"]),
+          (op_int["dias"][_ayer]["furgonetas"]["activas"], op_air["dias"][_ayer]["furgonetas"]["activas"]))
+comprueba("AIRBUS no ve visitas de fuera de su ambito",
+          _fa["dias"][_ayer]["visitas"] <= _fi["dias"][_ayer]["visitas"], True)
+
 print("\nLos almacenes por dentro (docs/54)")
 _al = json.loads(gzip.decompress(ALMACEN["cabina/interno/almacenes.json.gz"]))
 _sev = {p["cod"]: p for p in _al["almacenes"][0]["productos"]}

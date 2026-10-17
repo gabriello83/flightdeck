@@ -148,6 +148,11 @@ class DiaOperativo:
         # llegan en otro informe y en cualquier orden.
         self.partes_pdv = {}         # parte_id -> pdv, solo visitas reales
         self.partes_con_lineas = set()
+        # Para la pagina de furgonetas (docs/58): que hizo cada vehiculo ese dia,
+        # y quien visito sin vehiculo informado. Una entrada por vehiculo o por
+        # reponedor, con conjuntos: no guarda filas.
+        self.furgos = {}             # vehiculo -> {"v","p","e","d","r","min","ini","fin"}
+        self.sin_furgo = {}          # (delegacion, reponedor) -> {"v","p","r","x"}
 
     def come_partes(self, filas):
         for p in filas:
@@ -172,10 +177,35 @@ class DiaOperativo:
                     if antes is None or (x["h"] and (not antes["h"] or x["h"] < antes["h"])):
                         self.visita_de[pdv] = x
                 v = R.v(p, "vehiculo", "")
+                emp = str(R.v(p, "empleado", "") or "").strip()
+                ruta = str(R.v(p, "ruta", "") or "").strip()
                 if vehiculo_real(v):
-                    self.vehiculos.add(str(v).strip())
+                    v = str(v).strip()
+                    self.vehiculos.add(v)
+                    f = self.furgos.setdefault(v, {"v": 0, "p": set(), "e": set(), "d": set(),
+                                                   "r": set(), "min": 0.0, "ini": "", "fin": ""})
+                    f["v"] += 1
+                    for k, x in (("p", pdv), ("e", emp), ("d", deleg), ("r", ruta)):
+                        if x:
+                            f[k].add(x)
+                    m = R.v(p, "minutos", None)
+                    try:
+                        f["min"] += float(m) if m not in (None, "") else 0.0
+                    except (TypeError, ValueError):
+                        pass
+                    h = hora(R.v(p, "fecha_ini", ""))
+                    if h:
+                        f["ini"] = min(f["ini"] or h, h)
+                        f["fin"] = max(f["fin"], h)
                 else:
                     self.visitas_sin_vehiculo += 1
+                    s = self.sin_furgo.setdefault((deleg, emp), {"v": 0, "p": set(), "r": set(), "x": set()})
+                    s["v"] += 1
+                    if pdv:
+                        s["p"].add(pdv)
+                    if ruta:
+                        s["r"].add(ruta)
+                    s["x"].add(str(v or "").strip() or "(vacío)")
             elif es_lectura_remota(p):
                 m = R.v(p, "matricula", "")
                 if m:
@@ -561,6 +591,33 @@ class Operativo:
                       "cada festivo y cada día laborable flojo con el día normal de su delegación."),
         }
 
+    def detalle_furgonetas(self, perfil_id, anterior=None):
+        """El fichero de la pagina de furgonetas (docs/58).
+
+        Cada dia, vehiculo a vehiculo, lo que hizo: visitas, puntos de venta,
+        reponedores, delegacion y rutas; y las visitas sin vehiculo informado,
+        por reponedor, que son las que el cuadrado no puede contar como
+        furgoneta. Acumula como el informe, DIAS_GUARDADOS dias.
+        """
+        dias = dict((anterior or {}).get("dias") or {})
+        for f, d in self.dias.items():
+            if d is not None:
+                dias[f] = furgonetas_del_dia(d)
+        dias = dict(sorted(dias.items())[-DIAS_GUARDADOS:])
+        return {
+            "generado": datetime.datetime.utcnow().isoformat() + "Z",
+            "perfil": perfil_id,
+            "ultimo_dia": max(dias) if dias else None,
+            "dias": dias,
+            "_nota": ("Cada día, los vehículos con alguna visita real en los partes de VenCloud. "
+                      "vehiculos: [matrícula, delegación(es), ruta(s), reponedor(es), visitas, "
+                      "puntos de venta, minutos de visita, primera visita, última visita]. "
+                      "sin_vehiculo: [delegación, reponedor, ruta(s), visitas, puntos de venta, "
+                      "lo que traía el campo vehículo]: VenCloud rellena con «xxxx-xxx» el "
+                      "vehículo que no se informó, y eso no es una furgoneta. "
+                      "delegaciones: [delegación, furgonetas, visitas, visitas sin vehículo]."),
+        }
+
     def fichero(self, perfil_id, anterior=None):
         """El fichero del perfil: los dias de esta noche sobre los que ya habia.
 
@@ -653,6 +710,34 @@ MIN_DIAS_NORMALES = 3
 HECHA, PENDIENTE, FUERA = "HECHA", "PENDIENTE", "FUERA DE RUTA"
 SIN_LINEAS = ("No ha llegado ninguna línea de reposición de ese día (A2): sin ellas no se "
               "sabe qué visita fue un pasaje vacío.")
+
+
+def furgonetas_del_dia(d):
+    """Un dia de la pagina de furgonetas: los vehiculos, las visitas sin
+    vehiculo y el resumen por delegacion. Las furgonetas de una delegacion son
+    las distintas que visitaron alli; una que paso por dos cuenta en las dos,
+    y el total es el de distintas, como el cuadrado."""
+    junta = lambda xs: " · ".join(sorted(xs, key=lambda x: x.lower()))
+    vehiculos = [[v, junta(f["d"]), junta(f["r"]), junta(f["e"]), f["v"], len(f["p"]),
+                  round(f["min"]), f["ini"], f["fin"]]
+                 for v, f in d.furgos.items()]
+    vehiculos.sort(key=lambda x: (-x[4], x[0]))
+    sin = [[dl, e, junta(s["r"]), s["v"], len(s["p"]), junta(s["x"])]
+           for (dl, e), s in d.sin_furgo.items()]
+    sin.sort(key=lambda x: (-x[3], x[0], x[1]))
+    por = {}
+    for v, f in d.furgos.items():
+        for dl in f["d"] or {""}:
+            por.setdefault(dl, [set(), 0, 0])[0].add(v)
+    for dl, n in d.visitas_deleg.items():
+        por.setdefault(dl, [set(), 0, 0])[1] = n
+    for (dl, _), s in d.sin_furgo.items():
+        por.setdefault(dl, [set(), 0, 0])[2] += s["v"]
+    delegaciones = sorted(([dl, len(x[0]), x[1], x[2]] for dl, x in por.items()),
+                          key=lambda x: (-x[1], x[0]))
+    return {"activas": len(d.vehiculos), "visitas": d.visitas,
+            "visitas_sin_vehiculo": d.visitas_sin_vehiculo,
+            "vehiculos": vehiculos, "sin_vehiculo": sin, "delegaciones": delegaciones}
 
 
 def pasajes_vacios(d):

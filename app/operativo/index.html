@@ -189,18 +189,19 @@ $("#bSalir").addEventListener("click", async ()=>{
 
 /* A donde lleva cada cuadrado: la sesion del panel y el panel dentro de ella.
    Gabriele decidira en un segundo paso que se ve al pulsar cada uno; hasta
-   entonces, la seccion que ya existe. Furgonetas no tiene todavia ninguna
-   seccion en el panel, y se dice en vez de llevar a cualquier sitio. */
+   entonces, la seccion que ya existe. Las que tienen pagina propia y `dia`
+   se abren en el dia del cuadrado. */
 const DESTINO = {
   // Rutas tiene su propia pagina: delegaciones, rutas, puntos de venta y festivos (docs/55).
   rutas:        {url:"/rutas/", dia:true},
   // Incidencias tiene su propia pagina, como el Power BI de Gabriele (docs/56).
-  averias:      {url:"/incidencias/"},
+  averias:      {url:"/incidencias/", dia:true},
   // Las devoluciones de dinero, con su pagina de tablas y graficos (docs/57).
   devoluciones: {url:"/devoluciones/"},
   // Almacenes tiene su propia pagina: productos, fotos, packs y bajo minimo (docs/54).
   almacenes:    {url:"/almacenes/"},
-  furgonetas:   null,
+  // Furgonetas tiene su propia pagina: vehiculo a vehiculo y visitas sin vehiculo (docs/58).
+  furgonetas:   {url:"/furgonetas/", dia:true},
   pdvs:         {sesion:"instalaciones", panel:"censo"},
   ventas:       {sesion:"venta_consumo", panel:"recaudacion"},
   reposiciones: {sesion:"venta_consumo", panel:"carga"},
@@ -321,7 +322,7 @@ function pinta(){
       + `<div class="vl">${c.sin ? "Sin dato" : c.vl}</div>`
       + `<div class="sub">${esc(c.sin || c.sub)}</div>`
       + `<div class="pie"><span class="foto">${FOTO.has(id) ? "foto de la última carga" : ""}</span>`
-      + `<span>${va ? (dest.url ? "Ver detalle →" : "Ver sección →") : dest ? "" : "Sin sección todavía"}</span></div>`;
+      + `<span>${va ? (propia || dest.url ? "Ver detalle →" : "Ver sección →") : dest ? "" : "Sin sección todavía"}</span></div>`;
     if(va) el.setAttribute("aria-label", `${TITULO[id]}: ${c.sin ? c.sin : c.vl}. Abrir la sección.`);
     cont.appendChild(el);
   });

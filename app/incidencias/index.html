@@ -193,7 +193,9 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
         <option value="ultimo">Último mes</option>
         <option value="mes">Mes corriente</option>
         <option value="libre">Intervalo libre</option>
+        <option value="dia">Cerradas un día</option>
       </select></label>
+      <label class="solo-panel undia" hidden>Día <input type="date" id="dia"></label>
       <label class="solo-panel libre" hidden>Desde <input type="date" id="desde"></label>
       <label class="solo-panel libre" hidden>Hasta <input type="date" id="hasta"></label>
       <label class="solo-panel">Estado <select id="estado">
@@ -316,6 +318,12 @@ function periodo(){
   if(p === "ultimo") return {d: inicioMes(fm,1), h: finMes(fm,1), pd: inicioMes(fm,2), ph: finMes(fm,2), nombre:"el mes de antes"};
   if(p === "tres") return {d: inicioMes(fm,2), h: fm, pd: inicioMes(fm,5), ph: mismoDia(fm,3), nombre:"los tres meses de antes"};
   if(p === "anio") return {d: inicioMes(fm,11), h: fm, pd: inicioMes(fm,23), ph: mismoDia(fm,12), nombre:"el año de antes"};
+  if(p === "dia"){
+    /* Lo que cuenta el cuadrado del informe general: las técnicas que se
+       cerraron ese día, por su fecha de cierre y no por la de entrada. */
+    const d = $("#dia").value || fm, pd = sumaDias(d, -1);
+    return {d, h: d, pd, ph: pd, nombre:"el día anterior", cierre:true};
+  }
   let d = $("#desde").value || inicioMes(fm), h = $("#hasta").value || fm;
   if(h < d) [d, h] = [h, d];
   const largo = Math.round((deIso(h) - deIso(d)) / 864e5) + 1;
@@ -347,6 +355,7 @@ function enEstado(r){
   return e === "abierta" ? abierta(r) : !abierta(r);
 }
 const entre = (r, d, h) => fila(r).dia >= d && fila(r).dia <= h;
+const cerradaEntre = (r, d, h) => !abierta(r) && r.x && r.x.slice(0,10) >= d && r.x.slice(0,10) <= h;
 
 function opciones(sel, valores, todas, etiqueta){
   const antes = sel.value;
@@ -400,25 +409,31 @@ function delta(actual, previo, modo, mejorSiSube){
 }
 function pintaPanel(){
   const p = periodo(), desde = D.desde || p.d;
-  const lugar = INC.filter(r=>enLugar(r) && enEstado(r));
-  const ahora = lugar.filter(r=>entre(r, p.d, p.h));
+  const lugar = INC.filter(r=>enLugar(r) && (p.cierre ? tecnica(r) : enEstado(r)));
+  const en = p.cierre ? cerradaEntre : entre;
+  const ahora = lugar.filter(r=>en(r, p.d, p.h));
   const hayPrevio = p.pd >= desde;
-  const antes = hayPrevio ? lugar.filter(r=>entre(r, p.pd, p.ph)) : null;
+  const antes = hayPrevio ? lugar.filter(r=>en(r, p.pd, p.ph)) : null;
   const a = medidas(ahora), b = antes ? medidas(antes) : {};
-  $("#rango").textContent = `Del ${fechaCorta(p.d)} al ${fechaCorta(p.h)}, por la fecha en que entró cada incidencia.`
+  $("#rango").textContent = (p.cierre
+    ? `Las averías técnicas cerradas el ${fechaCorta(p.d)}, por la fecha de cierre: lo mismo que cuenta el cuadrado del informe general.`
+    : `Del ${fechaCorta(p.d)} al ${fechaCorta(p.h)}, por la fecha en que entró cada incidencia.`)
     + (p.d < desde ? ` Ojo: los datos empiezan el ${fechaCorta(desde)}.` : "");
-  const soloAbiertas = $("#estado").value === "abierta";
+  const soloAbiertas = !p.cierre && $("#estado").value === "abierta";
   const conEstado = D.estado_al_dia;
   const kpi = (et, vl, nt, dl, color) => `<div class="kpi ${esc(color||"")}"><div class="et">${esc(et)}</div>
     <div class="vl">${vl}</div><div class="nt">${nt}</div>${dl||""}</div>`;
   const sinEstado = "Sin dato: falta el informe M13";
   $("#kpis").innerHTML =
-    kpi("Total de incidencias", num(a.total),
+    (p.cierre
+      ? kpi("Averías cerradas", num(a.total), "técnicas, cerradas ese día", delta(a.total, antes ? b.total : null, "pct", false))
+        + kpi("Tasa de resolución", "—", "no aplica: aquí todas están cerradas", "")
+      : kpi("Total de incidencias", num(a.total),
         conEstado ? `${num(a.abiertas)} abiertas · ${num(a.cerradas)} cerradas` : "entradas en el periodo",
         delta(a.total, antes ? b.total : null, "pct", false))
     + (conEstado && !soloAbiertas
       ? kpi("Tasa de resolución", fpct(a.tasa), "cerradas sobre el total", delta(a.tasa, antes ? b.tasa : null, "pts", true))
-      : kpi("Tasa de resolución", "—", soloAbiertas ? "no aplica a las abiertas" : sinEstado, ""))
+      : kpi("Tasa de resolución", "—", soloAbiertas ? "no aplica a las abiertas" : sinEstado, "")))
     + (conEstado && !soloAbiertas
       ? kpi("Tiempo de resolución", a.mediana==null ? "—" : `${dec(a.mediana)} h`,
             a.media==null ? "mediana de las cerradas con hora" : `mediana · la media es ${dec(a.media)} h`,
@@ -615,8 +630,9 @@ function pintaHoja(){
   $("#hPanel").hidden = HOJA !== "panel";
   $("#hAbiertas").hidden = HOJA !== "abiertas";
   document.querySelectorAll(".solo-panel").forEach(l => {
-    l.hidden = HOJA !== "panel" || (l.classList.contains("libre") && $("#periodo").value !== "libre"); });
-  $("#estado").disabled = !D.estado_al_dia;
+    l.hidden = HOJA !== "panel" || (l.classList.contains("libre") && $("#periodo").value !== "libre")
+      || (l.classList.contains("undia") && $("#periodo").value !== "dia"); });
+  $("#estado").disabled = !D.estado_al_dia || $("#periodo").value === "dia";
 }
 function pintaTodo(){
   pintaHoja();
@@ -655,15 +671,21 @@ function pintaTodo(){
   const desde = D.desde || D.ultimo_dia;
   const q = new URLSearchParams(location.search);
   const pedido = q.get("periodo");
-  $("#periodo").value = ["anio","tres","ultimo","mes","libre"].includes(pedido) ? pedido
+  /* Desde el cuadrado del informe general se llega con ?dia=: se abre en ese
+     día y por la fecha de cierre, que es lo que cuenta el cuadrado. */
+  const diaPedido = /^\d{4}-\d{2}-\d{2}$/.test(q.get("dia") || "") ? q.get("dia") : null;
+  $("#periodo").value = ["anio","tres","ultimo","mes","libre","dia"].includes(pedido) ? pedido
+    : diaPedido && D.estado_al_dia ? "dia"
     : inicioMes(D.ultimo_dia, 11) >= desde ? "anio" : inicioMes(D.ultimo_dia, 2) >= desde ? "tres" : "ultimo";
   $("#desde").value = inicioMes(D.ultimo_dia); $("#hasta").value = D.ultimo_dia;
-  $("#desde").min = $("#hasta").min = desde; $("#desde").max = $("#hasta").max = D.ultimo_dia;
+  $("#dia").value = diaPedido && diaPedido >= desde && diaPedido <= D.ultimo_dia ? diaPedido : D.ultimo_dia;
+  $("#desde").min = $("#hasta").min = $("#dia").min = desde;
+  $("#desde").max = $("#hasta").max = $("#dia").max = D.ultimo_dia;
   if(q.get("ver") === "abiertas") HOJA = "abiertas";
   pintaFiltros();
   if(q.get("delegacion")){ $("#deleg").value = q.get("delegacion"); pintaFiltros(); }
   document.querySelectorAll(".hojas button").forEach(b=>b.addEventListener("click", ()=>{ HOJA = b.dataset.h; pintaTodo(); }));
-  ["#periodo","#desde","#hasta","#estado"].forEach(s=>$(s).addEventListener("change", pintaTodo));
+  ["#periodo","#desde","#hasta","#dia","#estado"].forEach(s=>$(s).addEventListener("change", pintaTodo));
   $("#zona").addEventListener("change", ()=>{ pintaFiltros(); ELEGIDA = null; pintaTodo(); });
   $("#deleg").addEventListener("change", ()=>{ pintaFiltros(); ELEGIDA = null; pintaTodo(); });
   $("#centro").addEventListener("change", ()=>{ ELEGIDA = null; pintaTodo(); });

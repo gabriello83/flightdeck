@@ -215,6 +215,23 @@ const API = {
         { n: 'E-5', a: d(0), m: 'C1', c: 2, d: 2, o: 2, t: 1, f: 68, tx: 'máquina vacía', u: 'Hall', p: 'C09' }]
     };
   })(),
+  // Las furgonetas (docs/58), con la forma que escribe infra/operativo.py.
+  '/api/furgonetas': {
+    generado: new Date().toISOString(), perfil: 'interno', ultimo_dia: iso(AYER),
+    dias: {
+      [iso(new Date(AYER.getTime() - 7 * 86400000))]: {
+        activas: 3, visitas: 30, visitas_sin_vehiculo: 0,
+        vehiculos: [['1234ABC', 'Madrid - Leganes', 'Ruta Getafe', 'Ana Pérez', 12, 10, 90, '08:00', '13:00']],
+        sin_vehiculo: [], delegaciones: [['Madrid - Leganes', 3, 30, 0]] },
+      [iso(AYER)]: {
+        activas: 2, visitas: 25, visitas_sin_vehiculo: 5,
+        vehiculos: [
+          ['1234ABC', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', 'Ana Pérez', 12, 10, 95, '08:05', '13:40'],
+          ['5678DEF', 'Andalucía - Málaga · Madrid - Leganes', 'Málaga 1', 'Luis Gil', 8, 8, 60, '09:00', '12:10']],
+        sin_vehiculo: [['Andalucía - Málaga', 'Rosa Gil', 'Málaga 2', 5, 4, 'xxxx-xxx']],
+        delegaciones: [['Madrid - Leganes', 2, 15, 0], ['Andalucía - Málaga', 1, 10, 5]] }
+    }
+  },
   // Las devoluciones (docs/57), con la forma que escribe infra/devoluciones.py.
   '/api/devoluciones': (() => {
     const d = (n, h = '09:00') => `${iso(new Date(AYER.getTime() - n * 86400000))} ${h}`;
@@ -804,9 +821,13 @@ const servidor = http.createServer((pet, res) => {
       await pagina.getAttribute('.cuadro[data-id="rutas"]', 'href'), `/rutas/?dia=${iso(AYER)}`);
     comprueba('almacenes lleva a su pagina',
       await pagina.getAttribute('.cuadro[data-id="almacenes"]', 'href'), '/almacenes/');
-    comprueba_que('furgonetas no tiene seccion todavia, y lo dice',
-      (await pagina.evaluate(() => document.querySelector('.cuadro[data-id="furgonetas"]').tagName)) === 'DIV'
-      && (await pagina.textContent('.cuadro[data-id="furgonetas"]')).includes('Sin sección todavía'));
+    comprueba('furgonetas lleva a su pagina, con el dia',
+      await pagina.getAttribute('.cuadro[data-id="furgonetas"]', 'href'), `/furgonetas/?dia=${iso(AYER)}`);
+    comprueba('incidencias lleva a su pagina, con el dia',
+      await pagina.getAttribute('.cuadro[data-id="averias"]', 'href'), `/incidencias/?dia=${iso(AYER)}`);
+    comprueba('los que tienen pagina propia dicen Ver detalle',
+      await pagina.$$eval('#cuadros .cuadro', x => x.filter(c => ['rutas', 'furgonetas', 'averias'].includes(c.dataset.id))
+        .map(c => c.textContent.includes('Ver detalle'))), [true, true, true]);
     await pagina.selectOption('#dia', '2026-10-01');
     comprueba_que('un dia sin plan dice el motivo, no un cero',
       (await pagina.textContent('.cuadro[data-id="rutas"]')).includes('Falta el plan de visitas'));
@@ -818,6 +839,7 @@ const servidor = http.createServer((pet, res) => {
     await Promise.all([pagina.waitForURL('**/incidencias/**'), pagina.click('.cuadro[data-id="averias"]')]);
     await pagina.waitForSelector('#kpis .kpi');
     comprueba_que('y al pulsarlo abre su pagina', pagina.url().includes('/incidencias/'), pagina.url());
+    comprueba('en el dia del cuadrado, por la fecha de cierre', await pagina.inputValue('#periodo'), 'dia');
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
@@ -884,6 +906,8 @@ const servidor = http.createServer((pet, res) => {
       sub.includes('975 de 2254') && sub.includes('538 diferencias con Nayax, Prodelfi y Nebula'));
     comprueba('lleva a la pagina de telemetria, con el dia',
       await pagina.getAttribute('.cuadro[data-id="telemetria"]', 'href'), `/telemetria/?dia=${iso(AYER)}`);
+    comprueba_que('y dice Ver detalle, no Ver seccion: es su pagina',
+      (await pagina.textContent('.cuadro[data-id="telemetria"]')).includes('Ver detalle'));
     await Promise.all([pagina.waitForURL('**/telemetria/**'), pagina.click('.cuadro[data-id="telemetria"]')]);
     await pagina.waitForSelector('#tabla table');
     comprueba('pestañas: Nayax, Prodelfi, solo en VenCloud y las que no estan en VenCloud',
@@ -1095,6 +1119,23 @@ const servidor = http.createServer((pet, res) => {
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
 
+    // Desde el cuadrado del informe general llega con ?dia=: las tecnicas
+    // cerradas ese dia, lo mismo que cuenta el cuadrado.
+    {
+      const dia = n => iso(new Date(AYER.getTime() - n * 86400000));
+      const c = await abre(`/incidencias/?dia=${dia(1)}`);
+      await c.pagina.waitForSelector('#kpis .kpi');
+      const k = async i => c.pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent);
+      comprueba('con ?dia= abre en ese dia, por cierre', [await c.pagina.inputValue('#periodo'), await c.pagina.inputValue('#dia')], ['dia', dia(1)]);
+      comprueba('una tecnica cerrada ese dia, en 2 h: SLA 100 %', [await k(1), await k(4)], ['1', '100 %']);
+      comprueba_que('y dice que es lo que cuenta el cuadrado', (await c.pagina.textContent('#rango')).includes('cuadrado del informe general'));
+      await c.pagina.fill('#dia', dia(3));
+      await c.pagina.dispatchEvent('#dia', 'change');
+      comprueba('otro dia: la de 30 h, fuera de SLA', [await k(1), await k(4)], ['1', '0 %']);
+      comprueba('sin un solo error en la consola del navegador', c.errores, []);
+      await c.pagina.close();
+    }
+
     // Sin M13 no se ensena un estado que no se sabe: se dice por que.
     const antes = API['/api/incidencias'];
     API['/api/incidencias'] = { ...antes, estado_al_dia: false, fuente: 'D7 · EXT_SAT_AVERIAS y D8 · EXT_SAT_EVENTOS',
@@ -1111,6 +1152,42 @@ const servidor = http.createServer((pet, res) => {
     comprueba('sin un solo error en la consola del navegador', b.errores, []);
     await b.pagina.close();
     API['/api/incidencias'] = antes;
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nLas furgonetas (docs/58)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre(`/furgonetas/?dia=${iso(AYER)}`);
+    await pagina.waitForSelector('#kpis .kpi');
+    comprueba('arranca en el dia que llega', await pagina.inputValue('#dia'), iso(AYER));
+    const kpi = async i => pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent);
+    comprueba('furgonetas, visitas, por furgoneta y sin vehiculo', [await kpi(1), await kpi(2), await kpi(3), await kpi(4)],
+      ['2', '25', '10', '5']);
+    comprueba('una fila por furgoneta, la de mas visitas primero',
+      await pagina.$$eval('#tabla tbody tr .mat', x => x.map(e => e.textContent)), ['1234ABC', '5678DEF']);
+    comprueba_que('el nombre de la ruta se escapa', (await pagina.textContent('#tabla')).includes('Ruta Getafe <Airbus>'));
+    comprueba('y los dias con visitas de los ultimos',
+      await pagina.$eval('#tabla tbody tr:first-child td:last-child', e => e.textContent), '2');
+    await pagina.selectOption('#deleg', 'Andalucía - Málaga');
+    comprueba('la delegacion filtra: la que paso por dos sale en las dos',
+      [await pagina.$$eval('#tabla tbody tr .mat', x => x.map(e => e.textContent)), await kpi(1), await kpi(4)],
+      [['5678DEF'], '1', '5']);
+    await pagina.click('#pestanas button[data-p="sin"]');
+    comprueba_que('las visitas sin vehiculo, por reponedor', (await pagina.textContent('#tabla')).includes('Rosa Gil'));
+    await pagina.selectOption('#deleg', '');
+    await pagina.click('#pestanas button[data-p="deleg"]');
+    comprueba('por delegacion', await pagina.$$eval('#tabla tbody tr', x => x.length), 2);
+    comprueba('el dia a dia, con los dos dias', await pagina.$$eval('#dias .fb', x => x.length), 2);
+    await pagina.setViewportSize({ width: 380, height: 800 });
+    comprueba('en movil no se sale de la pantalla',
+      await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await pagina.emulateMedia({ colorScheme: 'dark' });
+    comprueba_que('en oscuro el fondo es oscuro',
+      (await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(18, 18, 17)');
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 

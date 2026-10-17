@@ -15,10 +15,10 @@ a la sección del panel que ya existe.
 | cuadrado | dato principal | de dónde sale | color | lleva a |
 |---|---|---|---|---|
 | Rutas | % de visitas previstas que se hicieron | plan de visitas (D12) contra visitas reales, por punto de venta | semáforo | su página, `/rutas/` (docs/55) |
-| Incidencias (antes Averías) | % de averías cerradas ese día en menos de 24 h | SAT: fallos técnicos (sin serie E ni ficticia), apertura y cierre de sus eventos | semáforo | Su página, /incidencias/ (docs/56) |
+| Incidencias (antes Averías) | % de averías cerradas ese día en menos de 24 h | SAT: fallos técnicos (sin serie E ni ficticia), apertura y cierre de sus eventos | semáforo | Su página, `/incidencias/?dia=`, en «Cerradas un día» (docs/56) |
 | Devoluciones | devoluciones de dinero del mes, hasta ayer, contra los mismos días del mes anterior | SAT (M13): operaciones de devolución, sin la ficticia | propio | Su página, /devoluciones/ (docs/57) |
 | Almacenes | valor del producto en almacén | último cierre mensual de inventario (C9, tipo A) | propio | `/almacenes/` (docs/54) |
-| Furgonetas | furgonetas con visitas ese día | vehículo de las visitas reales, sin «xxxx-xxx» | propio | todavía sin sección |
+| Furgonetas | furgonetas con visitas ese día | vehículo de las visitas reales, sin «xxxx-xxx» | propio | Su página, `/furgonetas/?dia=` (docs/58) |
 | Puntos de venta activos | puntos de venta en estado 1 | censo (M5) de esa noche | propio | Instalaciones · Censo |
 | Ventas | venta del día en euros | la misma cuenta que la serie: telemetría, y si no hay, el parte | propio | Venta y consumo · Recaudación |
 | Reposiciones | unidades de producto repuestas, por clase de máquina | líneas CM de la reposición; los carriles de café van aparte | propio | Venta y consumo · Carga |

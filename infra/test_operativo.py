@@ -226,6 +226,38 @@ comprueba("sin plan se dice, y quedan las visitas por delegacion",
 comprueba("la hora del parte", (OP.hora("2026-10-09 07:41:12"), OP.hora("2026-10-09T18:02"),
                                 OP.hora("2026-10-09"), OP.hora(None)), ("07:41", "18:02", "", ""))
 
+print("\nLa pagina de furgonetas (docs/58): vehiculo a vehiculo")
+op = OP.Operativo([DIA])
+d = op.dia(DIA)
+d.come_partes([dict(parte("P1", "Madrid", "R1", ini="2026-10-09 11:00:00"), vehiculo="1111AAA"),
+               dict(parte("P2", "Madrid", "R2", "Pepe", ini="2026-10-09 08:05:00"), vehiculo="1111AAA"),
+               dict(parte("P2", "Madrid", "R2", "Pepe", pid="x2", ini="2026-10-09 08:40:00"), vehiculo="1111AAA"),
+               dict(parte("S1", "Sevilla", "S", "Luis"), vehiculo="2222BBB"),
+               dict(parte("S2", "Sevilla", "S", "Rosa"), vehiculo="xxxx-xxx"),
+               dict(parte("S3", "Sevilla", "S", "Rosa"), vehiculo=""),
+               sistema("MX")])
+fu = op.detalle_furgonetas("interno")
+r = fu["dias"][DIA]
+comprueba("las mismas cifras que el cuadrado",
+          (r["activas"], r["visitas"], r["visitas_sin_vehiculo"]),
+          tuple(op.fichero("interno")["dias"][DIA]["furgonetas"][k]
+                for k in ("activas", "visitas", "visitas_sin_vehiculo")))
+comprueba("cada furgoneta, con delegacion, rutas, reponedores, visitas, pdv, minutos y horas",
+          r["vehiculos"], [["1111AAA", "Madrid", "R1 · R2", "Ana · Pepe", 3, 2, 18, "08:05", "11:00"],
+                           ["2222BBB", "Sevilla", "S", "Luis", 1, 1, 6, "09:30", "09:30"]])
+comprueba("las visitas sin vehiculo, por reponedor, con lo que traia el campo",
+          r["sin_vehiculo"], [["Sevilla", "Rosa", "S", 2, 2, "(vacío) · xxxx-xxx"]])
+comprueba("por delegacion: furgonetas distintas, visitas y sin vehiculo",
+          r["delegaciones"], [["Madrid", 1, 3, 0], ["Sevilla", 1, 3, 2]])
+viejo = {"dias": {"2026-07-01": {"activas": 9}, "2026-10-08": {"activas": 5}}}
+fu = op.detalle_furgonetas("interno", viejo)
+comprueba("acumula los dias de antes, hasta DIAS_GUARDADOS",
+          ("2026-10-08" in fu["dias"], fu["ultimo_dia"]), (True, DIA))
+comprueba("y deja caer los que pasan de DIAS_GUARDADOS",
+          "2026-07-01" in op.detalle_furgonetas("interno", dict(dias={**viejo["dias"], **{
+              f"2026-09-{n:02d}": {} for n in range(1, 31)}, **{f"2026-08-{n:02d}": {} for n in range(1, 32)}}))["dias"],
+          False)
+
 print("\nEl fichero de rutas guarda las cifras y solo una semana de listas")
 viejo = {"dias": {"2026-08-01": {"total": {}, "visitas": [["X"]]},
                   "2026-08-02": {"total": {}, "no_visitados": [["X"]], "fuera": []}}}
