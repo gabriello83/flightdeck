@@ -337,6 +337,9 @@ CUADRADOS = (
     # Tarifas contra venta real (docs/52): es configuracion de la maquina, como
     # la tarifa que falta en el bloque de instalaciones.
     ("tarifas", "instalaciones"),
+    # Revision de clientes (docs/59): sin planograma, sin tarifa y precio
+    # distinto, maquina a maquina. Tambien configuracion de la maquina.
+    ("revision", "instalaciones"),
 )
 
 

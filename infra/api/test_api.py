@@ -526,8 +526,8 @@ comprueba("y el fichero es el de su perfil, aunque pida otro",
           cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA,
                           query={"perfil": "interno"}))["ultimo_dia"], "2026-10-12")
 o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_JEFE))
-comprueba("el administrador ve los diez, tarifas la ultima", (len(o["cuadrados"]), o["cuadrados"][-1]),
-          (10, "tarifas"))
+comprueba("el administrador ve los once, revision la ultima", (len(o["cuadrados"]), o["cuadrados"][-1]),
+          (11, "revision"))
 comprueba("almacenes incluido", o["foto"]["almacenes"]["valor"], 500000.0)
 del falsos.OBJETOS["cabina/ope-sur/operativo.json"]
 comprueba("sin calcular todavia, 503",
@@ -648,6 +648,26 @@ comprueba("y no hay parametro con el que pedir otra",
 del falsos.OBJETOS["cabina/ope-sur/incidencias.json.gz"]
 comprueba("sin calcular todavia, 503", _inc(cookie=COOKIE_OLGA), 503)
 del falsos.OBJETOS["cabina/interno/incidencias.json.gz"]
+
+print("\nLa revision de clientes (docs/59): el fichero del perfil de la sesion, comprimido")
+falsos.OBJETOS["cabina/interno/revision.json.gz"] = gzip.compress(json.dumps({"perfil": "interno"}).encode())
+
+
+def _rev(**kw):
+    x = llama("GET", "/api/revision", **kw)
+    if x["statusCode"] != 200:
+        return x["statusCode"]
+    return (x["headers"].get("content-encoding"),
+            json.loads(gzip.decompress(_b64i.b64decode(x["body"])))["perfil"])
+
+
+comprueba("un cliente no la ve", _rev(cookie=COOKIE_ANA), 403)
+comprueba("operaciones sin la sesion de instalaciones tampoco", _rev(cookie=COOKIE_OLGA), 403)
+comprueba("el administrador ve la de su perfil, comprimida", _rev(cookie=COOKIE_JEFE), ("gzip", "interno"))
+comprueba("y no hay parametro con el que pedir otra",
+          _rev(cookie=COOKIE_JEFE, query={"perfil": "ope-sur"}), ("gzip", "interno"))
+del falsos.OBJETOS["cabina/interno/revision.json.gz"]
+comprueba("sin calcular todavia, 503", _rev(cookie=COOKIE_JEFE), 503)
 
 print("\nLa pagina de devoluciones (docs/57): igual, con su propio fichero")
 falsos.OBJETOS["cabina/ope-sur/devoluciones.json.gz"] = gzip.compress(json.dumps({"perfil": "ope-sur"}).encode())

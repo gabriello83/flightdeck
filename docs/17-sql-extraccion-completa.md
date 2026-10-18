@@ -2005,6 +2005,38 @@ where a.obsoleto = false
                  and d.fecha >= current_date - 120)
 ```
 
+## M14Z · EXT_SONDA_PLANOGRAMA  *(sin parámetros, se lanza una vez)*
+
+No es un informe de datos: es la pregunta «¿guarda VenCloud **quién** crea un planograma, y
+**cuándo**?». La revisión de clientes ([59-la-revision-de-clientes.md](59-la-revision-de-clientes.md))
+ya ve cada mañana qué máquinas han pasado de no tener planograma a tenerlo, comparando una noche
+con la anterior, pero el usuario no está en ningún informe de los que se bajan. Puede estar en
+una columna de alta o de modificación de las propias tablas del planograma, o en una tabla de
+registro aparte. Esta sonda lista las columnas de las tres tablas del planograma y las de toda
+tabla cuyo nombre suene a registro, a histórico o a usuarios. Se lanza una vez, se sube el
+Excel, y con lo que diga se escribe el informe del usuario.
+
+```sql
+select
+  c.table_schema as esquema,
+  c.table_name   as tabla,
+  c.column_name  as columna,
+  c.data_type    as tipo
+from information_schema.columns c
+where c.table_schema not in ('pg_catalog', 'information_schema')
+  and (
+        (c.table_schema = 'recursos'
+         and c.table_name in ('maquinas', 'maquinascanales', 'maquinascarriles'))
+     or c.table_name ilike '%planog%'
+     or c.table_name ilike '%log%'
+     or c.table_name ilike '%audit%'
+     or c.table_name ilike '%histor%'
+     or c.table_name ilike '%usuario%'
+     or c.table_name ilike '%cambio%'
+  )
+order by c.table_schema, c.table_name, c.ordinal_position
+```
+
 ## M11 · EXT_MAESTRO_EMPLEADOS  *(sin parámetros)*
 
 Informe 190. Los empleados con su cargo y sus marcas de rol, sin teléfono, email ni DNI. El

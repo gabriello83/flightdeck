@@ -71,6 +71,7 @@ import serie as S
 import cuadro as CU
 import operativo as OP
 import tarifas as TA
+import revision as RV
 import telemetria as TE
 import almacenes as AL
 import incidencias as IN
@@ -119,6 +120,9 @@ CARPETA_FOTOS = "cabina/_articulos/fotos/"
 # cobrado, seis meses (tarifas.py explica por que no se relee todo).
 CLAVE_TARIFAS = os.environ.get("TARIFAS", "maestros/tarifas/m_tarifas.json.gz")
 CLAVE_ESTADO_TARIFAS = "cabina/_tarifas/estado.json.gz"
+# Las maquinas sin planograma de la noche anterior, para saber cuales se han
+# creado (revision.py explica por que hace falta guardarlas).
+CLAVE_ESTADO_PLANOGRAMAS = "cabina/_revision/planogramas.json.gz"
 # Que hace el observador de tarifas con cada fuente. Va con el fichero ENTERO,
 # antes de filtrar por perfil: el estado es uno para todos.
 TARIFAS_COME = {"lineas": "come_cargas", "telemetria": "come_telemetria",
@@ -1188,7 +1192,7 @@ def escribe_tarifas(acu, op, tarifas, censo, observador, hoy):
     """
     if tarifas is None:
         op.foto["tarifas"] = {"sin_dato": TA.SIN_MAESTRO}
-        return {"sin_dato": TA.SIN_MAESTRO}
+        return {"sin_dato": TA.SIN_MAESTRO}, None
     resumen, detalle = TA.calcula(censo, tarifas, observador, hoy, OP.semaforo)
     base = f"cabina/{acu.perfil['id']}/tarifas"
     for num, d in detalle.items():
@@ -1197,7 +1201,19 @@ def escribe_tarifas(acu, op, tarifas, censo, observador, hoy):
     op.foto["tarifas"] = TA.cuadrado(resumen, OP.semaforo)
     t = resumen["total"]
     return {"pct": t["pct"], "controlados": t["controlados"], "sin_tarifa": t["sin_tarifa"],
-            "sin_dato": t["sin_dato"], "centros": len(detalle)}
+            "sin_dato": t["sin_dato"], "centros": len(detalle)}, detalle
+
+
+def escribe_revision(acu, op, censo, detalle_tarifas, planogramas, hoy):
+    """La revision de clientes de un perfil (docs/59): su pagina y su cuadrado.
+
+    Va despues de las tarifas: las tablas de sin tarifa y precio distinto son
+    su detalle, maquina a maquina.
+    """
+    fichero = RV.calcula(censo, detalle_tarifas, planogramas, hoy)
+    escribe_comprimido(f"cabina/{acu.perfil['id']}/revision.json.gz", fichero)
+    op.foto["revision"] = RV.cuadrado(fichero, hoy)
+    return op.foto["revision"]
 
 
 def escribe_incidencias(acumuladores, operativos, incidencias, mapa, hoy):
@@ -1496,25 +1512,38 @@ def lambda_handler(event, context):
     escribe_comprimido(CLAVE_ESTADO_TARIFAS, observador.estado())
 
     escritos, cuadros, resumen_operativo, resumen_tarifas, resumen_almacenes = [], {}, {}, {}, {}
+    resumen_revision = {}
     if not historico:
         rutas = _filas(_json_de(CLAVE_RUTAS))
         maestro_tarifas = _filas(_json_de(CLAVE_TARIFAS))
         tarifas = TA.Tarifas(maestro_tarifas) if maestro_tarifas else None
-        censo = _filas(_json_de(CLAVE_CENSO)) if tarifas else []
+        censo = _filas(_json_de(CLAVE_CENSO))
+        # Los planogramas creados se miran en toda la red, una vez: cada perfil
+        # se queda luego con sus maquinas.
+        planogramas = RV.planogramas(_json_de(CLAVE_ESTADO_PLANOGRAMAS), censo, hoy) \
+            if censo else None
+        if planogramas is not None:
+            escribe_comprimido(CLAVE_ESTADO_PLANOGRAMAS, planogramas)
         escribe_incidencias(acumuladores, operativos, incidencias, mapa, hoy)
         for acu in acumuladores:
             op = operativos[acu.perfil["id"]]
             op.pon_almacenes(OP.almacenes(op.balance, rutas, acu.ambito))
-            resumen_tarifas[acu.perfil["id"]] = escribe_tarifas(
-                acu, op, tarifas, [f for f in censo if en_ambito(f, acu.ambito, mapa)],
-                observador, hoy)
+            censo_perfil = [f for f in censo if en_ambito(f, acu.ambito, mapa)]
+            resumen_tarifas[acu.perfil["id"]], detalle_tarifas = escribe_tarifas(
+                acu, op, tarifas, censo_perfil, observador, hoy)
+            if censo:
+                resumen_revision[acu.perfil["id"]] = escribe_revision(
+                    acu, op, censo_perfil, detalle_tarifas, planogramas, hoy)
+            else:
+                op.foto["revision"] = {"sin_dato": "Falta el censo de instalaciones "
+                                                   "(EXT_INSTALACIONES) de esta noche."}
         resumen_almacenes = escribe_almacenes(acumuladores, operativos, existencias, rutas, hoy)
         festivos = _json_de(CLAVE_FESTIVOS)
         # Donde esta cada maquina dentro del centro («Planta 4»), para la lista de
         # la pagina de rutas: el plan y los partes no lo traen, el censo si.
         ubicaciones = {str(R.v(f, "matricula", "") or "").strip():
                        str(R.v(f, "ubicacion", "") or "").strip()[:60]
-                       for f in _filas(_json_de(CLAVE_CENSO))
+                       for f in censo
                        if R.v(f, "matricula", "") and R.v(f, "ubicacion", "")}
         for acu in acumuladores:
             op = operativos[acu.perfil["id"]]
@@ -1613,6 +1642,9 @@ def lambda_handler(event, context):
         # Los almacenes por dentro (docs/54): productos y bajo minimo por perfil,
         # y si han llegado el maestro de articulos y las fotos.
         "almacenes": resumen_almacenes,
+        # La revision de clientes (docs/59): sin planograma, sin tarifa, precio
+        # distinto y planogramas creados ayer, por perfil.
+        "revision": resumen_revision,
     }
     if parado_en:
         # Esto tiene que verse en la RESPUESTA, no solo en el registro: es la

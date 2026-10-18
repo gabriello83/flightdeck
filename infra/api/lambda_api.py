@@ -253,6 +253,22 @@ def encamina(evento, metodo, ruta):
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
         return _comprimido(comprimido)
 
+    # La revision de clientes (docs/59): las maquinas del perfil con lo que
+    # tienen mal configurado. La misma regla que el cuadrado que lleva a ella.
+    # Comprimido tal cual: los productos del interno son varios megas.
+    if ruta == "/api/revision" and metodo == "GET":
+        if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
+            raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
+        if "revision" not in A.cuadrados_de(perfil):
+            raise PermissionError("Este perfil no ve la revisión de clientes.")
+        try:
+            comprimido = s3.get_object(Bucket=BUCKET, Key=f"cabina/{perfil.get('perfil_id', '')}/"
+                                                           "revision.json.gz")["Body"].read()
+        except Exception:
+            return r(503, {"error": "La revisión de clientes todavía no se ha calculado.",
+                           "_nota": "Lo escriben los agregados cada noche (4:45)."})
+        return _comprimido(comprimido)
+
     # La pagina de devoluciones (docs/57): igual que la de incidencias, de la
     # misma foto, con su propio cuadrado.
     if ruta == "/api/devoluciones" and metodo == "GET":

@@ -21,7 +21,7 @@
   /* Los cuadrados sin semaforo, cada uno de su color. Ninguno es verde, ni
      ambar ni rojo, para que no se confundan con un estado. */
   --c-almacenes:#6d4fc2; --c-furgonetas:#1f6f8b; --c-pdvs:#2a62c9;
-  --c-ventas:#a63d84; --c-reposiciones:#4a5568; --c-devoluciones:#7a4e1d;
+  --c-ventas:#a63d84; --c-reposiciones:#4a5568; --c-devoluciones:#7a4e1d; --c-revision:#3d5a80;
 }
 @media (prefers-color-scheme: dark){
   :root:where(:not([data-theme="light"])){
@@ -31,7 +31,7 @@
     --s1:#3987e5; --sombra:none;
     --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
     --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
-    --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d;
+    --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d; --c-revision:#3a557a;
   }
 }
 :root[data-theme="dark"]{
@@ -41,7 +41,7 @@
   --s1:#3987e5; --sombra:none;
   --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
   --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
-  --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d;
+  --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d; --c-revision:#3a557a;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -208,15 +208,18 @@ const DESTINO = {
   telemetria:   {sesion:"instalaciones", panel:"incidencias"},
   // Tarifas tiene su propia pagina, con delegaciones, centros y productos (docs/52).
   tarifas:      {url:"/tarifas/"},
+  // Revision de clientes: sin planograma, sin tarifa, precio distinto y
+  // planogramas creados, maquina a maquina (docs/59).
+  revision:     {url:"/revision/"},
 };
 const TITULO = {
   rutas:"Rutas", averias:"Incidencias", devoluciones:"Devoluciones", almacenes:"Almacenes", furgonetas:"Furgonetas",
   pdvs:"Puntos de venta activos", ventas:"Ventas", reposiciones:"Reposiciones", telemetria:"Telemetría",
-  tarifas:"Tarifas",
+  tarifas:"Tarifas", revision:"Revisión clientes",
 };
 
 // Los cuadrados que no son de un dia sino la foto de la noche.
-const FOTO = new Set(["pdvs", "almacenes", "tarifas", "devoluciones"]);
+const FOTO = new Set(["pdvs", "almacenes", "tarifas", "devoluciones", "revision"]);
 let YO=null, DATOS=null;
 
 function fechaLarga(s){
@@ -272,6 +275,11 @@ function contenido(id, d, f){
     case "tarifas": return {vl:pct(x.pct), pct:x.pct,
       sub:`${num(x.coinciden)} de ${num(x.controlados)} productos cobran su tarifa`
         + (x.sin_tarifa ? ` · ${num(x.sin_tarifa)} sin tarifa` : "")};
+    case "revision": return {vl:num(x.sin_planograma),
+      sub:`máquinas sin planograma`
+        + (x.creados_ayer ? ` · ${num(x.creados_ayer)} creados ayer` : "")
+        + (x.sin_tarifa!=null ? ` · ${num(x.sin_tarifa)} con productos sin tarifa` : "")
+        + (x.precio_distinto!=null ? ` · ${num(x.precio_distinto)} con precio distinto` : "")};
     case "ventas": return {vl:eur(x.importe),
       sub:`${num(x.unidades)} unidades · ${num(x.maquinas)} máquinas`
         + (x.fuente==="telemetria" ? " · por telemetría" : x.fuente==="visita_ventas" ? " · del parte, parcial" : "")};
