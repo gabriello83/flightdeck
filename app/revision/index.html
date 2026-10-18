@@ -40,6 +40,7 @@
   --ambar-fondo:#3a2f0c; --ambar-tinta:#f3d06b;
 }
 *{box-sizing:border-box}
+[hidden]{display:none !important}
 html,body{margin:0;padding:0}
 body{
   background:var(--fondo); color:var(--tinta);
@@ -114,6 +115,16 @@ nav.miga a:hover{text-decoration:underline}
 nav.miga b{color:var(--tinta)}
 footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
 #cargando{padding:40px 0;color:var(--tinta-2)}
+.personas{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:12px}
+.persona{border:1px solid var(--borde);border-radius:10px;padding:10px 12px}
+.persona h3{font-size:15px;margin:0}
+.cifras{display:flex;flex-wrap:wrap;gap:6px 18px;margin:8px 0}
+.cifras div{font-size:12px;color:var(--tinta-2)}
+.cifras b{display:block;font-size:20px;color:var(--tinta);font-variant-numeric:tabular-nums}
+.horas{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;align-items:end;height:54px;margin-top:6px}
+.horas span{background:var(--s1);border-radius:2px 2px 0 0;min-height:1px}
+.horas span.cero{background:var(--borde)}
+.horas-et{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;font-size:10px;color:var(--tinta-3);text-align:center}
 @media (max-width:560px){
   .barra label{flex:1 1 100%;min-width:0}
   .barra label select{flex:1;width:100%;max-width:100%;min-width:0}
@@ -121,6 +132,8 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   .kpi .vl{font-size:22px}
   th,td{padding:7px 8px}
   .oculta-movil{display:none}
+  .personas{grid-template-columns:1fr}
+  .horas-et span:nth-child(odd){visibility:hidden}
   section.caja{padding:10px 10px 12px}
 }
 </style>
@@ -199,6 +212,8 @@ const TABLAS = [
   ["precio", "Precio distinto"],
   ["creados", "Planogramas creados"],
 ];
+/* La actividad de las personas en VenCloud (M15) solo llega al perfil interno. */
+const ACCION = {I:"Alta", U:"Cambio", D:"Borrado"};
 let YO=null, D=null;
 
 function fechaCorta(s){
@@ -293,6 +308,7 @@ function pinta(){
   avisa("");
   const r = ruta();
   pintaFiltros(r);
+  if(r.t==="usuarios" && D.actividad) return vistaUsuarios(r);
   if(r.m && (r.t==="tarifa" || r.t==="precio")) return vistaMaquina(r);
   $("#miga").hidden = true;
   const filtra = x => Array.isArray(x) ? x.filter(m=>encaja(m, r)) : x;
@@ -304,18 +320,32 @@ function pinta(){
   const nota = {planograma:"máquinas", tarifa:"máquinas con productos sin tarifa", precio:"máquinas que cobran distinto",
                 creados: dias[0] ? `el ${fechaLarga(dias[0])}` : "todavía ninguno"};
   const v = $("#vista");
-  v.innerHTML = `<div class="kpis" role="group" aria-label="Qué tabla ver">`
-    + TABLAS.map(([k,t])=>`<button class="kpi" type="button" data-t="${k}" aria-pressed="${k===r.t}">`
-      + `<div class="et">${t}</div><div class="vl">${cuenta[k]==null ? "Sin dato" : num(cuenta[k])}</div>`
-      + `<div class="nt">${esc(nota[k])}</div></button>`).join("")
-    + `</div><section class="caja" id="tabla"></section>`;
-  v.querySelectorAll(".kpi").forEach(b=>b.addEventListener("click", ()=>ir({t:b.dataset.t, m:""})));
+  v.innerHTML = kpis(r, cuenta, nota) + `<section class="caja" id="tabla"></section>`;
+  conectaKpis(v);
   const caja = $("#tabla");
   if(r.t==="tarifa") tablaTarifa(caja, st);
   else if(r.t==="precio") tablaPrecio(caja, pd);
   else if(r.t==="creados") tablaCreados(caja, cr, dias, r);
   else tablaPlanograma(caja, sp);
   caja.querySelectorAll(".mat").forEach(b=>b.addEventListener("click", ()=>ir({m:b.dataset.m})));
+}
+
+function kpis(r, cuenta, nota){
+  const tablas = TABLAS.slice();
+  if(D.actividad){
+    const a = resumenActividad();
+    tablas.push(["usuarios", "García y Marcos"]);
+    cuenta.usuarios = a ? a.acciones : null;
+    nota.usuarios = a ? `acciones el ${fechaLarga(a.dia)}` : "sin dato todavía";
+  }
+  return `<div class="kpis" role="group" aria-label="Qué tabla ver">`
+    + tablas.map(([k,t])=>`<button class="kpi" type="button" data-t="${k}" aria-pressed="${k===r.t}">`
+      + `<div class="et">${t}</div><div class="vl">${cuenta[k]==null ? "Sin dato" : num(cuenta[k])}</div>`
+      + `<div class="nt">${esc(nota[k])}</div></button>`).join("")
+    + `</div>`;
+}
+function conectaKpis(v){
+  v.querySelectorAll(".kpi").forEach(b=>b.addEventListener("click", ()=>ir({t:b.dataset.t, m:""})));
 }
 
 function cabecera(caja, titulo, explica, excel){
@@ -378,6 +408,100 @@ function tablaCreados(caja, filas, dias, r){
     + delDia.map(c=>`<tr><td><b>${esc(c.matricula)}</b></td>${sitio(c)}<td class="n">${num(c.canales)}</td>`
       + `<td>${c.usuario ? esc(c.usuario) : `<span class="peq">Sin dato</span>`}</td></tr>`).join("")
     + `</tbody></table></div>`);
+}
+
+/* ------------------------------------------- lo que hace cada persona */
+function diasActividad(){
+  const g = lista((D.actividad||{}).grupos);
+  return [...new Set(g.flatMap(x=>x.dias.map(d=>d.dia)))].sort().reverse();
+}
+function resumenActividad(){
+  const dia = diasActividad()[0];
+  if(!dia) return null;
+  return {dia, acciones: D.actividad.grupos.reduce((s,g)=>s+((g.dias.find(d=>d.dia===dia)||{}).acciones||0), 0)};
+}
+function vistaUsuarios(r){
+  /* No depende de delegacion, cliente ni centro: es lo que hace cada persona
+     en VenCloud, en toda la red. */
+  $("#miga").hidden = true; $("#barra").hidden = true;
+  const v = $("#vista");
+  const cuenta = {}, nota = {};
+  const vacio = TABLAS.map(([k])=>k);
+  vacio.forEach(k=>{ cuenta[k] = null; nota[k] = ""; });
+  cuenta.planograma = D.sin_planograma.length; nota.planograma = "máquinas";
+  cuenta.tarifa = Array.isArray(D.sin_tarifa) ? D.sin_tarifa.length : null; nota.tarifa = "máquinas con productos sin tarifa";
+  cuenta.precio = Array.isArray(D.precio_distinto) ? D.precio_distinto.length : null; nota.precio = "máquinas que cobran distinto";
+  const cr = D.creados||[], dc = [...new Set(cr.map(c=>c.dia))].sort().reverse();
+  cuenta.creados = cr.filter(c=>c.dia===(dc[0]||"")).length; nota.creados = dc[0] ? `el ${fechaLarga(dc[0])}` : "todavía ninguno";
+  v.innerHTML = kpis(r, cuenta, nota) + `<section class="caja" id="tabla"></section>`;
+  conectaKpis(v);
+  const caja = $("#tabla");
+  const dias = diasActividad();
+  if(D.actividad.sin_dato){ cabecera(caja, "M. García y J. Marcos en VenCloud", esc(D.actividad.sin_dato)); return; }
+  const dia = r.dia && dias.includes(r.dia) ? r.dia : (dias[0] || "");
+  cabecera(caja, "M. García y J. Marcos en VenCloud",
+    "Lo que M. García (M.GARCIA y M2.GARCIA) y J. Marcos (J.MARCOS y J2.MARCOS) han hecho en VenCloud cada día, con sus dos cuentas juntas: cuántas acciones (cada alta, cambio o borrado que VenCloud apunta en su registro de actividad), en qué horas, a qué hora empezaron y terminaron y qué tocaron. Es de toda la red: los filtros de delegación, cliente y centro no se aplican. Todos los usuarios están en el cuadrado Utilizo.",
+    dia ? ()=>excelUsuarios(dia) : null);
+  if(!dias.length){ caja.insertAdjacentHTML("beforeend", `<p class="vacio">Todavía no hay ningún día con actividad de estas personas.</p>`); return; }
+  caja.insertAdjacentHTML("beforeend", `<div class="barra"><label>Día <select id="fDia">`
+    + dias.map(d=>`<option value="${d}"${d===dia?" selected":""}>${esc(fechaLarga(d))}</option>`).join("")
+    + `</select></label></div><div class="personas">`
+    + D.actividad.grupos.map(g=>persona(g, g.dias.find(d=>d.dia===dia))).join("")
+    + `</div><h2 style="margin-top:18px">Día a día</h2>`
+    + `<div class="tabla-env"><table><thead><tr><th>Día</th>`
+    + D.actividad.grupos.map(g=>`<th class="n">${esc(g.nombre)} · acciones</th><th class="n oculta-movil">horas</th><th class="oculta-movil">de · a</th>`).join("")
+    + `</tr></thead><tbody>`
+    + dias.map(d=>`<tr><td>${esc(fechaCorta(d))}</td>` + D.actividad.grupos.map(g=>{
+        const x = g.dias.find(y=>y.dia===d);
+        return x ? `<td class="n"><b>${num(x.acciones)}</b></td><td class="n oculta-movil">${num(x.horas)}</td><td class="oculta-movil">${esc(deA(x))}</td>`
+                 : `<td class="n">0</td><td class="n oculta-movil">0</td><td class="oculta-movil peq">sin actividad</td>`;
+      }).join("") + `</tr>`).join("")
+    + `</tbody></table></div>`);
+  $("#fDia").addEventListener("change", e=>ir({dia:e.target.value}));
+}
+const deA = x => x.primera ? `${x.primera.slice(0,5)} – ${x.ultima.slice(0,5)}` : "—";
+function persona(g, x){
+  const cab = `<div class="persona"><h3>${esc(g.nombre)}</h3><div class="peq">Cuentas ${g.cuentas.map(esc).join(" y ")}</div>`;
+  if(!x) return cab + `<p class="vacio">Ninguna acción en VenCloud este día.</p></div>`;
+  const max = Math.max(1, ...Object.values(x.por_hora||{}));
+  const barras = Array.from({length:24}, (_,h)=>{
+    const n = (x.por_hora||{})[h] || 0;
+    return `<span class="${n ? "" : "cero"}" style="height:${n ? Math.max(4, Math.round(n/max*100)) : 2}%" title="${h}:00 · ${num(n)} acciones"></span>`;
+  }).join("");
+  return cab + `<div class="cifras"><div><b>${num(x.acciones)}</b>acciones</div><div><b>${num(x.horas)}</b>horas con actividad</div>`
+    + `<div><b>${esc(deA(x))}</b>primera · última</div></div>`
+    + (x.cuentas.length < g.cuentas.length ? `<div class="peq">Sólo trabajó con ${x.cuentas.map(esc).join(" y ")}.</div>` : "")
+    + `<div class="horas" aria-label="Acciones por hora">${barras}</div>`
+    + `<div class="horas-et">${Array.from({length:24},(_,h)=>`<span>${h}</span>`).join("")}</div>`
+    + `<div class="tabla-env"><table><thead><tr><th>Qué tocó</th><th>Acción</th><th class="n">Veces</th></tr></thead><tbody>`
+    + x.entidades.map(([e,a,n])=>`<tr><td>${esc(e)}</td><td>${esc(ACCION[a]||a)}</td><td class="n">${num(n)}</td></tr>`).join("")
+    + `</tbody></table></div></div>`;
+}
+function excelUsuarios(dia){
+  const gs = D.actividad.grupos, dias = diasActividad();
+  const hoja1 = [];
+  dias.forEach(d=>gs.forEach(g=>{
+    const x = g.dias.find(y=>y.dia===d);
+    hoja1.push([d, g.nombre, x ? x.cuentas.join(" + ") : "", x ? x.acciones : 0, x ? x.horas : 0,
+                x && x.primera ? x.primera : "", x && x.primera ? x.ultima : ""]);
+  }));
+  const hoja2 = [], hoja3 = [];
+  gs.forEach(g=>{
+    const x = g.dias.find(y=>y.dia===dia);
+    if(!x) return;
+    x.entidades.forEach(([e,a,n])=>hoja2.push([g.nombre, e, ACCION[a]||a, n]));
+    Object.entries(x.por_hora||{}).forEach(([h,n])=>hoja3.push([g.nombre, `${String(h).padStart(2,"0")}:00`, n]));
+  });
+  const tit = que => [`Revisión clientes · M. García y J. Marcos · ${que}`, `Generado el ${HOY.toLocaleDateString("es-ES")}`];
+  XLSX.descarga(XLSX.libro([
+    {nombre:"Día a día", titulo:tit("usuarios en VenCloud, día a día"), filas:hoja1,
+     columnas:[{titulo:"Día",ancho:12},{titulo:"Persona",ancho:14},{titulo:"Cuentas",ancho:22},{titulo:"Acciones",ancho:10},
+       {titulo:"Horas con actividad",ancho:10},{titulo:"Primera",ancho:10},{titulo:"Última",ancho:10}]},
+    {nombre:"Qué tocó", titulo:tit(`qué tocó cada persona el ${fechaLarga(dia)}`), filas:hoja2,
+     columnas:[{titulo:"Persona",ancho:14},{titulo:"Qué tocó",ancho:30},{titulo:"Acción",ancho:10},{titulo:"Veces",ancho:10}]},
+    {nombre:"Por hora", titulo:tit(`acciones por hora el ${fechaLarga(dia)}`), filas:hoja3,
+     columnas:[{titulo:"Persona",ancho:14},{titulo:"Hora",ancho:8},{titulo:"Acciones",ancho:10}]}]),
+    nombre("garcia_marcos", dia));
 }
 
 /* ------------------------------------------------- una maquina por dentro */

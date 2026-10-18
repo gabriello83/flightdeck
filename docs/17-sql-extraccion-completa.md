@@ -2163,6 +2163,56 @@ group by m.codigo, e.usuarionombre, e.usuarioid
 order by 2, 1, 7
 ```
 
+## M15 · EXT_ACTIVIDAD_USUARIOS  *(sin parámetros)*
+
+Lo que hace cada persona en VenCloud, día a día, de `control.activitylog`: los tres últimos
+días, sólo usuarios de verdad (los procesos de VenCloud llevan id negativo). Dos clases de fila:
+
+- `tipo = 'hora'`: cuántas acciones hizo en cada hora del día. Sirve para contar las **horas con
+  actividad** juntando dos cuentas de la misma persona (M.GARCIA y M2.GARCIA), que sumando no se
+  puede.
+- `tipo = 'entidad'`: cuántas altas (`I`), cambios (`U`) y borrados (`D`) hizo de cada cosa
+  (`ParteVisita`, `MaquinaCanal`, `TarifaVendingProducto`…).
+
+Lo usan el cuadrado Utilizo (docs/60), con todos los usuarios, y la revisión de clientes
+(docs/59), con M. García y J. Marcos. La noche guarda cada día, así que la historia crece aunque
+el informe sólo traiga tres.
+
+```sql
+select
+  'hora'                                    as tipo,
+  u.nombre                                  as usuario,
+  cast(cast(a.date as date) as text)        as dia,
+  cast(extract(hour from a.date) as integer) as hora,
+  ''                                        as entidad,
+  ''                                        as accion,
+  count(*)                                  as veces,
+  cast(min(a.date) as text)                 as primera,
+  cast(max(a.date) as text)                 as ultima
+from control.activitylog a
+join general.usuarios u on u.id = a.userid
+where a.date >= current_date - 3
+  and a.userid > 0
+group by u.nombre, cast(a.date as date), extract(hour from a.date)
+union all
+select
+  'entidad'                                 as tipo,
+  u.nombre                                  as usuario,
+  cast(cast(a.date as date) as text)        as dia,
+  -1                                        as hora,
+  a.entity                                  as entidad,
+  a.action                                  as accion,
+  count(*)                                  as veces,
+  cast(min(a.date) as text)                 as primera,
+  cast(max(a.date) as text)                 as ultima
+from control.activitylog a
+join general.usuarios u on u.id = a.userid
+where a.date >= current_date - 3
+  and a.userid > 0
+group by u.nombre, cast(a.date as date), a.entity, a.action
+order by 2, 3, 1, 4, 5
+```
+
 ## M11 · EXT_MAESTRO_EMPLEADOS  *(sin parámetros)*
 
 Informe 190. Los empleados con su cargo y sus marcas de rol, sin teléfono, email ni DNI. El

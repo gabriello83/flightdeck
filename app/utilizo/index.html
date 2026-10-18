@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Utilizo · digivend</title>
+<!-- Un solo origen. Esta pagina habla con /api/* del mismo dominio y con nadie
+     mas, y el Excel se hace aqui mismo (comun/xlsx.js): no hay libreria de fuera. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M3 3h4v4H3zm6 0h4v4H9zM3 9h4v4H3zm6 0h4v4H9z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6; --fila:#f0efeb;
+  --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+  --verde:#15803d; --amarillo:#f2b705; --rojo:#c62828;
+  --mal-fondo:#fbe3e1; --mal-tinta:#9b1c1c; --bien-tinta:#166534; --gris-fondo:#ecebe6;
+  --ambar-fondo:#fdf0c4; --ambar-tinta:#6b4e00;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --fila:#222220; --sombra:none;
+    --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
+    --mal-fondo:#3d1d1b; --mal-tinta:#f4a59e; --bien-tinta:#7fd89d; --gris-fondo:#262624;
+    --ambar-fondo:#3a2f0c; --ambar-tinta:#f3d06b;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --fila:#222220; --sombra:none;
+  --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
+  --mal-fondo:#3d1d1b; --mal-tinta:#f4a59e; --bien-tinta:#7fd89d; --gris-fondo:#262624;
+  --ambar-fondo:#3a2f0c; --ambar-tinta:#f3d06b;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1240px;margin:0 auto;padding:18px 16px 72px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+.marca{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn,a.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);text-decoration:none;
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
+button.btn:hover,a.btn:hover{border-color:var(--tinta-3)}
+button.btn.primario{background:var(--s1);border-color:var(--s1);color:#fff;font-weight:600}
+.barra{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:16px 0 6px}
+.barra label{font-size:13px;color:var(--tinta-2);display:flex;align-items:center;gap:8px}
+.barra select{
+  font:inherit;font-size:14px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:5px 8px;max-width:280px
+}
+.nota{
+  margin:12px 0 4px;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+.nota.mal{border-left-color:var(--rojo)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:14px}
+.kpi{
+  font:inherit;text-align:left;cursor:pointer;color:var(--tinta);
+  background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:11px 13px;box-shadow:var(--sombra)
+}
+.kpi[aria-pressed="true"]{border-color:var(--s1);box-shadow:0 0 0 2px var(--s1) inset}
+.kpi:focus-visible{outline:3px solid var(--s1);outline-offset:2px}
+.kpi .et{font-size:12px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
+.kpi .vl{font-size:26px;font-weight:700;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .nt{font-size:12px;color:var(--tinta-3);margin-top:2px}
+section.caja{
+  background:var(--tarjeta);border:1px solid var(--borde);border-radius:12px;
+  padding:12px 16px 14px;box-shadow:var(--sombra);margin-top:14px
+}
+.cabsec{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+section.caja h2{font-size:16px;margin:0;font-weight:650}
+.explica{color:var(--tinta-2);font-size:13px;margin:4px 0 0}
+.tabla-env{margin-top:12px;overflow-x:auto;border:1px solid var(--borde);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:8px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--borde)}
+th{font-size:12px;color:var(--tinta-2);font-weight:650;background:var(--fila);white-space:nowrap}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.peq{color:var(--tinta-2);font-size:12px}
+.mat{
+  font:inherit;font-weight:700;color:var(--s1);background:none;border:0;padding:0;cursor:pointer;
+  text-decoration:underline;text-underline-offset:2px
+}
+.mat:focus-visible{outline:3px solid var(--s1);outline-offset:2px}
+.etq{display:inline-block;font-size:11.5px;font-weight:650;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.etq.estandar{color:var(--ambar-tinta);background:var(--ambar-fondo);border:1px solid currentColor}
+.etq.otro{color:var(--tinta-2);background:var(--gris-fondo)}
+.etq.ninguno{color:var(--mal-tinta);background:var(--mal-fondo)}
+.dif{font-weight:700;font-variant-numeric:tabular-nums}
+.dif.mas{color:var(--mal-tinta)}
+.precios{display:grid;grid-template-columns:auto auto auto;gap:1px 10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.precios .m{color:var(--tinta-3);font-size:11.5px}
+.precios .mal{color:var(--mal-tinta);font-weight:700}
+.vacio{color:var(--tinta-2);font-size:13px;padding:10px 0}
+nav.miga{margin:16px 0 4px;font-size:14px;color:var(--tinta-2);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+nav.miga a{color:var(--s1);text-decoration:none}
+nav.miga a:hover{text-decoration:underline}
+nav.miga b{color:var(--tinta)}
+footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+#cargando{padding:40px 0;color:var(--tinta-2)}
+@media (max-width:560px){
+  .barra label{flex:1 1 100%;min-width:0}
+  .barra label select{flex:1;width:100%;max-width:100%;min-width:0}
+  .kpis{grid-template-columns:1fr 1fr}
+  .kpi .vl{font-size:22px}
+  th,td{padding:7px 8px}
+  .oculta-movil{display:none}
+  section.caja{padding:10px 10px 12px}
+}
+.barra input{
+  font:inherit;font-size:14px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:5px 8px;width:220px;max-width:100%
+}
+.kpis.fijos .kpi{cursor:default}
+.persona-cab{display:flex;flex-wrap:wrap;gap:6px 18px;margin:8px 0}
+.persona-cab div{font-size:12px;color:var(--tinta-2)}
+.persona-cab b{display:block;font-size:20px;color:var(--tinta);font-variant-numeric:tabular-nums}
+.horas{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;align-items:end;height:70px;margin-top:10px}
+.horas span{background:var(--s1);border-radius:2px 2px 0 0;min-height:1px}
+.horas span.cero{background:var(--borde)}
+.horas-et{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;font-size:10px;color:var(--tinta-3);text-align:center}
+.dos{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+a.dia{color:var(--s1)}
+.barrita{display:inline-block;height:8px;border-radius:4px;background:var(--s1);vertical-align:middle;margin-right:6px}
+@media (max-width:760px){ .dos{grid-template-columns:1fr} }
+@media (max-width:560px){
+  .barra input{width:100%}
+  .horas-et span:nth-child(odd){visibility:hidden}
+}
+</style>
+</head>
+<body>
+<div class="env">
+  <header class="top">
+    <div class="marca">
+      <b>Utilizo</b>
+      <span id="quien"></span>
+    </div>
+    <div class="acciones">
+      <a class="btn" href="/operativo/">Informe operativo</a>
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn" id="bSalir" type="button">Salir</button>
+    </div>
+  </header>
+
+  <div class="barra" id="barra" hidden>
+    <label>Día <select id="fDia"></select></label>
+    <label>Buscar <input id="fBusca" type="search" placeholder="Usuario" autocomplete="off"></label>
+  </div>
+  <nav class="miga" id="miga" aria-label="Dónde estás" hidden></nav>
+  <div id="cargando">Cargando…</div>
+  <div class="nota" id="aviso" hidden></div>
+  <main id="vista"></main>
+  <footer id="pie" hidden></footer>
+</div>
+
+<script src="/comun/xlsx.js"></script>
+<script>
+/* ===================================================================
+   Utilizo · digivend.es  (docs/60)
+
+   Cuanto usa VenCloud cada persona, dia a dia: acciones (altas, cambios y
+   borrados del registro de actividad de VenCloud), horas con actividad, primera
+   y ultima, y que toco. M.GARCIA y M2.GARCIA son una persona, y J.MARCOS y
+   J2.MARCOS otra: llegan ya juntas. Esta pagina no calcula nada: dibuja lo que
+   escribio la noche (infra/utilizo.py).
+   =================================================================== */
+const CLAVE_TEMA = "digivend.tema";
+const num  = n => new Intl.NumberFormat("es-ES").format(Math.round(n||0));
+const esc  = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = s => document.querySelector(s);
+
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = $("#bTema");
+  const oscuro = () => document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const pinta = () => { b.textContent = oscuro() ? "Modo claro" : "Modo oscuro"; };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const n = oscuro() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+  });
+})();
+$("#bSalir").addEventListener("click", async ()=>{
+  try{ await fetch("/api/salir", {method:"POST", credentials:"same-origin"}); }catch(e){}
+  location.href = "/";
+});
+
+const ACCION = {I:"Alta", U:"Cambio", D:"Borrado"};
+let YO=null, D=null;
+
+function fechaCorta(s){
+  const d = new Date(String(s).slice(0,10)+"T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(s||"") : d.toLocaleDateString("es-ES",{day:"numeric", month:"short", year:"numeric"});
+}
+function fechaLarga(s){
+  const d = new Date(String(s).slice(0,10)+"T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(s||"") : d.toLocaleDateString("es-ES",{weekday:"long", day:"numeric", month:"long"});
+}
+function avisa(texto, mal){
+  const a = $("#aviso");
+  a.textContent = texto||""; a.hidden = !texto; a.classList.toggle("mal", !!mal);
+}
+const limpio = s => String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,40);
+const deA = x => x && x.primera ? `${x.primera.slice(0,5)} – ${x.ultima.slice(0,5)}` : "—";
+const sinTildes = s => String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+
+/* ----------------------------------------------------- estado en la URL */
+function ruta(){
+  const q = new URLSearchParams(location.hash.slice(1));
+  return {dia: q.get("dia") || "", p: q.get("p") || "", q: q.get("q") || ""};
+}
+function ir(cambios){
+  const r = Object.assign(ruta(), cambios);
+  const q = new URLSearchParams();
+  for(const k of ["dia","p","q"]) if(r[k]) q.set(k, r[k]);
+  location.hash = q.toString();
+}
+$("#fDia").addEventListener("change", e=>ir({dia:e.target.value}));
+let tecleo = null;
+$("#fBusca").addEventListener("input", e=>{
+  clearTimeout(tecleo);
+  tecleo = setTimeout(()=>ir({q:e.target.value.trim()}), 250);
+});
+
+function diaDe(r){ return r.dia && D.dias.includes(r.dia) ? r.dia : (D.dias[0] || ""); }
+const delDia = (p, dia) => p.dias.find(d=>d.dia===dia);
+
+/* ------------------------------------------------------------ la vista */
+function pinta(){
+  avisa("");
+  const r = ruta(), dia = diaDe(r);
+  $("#fDia").innerHTML = D.dias.map(d=>`<option value="${d}"${d===dia?" selected":""}>${esc(fechaLarga(d))}</option>`).join("");
+  if(document.activeElement !== $("#fBusca")) $("#fBusca").value = r.q;
+  $("#barra").hidden = false;
+  const p = r.p && D.personas.find(x=>x.nombre===r.p);
+  if(p) return vistaPersona(p, dia);
+  $("#miga").hidden = true;
+  $("#fBusca").closest("label").hidden = false;
+  vistaDia(dia, r);
+}
+
+function vistaDia(dia, r){
+  const activos = D.personas.map(p=>({p, x:delDia(p, dia)})).filter(o=>o.x)
+    .sort((a,b)=>b.x.acciones-a.x.acciones || a.p.nombre.localeCompare(b.p.nombre,"es"));
+  const busca = sinTildes(r.q);
+  const filas = busca ? activos.filter(o=>sinTildes(o.p.nombre+" "+o.p.cuentas.join(" ")).includes(busca)) : activos;
+  const acciones = activos.reduce((s,o)=>s+o.x.acciones, 0);
+  const horas = activos.reduce((s,o)=>s+o.x.horas, 0);
+  const max = Math.max(1, ...activos.map(o=>o.x.acciones));
+  const ultimos = D.dias.filter(d=>d<=dia).slice(0,30);
+  const v = $("#vista");
+  v.innerHTML = `<div class="kpis fijos">`
+    + `<div class="kpi"><div class="et">Usuarios</div><div class="vl">${num(activos.length)}</div><div class="nt">con alguna acción el ${esc(fechaLarga(dia))}</div></div>`
+    + `<div class="kpi"><div class="et">Acciones</div><div class="vl">${num(acciones)}</div><div class="nt">altas, cambios y borrados</div></div>`
+    + `<div class="kpi"><div class="et">Horas con actividad</div><div class="vl">${num(horas)}</div><div class="nt">sumando las de cada usuario</div></div>`
+    + `</div><section class="caja" id="tabla"></section>`;
+  const caja = $("#tabla");
+  caja.innerHTML = `<div class="cabsec"><h2>Uso de VenCloud el ${esc(fechaLarga(dia))}</h2>`
+    + `<button class="btn primario" id="bExcel" type="button">Descargar Excel</button></div>`
+    + `<p class="explica">Cada usuario de VenCloud con lo que hizo ese día: las acciones son cada alta, cambio o borrado que VenCloud apunta en su registro de actividad; las horas, en cuántas horas distintas trabajó. M. García (M.GARCIA y M2.GARCIA) y J. Marcos (J.MARCOS y J2.MARCOS) van con sus dos cuentas juntas. Pulsa un usuario para ver qué tocó y su historia.</p>`;
+  $("#bExcel").addEventListener("click", ()=>excelDia(dia));
+  if(!filas.length){
+    caja.insertAdjacentHTML("beforeend", `<p class="vacio">${busca ? "Ningún usuario con ese nombre tuvo actividad ese día." : "Ningún usuario tuvo actividad ese día."}</p>`);
+    return;
+  }
+  caja.insertAdjacentHTML("beforeend", `<div class="tabla-env"><table><thead><tr><th>Usuario</th><th class="n">Acciones</th>`
+    + `<th class="n">Horas</th><th class="oculta-movil">Primera · última</th><th class="oculta-movil">Lo que más tocó</th>`
+    + `<th class="n oculta-movil">Días con actividad</th></tr></thead><tbody>`
+    + filas.map(({p,x})=>{
+        const top = x.entidades[0];
+        const activosMes = ultimos.filter(d=>delDia(p,d)).length;
+        return `<tr><td><button class="mat" type="button" data-p="${esc(p.nombre)}">${esc(p.nombre)}</button>`
+          + (p.cuentas.length>1 ? `<div class="peq">${p.cuentas.map(esc).join(" + ")}</div>` : "") + `</td>`
+          + `<td class="n"><span class="barrita" style="width:${Math.max(2, Math.round(x.acciones/max*60))}px"></span><b>${num(x.acciones)}</b></td>`
+          + `<td class="n">${num(x.horas)}</td><td class="oculta-movil">${esc(deA(x))}</td>`
+          + `<td class="oculta-movil">${top ? `${esc(top[0])} · ${esc(ACCION[top[1]]||top[1])} <span class="peq">${num(top[2])}</span>` : "—"}</td>`
+          + `<td class="n oculta-movil">${num(activosMes)} <span class="peq">de ${num(ultimos.length)}</span></td></tr>`;
+      }).join("")
+    + `</tbody></table></div>`);
+  caja.querySelectorAll(".mat").forEach(b=>b.addEventListener("click", ()=>ir({p:b.dataset.p})));
+}
+
+function vistaPersona(p, dia){
+  $("#fBusca").closest("label").hidden = true;
+  const mi = $("#miga");
+  mi.innerHTML = `<a href="#" id="volver">Todos los usuarios</a> › <b>${esc(p.nombre)}</b>`;
+  mi.hidden = false;
+  $("#volver").addEventListener("click", e=>{ e.preventDefault(); ir({p:""}); });
+  const x = delDia(p, dia);
+  const v = $("#vista");
+  let h = `<section class="caja"><div class="cabsec"><div><h2>${esc(p.nombre)} · ${esc(fechaLarga(dia))}</h2>`
+    + `<div class="peq">${p.cuentas.length>1 ? "Cuentas " + p.cuentas.map(esc).join(" y ") : "Cuenta " + esc(p.cuentas[0])}</div></div>`
+    + `<button class="btn primario" id="bExcel" type="button">Descargar Excel</button></div>`;
+  if(!x) h += `<p class="vacio">Ninguna acción en VenCloud este día.</p>`;
+  else {
+    const max = Math.max(1, ...Object.values(x.por_hora||{}));
+    h += `<div class="persona-cab"><div><b>${num(x.acciones)}</b>acciones</div><div><b>${num(x.horas)}</b>horas con actividad</div>`
+      + `<div><b>${esc(deA(x))}</b>primera · última</div></div>`
+      + (x.cuentas.length < p.cuentas.length ? `<div class="peq">Sólo trabajó con ${x.cuentas.map(esc).join(" y ")}.</div>` : "")
+      + `<div class="horas" aria-label="Acciones por hora">` + Array.from({length:24}, (_,hr)=>{
+          const n = (x.por_hora||{})[hr] || 0;
+          return `<span class="${n ? "" : "cero"}" style="height:${n ? Math.max(4, Math.round(n/max*100)) : 2}%" title="${hr}:00 · ${num(n)} acciones"></span>`;
+        }).join("") + `</div>`
+      + `<div class="horas-et">${Array.from({length:24},(_,hr)=>`<span>${hr}</span>`).join("")}</div>`
+      + `<h2 style="margin-top:16px">Qué tocó</h2><div class="tabla-env"><table><thead><tr><th>Qué</th><th>Acción</th><th class="n">Veces</th></tr></thead><tbody>`
+      + x.entidades.map(([e,a,n])=>`<tr><td>${esc(e)}</td><td>${esc(ACCION[a]||a)}</td><td class="n">${num(n)}</td></tr>`).join("")
+      + `</tbody></table></div>`;
+  }
+  h += `<h2 style="margin-top:16px">Día a día</h2><div class="tabla-env"><table><thead><tr><th>Día</th><th class="n">Acciones</th><th class="n">Horas</th><th class="oculta-movil">Primera · última</th></tr></thead><tbody>`
+    + D.dias.map(d=>{
+        const y = delDia(p, d);
+        return `<tr><td><a href="#" class="dia" data-d="${d}">${esc(fechaCorta(d))}</a></td>`
+          + (y ? `<td class="n"><b>${num(y.acciones)}</b></td><td class="n">${num(y.horas)}</td><td class="oculta-movil">${esc(deA(y))}</td>`
+               : `<td class="n">0</td><td class="n">0</td><td class="oculta-movil peq">sin actividad</td>`) + `</tr>`;
+      }).join("")
+    + `</tbody></table></div></section>`;
+  v.innerHTML = h;
+  v.querySelectorAll("a.dia").forEach(a=>a.addEventListener("click", e=>{ e.preventDefault(); ir({dia:a.dataset.d}); }));
+  $("#bExcel").addEventListener("click", ()=>excelPersona(p, dia));
+}
+
+/* ------------------------------------------------------------- los Excel */
+const HOY = new Date();
+const tit = que => [`Utilizo · ${que}`, `Generado el ${HOY.toLocaleDateString("es-ES")}`];
+const COL_DIA = [{titulo:"Día",ancho:12},{titulo:"Usuario",ancho:16},{titulo:"Cuentas",ancho:22},{titulo:"Acciones",ancho:10},
+  {titulo:"Horas con actividad",ancho:10},{titulo:"Primera",ancho:10},{titulo:"Última",ancho:10}];
+const filaDia = (p, d, x) => [d, p.nombre, x.cuentas.join(" + "), x.acciones, x.horas, x.primera||"", x.primera ? x.ultima : ""];
+function excelDia(dia){
+  const hoy = [], historia = [], que = [];
+  D.personas.forEach(p=>{
+    const x = delDia(p, dia);
+    if(x){
+      hoy.push(filaDia(p, dia, x));
+      x.entidades.forEach(([e,a,n])=>que.push([p.nombre, e, ACCION[a]||a, n]));
+    }
+    p.dias.forEach(y=>historia.push(filaDia(p, y.dia, y)));
+  });
+  hoy.sort((a,b)=>b[3]-a[3]);
+  historia.sort((a,b)=>b[0].localeCompare(a[0]) || b[3]-a[3]);
+  XLSX.descarga(XLSX.libro([
+    {nombre:"Día", titulo:tit(`uso de VenCloud el ${fechaLarga(dia)}`), columnas:COL_DIA, filas:hoy},
+    {nombre:"Qué tocó", titulo:tit(`qué tocó cada usuario el ${fechaLarga(dia)}`), filas:que,
+     columnas:[{titulo:"Usuario",ancho:16},{titulo:"Qué",ancho:30},{titulo:"Acción",ancho:10},{titulo:"Veces",ancho:10}]},
+    {nombre:"Día a día", titulo:tit("uso de VenCloud, día a día"), columnas:COL_DIA, filas:historia}]),
+    `utilizo_${dia}.xlsx`);
+}
+function excelPersona(p, dia){
+  const x = delDia(p, dia);
+  XLSX.descarga(XLSX.libro([
+    {nombre:"Día a día", titulo:tit(`${p.nombre}, día a día`), columnas:COL_DIA, filas:p.dias.map(y=>filaDia(p, y.dia, y))},
+    {nombre:"Qué tocó", titulo:tit(`qué tocó ${p.nombre} el ${fechaLarga(dia)}`),
+     filas:x ? x.entidades.map(([e,a,n])=>[e, ACCION[a]||a, n]) : [],
+     columnas:[{titulo:"Qué",ancho:30},{titulo:"Acción",ancho:10},{titulo:"Veces",ancho:10}]},
+    {nombre:"Por hora", titulo:tit(`acciones de ${p.nombre} por hora el ${fechaLarga(dia)}`),
+     filas:Array.from({length:24},(_,h)=>[`${String(h).padStart(2,"0")}:00`, x ? (x.por_hora||{})[h]||0 : 0]),
+     columnas:[{titulo:"Hora",ancho:8},{titulo:"Acciones",ancho:10}]}]),
+    `utilizo_${limpio(p.nombre)}_${dia}.xlsx`);
+}
+
+(async function arranca(){
+  let r;
+  try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(r.status === 401){ location.href = "/"; return; }
+  if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
+  YO = await r.json();
+  if(YO.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  $("#quien").textContent = (YO.perfil ? YO.perfil + " · " : "") + (YO.nombre || YO.correo);
+
+  let rr;
+  try{ rr = await fetch("/api/utilizo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(rr.status === 401){ location.href = "/"; return; }
+  $("#cargando").hidden = true;
+  if(!rr.ok){
+    let e={}; try{ e = await rr.json(); }catch(x){}
+    avisa(e.error || "El uso de VenCloud no está disponible ahora mismo.", true);
+    return;
+  }
+  D = await rr.json();
+  if(D.sin_dato){ avisa(D.sin_dato); return; }
+  D.dias = D.dias || []; D.personas = D.personas || [];
+  if(!D.dias.length){ avisa("Todavía no ha llegado ningún día de actividad de VenCloud."); return; }
+  window.addEventListener("hashchange", pinta);
+  pinta();
+  $("#pie").textContent = "Sale del registro de actividad de VenCloud (control.activitylog): cada alta, cambio o borrado que hace un usuario, con su hora. Los procesos automáticos de VenCloud no cuentan. El día de hoy no sale hasta mañana, cuando está completo."
+    + (D.generado ? ` Calculado con la carga del ${fechaCorta(D.generado)}.` : "");
+  $("#pie").hidden = false;
+})();
+</script>
+</body>
+</html>

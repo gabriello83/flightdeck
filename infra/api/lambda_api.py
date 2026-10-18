@@ -269,6 +269,19 @@ def encamina(evento, metodo, ruta):
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
         return _comprimido(comprimido)
 
+    # Utilizo (docs/60): cuanto usa VenCloud cada persona. Solo se escribe a
+    # los perfiles sin ambito, y solo lo pide quien ve su cuadrado.
+    if ruta == "/api/utilizo" and metodo == "GET":
+        if "utilizo" not in A.cuadrados_de(perfil):
+            raise PermissionError("Este perfil no ve el uso de VenCloud.")
+        try:
+            comprimido = s3.get_object(Bucket=BUCKET, Key=f"cabina/{perfil.get('perfil_id', '')}/"
+                                                           "utilizo.json.gz")["Body"].read()
+        except Exception:
+            return r(503, {"error": "El uso de VenCloud todavía no se ha calculado.",
+                           "_nota": "Lo escriben los agregados cada noche (4:45)."})
+        return _comprimido(comprimido)
+
     # La pagina de devoluciones (docs/57): igual que la de incidencias, de la
     # misma foto, con su propio cuadrado.
     if ruta == "/api/devoluciones" and metodo == "GET":

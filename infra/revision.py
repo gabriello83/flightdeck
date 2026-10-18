@@ -39,6 +39,7 @@ Sin dependencias: se prueba con `python3 infra/test_revision.py`.
 import datetime
 
 import reglas as R
+import utilizo as UT
 
 DIAS_CREADOS = 62
 
@@ -212,7 +213,7 @@ def _diferencia(medios):
     return out
 
 
-def calcula(censo, detalle_tarifas, estado_planogramas, hoy):
+def calcula(censo, detalle_tarifas, estado_planogramas, hoy, actividad=False):
     """El fichero de la pagina para un perfil.
 
     `censo`: las filas de EXT_INSTALACIONES del ambito del perfil.
@@ -233,6 +234,13 @@ def calcula(censo, detalle_tarifas, estado_planogramas, hoy):
     out["creados_desde"] = (e.get("previo") or {}).get("fecha") or e.get("fecha")
     if not any(c.get("usuario") for c in out["creados"]):
         out["sin_usuario"] = SIN_USUARIO
+
+    # Lo que hacen en VenCloud las dos personas que Gabriele sigue de cerca
+    # (docs/60), con su detalle. Solo un perfil sin ambito: `actividad` es
+    # False en los demas, None si falta el informe M15.
+    if actividad is not False:
+        out["actividad"] = ({"sin_dato": UT.SIN_ACTIVIDAD} if actividad is None
+                            else {"grupos": UT.personas(actividad, todos=False)})
 
     if detalle_tarifas is None:
         import tarifas as TA

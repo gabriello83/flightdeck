@@ -58,3 +58,12 @@ firmaba la mayoría de cambios de canal. Sin el informe la página lo dice y no 
 
 La API sirve sólo el del perfil de la sesión, con la misma regla que el cuadrado (sesión de
 instalaciones, operaciones para arriba). Se prueba con `python3 infra/test_revision.py`.
+
+## M. García y J. Marcos
+
+Gabriele sigue cada día lo que hacen en VenCloud M. García (cuentas `M.GARCIA` y `M2.GARCIA`) y
+J. Marcos (`J.MARCOS` y `J2.MARCOS`), con las dos cuentas juntas. Van en la quinta tabla de la
+página, con su detalle: acciones, horas con actividad, primera y última, acciones por hora y qué
+tocaron (alta, cambio o borrado de cada cosa). Sale de lo mismo que el cuadrado **Utilizo**
+(docs/60), que tiene a todos los usuarios; aquí sólo ellos dos, y sólo en el perfil sin ámbito.
+No la tocan los filtros de delegación, cliente y centro.

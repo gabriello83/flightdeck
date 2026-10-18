@@ -340,7 +340,12 @@ CUADRADOS = (
     # Revision de clientes (docs/59): sin planograma, sin tarifa y precio
     # distinto, maquina a maquina. Tambien configuracion de la maquina.
     ("revision", "instalaciones"),
+    # Utilizo (docs/60): cuanto usa VenCloud cada persona. Es lo que hace la
+    # gente, no un cliente: solo direccion para arriba y sin ambito.
+    ("utilizo", "instalaciones"),
 )
+
+SOLO_DIRECCION = ("almacenes", "utilizo")
 
 
 def cuadrados_de(perfil):
@@ -348,8 +353,11 @@ def cuadrados_de(perfil):
     necesarios = bloques_de(perfil)
     tipo = perfil.get("tipo", "cliente")
     out = [c for c, bloque in CUADRADOS if bloque in necesarios]
-    if nivel_de(tipo) < NIVEL["direccion"] and "almacenes" in out:
-        out.remove("almacenes")
+    if nivel_de(tipo) < NIVEL["direccion"]:
+        out = [c for c in out if c not in SOLO_DIRECCION]
+    ambito = perfil.get("ambito") or {}
+    if any(ambito.get(k) for k in ("clientes", "centros", "delegaciones")) and "utilizo" in out:
+        out.remove("utilizo")
     return out
 
 

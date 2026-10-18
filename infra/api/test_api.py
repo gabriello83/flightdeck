@@ -526,8 +526,8 @@ comprueba("y el fichero es el de su perfil, aunque pida otro",
           cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA,
                           query={"perfil": "interno"}))["ultimo_dia"], "2026-10-12")
 o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_JEFE))
-comprueba("el administrador ve los once, revision la ultima", (len(o["cuadrados"]), o["cuadrados"][-1]),
-          (11, "revision"))
+comprueba("el administrador ve los doce, utilizo el ultimo", (len(o["cuadrados"]), o["cuadrados"][-2:]),
+          (12, ["revision", "utilizo"]))
 comprueba("almacenes incluido", o["foto"]["almacenes"]["valor"], 500000.0)
 del falsos.OBJETOS["cabina/ope-sur/operativo.json"]
 comprueba("sin calcular todavia, 503",
@@ -668,6 +668,24 @@ comprueba("y no hay parametro con el que pedir otra",
           _rev(cookie=COOKIE_JEFE, query={"perfil": "ope-sur"}), ("gzip", "interno"))
 del falsos.OBJETOS["cabina/interno/revision.json.gz"]
 comprueba("sin calcular todavia, 503", _rev(cookie=COOKIE_JEFE), 503)
+
+print("\nUtilizo (docs/60): el uso de VenCloud, solo direccion para arriba y sin ambito")
+falsos.OBJETOS["cabina/interno/utilizo.json.gz"] = gzip.compress(json.dumps({"perfil": "interno"}).encode())
+
+
+def _uti(**kw):
+    x = llama("GET", "/api/utilizo", **kw)
+    if x["statusCode"] != 200:
+        return x["statusCode"]
+    return (x["headers"].get("content-encoding"),
+            json.loads(gzip.decompress(_b64i.b64decode(x["body"])))["perfil"])
+
+
+comprueba("un cliente no lo ve", _uti(cookie=COOKIE_ANA), 403)
+comprueba("operaciones tampoco", _uti(cookie=COOKIE_OLGA), 403)
+comprueba("el administrador ve el de su perfil, comprimido", _uti(cookie=COOKIE_JEFE), ("gzip", "interno"))
+del falsos.OBJETOS["cabina/interno/utilizo.json.gz"]
+comprueba("sin calcular todavia, 503", _uti(cookie=COOKIE_JEFE), 503)
 
 print("\nLa pagina de devoluciones (docs/57): igual, con su propio fichero")
 falsos.OBJETOS["cabina/ope-sur/devoluciones.json.gz"] = gzip.compress(json.dumps({"perfil": "ope-sur"}).encode())

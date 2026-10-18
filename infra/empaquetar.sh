@@ -21,7 +21,7 @@ cp infra/lambda_extraccion.py "$TEMP/index.py"
 rm "$TEMP/index.py"
 
 # El de digivend-agregados apunta al modulo, asi que van con su nombre.
-(cd infra && zip -q "$SALIDA/agregados.zip" lambda_agregados.py reglas.py cuadro.py serie.py operativo.py tarifas.py revision.py telemetria.py almacenes.py incidencias.py devoluciones.py)
+(cd infra && zip -q "$SALIDA/agregados.zip" lambda_agregados.py reglas.py cuadro.py serie.py operativo.py tarifas.py revision.py utilizo.py telemetria.py almacenes.py incidencias.py devoluciones.py)
 
 # --- plataforma web --------------------------------------------------------
 # telemetria.py vive en infra/ porque lo usan las dos pilas: la API lee los

@@ -174,6 +174,16 @@ comprueba("el indice pierde los totales de venta e incidencias",
 comprueba("y la cabecera de la venta", "ventas" in _i, False)
 comprueba("sin tocar el original", "importe" in _IX["meses"][0], True)
 
+print("\nUtilizo: direccion para arriba y sin ambito")
+_dir = {"tipo": "direccion", "sesiones": ["instalaciones"]}
+comprueba("direccion sin ambito lo ve", "utilizo" in A.cuadrados_de(_dir), True)
+comprueba("direccion con delegacion no", "utilizo" in A.cuadrados_de(
+    dict(_dir, ambito={"delegaciones": ["SEVILLA"]})), False)
+comprueba("operaciones no", "utilizo" in A.cuadrados_de(
+    {"tipo": "operaciones", "sesiones": ["instalaciones"]}), False)
+comprueba("pero operaciones si ve la revision", "revision" in A.cuadrados_de(
+    {"tipo": "operaciones", "sesiones": ["instalaciones"]}), True)
+
 print()
 if fallos:
     print(f"{len(fallos)} PRUEBAS FALLIDAS: {', '.join(fallos)}")
