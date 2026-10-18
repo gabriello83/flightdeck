@@ -126,9 +126,17 @@ def usuarios_de(filas, desde):
         k[2] = max(k[2], ultima)
     out = {}
     for mat, us in por.items():
-        usuario, (_, _, ultima) = max(us.items(), key=lambda x: (x[1][0], x[1][1], x[1][2]))
-        out[mat] = {"usuario": usuario, "fecha": ultima}
+        # Un id negativo (-102) no es una persona: son los procesos de VenCloud
+        # (el terminal del reponedor, por ejemplo). Solo cuenta si no hay nadie.
+        usuario, (_, _, ultima) = max(us.items(), key=lambda x: (not es_proceso(x[0]), x[1][0],
+                                                               x[1][1], x[1][2]))
+        out[mat] = {"usuario": f"Proceso de VenCloud ({usuario})" if es_proceso(usuario) else usuario,
+                    "fecha": ultima}
     return out
+
+
+def es_proceso(usuario):
+    return usuario.startswith("-") and usuario[1:].isdigit()
 
 
 def planogramas(estado, censo, hoy, usuarios=None):

@@ -77,6 +77,12 @@ e2u = RV.planogramas(e1, censo2, HOY, usuarios=m14)
 comprueba("y llega al planograma creado",
           [(c["matricula"], c.get("usuario"), c.get("fecha")) for c in e2u["creados"]],
           [("A2", "mgarcia", "2026-10-18 09:40:00")])
+comprueba("un proceso de VenCloud (id negativo) solo si no hay una persona",
+          (RV.usuarios_de(m14 + [{"origen": "canal", "matricula": "A2", "usuario": "-102", "cambios": 99,
+                                  "ultima": "2026-10-18 10:00:00"}], "2026-10-18")["A2"]["usuario"],
+           RV.usuarios_de([{"origen": "canal", "matricula": "A9", "usuario": "-102", "cambios": 1,
+                            "ultima": "2026-10-18 10:00:00"}], "2026-10-18")["A9"]["usuario"]),
+          ("mgarcia", "Proceso de VenCloud (-102)"))
 comprueba("sin el informe, sin usuario",
           [c.get("usuario") for c in RV.planogramas(e1, censo2, HOY)["creados"]], [None])
 
