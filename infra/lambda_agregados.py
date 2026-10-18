@@ -123,6 +123,10 @@ CLAVE_ESTADO_TARIFAS = "cabina/_tarifas/estado.json.gz"
 # Las maquinas sin planograma de la noche anterior, para saber cuales se han
 # creado (revision.py explica por que hace falta guardarlas).
 CLAVE_ESTADO_PLANOGRAMAS = "cabina/_revision/planogramas.json.gz"
+# Quien toca el planograma de cada maquina (docs/17, M14): de ahi sale el
+# usuario de cada planograma creado.
+CLAVE_PLANOGRAMA_USUARIOS = os.environ.get(
+    "PLANOGRAMA_USUARIOS", "maestros/planograma_usuarios/m_planograma_usuarios.json.gz")
 # Que hace el observador de tarifas con cada fuente. Va con el fichero ENTERO,
 # antes de filtrar por perfil: el estado es uno para todos.
 TARIFAS_COME = {"lineas": "come_cargas", "telemetria": "come_telemetria",
@@ -1520,7 +1524,9 @@ def lambda_handler(event, context):
         censo = _filas(_json_de(CLAVE_CENSO))
         # Los planogramas creados se miran en toda la red, una vez: cada perfil
         # se queda luego con sus maquinas.
-        planogramas = RV.planogramas(_json_de(CLAVE_ESTADO_PLANOGRAMAS), censo, hoy) \
+        usuarios_plano = _json_de(CLAVE_PLANOGRAMA_USUARIOS)
+        planogramas = RV.planogramas(_json_de(CLAVE_ESTADO_PLANOGRAMAS), censo, hoy,
+                                     _filas(usuarios_plano) if usuarios_plano else None) \
             if censo else None
         if planogramas is not None:
             escribe_comprimido(CLAVE_ESTADO_PLANOGRAMAS, planogramas)

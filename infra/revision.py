@@ -29,8 +29,9 @@ cambio no se rellena nunca (docs/09). Asi que se compara el censo de esta noche
 con el de la noche anterior: una maquina que anoche no tenia planograma y hoy
 si lo tiene, sigue instalada, es un planograma creado ayer. Se guarda en
 `cabina/_revision/planogramas.json.gz` y se conservan `DIAS_CREADOS` dias.
-Quien lo creo no esta en ningun informe que se baje hoy: va en el campo
-`usuario` cuando llegue, y mientras tanto se dice que falta.
+Quien lo creo sale del registro de actividad de VenCloud
+(M14 · EXT_PLANOGRAMA_USUARIOS, docs/17): el usuario que mas toco los canales
+de esa maquina desde la noche anterior. Sin ese informe se dice que falta.
 
 Sin dependencias: se prueba con `python3 infra/test_revision.py`.
 """
@@ -41,8 +42,8 @@ import reglas as R
 
 DIAS_CREADOS = 62
 
-SIN_USUARIO = ("Quién lo creó todavía no se descarga de VenCloud: falta el informe con el "
-               "usuario del planograma.")
+SIN_USUARIO = ("Quién lo creó todavía no se descarga de VenCloud: falta el informe "
+               "M14 · EXT_PLANOGRAMA_USUARIOS.")
 
 
 def _s(x):
@@ -96,11 +97,45 @@ def con_planograma(censo, hoy):
 # ----------------------------------------------------------------------
 # los planogramas creados, de una noche a otra
 # ----------------------------------------------------------------------
+# Que cambio pesa mas para decir quien creo el planograma: el canal es el
+# planograma de verdad; el aviso de VenCloud y la ficha de la maquina, si no
+# hay otra cosa.
+PESO_ORIGEN = {"canal": 3, "carril": 3, "evento": 2, "maquina": 1}
+
+
+def usuarios_de(filas, desde):
+    """{matricula: {"usuario", "fecha"}} de M14 · EXT_PLANOGRAMA_USUARIOS.
+
+    Para cada maquina, el usuario que mas toco su planograma desde `desde`
+    (la fecha de la noche anterior), y la ultima vez que lo hizo. Lo de antes
+    no cuenta: seria quien lo toco otro dia.
+    """
+    por = {}
+    for f in filas or []:
+        mat, usuario = _s(R.v(f, "matricula", "")), _s(R.v(f, "usuario", ""))
+        ultima = _s(R.v(f, "ultima", ""))[:19]
+        if not (mat and usuario) or ultima[:10] < (desde or ""):
+            continue
+        try:
+            n = int(float(R.v(f, "cambios", 0) or 0))
+        except (TypeError, ValueError):
+            n = 0
+        k = por.setdefault(mat, {}).setdefault(usuario, [0, 0, ""])
+        k[0] = max(k[0], PESO_ORIGEN.get(_s(R.v(f, "origen", "")), 0))
+        k[1] += n
+        k[2] = max(k[2], ultima)
+    out = {}
+    for mat, us in por.items():
+        usuario, (_, _, ultima) = max(us.items(), key=lambda x: (x[1][0], x[1][1], x[1][2]))
+        out[mat] = {"usuario": usuario, "fecha": ultima}
+    return out
+
+
 def planogramas(estado, censo, hoy, usuarios=None):
     """El estado nuevo: las sin planograma de hoy y los creados.
 
-    `estado` es el de la noche anterior (o None). `usuarios`, si llega, es
-    {matricula: {"usuario", "fecha"}} del informe de VenCloud.
+    `estado` es el de la noche anterior (o None). `usuarios`, si llega, son
+    las filas de M14 · EXT_PLANOGRAMA_USUARIOS (o ya {matricula: {...}}).
 
     Una segunda ejecucion el mismo dia compara con la misma noche de antes que
     la primera, no consigo misma: si no, los creados de hoy desaparecerian.
@@ -113,6 +148,8 @@ def planogramas(estado, censo, hoy, usuarios=None):
         previo = {"fecha": e.get("fecha"), "sin": e.get("sin") or {}}
     ahora = sin_planograma(censo, hoy)
     creados = [c for c in (e.get("creados") or []) if c.get("detectado") != hoy_s]
+    if usuarios is not None and not isinstance(usuarios, dict):
+        usuarios = usuarios_de(usuarios, previo.get("fecha"))
     if previo.get("fecha"):
         con = con_planograma(censo, hoy)
         dia = (hoy - datetime.timedelta(days=1)).isoformat()

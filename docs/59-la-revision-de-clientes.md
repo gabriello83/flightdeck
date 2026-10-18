@@ -39,12 +39,12 @@ las que ya lo tienen y siguen instaladas son **planogramas creados ayer**. Una m
 sin planograma no cuenta como creada. Se guardan dos meses. La primera noche no hay con qué
 comparar: los creados empiezan a salir el día después del primer despliegue.
 
-**Quién lo creó no se baja todavía.** La sonda `M14Z · EXT_SONDA_PLANOGRAMA` (docs/17, leída el
-18-oct) dice que las tablas del planograma no guardan usuario ni fecha de alta; sí hay dos
-registros con usuario, `control.activitylog` y `control.veneventlog`. La sonda
-`M14Y · EXT_SONDA_REGISTRO` dirá si alguno apunta la creación del planograma. Con eso se escribe
-el informe del usuario y se rellena el campo `usuario` de cada creado; hasta entonces la página
-lo dice y no pone a nadie.
+**Quién lo creó** sale del registro de actividad de VenCloud. Las tablas del planograma no
+guardan usuario (sonda M14Z, 18-oct), pero `control.activitylog` apunta cada cambio de canal con
+su usuario, y `control.veneventlog` avisa de cada cambio de planograma (sonda M14Y). El informe
+`M14 · EXT_PLANOGRAMA_USUARIOS` (docs/17) baja cada noche los últimos siete días, y a cada
+planograma creado se le pone el usuario que más tocó los canales de esa máquina desde la noche
+anterior. Sin ese informe la página lo dice y no pone a nadie.
 
 ## Lo que escribe la noche
 

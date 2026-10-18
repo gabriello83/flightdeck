@@ -63,6 +63,23 @@ comprueba("la que se retira sin planograma no es un planograma creado",
 e4 = RV.planogramas(e3, censo3, HOY + datetime.timedelta(days=RV.DIAS_CREADOS + 2))
 comprueba("lo de hace mas de dos meses se olvida", e4["creados"], [])
 
+print("\nEl usuario, del registro de actividad de VenCloud (M14)")
+m14 = [{"origen": "maquina", "matricula": "A2", "accion": "U", "usuario": "jefe", "cambios": 9,
+        "primera": "2026-10-18 08:00:00", "ultima": "2026-10-18 08:05:00"},
+       {"origen": "canal", "matricula": "A2", "accion": "U", "usuario": "mgarcia", "cambios": 24,
+        "primera": "2026-10-18 09:00:00", "ultima": "2026-10-18 09:40:00"},
+       {"origen": "canal", "matricula": "A2", "accion": "U", "usuario": "antiguo", "cambios": 90,
+        "primera": "2026-10-12 09:00:00", "ultima": "2026-10-12 09:40:00"}]
+u = RV.usuarios_de(m14, "2026-10-18")
+comprueba("manda quien toco los canales desde la noche anterior, no la ficha ni otro dia",
+          u, {"A2": {"usuario": "mgarcia", "fecha": "2026-10-18 09:40:00"}})
+e2u = RV.planogramas(e1, censo2, HOY, usuarios=m14)
+comprueba("y llega al planograma creado",
+          [(c["matricula"], c.get("usuario"), c.get("fecha")) for c in e2u["creados"]],
+          [("A2", "mgarcia", "2026-10-18 09:40:00")])
+comprueba("sin el informe, sin usuario",
+          [c.get("usuario") for c in RV.planogramas(e1, censo2, HOY)["creados"]], [None])
+
 print("\nSin tarifa y precio distinto, maquina a maquina")
 
 
@@ -108,7 +125,7 @@ fich = RV.calcula(censo2, None, None, HOY)
 comprueba("sin tarifa dice por que no hay dato", "M10" in fich["sin_tarifa"]["sin_dato"], True)
 comprueba("el cuadrado no lleva la cuenta de tarifas", RV.cuadrado(fich, HOY),
           {"sin_planograma": 1, "creados_ayer": 0})
-comprueba("y sin el informe del usuario, se dice", "usuario" in fich["sin_usuario"], True)
+comprueba("y sin el informe del usuario, se dice", "M14" in fich["sin_usuario"], True)
 
 print("\nOtro perfil no ve los creados de una maquina que no es suya")
 fich = RV.calcula([maquina("Z9")], {}, e2, HOY)

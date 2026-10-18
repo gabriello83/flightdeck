@@ -2077,6 +2077,92 @@ group by e.proceso, e.entidad
 order by 1, 5 desc
 ```
 
+**Leída el 18-oct-2026.** `control.activitylog` apunta cada alta (`I`), cambio (`U`) y borrado
+(`D`) de las entidades de VenCloud con su usuario (`userid`) y el id del registro tocado
+(`element`). En treinta días hay 919 cambios de `MaquinaCanal`, 65 de `MaquinaCarril` y 962 de
+`Maquina`, y ningún alta de canal: un planograma se crea poniendo artículo a canales que ya
+existen. `control.veneventlog` apunta además el «borrado de pedidos de reponedor por cambio de
+planograma» (1.203 en treinta días), con el nombre del usuario y el punto de venta. De ahí sale
+M14.
+
+## M14 · EXT_PLANOGRAMA_USUARIOS  *(sin parámetros)*
+
+Quién ha tocado el planograma de cada máquina en los últimos siete días, y cuándo: los cambios de
+canales, de carriles y de la ficha de la máquina en `control.activitylog`, y los avisos de
+cambio de planograma de `control.veneventlog`. Una fila por máquina, origen, acción y usuario.
+La revisión de clientes (docs/59) se queda, para cada planograma creado, con el usuario que más
+cambios hizo desde la noche anterior.
+
+`element` es texto: sólo se cruza cuando es un número, para que un registro raro no tumbe el
+informe.
+
+```sql
+select
+  'canal'                            as origen,
+  m.codigo                           as matricula,
+  a.action                           as accion,
+  coalesce(u.nombre, cast(a.userid as text)) as usuario,
+  count(*)                           as cambios,
+  cast(min(a.date) as text)          as primera,
+  cast(max(a.date) as text)          as ultima
+from control.activitylog a
+join recursos.maquinascanales c on c.id = case when a.element ~ '^[0-9]+$'
+                                               then cast(a.element as bigint) end
+join recursos.maquinas m        on m.id = c.maquinaid
+left join general.usuarios u    on u.id = a.userid
+where a.entity = 'MaquinaCanal'
+  and a.date >= current_date - 7
+group by m.codigo, a.action, u.nombre, a.userid
+union all
+select
+  'carril'                           as origen,
+  m.codigo                           as matricula,
+  a.action                           as accion,
+  coalesce(u.nombre, cast(a.userid as text)) as usuario,
+  count(*)                           as cambios,
+  cast(min(a.date) as text)          as primera,
+  cast(max(a.date) as text)          as ultima
+from control.activitylog a
+join recursos.maquinascarriles c on c.id = case when a.element ~ '^[0-9]+$'
+                                                then cast(a.element as bigint) end
+join recursos.maquinas m         on m.id = c.maquinaid
+left join general.usuarios u     on u.id = a.userid
+where a.entity = 'MaquinaCarril'
+  and a.date >= current_date - 7
+group by m.codigo, a.action, u.nombre, a.userid
+union all
+select
+  'maquina'                          as origen,
+  m.codigo                           as matricula,
+  a.action                           as accion,
+  coalesce(u.nombre, cast(a.userid as text)) as usuario,
+  count(*)                           as cambios,
+  cast(min(a.date) as text)          as primera,
+  cast(max(a.date) as text)          as ultima
+from control.activitylog a
+join recursos.maquinas m      on m.id = case when a.element ~ '^[0-9]+$'
+                                             then cast(a.element as bigint) end
+left join general.usuarios u  on u.id = a.userid
+where a.entity = 'Maquina'
+  and a.date >= current_date - 7
+group by m.codigo, a.action, u.nombre, a.userid
+union all
+select
+  'evento'                           as origen,
+  m.codigo                           as matricula,
+  'planograma'                       as accion,
+  coalesce(e.usuarionombre, cast(e.usuarioid as text)) as usuario,
+  count(*)                           as cambios,
+  cast(min(e.fecha) as text)         as primera,
+  cast(max(e.fecha) as text)         as ultima
+from control.veneventlog e
+join recursos.maquinas m on m.pdvid = e.pdvid
+where e.texto ilike '%planograma%'
+  and e.fecha >= current_date - 7
+group by m.codigo, e.usuarionombre, e.usuarioid
+order by 2, 1, 7
+```
+
 ## M11 · EXT_MAESTRO_EMPLEADOS  *(sin parámetros)*
 
 Informe 190. Los empleados con su cargo y sus marcas de rol, sin teléfono, email ni DNI. El
