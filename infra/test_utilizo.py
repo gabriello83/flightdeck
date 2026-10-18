@@ -50,13 +50,15 @@ filas = [
     entidad("A.PEREZ", "2026-10-18", "Pdv", "U", 7),
     hora("A.PEREZ", "2026-10-19", 8, 99, "08:00:00", "08:10:00"),
 ]
-viejo = {"dias": {"2026-08-01": {"A.PEREZ": {"horas": {"9": 1}, "entidades": {}, "primera": "", "ultima": ""}},
+viejo = {"dias": {"2024-01-02": {"A.PEREZ": {"horas": {"9": 1}, "entidades": {}, "primera": "", "ultima": ""}},
+                  "2026-08-01": {"A.PEREZ": {"horas": {"9": 1}, "entidades": {}, "primera": "", "ultima": ""}},
                   "2026-10-18": {"X.VIEJO": {"horas": {"9": 1}, "entidades": {}, "primera": "", "ultima": ""}},
                   "2026-10-17": {"A.PEREZ": {"horas": {"11": 4}, "entidades": {"Pdv|U": 4},
                                              "primera": "11:00:00", "ultima": "11:30:00"}}}}
 e = UT.actividad(viejo, filas, HOY)
 comprueba("hoy no se guarda, que va a medias", "2026-10-19" in e["dias"], False)
-comprueba("mas de dos meses, fuera", "2026-08-01" in e["dias"], False)
+comprueba("con historico: dos meses atras se queda", "2026-08-01" in e["dias"], True)
+comprueba("mas de 800 dias, fuera", "2024-01-02" in e["dias"], False)
 comprueba("un dia que llega sustituye al guardado", "X.VIEJO" in e["dias"]["2026-10-18"], False)
 comprueba("el dia que no llega se queda", e["dias"]["2026-10-17"]["A.PEREZ"]["horas"], {"11": 4})
 comprueba("el usuario, en mayusculas", sorted(e["dias"]["2026-10-18"]),
@@ -73,11 +75,14 @@ comprueba("por hora, sumadas", mg["por_hora"], {"9": 10, "10": 8, "16": 2})
 comprueba("que toco, de mas a menos", mg["entidades"], [["MaquinaCanal", "U", 15], ["Maquina", "I", 2]])
 comprueba("las dos cuentas", mg["cuentas"], ["M.GARCIA", "M2.GARCIA"])
 comprueba("A.PEREZ, sus dos dias, el ultimo primero", [d["dia"] for d in gente["A.PEREZ"]["dias"]],
-          ["2026-10-18", "2026-10-17"])
+          ["2026-10-18", "2026-10-17", "2026-08-01"])
 
 print("\nLa pagina y el cuadrado")
 f = UT.fichero(e, HOY)
-comprueba("los dias, el ultimo primero", f["dias"], ["2026-10-18", "2026-10-17"])
+comprueba("los dias, el ultimo primero", f["dias"], ["2026-10-18", "2026-10-17", "2026-08-01"])
+ap = {d["dia"]: d for p in f["personas"] if p["nombre"] == "A.PEREZ" for d in p["dias"]}
+comprueba("de los dos ultimos meses, el detalle", "entidades" in ap["2026-10-17"], True)
+comprueba("de antes, solo las cifras", ("entidades" in ap["2026-08-01"], ap["2026-08-01"]["acciones"]), (False, 1))
 comprueba("el cuadrado: usuarios y acciones del ultimo dia", UT.cuadrado(f),
           {"dia": "2026-10-18", "usuarios": 2, "acciones": 27, "horas": 4})
 comprueba("sin informe ni historia, se dice", "M15" in UT.fichero(None, HOY)["sin_dato"], True)
@@ -88,6 +93,7 @@ print("\nEn la revision de clientes: solo las dos personas, aunque no hicieran n
 r = RV.calcula([], None, None, HOY, e)
 comprueba("M. Garcia y J. Marcos", [g["nombre"] for g in r["actividad"]["grupos"]], ["M. García", "J. Marcos"])
 comprueba("J. Marcos sin dias", r["actividad"]["grupos"][1]["dias"], [])
+comprueba("solo los dos ultimos meses", [d["dia"] for d in r["actividad"]["grupos"][0]["dias"]], ["2026-10-18"])
 comprueba("sin el informe, se dice", "M15" in RV.calcula([], None, None, HOY, None)["actividad"]["sin_dato"], True)
 comprueba("un perfil con ambito no lo lleva", "actividad" in RV.calcula([], None, None, HOY), False)
 

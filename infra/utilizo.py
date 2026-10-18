@@ -9,13 +9,16 @@ J2.MARCOS) y se ven juntas; ademas, su detalle va en la revision de clientes
 
 De donde sale: `control.activitylog` de VenCloud apunta cada alta (I), cambio
 (U) y borrado (D) que hace un usuario, con la hora (sondas M14Y, docs/17). El
-informe `M15 · EXT_ACTIVIDAD_USUARIOS` baja los tres ultimos dias, ya contados
-por usuario, dia y hora, y por usuario, dia, entidad y accion. Los ids
-negativos son procesos de VenCloud, no personas, y no entran.
+informe `M15 · EXT_ACTIVIDAD_USUARIOS` (196) se baja dia a dia, como las
+visitas, ya contado por usuario, dia y hora, y por usuario, dia, entidad y
+accion. Los ids negativos son procesos de VenCloud, no personas, y no entran.
 
-La historia la guarda la noche (`cabina/_utilizo/actividad.json.gz`, dos
-meses): el informe solo trae tres dias. Un dia que vuelve a llegar sustituye al
-guardado, y el de hoy no se guarda, que va a medias.
+CON HISTORICO (Gabriele, 18-oct): la noche guarda todos los dias en
+`cabina/_utilizo/actividad.json.gz`, y el relleno historico de la extraccion
+baja los de atras. Un dia que vuelve a llegar sustituye al guardado, y el de
+hoy no se guarda, que va a medias. La pagina lleva de todos los dias las
+cifras (acciones, horas, primera y ultima) y, de los dos ultimos meses, ademas
+el detalle (por hora y que toco): asi pesa poco aunque haya anos.
 
 Solo lo ve un perfil sin ambito de direccion o administracion: es lo que hace
 la gente, no ningun cliente, y un perfil de delegacion no tiene por que ver a
@@ -38,7 +41,9 @@ GRUPOS_USUARIOS = (
     ("M. García", ("M.GARCIA", "M2.GARCIA")),
     ("J. Marcos", ("J.MARCOS", "J2.MARCOS")),
 )
-DIAS_ACTIVIDAD = 62
+# Cuanta historia se guarda, y de cuanta se manda el detalle a la pagina.
+DIAS_HISTORIA = 800
+DIAS_DETALLE = 62
 
 SIN_ACTIVIDAD = ("La actividad de los usuarios todavía no se descarga de VenCloud: falta el "
                  "informe M15 · EXT_ACTIVIDAD_USUARIOS.")
@@ -78,16 +83,18 @@ def actividad(estado, filas, hoy):
             k = f"{_s(R.v(f, 'entidad', ''))}|{_s(R.v(f, 'accion', ''))}"
             u["entidades"][k] = u["entidades"].get(k, 0) + n
     dias.update(nuevos)
-    corte = (hoy - datetime.timedelta(days=DIAS_ACTIVIDAD)).isoformat()
+    corte = (hoy - datetime.timedelta(days=DIAS_HISTORIA)).isoformat()
     return {"dias": {d: v for d, v in sorted(dias.items()) if d >= corte}}
 
 
-def personas(estado, grupos=GRUPOS_USUARIOS, todos=True):
+def personas(estado, grupos=GRUPOS_USUARIOS, todos=True, desde="", detalle_desde=""):
     """Por persona y dia, sus cuentas juntas.
 
     Con `todos`, todos los usuarios de VenCloud (Utilizo): los de `grupos` con
     sus dos cuentas juntas y cada uno de los demas por su cuenta. Sin el, solo
-    `grupos` (su detalle en la revision de clientes). Las horas
+    `grupos` (su detalle en la revision de clientes). `desde` deja fuera los
+    dias anteriores; antes de `detalle_desde`, cada dia va sin su detalle (por
+    hora y que toco), solo con sus cifras. Las horas
     con actividad se cuentan sobre la union de las horas de las cuentas: si las
     dos trabajaron a las 10, es una hora, no dos.
     """
@@ -99,6 +106,8 @@ def personas(estado, grupos=GRUPOS_USUARIOS, todos=True):
     for nombre, cuentas in personas:
         por_dia = []
         for dia, usuarios in sorted(dias_estado.items(), reverse=True):
+            if dia < desde:
+                continue
             mias = [usuarios[c] for c in cuentas if c in usuarios]
             if not mias:
                 continue
@@ -113,10 +122,11 @@ def personas(estado, grupos=GRUPOS_USUARIOS, todos=True):
                 "dia": dia, "acciones": sum(horas.values()) or sum(entidades.values()),
                 "horas": len(horas), "primera": min(primeras) if primeras else "",
                 "ultima": max(u["ultima"] for u in mias),
-                "cuentas": [c for c in cuentas if c in usuarios],
-                "por_hora": {h: horas[h] for h in sorted(horas, key=int)},
-                "entidades": sorted(([*k.split("|", 1), n] for k, n in entidades.items()),
-                                    key=lambda x: -x[2])})
+                "cuentas": [c for c in cuentas if c in usuarios]})
+            if dia >= detalle_desde:
+                por_dia[-1]["por_hora"] = {h: horas[h] for h in sorted(horas, key=int)}
+                por_dia[-1]["entidades"] = sorted(([*k.split("|", 1), n] for k, n in entidades.items()),
+                                                  key=lambda x: -x[2])
         if por_dia or not todos:
             out.append({"nombre": nombre, "cuentas": list(cuentas), "dias": por_dia})
     return out
@@ -126,9 +136,10 @@ def fichero(estado, hoy):
     """La pagina de Utilizo: todas las personas, con su historia."""
     if estado is None:
         return {"sin_dato": SIN_ACTIVIDAD}
-    gente = personas(estado)
+    detalle = (hoy - datetime.timedelta(days=DIAS_DETALLE)).isoformat()
+    gente = personas(estado, detalle_desde=detalle)
     dias = sorted({d["dia"] for p in gente for d in p["dias"]}, reverse=True)
-    return {"generado": hoy.isoformat(), "dias": dias, "personas": gente}
+    return {"generado": hoy.isoformat(), "dias": dias, "detalle_desde": detalle, "personas": gente}
 
 
 def cuadrado(f):

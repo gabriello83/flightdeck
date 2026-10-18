@@ -126,10 +126,11 @@ CLAVE_ESTADO_TARIFAS = "cabina/_tarifas/estado.json.gz"
 CLAVE_ESTADO_PLANOGRAMAS = "cabina/_revision/planogramas.json.gz"
 # Quien toca el planograma de cada maquina (docs/17, M14): de ahi sale el
 # usuario de cada planograma creado.
-# Lo que hace cada persona en VenCloud (docs/17, M15), y su historia, que el
-# informe solo trae tres dias.
-CLAVE_ACTIVIDAD_USUARIOS = os.environ.get(
-    "ACTIVIDAD_USUARIOS", "maestros/actividad_usuarios/m_actividad_usuarios.json.gz")
+# Lo que hace cada persona en VenCloud (docs/17, M15), dia a dia, y su historia.
+DESTINO_ACTIVIDAD = "crudo/actividad_usuarios"
+# Los dias de M15 que se releen cada noche: la ventana de reproceso de la
+# extraccion, y uno mas.
+DIAS_ACTIVIDAD_NOCHE = 4
 CLAVE_ESTADO_ACTIVIDAD = "cabina/_utilizo/actividad.json.gz"
 CLAVE_PLANOGRAMA_USUARIOS = os.environ.get(
     "PLANOGRAMA_USUARIOS", "maestros/planograma_usuarios/m_planograma_usuarios.json.gz")
@@ -1214,6 +1215,16 @@ def escribe_tarifas(acu, op, tarifas, censo, observador, hoy):
             "sin_dato": t["sin_dato"], "centros": len(detalle)}, detalle
 
 
+def dias_actividad(hoy, desde=None):
+    """Los dias de M15 que se leen esta noche, del mas viejo al de ayer."""
+    if desde:
+        primero = datetime.date.fromisoformat(str(desde)[:10])
+    else:
+        primero = hoy - datetime.timedelta(days=DIAS_ACTIVIDAD_NOCHE)
+    n = (hoy - primero).days
+    return [primero + datetime.timedelta(days=i) for i in range(max(n, 0))]
+
+
 def _sin_ambito(acu):
     return not any(acu.ambito.get(k) for k in ("clientes", "centros", "delegaciones"))
 
@@ -1554,12 +1565,18 @@ def lambda_handler(event, context):
             if censo else None
         if planogramas is not None:
             escribe_comprimido(CLAVE_ESTADO_PLANOGRAMAS, planogramas)
-        # Utilizo (docs/60): la historia de la actividad, con lo de esta noche.
+        # Utilizo (docs/60): la historia de la actividad, con los dias de esta
+        # noche. Tras un relleno historico de M15, el evento
+        # {"utilizo_desde": "2025-01-01"} relee todos los dias desde esa fecha.
         # Si M15 no llega, se sigue ensenando la guardada.
-        filas_actividad = _json_de(CLAVE_ACTIVIDAD_USUARIOS)
-        actividad = _json_de(CLAVE_ESTADO_ACTIVIDAD)
-        if filas_actividad:
-            actividad = UT.actividad(actividad, _filas(filas_actividad), hoy)
+        # Dia a dia: un relleno de anos no cabe entero en memoria.
+        actividad, leidos = _json_de(CLAVE_ESTADO_ACTIVIDAD), 0
+        for dia in dias_actividad(hoy, event.get("utilizo_desde")):
+            filas_actividad = lee_dia(DESTINO_ACTIVIDAD, "actividad_usuarios", dia)
+            if filas_actividad:
+                actividad = UT.actividad(actividad, filas_actividad, hoy)
+                leidos += 1
+        if leidos:
             escribe_comprimido(CLAVE_ESTADO_ACTIVIDAD, actividad)
         resumen_utilizo = escribe_utilizo(acumuladores, operativos, actividad, hoy)
         escribe_incidencias(acumuladores, operativos, incidencias, mapa, hoy)

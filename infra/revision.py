@@ -240,7 +240,9 @@ def calcula(censo, detalle_tarifas, estado_planogramas, hoy, actividad=False):
     # False en los demas, None si falta el informe M15.
     if actividad is not False:
         out["actividad"] = ({"sin_dato": UT.SIN_ACTIVIDAD} if actividad is None
-                            else {"grupos": UT.personas(actividad, todos=False)})
+                            else {"grupos": UT.personas(
+                                actividad, todos=False,
+                                desde=(hoy - datetime.timedelta(days=UT.DIAS_DETALLE)).isoformat())})
 
     if detalle_tarifas is None:
         import tarifas as TA

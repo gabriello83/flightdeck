@@ -137,7 +137,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 .horas span.cero{background:var(--borde)}
 .horas-et{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;font-size:10px;color:var(--tinta-3);text-align:center}
 .dos{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-a.dia{color:var(--s1)}
+a.dia,a.mes{color:var(--s1)}
 .barrita{display:inline-block;height:8px;border-radius:4px;background:var(--s1);vertical-align:middle;margin-right:6px}
 @media (max-width:760px){ .dos{grid-template-columns:1fr} }
 @media (max-width:560px){
@@ -161,7 +161,9 @@ a.dia{color:var(--s1)}
   </header>
 
   <div class="barra" id="barra" hidden>
-    <label>Día <select id="fDia"></select></label>
+    <label>Ver <select id="fPer"><option value="dia">Un día</option><option value="mes">Un mes</option></select></label>
+    <label id="lDia">Día <select id="fDia"></select></label>
+    <label id="lMes" hidden>Mes <select id="fMes"></select></label>
     <label>Buscar <input id="fBusca" type="search" placeholder="Usuario" autocomplete="off"></label>
   </div>
   <nav class="miga" id="miga" aria-label="Dónde estás" hidden></nav>
@@ -179,8 +181,10 @@ a.dia{color:var(--s1)}
    Cuanto usa VenCloud cada persona, dia a dia: acciones (altas, cambios y
    borrados del registro de actividad de VenCloud), horas con actividad, primera
    y ultima, y que toco. M.GARCIA y M2.GARCIA son una persona, y J.MARCOS y
-   J2.MARCOS otra: llegan ya juntas. Esta pagina no calcula nada: dibuja lo que
-   escribio la noche (infra/utilizo.py).
+   J2.MARCOS otra: llegan ya juntas. Con historico: se ve un dia o un mes
+   entero, y de cada usuario su historia mes a mes. El detalle (por hora y que
+   toco) solo llega de los dos ultimos meses. Esta pagina solo suma los dias
+   del mes; el resto lo escribio la noche (infra/utilizo.py).
    =================================================================== */
 const CLAVE_TEMA = "digivend.tema";
 const num  = n => new Intl.NumberFormat("es-ES").format(Math.round(n||0));
@@ -214,6 +218,10 @@ function fechaCorta(s){
   const d = new Date(String(s).slice(0,10)+"T00:00:00");
   return Number.isNaN(d.getTime()) ? String(s||"") : d.toLocaleDateString("es-ES",{day:"numeric", month:"short", year:"numeric"});
 }
+function mesLargo(m){
+  const d = new Date(String(m).slice(0,7)+"-01T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(m||"") : d.toLocaleDateString("es-ES",{month:"long", year:"numeric"});
+}
 function fechaLarga(s){
   const d = new Date(String(s).slice(0,10)+"T00:00:00");
   return Number.isNaN(d.getTime()) ? String(s||"") : d.toLocaleDateString("es-ES",{weekday:"long", day:"numeric", month:"long"});
@@ -229,15 +237,19 @@ const sinTildes = s => String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toL
 /* ----------------------------------------------------- estado en la URL */
 function ruta(){
   const q = new URLSearchParams(location.hash.slice(1));
-  return {dia: q.get("dia") || "", p: q.get("p") || "", q: q.get("q") || ""};
+  return {dia: q.get("dia") || "", p: q.get("p") || "", q: q.get("q") || "",
+          per: q.get("per")==="mes" ? "mes" : "dia", mes: q.get("mes") || ""};
 }
 function ir(cambios){
   const r = Object.assign(ruta(), cambios);
   const q = new URLSearchParams();
-  for(const k of ["dia","p","q"]) if(r[k]) q.set(k, r[k]);
+  if(r.per==="dia") r.per = "";
+  for(const k of ["per","mes","dia","p","q"]) if(r[k]) q.set(k, r[k]);
   location.hash = q.toString();
 }
 $("#fDia").addEventListener("change", e=>ir({dia:e.target.value}));
+$("#fMes").addEventListener("change", e=>ir({mes:e.target.value}));
+$("#fPer").addEventListener("change", e=>ir({per:e.target.value}));
 let tecleo = null;
 $("#fBusca").addEventListener("input", e=>{
   clearTimeout(tecleo);
@@ -246,19 +258,36 @@ $("#fBusca").addEventListener("input", e=>{
 
 function diaDe(r){ return r.dia && D.dias.includes(r.dia) ? r.dia : (D.dias[0] || ""); }
 const delDia = (p, dia) => p.dias.find(d=>d.dia===dia);
+let MESES = [];
+function mesDe(r){ return r.mes && MESES.includes(r.mes) ? r.mes : (MESES[0] || ""); }
+/* Lo de un usuario en un mes: la suma de sus dias. Lo que toco solo se suma de
+   los dias que traen detalle (los dos ultimos meses). */
+function delMes(p, mes){
+  const dias = p.dias.filter(d=>d.dia.slice(0,7)===mes);
+  if(!dias.length) return null;
+  const que = {};
+  dias.forEach(d=>(d.entidades||[]).forEach(([e,a,n])=>{ const k = e+"|"+a; que[k] = (que[k]||0) + n; }));
+  return {dias: dias.length, acciones: dias.reduce((s,d)=>s+d.acciones, 0), horas: dias.reduce((s,d)=>s+d.horas, 0),
+          lista: dias, entidades: Object.entries(que).map(([k,n])=>[...k.split("|"), n]).sort((a,b)=>b[2]-a[2])};
+}
+const SIN_DETALLE = "El detalle por hora y qué tocó sólo se guarda de los dos últimos meses.";
 
 /* ------------------------------------------------------------ la vista */
 function pinta(){
   avisa("");
-  const r = ruta(), dia = diaDe(r);
-  $("#fDia").innerHTML = D.dias.map(d=>`<option value="${d}"${d===dia?" selected":""}>${esc(fechaLarga(d))}</option>`).join("");
+  const r = ruta(), dia = diaDe(r), mes = mesDe(r);
+  $("#fPer").value = r.per;
+  $("#lDia").hidden = r.per!=="dia"; $("#lMes").hidden = r.per!=="mes";
+  $("#fDia").innerHTML = D.dias.map(d=>`<option value="${d}"${d===dia?" selected":""}>${esc(fechaLarga(d))} de ${d.slice(0,4)}</option>`).join("");
+  $("#fMes").innerHTML = MESES.map(m=>`<option value="${m}"${m===mes?" selected":""}>${esc(mesLargo(m))}</option>`).join("");
   if(document.activeElement !== $("#fBusca")) $("#fBusca").value = r.q;
   $("#barra").hidden = false;
   const p = r.p && D.personas.find(x=>x.nombre===r.p);
-  if(p) return vistaPersona(p, dia);
+  if(p) return vistaPersona(p, r.per==="mes" ? null : dia, r.per==="mes" ? mes : dia.slice(0,7));
   $("#miga").hidden = true;
   $("#fBusca").closest("label").hidden = false;
-  vistaDia(dia, r);
+  if(r.per==="mes") vistaMes(mes, r);
+  else vistaDia(dia, r);
 }
 
 function vistaDia(dia, r){
@@ -289,7 +318,7 @@ function vistaDia(dia, r){
     + `<th class="n">Horas</th><th class="oculta-movil">Primera · última</th><th class="oculta-movil">Lo que más tocó</th>`
     + `<th class="n oculta-movil">Días con actividad</th></tr></thead><tbody>`
     + filas.map(({p,x})=>{
-        const top = x.entidades[0];
+        const top = (x.entidades||[])[0];
         const activosMes = ultimos.filter(d=>delDia(p,d)).length;
         return `<tr><td><button class="mat" type="button" data-p="${esc(p.nombre)}">${esc(p.nombre)}</button>`
           + (p.cuentas.length>1 ? `<div class="peq">${p.cuentas.map(esc).join(" + ")}</div>` : "") + `</td>`
@@ -302,18 +331,67 @@ function vistaDia(dia, r){
   caja.querySelectorAll(".mat").forEach(b=>b.addEventListener("click", ()=>ir({p:b.dataset.p})));
 }
 
-function vistaPersona(p, dia){
+function vistaMes(mes, r){
+  const diasMes = D.dias.filter(d=>d.slice(0,7)===mes);
+  const activos = D.personas.map(p=>({p, x:delMes(p, mes)})).filter(o=>o.x)
+    .sort((a,b)=>b.x.acciones-a.x.acciones || a.p.nombre.localeCompare(b.p.nombre,"es"));
+  const busca = sinTildes(r.q);
+  const filas = busca ? activos.filter(o=>sinTildes(o.p.nombre+" "+o.p.cuentas.join(" ")).includes(busca)) : activos;
+  const acciones = activos.reduce((s,o)=>s+o.x.acciones, 0);
+  const max = Math.max(1, ...activos.map(o=>o.x.acciones));
+  const v = $("#vista");
+  v.innerHTML = `<div class="kpis fijos">`
+    + `<div class="kpi"><div class="et">Usuarios</div><div class="vl">${num(activos.length)}</div><div class="nt">con alguna acción en ${esc(mesLargo(mes))}</div></div>`
+    + `<div class="kpi"><div class="et">Acciones</div><div class="vl">${num(acciones)}</div><div class="nt">altas, cambios y borrados</div></div>`
+    + `<div class="kpi"><div class="et">Días con actividad</div><div class="vl">${num(diasMes.length)}</div><div class="nt">días del mes en que alguien usó VenCloud</div></div>`
+    + `</div><section class="caja" id="tabla"></section>`;
+  const caja = $("#tabla");
+  caja.innerHTML = `<div class="cabsec"><h2>Uso de VenCloud en ${esc(mesLargo(mes))}</h2>`
+    + `<button class="btn primario" id="bExcel" type="button">Descargar Excel</button></div>`
+    + `<p class="explica">Cada usuario con lo que hizo en el mes: sus acciones, cuántos días trabajó en VenCloud, las horas con actividad sumando las de cada día y la media de acciones por día trabajado. M. García y J. Marcos van con sus dos cuentas juntas. Pulsa un usuario para ver sus días.</p>`;
+  $("#bExcel").addEventListener("click", ()=>excelMes(mes));
+  if(!filas.length){
+    caja.insertAdjacentHTML("beforeend", `<p class="vacio">${busca ? "Ningún usuario con ese nombre tuvo actividad ese mes." : "Ningún usuario tuvo actividad ese mes."}</p>`);
+    return;
+  }
+  caja.insertAdjacentHTML("beforeend", `<div class="tabla-env"><table><thead><tr><th>Usuario</th><th class="n">Acciones</th>`
+    + `<th class="n">Días</th><th class="n oculta-movil">Horas</th><th class="n oculta-movil">Media por día</th>`
+    + `<th class="oculta-movil">Lo que más tocó</th></tr></thead><tbody>`
+    + filas.map(({p,x})=>{
+        const top = x.entidades[0];
+        return `<tr><td><button class="mat" type="button" data-p="${esc(p.nombre)}">${esc(p.nombre)}</button>`
+          + (p.cuentas.length>1 ? `<div class="peq">${p.cuentas.map(esc).join(" + ")}</div>` : "") + `</td>`
+          + `<td class="n"><span class="barrita" style="width:${Math.max(2, Math.round(x.acciones/max*60))}px"></span><b>${num(x.acciones)}</b></td>`
+          + `<td class="n">${num(x.dias)} <span class="peq">de ${num(diasMes.length)}</span></td>`
+          + `<td class="n oculta-movil">${num(x.horas)}</td><td class="n oculta-movil">${num(x.acciones/x.dias)}</td>`
+          + `<td class="oculta-movil">${top ? `${esc(top[0])} · ${esc(ACCION[top[1]]||top[1])} <span class="peq">${num(top[2])}</span>` : `<span class="peq">sin detalle</span>`}</td></tr>`;
+      }).join("")
+    + `</tbody></table></div>`);
+  caja.querySelectorAll(".mat").forEach(b=>b.addEventListener("click", ()=>ir({p:b.dataset.p})));
+}
+
+function vistaPersona(p, dia, mes){
   $("#fBusca").closest("label").hidden = true;
   const mi = $("#miga");
   mi.innerHTML = `<a href="#" id="volver">Todos los usuarios</a> › <b>${esc(p.nombre)}</b>`;
   mi.hidden = false;
   $("#volver").addEventListener("click", e=>{ e.preventDefault(); ir({p:""}); });
-  const x = delDia(p, dia);
+  const x = dia ? delDia(p, dia) : null, xm = delMes(p, mes);
   const v = $("#vista");
-  let h = `<section class="caja"><div class="cabsec"><div><h2>${esc(p.nombre)} · ${esc(fechaLarga(dia))}</h2>`
+  let h = `<section class="caja"><div class="cabsec"><div><h2>${esc(p.nombre)} · ${esc(dia ? fechaLarga(dia) : mesLargo(mes))}</h2>`
     + `<div class="peq">${p.cuentas.length>1 ? "Cuentas " + p.cuentas.map(esc).join(" y ") : "Cuenta " + esc(p.cuentas[0])}</div></div>`
     + `<button class="btn primario" id="bExcel" type="button">Descargar Excel</button></div>`;
-  if(!x) h += `<p class="vacio">Ninguna acción en VenCloud este día.</p>`;
+  if(!dia){
+    h += xm ? `<div class="persona-cab"><div><b>${num(xm.acciones)}</b>acciones</div><div><b>${num(xm.dias)}</b>días con actividad</div>`
+            + `<div><b>${num(xm.horas)}</b>horas con actividad</div><div><b>${num(xm.acciones/xm.dias)}</b>acciones por día</div></div>`
+            + (xm.entidades.length ? `<h2 style="margin-top:16px">Qué tocó en el mes</h2><div class="tabla-env"><table><thead><tr><th>Qué</th><th>Acción</th><th class="n">Veces</th></tr></thead><tbody>`
+                + xm.entidades.map(([e,a,n])=>`<tr><td>${esc(e)}</td><td>${esc(ACCION[a]||a)}</td><td class="n">${num(n)}</td></tr>`).join("")
+                + `</tbody></table></div>` : `<p class="peq">${SIN_DETALLE}</p>`)
+            : `<p class="vacio">Ninguna acción en VenCloud este mes.</p>`;
+  }
+  else if(!x) h += `<p class="vacio">Ninguna acción en VenCloud este día.</p>`;
+  else if(!x.entidades) h += `<div class="persona-cab"><div><b>${num(x.acciones)}</b>acciones</div><div><b>${num(x.horas)}</b>horas con actividad</div>`
+      + `<div><b>${esc(deA(x))}</b>primera · última</div></div><p class="peq">${SIN_DETALLE}</p>`;
   else {
     const max = Math.max(1, ...Object.values(x.por_hora||{}));
     h += `<div class="persona-cab"><div><b>${num(x.acciones)}</b>acciones</div><div><b>${num(x.horas)}</b>horas con actividad</div>`
@@ -328,17 +406,26 @@ function vistaPersona(p, dia){
       + x.entidades.map(([e,a,n])=>`<tr><td>${esc(e)}</td><td>${esc(ACCION[a]||a)}</td><td class="n">${num(n)}</td></tr>`).join("")
       + `</tbody></table></div>`;
   }
-  h += `<h2 style="margin-top:16px">Día a día</h2><div class="tabla-env"><table><thead><tr><th>Día</th><th class="n">Acciones</th><th class="n">Horas</th><th class="oculta-movil">Primera · última</th></tr></thead><tbody>`
-    + D.dias.map(d=>{
+  h += `<h2 style="margin-top:16px">Día a día, ${esc(mesLargo(mes))}</h2><div class="tabla-env"><table><thead><tr><th>Día</th><th class="n">Acciones</th><th class="n">Horas</th><th class="oculta-movil">Primera · última</th></tr></thead><tbody>`
+    + D.dias.filter(d=>d.slice(0,7)===mes).map(d=>{
         const y = delDia(p, d);
         return `<tr><td><a href="#" class="dia" data-d="${d}">${esc(fechaCorta(d))}</a></td>`
           + (y ? `<td class="n"><b>${num(y.acciones)}</b></td><td class="n">${num(y.horas)}</td><td class="oculta-movil">${esc(deA(y))}</td>`
                : `<td class="n">0</td><td class="n">0</td><td class="oculta-movil peq">sin actividad</td>`) + `</tr>`;
       }).join("")
+    + `</tbody></table></div>`
+    + `<h2 style="margin-top:16px">Mes a mes</h2><div class="tabla-env" id="mesames"><table><thead><tr><th>Mes</th><th class="n">Acciones</th><th class="n">Días</th><th class="n oculta-movil">Horas</th><th class="n oculta-movil">Media por día</th></tr></thead><tbody>`
+    + MESES.map(m=>{
+        const y = delMes(p, m);
+        return `<tr><td><a href="#" class="mes" data-m="${m}">${esc(mesLargo(m))}</a></td>`
+          + (y ? `<td class="n"><b>${num(y.acciones)}</b></td><td class="n">${num(y.dias)}</td><td class="n oculta-movil">${num(y.horas)}</td><td class="n oculta-movil">${num(y.acciones/y.dias)}</td>`
+               : `<td class="n">0</td><td class="n">0</td><td class="n oculta-movil">0</td><td class="n oculta-movil">—</td>`) + `</tr>`;
+      }).join("")
     + `</tbody></table></div></section>`;
   v.innerHTML = h;
-  v.querySelectorAll("a.dia").forEach(a=>a.addEventListener("click", e=>{ e.preventDefault(); ir({dia:a.dataset.d}); }));
-  $("#bExcel").addEventListener("click", ()=>excelPersona(p, dia));
+  v.querySelectorAll("a.dia").forEach(a=>a.addEventListener("click", e=>{ e.preventDefault(); ir({per:"dia", dia:a.dataset.d}); }));
+  v.querySelectorAll("a.mes").forEach(a=>a.addEventListener("click", e=>{ e.preventDefault(); ir({per:"mes", mes:a.dataset.m}); }));
+  $("#bExcel").addEventListener("click", ()=>excelPersona(p, dia, mes));
 }
 
 /* ------------------------------------------------------------- los Excel */
@@ -353,7 +440,7 @@ function excelDia(dia){
     const x = delDia(p, dia);
     if(x){
       hoy.push(filaDia(p, dia, x));
-      x.entidades.forEach(([e,a,n])=>que.push([p.nombre, e, ACCION[a]||a, n]));
+      (x.entidades||[]).forEach(([e,a,n])=>que.push([p.nombre, e, ACCION[a]||a, n]));
     }
     p.dias.forEach(y=>historia.push(filaDia(p, y.dia, y)));
   });
@@ -366,17 +453,38 @@ function excelDia(dia){
     {nombre:"Día a día", titulo:tit("uso de VenCloud, día a día"), columnas:COL_DIA, filas:historia}]),
     `utilizo_${dia}.xlsx`);
 }
-function excelPersona(p, dia){
-  const x = delDia(p, dia);
+const COL_MES = [{titulo:"Mes",ancho:9},{titulo:"Usuario",ancho:16},{titulo:"Cuentas",ancho:22},{titulo:"Acciones",ancho:10},
+  {titulo:"Días con actividad",ancho:10},{titulo:"Horas con actividad",ancho:10},{titulo:"Media de acciones por día",ancho:12}];
+const filaMes = (p, m, y) => [m, p.nombre, p.cuentas.join(" + "), y.acciones, y.dias, y.horas, Math.round(y.acciones/y.dias)];
+function excelMes(mes){
+  const resumen = [], dias = [];
+  D.personas.forEach(p=>{
+    const y = delMes(p, mes);
+    if(!y) return;
+    resumen.push(filaMes(p, mes, y));
+    y.lista.forEach(x=>dias.push(filaDia(p, x.dia, x)));
+  });
+  resumen.sort((a,b)=>b[3]-a[3]);
+  dias.sort((a,b)=>a[0].localeCompare(b[0]) || b[3]-a[3]);
   XLSX.descarga(XLSX.libro([
-    {nombre:"Día a día", titulo:tit(`${p.nombre}, día a día`), columnas:COL_DIA, filas:p.dias.map(y=>filaDia(p, y.dia, y))},
+    {nombre:"Mes", titulo:tit(`uso de VenCloud en ${mesLargo(mes)}`), columnas:COL_MES, filas:resumen},
+    {nombre:"Día a día", titulo:tit(`uso de VenCloud en ${mesLargo(mes)}, día a día`), columnas:COL_DIA, filas:dias}]),
+    `utilizo_${mes}.xlsx`);
+}
+function excelPersona(p, dia, mes){
+  const x = dia ? delDia(p, dia) : null;
+  const hojas = [
+    {nombre:"Mes a mes", titulo:tit(`${p.nombre}, mes a mes`), columnas:COL_MES,
+     filas:MESES.map(m=>[m, delMes(p, m)]).filter(([,y])=>y).map(([m,y])=>filaMes(p, m, y))},
+    {nombre:"Día a día", titulo:tit(`${p.nombre}, día a día`), columnas:COL_DIA, filas:p.dias.map(y=>filaDia(p, y.dia, y))}];
+  if(x && x.entidades) hojas.push(
     {nombre:"Qué tocó", titulo:tit(`qué tocó ${p.nombre} el ${fechaLarga(dia)}`),
-     filas:x ? x.entidades.map(([e,a,n])=>[e, ACCION[a]||a, n]) : [],
+     filas:x.entidades.map(([e,a,n])=>[e, ACCION[a]||a, n]),
      columnas:[{titulo:"Qué",ancho:30},{titulo:"Acción",ancho:10},{titulo:"Veces",ancho:10}]},
     {nombre:"Por hora", titulo:tit(`acciones de ${p.nombre} por hora el ${fechaLarga(dia)}`),
-     filas:Array.from({length:24},(_,h)=>[`${String(h).padStart(2,"0")}:00`, x ? (x.por_hora||{})[h]||0 : 0]),
-     columnas:[{titulo:"Hora",ancho:8},{titulo:"Acciones",ancho:10}]}]),
-    `utilizo_${limpio(p.nombre)}_${dia}.xlsx`);
+     filas:Array.from({length:24},(_,h)=>[`${String(h).padStart(2,"0")}:00`, (x.por_hora||{})[h]||0]),
+     columnas:[{titulo:"Hora",ancho:8},{titulo:"Acciones",ancho:10}]});
+  XLSX.descarga(XLSX.libro(hojas), `utilizo_${limpio(p.nombre)}_${dia || mes}.xlsx`);
 }
 
 (async function arranca(){
@@ -402,10 +510,11 @@ function excelPersona(p, dia){
   D = await rr.json();
   if(D.sin_dato){ avisa(D.sin_dato); return; }
   D.dias = D.dias || []; D.personas = D.personas || [];
+  MESES = [...new Set(D.dias.map(d=>d.slice(0,7)))].sort().reverse();
   if(!D.dias.length){ avisa("Todavía no ha llegado ningún día de actividad de VenCloud."); return; }
   window.addEventListener("hashchange", pinta);
   pinta();
-  $("#pie").textContent = "Sale del registro de actividad de VenCloud (control.activitylog): cada alta, cambio o borrado que hace un usuario, con su hora. Los procesos automáticos de VenCloud no cuentan. El día de hoy no sale hasta mañana, cuando está completo."
+  $("#pie").textContent = "Sale del registro de actividad de VenCloud (control.activitylog): cada alta, cambio o borrado que hace un usuario, con su hora. Los procesos automáticos de VenCloud no cuentan. El día de hoy no sale hasta mañana, cuando está completo. Se guarda toda la historia; el detalle por hora y qué tocó, de los dos últimos meses."
     + (D.generado ? ` Calculado con la carga del ${fechaCorta(D.generado)}.` : "");
   $("#pie").hidden = false;
 })();

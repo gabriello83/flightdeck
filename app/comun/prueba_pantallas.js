@@ -237,15 +237,18 @@ const API = {
   // Utilizo (docs/60), con la forma que escribe infra/utilizo.py.
   '/api/utilizo': (() => {
     const d1 = iso(AYER), d2 = iso(new Date(AYER.getTime() - 86400000));
+    // Un dia de hace mas de dos meses: llega sin su detalle, solo las cifras.
+    const viejo = iso(new Date(AYER.getTime() - 100 * 86400000));
     const dia = (dia, acciones, horas, cuentas, por_hora, entidades) => ({ dia, acciones, horas, primera: '08:05:00', ultima: '17:40:10', cuentas, por_hora, entidades });
     return {
-      generado: iso(new Date()), dias: [d1, d2],
+      generado: iso(new Date()), dias: [d1, d2, viejo], detalle_desde: iso(new Date(AYER.getTime() - 61 * 86400000)),
       personas: [
         { nombre: 'M. García', cuentas: ['M.GARCIA', 'M2.GARCIA'], dias: [
           dia(d1, 120, 6, ['M.GARCIA', 'M2.GARCIA'], { 8: 50, 9: 40, 17: 30 }, [['MaquinaCanal', 'U', 100], ['Maquina', 'I', 20]]),
           dia(d2, 30, 2, ['M.GARCIA'], { 10: 30 }, [['MaquinaCanal', 'U', 30]])] },
         { nombre: 'J. Marcos', cuentas: ['J.MARCOS', 'J2.MARCOS'], dias: [dia(d2, 15, 1, ['J2.MARCOS'], { 12: 15 }, [['Pdv', 'U', 15]])] },
-        { nombre: 'A.PEREZ <X>', cuentas: ['A.PEREZ <X>'], dias: [dia(d1, 300, 8, ['A.PEREZ <X>'], { 9: 300 }, [['Pdv', 'D', 300]])] }]
+        { nombre: 'A.PEREZ <X>', cuentas: ['A.PEREZ <X>'], dias: [dia(d1, 300, 8, ['A.PEREZ <X>'], { 9: 300 }, [['Pdv', 'D', 300]]),
+          { dia: viejo, acciones: 40, horas: 3, primera: '09:00:00', ultima: '12:00:00', cuentas: ['A.PEREZ <X>'] }] }]
     };
   })(),
   // La revision de clientes (docs/59), con la forma que escribe infra/revision.py.
@@ -1337,6 +1340,7 @@ const servidor = http.createServer((pet, res) => {
     const { pagina, errores, fuera } = await abre('/utilizo/');
     await pagina.waitForSelector('#tabla tbody tr');
     const textos = async sel => pagina.$$eval(sel, x => x.map(e => e.textContent.replace(/\s+/g, ' ').trim()));
+    const viejoMes = API['/api/utilizo'].dias[2].slice(0, 7);
     comprueba('el ultimo dia: usuarios, acciones y horas', await textos('.kpi .vl'), ['2', '420', '14']);
     comprueba('todos los usuarios, el que mas primero', await textos('#tabla tbody tr td:first-child .mat'), ['A.PEREZ <X>', 'M. García']);
     comprueba_que('el nombre va escapado', (await pagina.innerHTML('#tabla')).includes('A.PEREZ &lt;X&gt;'));
@@ -1351,12 +1355,28 @@ const servidor = http.createServer((pet, res) => {
     await pagina.click('#tabla .mat');
     await pagina.waitForSelector('#miga:not([hidden])');
     comprueba('pulsando, su detalle: veinticuatro horas', await pagina.locator('.horas span').count(), 24);
-    comprueba('y su historia, dia a dia', await textos('#vista .tabla-env:last-child tbody tr td:nth-child(2)'), ['120', '30']);
+    comprueba('y su historia mes a mes: los dos dias suman 150',
+      (await textos('#mesames tbody tr td:nth-child(2)')).reduce((a, t) => a + Number(t.replace(/\./g, '')), 0), 150);
     await pagina.selectOption('#fDia', iso(new Date(AYER.getTime() - 86400000)));
     await pagina.waitForFunction(() => document.querySelector('.persona-cab b') && document.querySelector('.persona-cab b').textContent === '30');
     comprueba_que('el otro dia, con una sola cuenta', (await pagina.textContent('#vista')).includes('Sólo trabajó con M.GARCIA'));
     const [d2] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
     comprueba_que('y su Excel', /^utilizo_M_Garcia_/.test(d2.suggestedFilename()), d2.suggestedFilename());
+    await pagina.click('#volver');
+    await pagina.waitForSelector('#miga[hidden]', { state: 'attached' });
+    await pagina.fill('#fBusca', '');
+    await pagina.waitForFunction(() => !location.hash.includes('q='));
+    await pagina.selectOption('#fPer', 'mes');
+    await pagina.waitForSelector('#lMes:not([hidden])');
+    await pagina.selectOption('#fMes', viejoMes);
+    await pagina.waitForFunction(m => location.hash.includes('mes=' + m), viejoMes);
+    comprueba('un mes de hace tiempo: el usuario con sus cifras', await textos('#tabla tbody tr td:first-child .mat'), ['A.PEREZ <X>']);
+    comprueba_que('y dice que no hay detalle', (await pagina.textContent('#tabla tbody')).includes('sin detalle'));
+    const [d3] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('el Excel del mes', d3.suggestedFilename() === `utilizo_${viejoMes}.xlsx`, d3.suggestedFilename());
+    await pagina.click('#tabla .mat');
+    await pagina.waitForSelector('#miga:not([hidden])');
+    comprueba_que('su mes, sin detalle, lo dice', (await pagina.textContent('#vista')).includes('dos últimos meses'));
     await pagina.click('#volver');
     await pagina.waitForSelector('#miga[hidden]', { state: 'attached' });
     await pagina.setViewportSize({ width: 380, height: 800 });

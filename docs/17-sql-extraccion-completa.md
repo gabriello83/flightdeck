@@ -2163,10 +2163,13 @@ group by m.codigo, e.usuarionombre, e.usuarioid
 order by 2, 1, 7
 ```
 
-## M15 · EXT_ACTIVIDAD_USUARIOS  *(sin parámetros)*
+## M15 · EXT_ACTIVIDAD_USUARIOS
 
-Lo que hace cada persona en VenCloud, día a día, de `control.activitylog`: los tres últimos
-días, sólo usuarios de verdad (los procesos de VenCloud llevan id negativo). Dos clases de fila:
+Lo que hace cada persona en VenCloud, día a día, de `control.activitylog`, sólo usuarios de verdad
+(los procesos de VenCloud llevan id negativo). Lleva las dos fechas como los informes de visitas:
+de noche se baja día a día la ventana de reproceso, y con el relleno histórico se baja hacia atrás
+todo lo que guarde VenCloud. Es el informe 196 (`actividad_usuarios`, `crudo/actividad_usuarios`).
+Dos clases de fila:
 
 - `tipo = 'hora'`: cuántas acciones hizo en cada hora del día. Sirve para contar las **horas con
   actividad** juntando dos cuentas de la misma persona (M.GARCIA y M2.GARCIA), que sumando no se
@@ -2175,8 +2178,7 @@ días, sólo usuarios de verdad (los procesos de VenCloud llevan id negativo). D
   (`ParteVisita`, `MaquinaCanal`, `TarifaVendingProducto`…).
 
 Lo usan el cuadrado Utilizo (docs/60), con todos los usuarios, y la revisión de clientes
-(docs/59), con M. García y J. Marcos. La noche guarda cada día, así que la historia crece aunque
-el informe sólo traiga tres.
+(docs/59), con M. García y J. Marcos.
 
 ```sql
 select
@@ -2191,7 +2193,7 @@ select
   cast(max(a.date) as text)                 as ultima
 from control.activitylog a
 join general.usuarios u on u.id = a.userid
-where a.date >= current_date - 3
+where a.date >= '{0}' and a.date <= '{1} 23:59:59'
   and a.userid > 0
 group by u.nombre, cast(a.date as date), extract(hour from a.date)
 union all
@@ -2207,7 +2209,7 @@ select
   cast(max(a.date) as text)                 as ultima
 from control.activitylog a
 join general.usuarios u on u.id = a.userid
-where a.date >= current_date - 3
+where a.date >= '{0}' and a.date <= '{1} 23:59:59'
   and a.userid > 0
 group by u.nombre, cast(a.date as date), a.entity, a.action
 order by 2, 3, 1, 4, 5

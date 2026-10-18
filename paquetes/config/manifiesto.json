@@ -348,6 +348,14 @@
       "clave_fecha": "ninguna",
       "destino": "maestros/planograma_usuarios",
       "filas_mes": 253
+    },
+    {
+      "id": "actividad_usuarios",
+      "nombre": "M15_EXT_ACTIVIDAD_USUARIOS",
+      "informe": 196,
+      "clave_fecha": "propia",
+      "destino": "crudo/actividad_usuarios",
+      "filas_mes": 3000
     }
   ],
   "descartados": {
