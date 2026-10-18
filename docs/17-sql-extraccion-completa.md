@@ -2037,6 +2037,46 @@ where c.table_schema not in ('pg_catalog', 'information_schema')
 order by c.table_schema, c.table_name, c.ordinal_position
 ```
 
+**Leída el 18-oct-2026.** Ni `recursos.maquinascanales` ni `maquinascarriles` guardan usuario ni
+fecha de alta, y `maquinas` sólo tiene `fechaultcambioplanograma`, que no se rellena. Hay dos
+tablas de registro con usuario que pueden llevar la creación del planograma:
+`control.activitylog` (`date`, `application`, `action`, `entity`, `element`, `userid` →
+`general.usuarios.nombre`) y `control.veneventlog` (`fecha`, `usuarioid`, `usuarionombre`,
+`entidad`, `elementoid`, `codelemento`, `proceso`, `texto`). Qué apuntan, lo dice la siguiente.
+
+## M14Y · EXT_SONDA_REGISTRO  *(sin parámetros, se lanza una vez)*
+
+Qué entidades y acciones apuntan los dos registros de VenCloud en los últimos treinta días, con
+cuántas veces, un ejemplo y la última. Si el planograma de una máquina aparece (una entidad que
+suene a canales, planograma o máquina), con eso se escribe el informe del usuario.
+
+```sql
+select
+  'activitylog'                   as registro,
+  a.application                   as aplicacion,
+  a.action                        as accion,
+  a.entity                        as entidad,
+  count(*)                        as veces,
+  max(a.element)                  as ejemplo,
+  cast(max(a.date) as text)       as ultima
+from control.activitylog a
+where a.date >= current_date - 30
+group by a.application, a.action, a.entity
+union all
+select
+  'veneventlog'                   as registro,
+  cast(e.proceso as text)         as aplicacion,
+  left(max(e.texto), 200)         as accion,
+  e.entidad                       as entidad,
+  count(*)                        as veces,
+  max(e.codelemento)              as ejemplo,
+  cast(max(e.fecha) as text)      as ultima
+from control.veneventlog e
+where e.fecha >= current_date - 30
+group by e.proceso, e.entidad
+order by 1, 5 desc
+```
+
 ## M11 · EXT_MAESTRO_EMPLEADOS  *(sin parámetros)*
 
 Informe 190. Los empleados con su cargo y sus marcas de rol, sin teléfono, email ni DNI. El
