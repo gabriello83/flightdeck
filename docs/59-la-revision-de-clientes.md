@@ -42,9 +42,11 @@ comparar: los creados empiezan a salir el día después del primer despliegue.
 **Quién lo creó** sale del registro de actividad de VenCloud. Las tablas del planograma no
 guardan usuario (sonda M14Z, 18-oct), pero `control.activitylog` apunta cada cambio de canal con
 su usuario, y `control.veneventlog` avisa de cada cambio de planograma (sonda M14Y). El informe
-`M14 · EXT_PLANOGRAMA_USUARIOS` (docs/17) baja cada noche los últimos siete días, y a cada
+`M14 · EXT_PLANOGRAMA_USUARIOS` (docs/17, **informe 195**, `m_planograma_usuarios`) baja cada noche los últimos siete días, y a cada
 planograma creado se le pone el usuario que más tocó los canales de esa máquina desde la noche
-anterior. Sin ese informe la página lo dice y no pone a nadie.
+anterior. Un usuario con id negativo (`-102`) no es una persona sino un proceso de VenCloud, y sólo se
+pone si no hay nadie más («Proceso de VenCloud (-102)»): en la semana del 12 al 18-oct era quien
+firmaba la mayoría de cambios de canal. Sin el informe la página lo dice y no pone a nadie.
 
 ## Lo que escribe la noche
 
