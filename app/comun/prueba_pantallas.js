@@ -218,22 +218,20 @@ const API = {
     };
   })(),
   // Las furgonetas (docs/58), con la forma que escribe infra/operativo.py.
-  '/api/furgonetas': {
-    generado: new Date().toISOString(), perfil: 'interno', ultimo_dia: iso(AYER),
-    dias: {
-      [iso(new Date(AYER.getTime() - 7 * 86400000))]: {
-        activas: 3, visitas: 30, visitas_sin_vehiculo: 0,
-        vehiculos: [['1234ABC', 'Madrid - Leganes', 'Ruta Getafe', 'Ana Pérez', 12, 10, 90, '08:00', '13:00']],
-        sin_vehiculo: [], delegaciones: [['Madrid - Leganes', 3, 30, 0]] },
-      [iso(AYER)]: {
-        activas: 2, visitas: 25, visitas_sin_vehiculo: 5,
-        vehiculos: [
-          ['1234ABC', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', 'Ana Pérez', 12, 10, 95, '08:05', '13:40'],
-          ['5678DEF', 'Andalucía - Málaga · Madrid - Leganes', 'Málaga 1', 'Luis Gil', 8, 8, 60, '09:00', '12:10']],
-        sin_vehiculo: [['Andalucía - Málaga', 'Rosa Gil', 'Málaga 2', 5, 4, 'xxxx-xxx']],
-        delegaciones: [['Madrid - Leganes', 2, 15, 0], ['Andalucía - Málaga', 1, 10, 5]] }
-    }
-  },
+  '/api/furgonetas': (() => {
+    const d = n => iso(new Date(AYER.getTime() - n * 86400000));
+    return {
+      generado: new Date().toISOString(), perfil: 'interno', ultimo_dia: d(0), desde: d(7),
+      dias: [7, 6, 5, 4, 3, 2, 1, 0].map(d),
+      umbrales_km: { min: 10, max: 400 },
+      flota: [['1234ABC', 'CRAFTER - Ana', 'Madrid - Leganes'],
+              ['5678DEF', 'JUMPER <Luis>', 'Andalucía - Málaga'],
+              ['9999ZZZ', 'CADDY', 'Madrid - Leganes']],
+      visitas: { '1234ABC': [d(7), d(0)], '5678DEF': [d(3)], '9999ZZZ': [] },
+      km: { [d(0)]: { '1234ABC': [95, 1, ''], '5678DEF': [450, 2, ''], '9999ZZZ': [null, 1, 'sin anotar'] },
+            [d(1)]: { '1234ABC': [5, 1, ''] } }
+    };
+  })(),
   // Utilizo (docs/60), con la forma que escribe infra/utilizo.py.
   '/api/utilizo': (() => {
     const d1 = iso(AYER), d2 = iso(new Date(AYER.getTime() - 86400000));
@@ -478,8 +476,7 @@ const NOMBRES_TABLAS = {
     maquinas: 'Máquinas no visitadas', delegaciones: 'Por delegación', festivos: 'Festivos por delegación' } },
   averias: { nombre: 'Incidencias', tablas: { zonas: 'Total de incidencias por zona',
     tecnicas: 'Los 10 centros con más averías técnicas', abiertas: 'Lista de incidencias y su ficha' } },
-  furgonetas: { nombre: 'Furgonetas', tablas: { vehiculos: 'Furgonetas con visitas', sin_vehiculo: 'Visitas sin vehículo',
-    delegaciones: 'Por delegación', dias: 'Furgonetas activas, día a día' } },
+  furgonetas: { nombre: 'Furgonetas', tablas: { vehiculos: 'Furgonetas activas', dias: 'Furgonetas con visitas, día a día' } },
   revision: { nombre: 'Revisión clientes', tablas: { planograma: 'Sin planograma', tarifa: 'Sin tarifa',
     precio: 'Precio distinto', creados: 'Planogramas creados', usuarios: 'García y Marcos' } },
   almacenes: { nombre: 'Almacenes', tablas: { productos: 'Productos de los almacenes' } }
@@ -1271,23 +1268,34 @@ const servidor = http.createServer((pet, res) => {
     await pagina.waitForSelector('#kpis .kpi');
     comprueba('arranca en el dia que llega', await pagina.inputValue('#dia'), iso(AYER));
     const kpi = async i => pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent);
-    comprueba('furgonetas, visitas, por furgoneta y sin vehiculo', [await kpi(1), await kpi(2), await kpi(3), await kpi(4)],
-      ['2', '25', '10', '5']);
-    comprueba('una fila por furgoneta, la de mas visitas primero',
-      await pagina.$$eval('#tabla tbody tr .mat', x => x.map(e => e.textContent)), ['1234ABC', '5678DEF']);
-    comprueba_que('el nombre de la ruta se escapa', (await pagina.textContent('#tabla')).includes('Ruta Getafe <Airbus>'));
-    comprueba('y los dias con visitas de los ultimos',
-      await pagina.$eval('#tabla tbody tr:first-child td:last-child', e => e.textContent), '2');
+    const mats = () => pagina.$$eval('#tabla tbody tr .mat', x => x.map(e => e.textContent));
+    comprueba('activas, con visitas, sin visitas y km en rojo', [await kpi(1), await kpi(2), await kpi(3), await kpi(4)],
+      ['3', '1', '2', '2']);
+    comprueba('toda la flota, la que lleva mas dias sin visitar primero', await mats(), ['9999ZZZ', '5678DEF', '1234ABC']);
+    comprueba('desde cuantos dias no visita',
+      await pagina.$$eval('#tabla tbody tr td:nth-child(5)', x => x.map(e => e.textContent)),
+      ['Más de 7 días', '3 días', 'Visitó']);
+    comprueba_que('el nombre del vehiculo se escapa', (await pagina.textContent('#tabla')).includes('JUMPER <Luis>'));
+    comprueba('los km de los ultimos 7 dias, el elegido el ultimo',
+      await pagina.$$eval('#tabla tbody tr:last-child td.km', x => x.map(e => e.textContent)),
+      ['s/d', 's/d', 's/d', 's/d', 's/d', '5', '95']);
+    comprueba('en rojo menos de 10, mas de 400 y la jornada sin km; 95 no',
+      await pagina.$$eval('#tabla tbody tr', x => x.map(f => f.querySelector('td.km.hoy span').className)),
+      ['falta', 'fuera', '']);
+    comprueba('y el 5 de antes de ayer tambien',
+      await pagina.$eval('#tabla tbody tr:last-child td.km:nth-last-child(2) span', e => e.className), 'fuera');
+    await pagina.selectOption('#ver', 'sin');
+    comprueba('solo las que no visitaron ese dia', await mats(), ['9999ZZZ', '5678DEF']);
+    await pagina.selectOption('#ver', '');
     await pagina.selectOption('#deleg', 'Andalucía - Málaga');
-    comprueba('la delegacion filtra: la que paso por dos sale en las dos',
-      [await pagina.$$eval('#tabla tbody tr .mat', x => x.map(e => e.textContent)), await kpi(1), await kpi(4)],
-      [['5678DEF'], '1', '5']);
-    await pagina.click('#pestanas button[data-p="sin"]');
-    comprueba_que('las visitas sin vehiculo, por reponedor', (await pagina.textContent('#tabla')).includes('Rosa Gil'));
+    comprueba('la delegacion filtra la lista y las cifras', [await mats(), await kpi(1), await kpi(4)], [['5678DEF'], '1', '1']);
     await pagina.selectOption('#deleg', '');
-    await pagina.click('#pestanas button[data-p="deleg"]');
-    comprueba('por delegacion', await pagina.$$eval('#tabla tbody tr', x => x.length), 2);
-    comprueba('el dia a dia, con los dos dias', await pagina.$$eval('#dias .fb', x => x.length), 2);
+    await pagina.selectOption('#dia', iso(new Date(AYER.getTime() - 3 * 86400000)));
+    comprueba('otro dia: la ultima visita es la de ese dia o antes',
+      await pagina.$$eval('#tabla tbody tr td:nth-child(5)', x => x.map(e => e.textContent)),
+      ['Más de 4 días', '4 días', 'Visitó']);
+    comprueba('el dia a dia, de la flota, hasta el dia elegido', await pagina.$$eval('#dias .fb', x => x.length), 5);
+    await pagina.selectOption('#dia', iso(AYER));
     await pagina.setViewportSize({ width: 380, height: 800 });
     comprueba('en movil no se sale de la pantalla',
       await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
@@ -1537,7 +1545,7 @@ const servidor = http.createServer((pet, res) => {
         averias: { nombre: 'Incidencias', tablas: { zonas: 'Total de incidencias por zona',
           tecnicas: 'Los 10 centros con más averías técnicas', abiertas: 'Lista de incidencias y su ficha' } },
         devoluciones: { nombre: 'Devoluciones', tablas: { meses: 'Devoluciones por mes y canal', pendientes: 'Devoluciones sin cerrar' } },
-        furgonetas: { nombre: 'Furgonetas', tablas: { vehiculos: 'Furgonetas con visitas', dias: 'Furgonetas activas, día a día' } },
+        furgonetas: { nombre: 'Furgonetas', tablas: { vehiculos: 'Furgonetas activas', dias: 'Furgonetas con visitas, día a día' } },
         ventas: { nombre: 'Ventas', tablas: {} } } };
     const { pagina, errores, fuera } = await abre('/consola/');
     await pagina.waitForSelector('[data-ed="olga@serunion.es"]');
@@ -1724,16 +1732,11 @@ const servidor = http.createServer((pet, res) => {
     x = await conQuitadas('/incidencias/?ver=abiertas', { averias: ['abiertas'] }, '#todo:not([hidden])');
     comprueba('ni pidiendola en la direccion', await x.pagina.isVisible('#hAbiertas'), false);
     await x.pagina.close();
-    x = await conQuitadas('/furgonetas/', { furgonetas: ['vehiculos', 'sin_vehiculo', 'delegaciones'] }, '#todo:not([hidden])');
-    comprueba('furgonetas: sin las tres tablas quedan las cifras y el dia a dia',
-      [await x.pagina.isVisible('#cajaTabla'), await x.pagina.isVisible('#pestanas'),
+    x = await conQuitadas('/furgonetas/', { furgonetas: ['vehiculos'] }, '#todo:not([hidden])');
+    comprueba('furgonetas: sin la lista quedan las cifras y el dia a dia, sin CSV',
+      [await x.pagina.isVisible('#cajaTabla'), await x.pagina.isVisible('#bCsv'),
        await x.pagina.isVisible('#kpis .kpi'), await x.pagina.isVisible('[data-tabla="dias"]')], [false, false, true, true]);
     comprueba('sin un solo error en la consola del navegador', x.errores, []);
-    await x.pagina.close();
-    x = await conQuitadas('/furgonetas/', { furgonetas: ['vehiculos'] }, '#todo:not([hidden])');
-    comprueba('sin una, arranca en la siguiente',
-      await x.pagina.$$eval('#pestanas button', b => b.map(e => [e.dataset.p, e.getAttribute('aria-pressed')])),
-      [['sin', 'true'], ['deleg', 'false']]);
     await x.pagina.close();
     x = await conQuitadas('/revision/', { revision: ['planograma', 'precio'] }, '#vista .kpi');
     comprueba('revision: sin las quitadas, y arranca en la primera que ve',
@@ -1779,16 +1782,13 @@ const servidor = http.createServer((pet, res) => {
     x = await abre('/furgonetas/');
     await x.pagina.waitForSelector('#cajaTabla .estrella');
     put = guardado();
-    await x.pagina.click('#pestanas button[data-p="sin"]');
-    await x.pagina.waitForTimeout(100);
     await x.pagina.click('#cajaTabla .estrella');
     await put;
-    comprueba('furgonetas: la estrella de las pestanas es la de la que se ve',
-      PREFS.map(p => p.t), ['maquinas', 'sin_vehiculo']);
-    await x.pagina.click('#pestanas button[data-p="vehiculos"]');
+    comprueba('furgonetas: la estrella de la lista', PREFS.map(p => p.t), ['maquinas', 'vehiculos']);
+    await x.pagina.selectOption('#ver', 'sin');
     await x.pagina.waitForTimeout(100);
-    comprueba('al cambiar de pestana, la de esa otra (apagada)',
-      await x.pagina.getAttribute('#cajaTabla .estrella', 'aria-pressed'), 'false');
+    comprueba('y sigue encendida al filtrar',
+      await x.pagina.getAttribute('#cajaTabla .estrella', 'aria-pressed'), 'true');
     comprueba('sin un solo error en la consola del navegador', x.errores, []);
     await x.pagina.close();
 

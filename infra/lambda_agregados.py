@@ -100,6 +100,9 @@ CLAVE_SAT_INCIDENCIAS = os.environ.get("SAT_INCIDENCIAS",
 # El maestro de rutas: lo unico que dice de que delegacion es cada almacen
 # (informe general operativo, docs/51).
 CLAVE_RUTAS = os.environ.get("RUTAS", "maestros/rutas/m_rutas.json.gz")
+# El maestro de vehiculos (M12, informe 191): que furgonetas estan activas y de
+# que delegacion es cada una, para la pagina de furgonetas (docs/58).
+CLAVE_VEHICULOS = os.environ.get("VEHICULOS", "maestros/vehiculos/m_vehiculos.json.gz")
 # El plan de visitas de cada dia (D12, informe 184 de VenCloud, docs/17). Un dia
 # sin fichero (los anteriores al 13-oct-2026) no tiene plan, y el cuadrado de
 # rutas lo dice.
@@ -112,6 +115,9 @@ CLAVE_FESTIVOS = os.environ.get("FESTIVOS", "config/festivos.json")
 # que no se ha movido; el maestro de articulos y sus fotos, cuando existan en
 # VenCloud. Las fotos se guardan una vez para todos los perfiles.
 MOV_ALMACEN = ("crudo/stock_almacen", "stock_almacen")
+# Las visitas de los tecnicos de la SAT (informe 163): traen la furgoneta, y
+# un tecnico no hace partes de reposicion. Solo para la pagina de furgonetas.
+SAT_VISITAS = ("crudo/sat_visitas", "sat_visitas")
 DETALLE_CIERRE = ("crudo/stock_balance_prod", "stock_balance_prod")
 CLAVE_ARTICULOS = os.environ.get("ARTICULOS", "maestros/articulos/m_articulos.json.gz")
 CLAVE_FOTOS = os.environ.get("FOTOS", "maestros/articulos_fotos/m_articulos_fotos.json.gz")
@@ -1184,6 +1190,9 @@ def come_operativo(op, dia, nombre, filas, clase_de):
         op.come_sat(filas)
     elif nombre == "sat_eventos":
         op.come_sat_eventos(filas)
+    elif nombre == "partes":
+        # Que dias visito cada furgoneta, para saber desde cuando no visita.
+        op.come_visitas_vehiculo(dia, filas)
     od = op.dia(dia)
     if od is None:
         return
@@ -1497,6 +1506,11 @@ def lambda_handler(event, context):
                     # Sin filtrar: las filas de almacen no traen centro, y de quien
                     # es cada almacen lo decide OP.almacenes por su delegacion.
                     op.come_balance(filas)
+                if nombre == "jornadas" and not historico:
+                    # Tambien sin filtrar: la jornada no trae centro ni
+                    # delegacion. De quien es cada furgoneta lo dice el maestro
+                    # de vehiculos al escribir la pagina de furgonetas.
+                    op.come_jornadas(dia, filas)
                 propias = [f for f in filas if en_ambito(f, acu.ambito, mapa)]
                 acu.filas_en_ambito += len(propias)
                 if propias and not historico:
@@ -1519,6 +1533,15 @@ def lambda_handler(event, context):
             # Los movimientos de almacen no traen centro ni pasan por el
             # ambito: solo se guarda el ultimo de cada producto (docs/54).
             existencias.come(lee_dia(*MOV_ALMACEN, dia))
+            # Las visitas de la SAT, por la furgoneta del tecnico (docs/58).
+            # Traen la matricula de la maquina: el ambito sale del mapa.
+            sat_v = lee_dia(*SAT_VISITAS, dia)
+            if sat_v:
+                leidas["sat_visitas"] += len(sat_v)
+                for acu in acumuladores:
+                    operativos[acu.perfil["id"]].come_visitas_sat(
+                        [f for f in sat_v if en_ambito(f, acu.ambito, mapa)])
+            del sat_v
         leidos.append(dia)
         for pid, op in operativos.items():
             od = op.dia(dia)
@@ -1594,6 +1617,8 @@ def lambda_handler(event, context):
                                                    "(EXT_INSTALACIONES) de esta noche."}
         resumen_almacenes = escribe_almacenes(acumuladores, operativos, existencias, rutas, hoy)
         festivos = _json_de(CLAVE_FESTIVOS)
+        vehiculos = _json_de(CLAVE_VEHICULOS)
+        vehiculos = _filas(vehiculos) if vehiculos is not None else None
         # Donde esta cada maquina dentro del centro («Planta 4»), para la lista de
         # la pagina de rutas: el plan y los partes no lo traen, el censo si.
         ubicaciones = {str(R.v(f, "matricula", "") or "").strip():
@@ -1616,7 +1641,9 @@ def lambda_handler(event, context):
                                                          festivos, ubicaciones))
             # La pagina de furgonetas (docs/58): vehiculo a vehiculo, cada dia.
             clave_f = f"cabina/{acu.perfil['id']}/furgonetas.json.gz"
-            escribe_comprimido(clave_f, op.detalle_furgonetas(acu.perfil["id"], _json_de(clave_f)))
+            op.desde = dias_leidos and min(dias_leidos)
+            escribe_comprimido(clave_f, op.detalle_furgonetas(acu.perfil["id"], _json_de(clave_f),
+                                                              vehiculos, acu.ambito))
             # Lo que falta, a la vista en la respuesta: un cuadrado sin dato
             # todos los dias es un informe que no llega, no un dia flojo.
             ultimo = fichero["dias"].get(fichero["ultimo_dia"] or "", {})

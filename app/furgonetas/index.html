@@ -62,7 +62,6 @@ button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);colo
 }
 .nota.mal{border-left-color:var(--rojo)}
 [hidden]{display:none!important}
-.pestanas{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 0}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:14px}
 .kpi{background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:11px 13px;box-shadow:var(--sombra)}
 .kpi .et{font-size:12px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
@@ -106,8 +105,23 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 .fb .v{font-variant-numeric:tabular-nums;color:var(--tinta-2);white-space:nowrap}
 .fb.hoy .nom{color:var(--tinta);font-weight:600}
 .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+/* Los km de cada día: en rojo fuera de los umbrales, y sin número lo que no está. */
+td.km{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:52px}
+th.km{text-align:right}
+th.km.hoy,td.km.hoy{background:color-mix(in srgb, var(--s1) 8%, transparent)}
+.km .fuera{color:var(--rojo);font-weight:650}
+.km .falta{color:var(--rojo);font-size:12px}
+.km .nada{color:var(--tinta-3)}
+.leyenda{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--tinta-3);margin-top:10px}
+.leyenda b{font-weight:600}
 th.num{text-align:right}
-@media (max-width:700px){ .num,th.num{text-align:left} }
+@media (max-width:700px){
+  .num,th.num,td.km{text-align:left}
+  td.km.hoy{background:none}
+  /* En el móvil los km van en una fila: día y cifra. */
+  .tabla td.km{display:inline-block;width:auto;min-width:0;margin:2px 10px 0 0}
+  .tabla td.km[data-et]::before{content:attr(data-et) " ";}
+}
 </style>
 <script src="/comun/preferidos.js"></script>
 </head>
@@ -132,18 +146,23 @@ th.num{text-align:right}
     <div class="barra">
       <label>Día <select id="dia"></select></label>
       <label>Delegación <select id="deleg"></select></label>
-      <label class="busca">Buscar <input id="busca" type="search" placeholder="Matrícula, reponedor, ruta…"></label>
+      <label>Ver <select id="ver">
+        <option value="">Todas</option>
+        <option value="sin">Sin visitas ese día</option>
+        <option value="km">Con km en rojo</option>
+      </select></label>
+      <label class="busca">Buscar <input id="busca" type="search" placeholder="Matrícula, vehículo, delegación…"></label>
       <button class="btn" id="bCsv" type="button">Descargar CSV</button>
     </div>
     <div class="kpis" id="kpis"></div>
-    <div class="pestanas" id="pestanas" role="tablist"></div>
-    <section class="caja" id="cajaTabla">
-      <div class="cabsec" data-estrella="*"><h2 id="tTabla"></h2><span class="tenue" id="cuenta"></span></div>
+    <section class="caja" id="cajaTabla" data-tabla="vehiculos">
+      <div class="cabsec" data-estrella="vehiculos"><h2>Furgonetas activas</h2><span class="tenue" id="cuenta"></span></div>
       <p class="sub" id="sTabla"></p>
       <div class="tabla" id="tabla"></div>
+      <div class="leyenda" id="leyenda"></div>
     </section>
     <section class="caja" data-tabla="dias">
-      <div class="cabsec" data-estrella="dias"><h2>Furgonetas activas, día a día</h2><span class="tenue" id="cuentaDias"></span></div>
+      <div class="cabsec" data-estrella="dias"><h2>Furgonetas con visitas, día a día</h2><span class="tenue" id="cuentaDias"></span></div>
       <p class="sub" id="sDias"></p>
       <div id="dias"></div>
     </section>
@@ -156,23 +175,24 @@ th.num{text-align:right}
 /* ===================================================================
    Furgonetas · digivend.es  (docs/58)
 
-   Lo que hay detrás del cuadrado de Furgonetas del informe general: cada
-   vehículo con visitas reales ese día, con su delegación, sus rutas, sus
-   reponedores, cuántas visitas y puntos de venta hizo y entre qué horas; las
-   visitas que llegaron sin vehículo informado («xxxx-xxx» en VenCloud), por
-   reponedor; y el resumen por delegación.
+   Lo que hay detrás del cuadrado de Furgonetas del informe general, como lo
+   pidió Gabriele el 19-oct-2026: todas las furgonetas activas, si alguna no
+   ha visitado y desde cuántos días, y los km de cada día, en rojo si son
+   menos de 10 o más de 400.
+
+   La flota es el maestro de vehículos de VenCloud (M12); las visitas, los
+   partes; los km, el control de jornada (D5): km finales menos iniciales.
+   Lo que no está se dice: una jornada sin cuentakilómetros no es un cero.
 
    El fichero ya llega con el ámbito del perfil aplicado: lo escribió la noche
    para este perfil, y la API no deja pedir otro. Esta página no decide qué
-   vehículos ve nadie: filtra y dibuja.
+   furgonetas ve nadie: filtra y dibuja.
    =================================================================== */
 const CLAVE_TEMA = "digivend.tema";
 const num = n => new Intl.NumberFormat("es-ES").format(Math.round(n||0));
-const dec = n => new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(n);
-const pct = (a,b) => b ? dec(100*a/b) + " %" : "—";
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const $ = s => document.querySelector(s);
-const MAX_FILAS = 50, TOPE_FILAS = 1000, DIAS_VISTA = 30;
+const MAX_FILAS = 60, DIAS_KM = 7, DIAS_VISTA = 30;
 
 function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
 function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
@@ -194,11 +214,7 @@ $("#bSalir").addEventListener("click", async ()=>{
   location.href = "/";
 });
 
-let D=null, PESTANA="vehiculos", TODAS=false;
-/* Las tablas que el administrador le quitó a este usuario (docs/61), y la que
-   es cada pestaña. */
-let QUITADAS = new Set();
-const TABLA_DE = {vehiculos:"vehiculos", sin:"sin_vehiculo", deleg:"delegaciones"};
+let D=null, TODAS=false, QUITADAS=new Set(), UMBRAL={min:10, max:400};
 
 function fechaLarga(s){
   const d = new Date(String(s)+"T00:00:00");
@@ -209,135 +225,125 @@ function fechaCorta(s){
   const d = new Date(String(s)+"T00:00:00");
   return Number.isNaN(d.getTime()) ? String(s) : d.toLocaleDateString("es-ES",{weekday:"short", day:"numeric", month:"short"});
 }
+function diaMes(s){
+  const d = new Date(String(s)+"T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(s) : d.toLocaleDateString("es-ES",{weekday:"short", day:"numeric"});
+}
 function isoLocal(d){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
+const entre = (a, b) => Math.round((new Date(b+"T00:00:00") - new Date(a+"T00:00:00")) / 864e5);
 function avisa(t, mal){ const a=$("#aviso"); a.textContent=t; a.hidden=!t; a.classList.toggle("mal", !!mal); }
 
-const delDia = () => (D.dias||{})[$("#dia").value] || {};
-/* Una furgoneta es de la delegación si visitó allí: la que pasó por dos sale
-   en las dos. */
+/* La última visita de una furgoneta el día elegido o antes, y cuántos días
+   lleva sin visitar. null si no visitó desde que hay datos (D.desde). */
+function ultima(m, dia){
+  const fs = (D.visitas||{})[m] || [];
+  for(let i=fs.length-1; i>=0; i--) if(fs[i] <= dia) return fs[i];
+  return null;
+}
+/* Los km de una furgoneta un día: {t: texto, c: clase, x: explicación, v: valor para el CSV}. */
+function km(m, f){
+  const dia = (D.km||{})[f];
+  if(!dia) return {t:"s/d", c:"nada", x:"No se leyeron las jornadas de ese día.", v:"sin dato", rojo:false};
+  const k = dia[m];
+  if(!k) return {t:"—", c:"nada", x:"No abrió jornada ese día.", v:"", rojo:false};
+  const [n, jor, falta] = k;
+  const varias = jor > 1 ? ` (${jor} jornadas)` : "";
+  if(n == null) return {t:"sin km", c:"falta", x:`Sin km: ${falta}${varias}.`, v:`sin km (${falta})`, rojo:true};
+  const fuera = n < UMBRAL.min || n > UMBRAL.max;
+  return {t:num(n), c:fuera ? "fuera" : "", x:`${num(n)} km${varias}${falta ? ` · otra ${falta}` : ""}`, v:n, rojo:fuera};
+}
+function diasKm(){
+  const dia = $("#dia").value, lista = (D.dias||[]).filter(f=>f<=dia);
+  return lista.slice(-DIAS_KM);
+}
 const enDeleg = (texto, dl) => !dl || String(texto||"").split(" · ").includes(dl);
-const busca = t => { const q = $("#busca").value.trim().toLowerCase(); return !q || t.join(" ").toLowerCase().includes(q); };
 
-/* Cuántos de los últimos DIAS_VISTA días, hasta el elegido, salió cada
-   vehículo con visitas. */
-function diasActiva(){
-  const dia = $("#dia").value, cuenta = {};
-  const dias = Object.keys(D.dias||{}).filter(f=>f<=dia).sort().slice(-DIAS_VISTA);
-  dias.forEach(f => ((D.dias[f]||{}).vehiculos||[]).forEach(v => { cuenta[v[0]] = (cuenta[v[0]]||0) + 1; }));
-  return {cuenta, n: dias.length};
+/* Las filas que se ven: la flota con el filtro, y lo de cada una el día elegido. */
+function filas(){
+  const dia = $("#dia").value, dl = $("#deleg").value, ver = $("#ver").value;
+  const q = $("#busca").value.trim().toLowerCase(), fks = diasKm();
+  return (D.flota||[]).filter(x=>enDeleg(x[2], dl) && (!q || x.join(" ").toLowerCase().includes(q)))
+    .map(([m, nombre, deleg])=>{
+      const u = ultima(m, dia);
+      const sin = u == null ? null : entre(u, dia);
+      const kms = fks.map(f=>km(m, f));
+      return {m, nombre, deleg, u, sin, kms, hoy:kms[kms.length-1]};
+    })
+    .filter(x=> ver==="sin" ? x.sin!==0 : ver==="km" ? x.kms.some(k=>k.rojo) : true)
+    /* Primero las que llevan más días sin visitar: lo que hay que mirar. */
+    .sort((a,b)=> (b.sin==null ? 1e9 : b.sin) - (a.sin==null ? 1e9 : a.sin)
+      || a.deleg.localeCompare(b.deleg, "es") || a.m.localeCompare(b.m, "es"));
 }
 
-/* Las columnas de cada pestaña: [cabecera, valor para pantalla (html), valor para el CSV, numérica]. */
-function actual(){
-  const d = delDia(), dl = $("#deleg").value;
-  if(PESTANA === "sin"){
-    const cols = [
-      ["Delegación", x=>esc(x[0]), x=>x[0]],
-      ["Reponedor", x=>esc(x[1] || "—"), x=>x[1]],
-      ["Ruta(s)", x=>esc(x[2]), x=>x[2]],
-      ["Visitas", x=>num(x[3]), x=>x[3], true],
-      ["Puntos de venta", x=>num(x[4]), x=>x[4], true],
-      ["Vehículo en VenCloud", x=>`<span class="mat">${esc(x[5])}</span>`, x=>x[5]],
-    ];
-    return {cols, filas:(d.sin_vehiculo||[]).filter(x=>(!dl || x[0]===dl) && busca(x))};
-  }
-  if(PESTANA === "deleg"){
-    const cols = [
-      ["Delegación", x=>esc(x[0] || "Sin delegación"), x=>x[0]],
-      ["Furgonetas", x=>num(x[1]), x=>x[1], true],
-      ["Visitas", x=>num(x[2]), x=>x[2], true],
-      ["Visitas por furgoneta", x=>x[1] ? dec((x[2]-x[3])/x[1]) : "—", x=>x[1] ? Math.round(10*(x[2]-x[3])/x[1])/10 : "", true],
-      ["Visitas sin vehículo", x=>`${num(x[3])} <span class="tenue">${x[2] ? pct(x[3], x[2]) : ""}</span>`, x=>x[3], true],
-    ];
-    return {cols, filas:(d.delegaciones||[]).filter(x=>(!dl || x[0]===dl) && busca(x))};
-  }
-  const act = diasActiva();
-  const cols = [
-    ["Matrícula", x=>`<span class="mat">${esc(x[0])}</span>`, x=>x[0]],
-    ["Delegación", x=>esc(x[1]), x=>x[1]],
-    ["Ruta(s)", x=>esc(x[2]), x=>x[2]],
-    ["Reponedor(es)", x=>esc(x[3]), x=>x[3]],
-    ["Visitas", x=>num(x[4]), x=>x[4], true],
-    ["Puntos de venta", x=>num(x[5]), x=>x[5], true],
-    ["Minutos de visita", x=>num(x[6]), x=>x[6], true],
-    ["Primera · última", x=>x[7] ? `${esc(x[7])} · ${esc(x[8])}` : "—", x=>x[7] ? `${x[7]}-${x[8]}` : ""],
-    [`Días con visitas (${act.n} d)`, x=>num(act.cuenta[x[0]]||0), x=>act.cuenta[x[0]]||0, true],
-  ];
-  return {cols, filas:(d.vehiculos||[]).filter(x=>enDeleg(x[1], dl) && busca(x))};
+function textoSin(x, dia){
+  if(x.sin === 0) return `<span class="si">Visitó</span>`;
+  if(x.sin == null) return `<span class="no">Más de ${num(entre(D.desde, dia))} días</span>`;
+  return `<span class="no">${num(x.sin)} ${x.sin===1?"día":"días"}</span>`;
 }
 
 function kpis(){
-  const d = delDia(), dl = $("#deleg").value;
+  const dia = $("#dia").value, dl = $("#deleg").value;
+  const flota = (D.flota||[]).filter(x=>enDeleg(x[2], dl));
+  const todas = flota.map(([m])=>({m, u:ultima(m, dia), k:km(m, dia)}));
+  const con = todas.filter(x=>x.u===dia).length;
+  const largas = todas.filter(x=>x.u==null || entre(x.u, dia) > 7).length;
+  const rojas = todas.filter(x=>x.k.rojo).length;
   const kpi = (et, vl, nt) => `<div class="kpi"><div class="et">${esc(et)}</div><div class="vl">${vl}</div><div class="nt">${nt}</div></div>`;
-  let activas = d.activas, visitas = d.visitas, sin = d.visitas_sin_vehiculo;
-  if(dl){
-    const f = (d.delegaciones||[]).find(x=>x[0]===dl) || [dl, 0, 0, 0];
-    [activas, visitas, sin] = [f[1], f[2], f[3]];
-  }
-  if(activas == null){ $("#kpis").innerHTML = ""; return; }
-  const con = visitas - sin;
   $("#kpis").innerHTML =
-    kpi("Furgonetas activas", num(activas), dl ? `con visitas en ${esc(dl)}` : "distintas, con alguna visita real")
-    + kpi("Visitas", num(visitas), "visitas reales del parte")
-    + kpi("Visitas por furgoneta", activas ? dec(con/activas) : "—", "de las que tienen vehículo")
-    + kpi("Visitas sin vehículo", num(sin), visitas ? `${pct(sin, visitas)} de las visitas · no cuentan como furgoneta` : "");
+    kpi("Furgonetas activas", num(flota.length), dl ? `de ${esc(dl)} en el maestro de VenCloud` : "en el maestro de vehículos de VenCloud")
+    + kpi("Con visitas", num(con), `el ${esc(fechaCorta(dia))}`)
+    + kpi("Sin visitas", `<span class="${flota.length-con ? "no" : ""}">${num(flota.length-con)}</span>`,
+          `${num(largas)} ${largas===1?"lleva":"llevan"} más de 7 días`)
+    + kpi("Km en rojo", `<span class="${rojas ? "no" : ""}">${num(rojas)}</span>`,
+          (D.km||{})[dia] ? `ese día: menos de ${num(UMBRAL.min)} o más de ${num(UMBRAL.max)} km, o sin km` : "no se leyeron las jornadas de ese día");
 }
 
 function pinta(){
-  const d = delDia();
-  const pest = [["vehiculos", `Furgonetas · ${num((d.vehiculos||[]).length)}`],
-                ["sin", `Visitas sin vehículo · ${num(d.visitas_sin_vehiculo||0)}`],
-                ["deleg", "Por delegación"]].filter(([id])=>!QUITADAS.has(TABLA_DE[id]));
-  /* Sin ninguna de las tres, quedan las cifras de arriba y el día a día. */
-  $("#pestanas").hidden = $("#cajaTabla").hidden = $("#bCsv").hidden = !pest.length;
-  if(!pest.length){ kpis(); pintaDias(); return; }
-  if(!pest.some(([id])=>id===PESTANA)) PESTANA = pest[0][0];
-  $("#pestanas").innerHTML = pest.map(([id,t])=>
-    `<button class="btn" type="button" role="tab" data-p="${id}" aria-pressed="${id===PESTANA}">${esc(t)}</button>`).join("");
-  $("#pestanas").querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{ PESTANA=b.dataset.p; TODAS=false; pinta(); }));
+  const dia = $("#dia").value, fks = diasKm(), fs = filas();
   kpis();
-  const TIT = {vehiculos:"Furgonetas con visitas", sin:"Visitas sin vehículo, por reponedor", deleg:"Por delegación"};
-  const SUB = {
-    vehiculos:"Cada vehículo con alguna visita real ese día, con las delegaciones, rutas y reponedores con los que salió. Las horas son las de inicio de la primera y la última visita.",
-    sin:"Visitas reales cuyo parte no trae vehículo (VenCloud lo rellena con «xxxx-xxx»). Son visitas hechas, pero no se puede saber en qué furgoneta: no entran en la cifra del cuadrado.",
-    deleg:"Las furgonetas de una delegación son las distintas que visitaron allí; una que pasó por dos cuenta en las dos, y el total de arriba es el de distintas.",
-  };
-  $("#tTabla").textContent = TIT[PESTANA];
-  $("#sTabla").textContent = SUB[PESTANA];
-  const {cols, filas} = actual();
-  $("#cuenta").textContent = `${num(filas.length)} ${filas.length===1?"fila":"filas"}`;
-  if(!filas.length){
-    $("#tabla").innerHTML = `<p class="vacio">Ninguna el ${esc(fechaLarga($("#dia").value))}${$("#deleg").value || $("#busca").value ? " con este filtro" : ""}.</p>`;
+  $("#cuenta").textContent = `${num(fs.length)} ${fs.length===1?"furgoneta":"furgonetas"}`;
+  $("#sTabla").textContent = "Cada furgoneta activa del maestro de vehículos, con su última visita hasta el día elegido "
+    + `y los km de sus jornadas de los últimos ${fks.length} días. Primero las que llevan más días sin visitar.`;
+  if(!fs.length){
+    $("#tabla").innerHTML = `<p class="vacio">Ninguna${$("#deleg").value || $("#busca").value || $("#ver").value ? " con este filtro" : ""}.</p>`;
   }else{
-    const vis = filas.slice(0, TODAS ? TOPE_FILAS : MAX_FILAS);
-    $("#tabla").innerHTML = `<table><thead><tr>${cols.map(c=>`<th${c[3]?' class="num"':""}>${esc(c[0])}</th>`).join("")}</tr></thead><tbody>
-      ${vis.map(f=>`<tr>${cols.map(c=>`<td data-et="${esc(c[0])}"${c[3]?' class="num"':""}>${c[1](f)}</td>`).join("")}</tr>`).join("")}
+    const vis = fs.slice(0, TODAS ? fs.length : MAX_FILAS);
+    $("#tabla").innerHTML = `<table><thead><tr><th>Matrícula</th><th>Vehículo</th><th>Delegación</th>
+      <th>Última visita</th><th>Sin visitas</th>
+      ${fks.map(f=>`<th class="km${f===dia?" hoy":""}" title="${esc(fechaLarga(f))}">${esc(diaMes(f))}</th>`).join("")}</tr></thead><tbody>
+      ${vis.map(x=>`<tr>
+        <td data-et="Matrícula"><span class="mat">${esc(x.m)}</span></td>
+        <td data-et="Vehículo">${esc(x.nombre)}</td>
+        <td data-et="Delegación">${esc(x.deleg)}</td>
+        <td data-et="Última visita">${x.u ? esc(fechaCorta(x.u)) : `<span class="tenue">antes del ${esc(fechaCorta(D.desde))}</span>`}</td>
+        <td data-et="Sin visitas">${textoSin(x, dia)}</td>
+        ${x.kms.map((k,i)=>`<td class="km${fks[i]===dia?" hoy":""}" data-et="${esc(diaMes(fks[i]))}" title="${esc(fechaLarga(fks[i]))}: ${esc(k.x)}"><span class="${k.c}">${esc(k.t)}</span></td>`).join("")}
+      </tr>`).join("")}
       </tbody></table>`
-      + (filas.length > vis.length
-        ? (TODAS ? `<p class="vacio">Y ${num(filas.length-vis.length)} más: están todas en el CSV.</p>`
-                 : `<p class="vacio"><button class="btn" type="button" id="bTodas">Ver todas (${num(filas.length)})</button></p>`)
-        : "");
+      + (fs.length > vis.length ? `<p class="vacio"><button class="btn" type="button" id="bTodas">Ver todas (${num(fs.length)})</button></p>` : "");
     const b = $("#bTodas"); if(b) b.addEventListener("click", ()=>{ TODAS=true; pinta(); });
   }
+  $("#leyenda").innerHTML = `<span><b class="no">En rojo</b>: menos de ${num(UMBRAL.min)} km o más de ${num(UMBRAL.max)} km ese día.</span>`
+    + `<span><b class="no">sin km</b>: abrió jornada sin cuentakilómetros, sin cerrarla o mal anotada.</span>`
+    + `<span><b>—</b>: no abrió jornada.</span><span><b>s/d</b>: no se leyeron las jornadas.</span>`;
   pintaDias();
 }
 
-/* Las furgonetas activas de cada día hasta el elegido, con la delegación del
-   filtro si la hay: para ver si el día elegido es normal. */
+/* Cuántas de la flota visitaron cada día hasta el elegido, con la delegación
+   del filtro si la hay. */
 function pintaDias(){
   const dia = $("#dia").value, dl = $("#deleg").value;
-  const dias = Object.keys(D.dias||{}).filter(f=>f<=dia).sort().slice(-DIAS_VISTA).reverse();
-  const de = f => { const d = D.dias[f]||{};
-    if(!dl) return [d.activas||0, d.visitas||0];
-    const x = (d.delegaciones||[]).find(y=>y[0]===dl); return x ? [x[1], x[2]] : [0, 0]; };
-  const filas = dias.map(f=>[f, ...de(f)]);
-  const max = Math.max(1, ...filas.map(x=>x[1]));
+  const flota = (D.flota||[]).filter(x=>enDeleg(x[2], dl)).map(x=>x[0]);
+  const dias = (D.dias||[]).filter(f=>f<=dia).slice(-DIAS_VISTA).reverse();
+  const filas = dias.map(f=>[f, flota.filter(m=>((D.visitas||{})[m]||[]).includes(f)).length]);
+  const max = Math.max(1, flota.length);
   $("#cuentaDias").textContent = `${num(filas.length)} días`;
-  $("#sDias").textContent = (dl ? `Las de ${dl}. ` : "") + "Los fines de semana y los festivos salen muchas menos: compara con el mismo día de otras semanas.";
-  $("#dias").innerHTML = `<div class="barras">${filas.map(([f, n, v])=>
-    `<div class="fb${f===dia?" hoy":""}" title="${esc(fechaLarga(f))}: ${num(n)} furgonetas, ${num(v)} visitas">
+  $("#sDias").textContent = (dl ? `Las de ${dl}, de ${num(flota.length)}. ` : `De ${num(flota.length)} furgonetas activas. `)
+    + "Los fines de semana y los festivos salen muchas menos: compara con el mismo día de otras semanas.";
+  $("#dias").innerHTML = `<div class="barras">${filas.map(([f, n])=>
+    `<div class="fb${f===dia?" hoy":""}" title="${esc(fechaLarga(f))}: ${num(n)} de ${num(flota.length)} furgonetas con visitas">
       <span class="nom">${esc(fechaCorta(f))}</span>
       <span class="pis"><span class="b" style="width:${Math.max(.5, 100*n/max)}%"></span><span class="v">${num(n)}</span></span>
     </div>`).join("")}</div>`;
@@ -345,19 +351,22 @@ function pintaDias(){
 
 function pintaDelegs(){
   const antes = $("#deleg").value, todas = new Set();
-  Object.values(D.dias||{}).forEach(d => (d.delegaciones||[]).forEach(x => { if(x[0]) todas.add(x[0]); }));
+  (D.flota||[]).forEach(x => String(x[2]||"").split(" · ").forEach(d => { if(d) todas.add(d); }));
   const l = [...todas].sort((a,b)=>a.localeCompare(b,"es"));
   $("#deleg").innerHTML = `<option value="">Todas</option>` + l.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
   $("#deleg").value = l.includes(antes) ? antes : "";
 }
 
 function csv(){
-  const {cols, filas} = actual();
+  const dia = $("#dia").value, fks = diasKm();
   const q = v => { const s = String(v==null?"":v); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
-  const texto = "\ufeff" + [cols.map(c=>q(c[0])).join(";"), ...filas.map(f=>cols.map(c=>q(c[2](f))).join(";"))].join("\r\n");
+  const cab = ["Matrícula", "Vehículo", "Delegación", "Última visita", "Días sin visitas", ...fks.map(f=>`km ${f}`)];
+  const lineas = filas().map(x=>[x.m, x.nombre, x.deleg, x.u || `antes del ${D.desde}`,
+    x.sin == null ? `más de ${entre(D.desde, dia)}` : x.sin, ...x.kms.map(k=>k.v)]);
+  const texto = "﻿" + [cab, ...lineas].map(l=>l.map(q).join(";")).join("\r\n");
   const url = URL.createObjectURL(new Blob([texto], {type:"text/csv;charset=utf-8"}));
   const a = document.createElement("a");
-  a.href = url; a.download = `furgonetas_${PESTANA}_${$("#dia").value}.csv`;
+  a.href = url; a.download = `furgonetas_${dia}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
@@ -374,6 +383,7 @@ function csv(){
      (docs/61): no se dibuja, y lo que sólo usa esa tabla ya no llega. */
   QUITADAS = new Set((yo.tablas_ocultas||{})["furgonetas"] || []);
   document.querySelectorAll("[data-tabla]").forEach(el=>{ if(QUITADAS.has(el.dataset.tabla)) el.hidden = true; });
+  if(QUITADAS.has("vehiculos")) ["#bCsv", "#ver"].forEach(s=>{ const el=$(s); (el.closest("label")||el).hidden = true; });
 
   $("#quien").textContent = (yo.perfil ? yo.perfil + " · " : "") + (yo.nombre || yo.correo);
 
@@ -388,33 +398,34 @@ function csv(){
     return;
   }
   D = await rf.json();
-  const dias = Object.keys(D.dias||{}).sort().reverse();
-  if(!dias.length){ avisa("Todavía no hay ningún día calculado.", true); return; }
+  if(!Array.isArray(D.dias) || !D.dias.length){ avisa(D.sin_dato || "Todavía no hay ningún día calculado.", true); return; }
+  if(D.sin_dato) avisa(D.sin_dato, true);
+  UMBRAL = Object.assign(UMBRAL, D.umbrales_km || {});
+  const dias = D.dias.slice().reverse();
   $("#dia").innerHTML = dias.map(f=>`<option value="${esc(f)}">${esc(fechaLarga(f))}</option>`).join("");
   /* El día que llega en la dirección (desde el cuadrado), o ayer, o el último. */
   const q = new URLSearchParams(location.search), pedido = q.get("dia");
   const hoy = new Date(), ayer = isoLocal(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()-1));
   $("#dia").value = dias.includes(pedido) ? pedido : dias.includes(ayer) ? ayer : dias[0];
-  if(!dias.includes(pedido) && !dias.includes(ayer))
+  if(!dias.includes(pedido) && !dias.includes(ayer) && !D.sin_dato)
     avisa(`Todavía no hay datos de ayer: lo último calculado es del ${fechaLarga(dias[0])}.`, true);
   pintaDelegs();
   if(q.get("delegacion")) $("#deleg").value = q.get("delegacion");
-  ["#dia","#deleg"].forEach(s=>$(s).addEventListener("change", ()=>{ TODAS=false; pinta(); }));
+  ["#dia","#deleg","#ver"].forEach(s=>$(s).addEventListener("change", ()=>{ TODAS=false; pinta(); }));
   $("#busca").addEventListener("input", ()=>{ TODAS=false; pinta(); });
   $("#bCsv").addEventListener("click", csv);
   $("#todo").hidden = false;
   pinta();
   const gen = D.generado ? new Date(D.generado) : null;
-  $("#pie").innerHTML = "Furgoneta activa = un vehículo distinto con alguna visita real ese día en los partes de VenCloud; "
-    + "no se suman de un día a otro. Una visita real es la de un reponedor, sin los partes automáticos de SYSTEM. "
+  $("#pie").innerHTML = "Furgoneta activa = vehículo activo del maestro de VenCloud, sin las fichas ficticias de los sitios fijos. "
+    + "Una visita es la de un reponedor en los partes, sin los automáticos de SYSTEM. "
+    + "Los km son los finales menos los iniciales de sus jornadas de ruta de ese día. "
+    + `Las visitas se conocen desde el ${esc(fechaLarga(D.desde))}. `
     + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
     + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;
   /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
-  Preferidos.monta("furgonetas", {
-    actual: () => $("#cajaTabla").hidden ? null : TABLA_DE[PESTANA],
-    abre: t => { const p = Object.keys(TABLA_DE).find(k => TABLA_DE[k] === t); if(p){ PESTANA = p; pinta(); } },
-    ocultar: ["#kpis", "#pestanas"].concat(Preferidos.solo === "dias" ? ["#cajaTabla", "#bCsv"] : [])});
+  Preferidos.monta("furgonetas", {ocultar: ["#kpis"].concat(Preferidos.solo === "dias" ? ["#bCsv", "label:has(#ver)"] : [])});
 })();
 </script>
 </body>
