@@ -625,6 +625,9 @@ def contexto_asistente(panel_recortado, perfil):
             "tipo": perfil.get("tipo"),
             "centros": perfil.get("ambito", {}).get("centros", []),
             "clientes": perfil.get("ambito", {}).get("clientes", []),
+            # Las del usuario, si se las marcaron (docs/65); un cliente no lleva.
+            "delegaciones": perfil.get("ambito", {}).get("delegaciones", [])
+            if perfil.get("tipo", "cliente") != "cliente" else [],
         },
         "datos": panel_recortado,
     }
