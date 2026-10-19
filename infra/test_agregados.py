@@ -327,15 +327,21 @@ print("\nLa pagina de furgonetas (docs/58): un fichero por perfil, con su ambito
 _fi = json.loads(gzip.decompress(ALMACEN["cabina/interno/furgonetas.json.gz"]))
 _fa = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/furgonetas.json.gz"]))
 comprueba("el interno: toda la flota activa del maestro, con o sin visitas",
-          [x[0] for x in _fi["flota"]], ["2222BBB", "1111AAA", "3333CCC"])
+          [x["m"] for x in _fi["flota"]], ["2222BBB", "1111AAA", "3333CCC"])
 comprueba("AIRBUS: solo las que visitaron su ambito, tambien la del tecnico",
-          [x[0] for x in _fa["flota"]], ["1111AAA", "3333CCC"])
+          [x["m"] for x in _fa["flota"]], ["1111AAA", "3333CCC"])
 comprueba("los dias con visita, cada perfil los suyos",
           (_fi["visitas"], _fa["visitas"]),
           ({"1111AAA": [_ayer], "2222BBB": [_ayer], "3333CCC": [_ayer]},
            {"1111AAA": [_ayer], "3333CCC": [_ayer]}))
-comprueba("los km del dia, de la jornada sin centro, con el maestro",
-          (_fi["km"][_ayer], _fa["km"][_ayer]), ({"1111AAA": [450, 9, ""]}, {"1111AAA": [450, 9, ""]}))
+comprueba("los km del dia, de la jornada sin centro, con el maestro (las nueve repetidas cuentan una)",
+          (_fi["km"][_ayer], _fa["km"][_ayer]), ({"1111AAA": [50, 9, ""]}, {"1111AAA": [50, 9, ""]}))
+_hk = json.loads(gzip.decompress(ALMACEN["cabina/_furgonetas/jornadas.json.gz"]))
+comprueba("la historia de jornadas, desde el 1-ene-2025 hasta ayer, tambien los dias vacios",
+          (min(_hk), max(_hk), len(_hk[_ayer]["1"])), ("2025-01-01", _ayer, 9))
+comprueba("los km acumulados y la persona, en la flota",
+          {x["m"]: (x["km"], x["z"]) for x in _fi["flota"]},
+          {"1111AAA": (50, "Centro"), "2222BBB": (0, "Levante"), "3333CCC": (0, "Centro")})
 comprueba("desde el primer dia que leyo la noche", _fi["desde"], min(_fi["dias"]))
 
 print("\nLos almacenes por dentro (docs/54)")

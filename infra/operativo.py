@@ -27,6 +27,7 @@ Sin dependencias: se prueba con `python3 infra/test_operativo.py`.
 
 import datetime
 import re
+import unicodedata
 
 import reglas as R
 
@@ -67,6 +68,12 @@ KM_ANOTADO = 100
 # Cuantos dias se recuerdan las visitas de cada furgoneta, para decir desde
 # cuando no visita. La ventana de la noche son 120; lo de antes se acumula.
 DIAS_VISITAS = 180
+# Los km acumulados de cada furgoneta se cuentan desde aqui (Gabriele, 19-oct-2026:
+# «desde 01/01/2025 hasta ayer»). Las jornadas de 2025 estan en el crudo.
+KM_DESDE = "2025-01-01"
+# Una furgoneta esta bien si se uso en la ultima semana y sus km de esos dias
+# estan entre KM_MIN y KM_MAX.
+SEMANA = 7
 SIN_VEHICULOS = ("Falta el maestro de vehículos (M12, informe 191 de VenCloud) de esta "
                  "noche: sin él no se sabe qué furgonetas están activas.")
 
@@ -112,6 +119,27 @@ def vehiculo_real(v):
     return bool(s) and not s.lower().startswith("xxx")
 
 
+# La zona de cada delegacion: el nombre de VenCloud empieza por ella
+# («Levante - Murcia»). Las mismas cinco del Power BI. La usan las paginas de
+# incidencias (zonas) y de furgonetas (areas).
+ZONAS = (("MADRID", "Centro"), ("ANDALUCIA", "Sur"), ("CATALUNA", "Cataluña"),
+         ("LEVANTE", "Levante"), ("NORTE", "Norte"))
+OTRA_ZONA = "Otra zona"
+
+
+def sin_acentos(texto):
+    t = unicodedata.normalize("NFD", str(texto or ""))
+    return "".join(c for c in t if unicodedata.category(c) != "Mn").upper()
+
+
+def zona_de(delegacion):
+    d = sin_acentos(delegacion).replace("Ñ", "N")
+    for prefijo, zona in ZONAS:
+        if d.startswith(prefijo):
+            return zona
+    return OTRA_ZONA
+
+
 def es_furgoneta(ficha):
     """Una ficha del maestro de vehiculos (M12, informe 191) que es una
     furgoneta en servicio: activa, no obsoleta, con matricula, y que no es uno
@@ -130,26 +158,88 @@ def es_furgoneta(ficha):
     return not (nombre.startswith("ficticio") or re.search(r"\btest\b", nombre))
 
 
+def falta_en(jornada):
+    """Lo que le falta a una jornada para tener km, o «» si los tiene."""
+    a, b, cerrada = jornada[0], jornada[1], jornada[2]
+    if not cerrada:
+        return "sin cerrar"
+    if a < KM_ANOTADO:
+        return "sin anotar"
+    if b < a:
+        return "mal anotado"
+    return ""
+
+
 def km_del_dia(jornadas):
     """Los km de una furgoneta en un dia: [km, jornadas, lo que falta].
 
-    `jornadas`: [(km iniciales, km finales, cerrada)] del control de jornada
-    (D5, informe 161). Se suman las jornadas bien anotadas; km es None si
-    ninguna lo esta, y entonces lo que falta dice por que: «sin cerrar» (la
-    jornada sigue abierta), «sin anotar» (cuentakilometros de 1 o 2) o «mal
-    anotado» (el final por debajo del inicio). Nunca se rellena.
+    `jornadas`: [(km iniciales, km finales, cerrada, ...)] del control de
+    jornada (D5, informe 161). Los tramos de cuentakilometros bien anotados se
+    juntan antes de sumar: VenCloud tiene la misma jornada dos veces en rutas
+    distintas (3742KFL, 43.794 a 43.836, el 16-oct), y sumarlas daria el doble.
+    km es None si ninguna esta bien, y entonces lo que falta dice por que:
+    «sin cerrar» (la jornada sigue abierta), «sin anotar» (cuentakilometros de
+    1 o 2) o «mal anotado» (el final por debajo del inicio). Nunca se rellena.
     """
-    buenos, falta = [], set()
-    for a, b, cerrada in jornadas:
-        if not cerrada:
-            falta.add("sin cerrar")
-        elif a < KM_ANOTADO:
-            falta.add("sin anotar")
-        elif b < a:
-            falta.add("mal anotado")
+    tramos, falta = [], set()
+    for j in jornadas:
+        f = falta_en(j)
+        if f:
+            falta.add(f)
         else:
-            buenos.append(b - a)
-    return [round(sum(buenos)) if buenos else None, len(jornadas), " · ".join(sorted(falta))]
+            tramos.append((j[0], j[1]))
+    km, hasta = 0.0, None
+    for a, b in sorted(tramos):
+        if hasta is None or a > hasta:
+            km += b - a
+            hasta = b
+        elif b > hasta:
+            km += b - hasta
+            hasta = b
+    return [round(km) if tramos else None, len(jornadas), " · ".join(sorted(falta))]
+
+
+def jornadas_por_vehiculo(filas):
+    """{vehiculoid: [[km ini, km fin, cerrada, empleado]]} de unas filas del
+    control de jornada (D5). Una jornada abierta lleva el centinela de VenCloud
+    (1900) en fechafin."""
+    out = {}
+    for j in filas:
+        vid = R.v(j, "vehiculoid", None)
+        if vid in (None, ""):
+            continue
+        try:
+            a = float(R.v(j, "kminiciales", 0) or 0)
+            b = float(R.v(j, "kmfinales", 0) or 0)
+        except (TypeError, ValueError):
+            a = b = 0.0
+        cerrada = not str(R.v(j, "fechafin", "") or "1900").startswith("1900")
+        out.setdefault(str(vid), []).append([a, b, cerrada, R.v(j, "empleadoid", None)])
+    return out
+
+
+def km_acumulados(historia, mat_de, flota, hasta):
+    """Por matricula de la flota: [km desde KM_DESDE hasta `hasta`, jornadas sin
+    km, empleado de la ultima jornada]. Dia a dia con km_del_dia, para que una
+    jornada repetida no cuente dos veces."""
+    out = {}
+    for f in sorted(historia):
+        if not (KM_DESDE <= f <= hasta):
+            continue
+        junto = {}
+        for vid, js in historia[f].items():
+            mat = mat_de.get(str(vid))
+            if mat in flota:
+                junto.setdefault(mat, []).extend(js)
+        for mat, js in junto.items():
+            x = out.setdefault(mat, [0, 0, None])
+            km = km_del_dia(js)[0]
+            x[0] += km or 0
+            x[1] += sum(1 for j in js if falta_en(j))
+            emp = [j[3] for j in js if len(j) > 3 and j[3] not in (None, "")]
+            if emp:
+                x[2] = emp[-1]
+    return out
 
 
 def es_lectura_remota(parte):
@@ -329,7 +419,7 @@ class Operativo:
         # cuando no visita, y las jornadas de cada dia, para sus km. `desde` es
         # el primer dia que se leyo: lo de antes no se sabe.
         self.visitas_de = {}     # matricula -> {fechas con visita real}
-        self.jornadas = {}       # fecha -> {vehiculoid: [(km ini, km fin, cerrada)]}
+        self.jornadas = {}       # fecha -> {vehiculoid: [(km ini, km fin, cerrada, empleado)]}
         self.desde = None
 
     def dia(self, fecha):
@@ -368,18 +458,8 @@ class Operativo:
         maestro de vehiculos al escribir (detalle_furgonetas)."""
         f = fecha.isoformat() if hasattr(fecha, "isoformat") else str(fecha)[:10]
         dia = self.jornadas.setdefault(f, {})
-        for j in filas:
-            vid = R.v(j, "vehiculoid", None)
-            if vid in (None, ""):
-                continue
-            try:
-                a = float(R.v(j, "kminiciales", 0) or 0)
-                b = float(R.v(j, "kmfinales", 0) or 0)
-            except (TypeError, ValueError):
-                a = b = 0.0
-            # Una jornada abierta lleva el centinela de VenCloud en fechafin.
-            cerrada = not str(R.v(j, "fechafin", "") or "1900").startswith("1900")
-            dia.setdefault(str(vid), []).append((a, b, cerrada))
+        for vid, js in jornadas_por_vehiculo(filas).items():
+            dia.setdefault(vid, []).extend(js)
 
     # ------------------------------------------------------------- averias
     def come_sat(self, filas):
@@ -664,7 +744,8 @@ class Operativo:
                       "cada festivo y cada día laborable flojo con el día normal de su delegación."),
         }
 
-    def detalle_furgonetas(self, perfil_id, anterior=None, maestro=None, ambito=None):
+    def detalle_furgonetas(self, perfil_id, anterior=None, maestro=None, ambito=None,
+                           historia=None, rutas=None, empleados=None):
         """El fichero de la pagina de furgonetas (docs/58).
 
         Gabriele, 19-oct-2026: el listado de todas las furgonetas activas, si
@@ -678,6 +759,12 @@ class Operativo:
         · km: cada dia, los de cada furgoneta que hizo jornada (km_del_dia).
           Un dia sin entrada no se leyo; una furgoneta sin entrada ese dia no
           abrio jornada.
+
+        19-oct, segunda vuelta: por area, el % de furgonetas bien, y en la
+        tabla el modelo, los km acumulados desde KM_DESDE y la persona de la
+        ruta. `historia` son las jornadas de todos los dias desde KM_DESDE
+        ({fecha: {vehiculoid: [[km ini, km fin, cerrada, empleado]]}}); `rutas`
+        y `empleados`, los maestros (M3 y M11).
 
         Acumula como el informe: lo de esta noche sobre lo que ya habia.
         """
@@ -714,12 +801,11 @@ class Operativo:
                     continue
                 mat_de[str(R.v(x, "id", ""))] = mat
                 if es_furgoneta(x):
-                    g = flota.setdefault(mat, {"n": set(), "d": set()})
-                    nombre = str(R.v(x, "denominacion", "") or "").strip()
-                    if nombre:
-                        g["n"].add(nombre)
-                    if R.v(x, "delegacion", ""):
-                        g["d"].add(str(R.v(x, "delegacion")).strip())
+                    g = flota.setdefault(mat, {"n": set(), "d": set(), "mod": set()})
+                    for k, campo in (("n", "denominacion"), ("d", "delegacion"), ("mod", "modelo")):
+                        valor = str(R.v(x, campo, "") or "").strip()
+                        if valor:
+                            g[k].add(valor)
             if any(ambito.get(k) for k in ("clientes", "centros", "delegaciones")):
                 delegs = {str(d) for d in ambito.get("delegaciones") or []}
                 flota = {m: g for m, g in flota.items() if g["d"] & delegs or m in visitas}
@@ -741,6 +827,34 @@ class Operativo:
             visitas = {m: fs for m, fs in visitas.items() if m in flota}
             km = {f: {m: x for m, x in por.items() if m in flota} for f, por in km.items()}
         junta = lambda xs: " · ".join(sorted(xs, key=lambda x: x.lower()))
+        acum = km_acumulados(historia, mat_de, flota, ultimo) if historia is not None else {}
+        de_ruta = {}
+        for r in rutas or []:
+            veh = str(R.v(r, "vehiculo", "") or "").strip()
+            if veh in flota and R.v(r, "activa", False):
+                x = de_ruta.setdefault(veh, {"p": set(), "r": set()})
+                for k, campo in (("p", "reponedor_titular"), ("r", "ruta")):
+                    valor = str(R.v(r, campo, "") or "").strip()
+                    if valor:
+                        x[k].add(valor)
+        nombre_de = {str(R.v(e, "id", "")): str(R.v(e, "empleado", "") or "").strip()
+                     for e in empleados or []}
+
+        def fila(m, g):
+            delegs = sorted(g["d"])
+            x = {"m": m, "n": junta(g["n"]), "d": junta(g["d"]),
+                 "z": zona_de(delegs[0]) if delegs else OTRA_ZONA,
+                 "mod": junta(g["mod"]), "p": "", "pr": "", "r": "", "km": None, "skm": None}
+            if de_ruta.get(m, {}).get("p"):
+                x.update(p=junta(de_ruta[m]["p"]), pr="ruta", r=junta(de_ruta[m]["r"]))
+            elif m in acum and nombre_de.get(str(acum[m][2])):
+                # Sin ruta activa con esta furgoneta (los tecnicos): quien la
+                # llevo en su ultima jornada, y se dice que es eso.
+                x.update(p=nombre_de[str(acum[m][2])], pr="jornada")
+            if historia is not None:
+                x["km"], x["skm"] = acum.get(m, [0, 0])[:2]
+            return x
+
         out = {
             "generado": datetime.datetime.utcnow().isoformat() + "Z",
             "perfil": perfil_id,
@@ -748,13 +862,19 @@ class Operativo:
             "dias": dias,
             "desde": desde,
             "umbrales_km": {"min": KM_MIN, "max": KM_MAX},
-            "flota": sorted(([m, junta(g["n"]), junta(g["d"])] for m, g in flota.items()),
-                            key=lambda x: (x[2], x[0])),
+            "flota": sorted((fila(m, g) for m, g in flota.items()), key=lambda x: (x["d"], x["m"])),
+            "km_desde": KM_DESDE if historia is not None else None,
+            "semana": SEMANA,
+            "umbrales": {"verde": VERDE, "amarillo": AMARILLO},
             "visitas": {m: sorted(f for f in fs if limite <= f <= ultimo)
                         for m, fs in sorted(visitas.items())},
             "km": {f: km[f] for f in sorted(km) if f in dias},
             "_nota": ("flota: las furgonetas activas del maestro de vehículos (M12, informe 191), "
-                      "[matrícula, nombre(s) en VenCloud, delegación(es)], sin las fichas "
+                      "{m: matrícula, n: nombre(s) en VenCloud, d: delegación(es), z: área, "
+                      "mod: modelo, p: persona, pr: de dónde sale la persona («ruta»: reponedor "
+                      "titular de una ruta activa con esta furgoneta; «jornada»: quien la llevó "
+                      "en su última jornada), r: ruta(s), km: km acumulados desde km_desde hasta "
+                      "ultimo_dia, skm: jornadas sin km en ese tiempo}, sin las fichas "
                       "ficticias ni las de baja. visitas: por matrícula, los días con alguna "
                       "visita real en los partes o de la SAT (informe 163); lo de antes de «desde» no se sabe. km: por día "
                       "y matrícula, [km, jornadas, lo que falta] del control de jornada (D5, "

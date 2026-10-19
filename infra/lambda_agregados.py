@@ -103,6 +103,12 @@ CLAVE_RUTAS = os.environ.get("RUTAS", "maestros/rutas/m_rutas.json.gz")
 # El maestro de vehiculos (M12, informe 191): que furgonetas estan activas y de
 # que delegacion es cada una, para la pagina de furgonetas (docs/58).
 CLAVE_VEHICULOS = os.environ.get("VEHICULOS", "maestros/vehiculos/m_vehiculos.json.gz")
+# Quien es cada empleado (M11, informe 190): quien llevo la furgoneta sin ruta.
+CLAVE_EMPLEADOS = os.environ.get("EMPLEADOS", "maestros/empleados/m_empleados.json.gz")
+# Las jornadas de todos los dias desde OP.KM_DESDE, para los km acumulados de
+# cada furgoneta. Se guardan una vez y cada noche se rehace la ventana.
+CLAVE_HISTORIA_KM = "cabina/_furgonetas/jornadas.json.gz"
+JORNADAS = ("crudo/jornadas", "jornadas")
 # El plan de visitas de cada dia (D12, informe 184 de VenCloud, docs/17). Un dia
 # sin fichero (los anteriores al 13-oct-2026) no tiene plan, y el cuadrado de
 # rutas lo dice.
@@ -1180,6 +1186,35 @@ def lee_telemetria_externa():
     return filas, {"ficheros": meta, "faltan": [t for t in TE.TIPOS if t not in filas]}
 
 
+def historia_de_jornadas(operativos, hoy, context=None):
+    """Las jornadas de cada dia desde OP.KM_DESDE hasta ayer, para los km
+    acumulados de la pagina de furgonetas (docs/58).
+
+    Los dias de la ventana de esta noche se rehacen con lo leido; los que
+    faltan se leen una vez y se guardan, tambien vacios (un dia sin fichero no
+    se vuelve a pedir). La primera noche son unos 650 ficheros pequenos; si se
+    acaba el tiempo, sigue la noche siguiente.
+    """
+    historia = _json_de(CLAVE_HISTORIA_KM) or {}
+    # Las jornadas no pasan por el ambito: todos los perfiles tienen las mismas.
+    for op in operativos.values():
+        historia.update(op.jornadas)
+        break
+    dia = datetime.date.fromisoformat(OP.KM_DESDE)
+    leidos = 0
+    while dia < hoy:
+        f = dia.isoformat()
+        if f not in historia:
+            if not _queda_tiempo(context, margen=120_000):
+                print(f"AVISO: la historia de km se queda en {f}; sigue la noche que viene.")
+                break
+            historia[f] = OP.jornadas_por_vehiculo(lee_dia(*JORNADAS, dia))
+            leidos += 1
+        dia += datetime.timedelta(days=1)
+    escribe_comprimido(CLAVE_HISTORIA_KM, historia)
+    return historia
+
+
 def come_operativo(op, dia, nombre, filas, clase_de):
     """Lo que hace el informe general operativo con las filas de una fuente.
 
@@ -1619,6 +1654,8 @@ def lambda_handler(event, context):
         festivos = _json_de(CLAVE_FESTIVOS)
         vehiculos = _json_de(CLAVE_VEHICULOS)
         vehiculos = _filas(vehiculos) if vehiculos is not None else None
+        empleados = _filas(_json_de(CLAVE_EMPLEADOS))
+        historia_km = historia_de_jornadas(operativos, hoy, context)
         # Donde esta cada maquina dentro del centro («Planta 4»), para la lista de
         # la pagina de rutas: el plan y los partes no lo traen, el censo si.
         ubicaciones = {str(R.v(f, "matricula", "") or "").strip():
@@ -1643,7 +1680,8 @@ def lambda_handler(event, context):
             clave_f = f"cabina/{acu.perfil['id']}/furgonetas.json.gz"
             op.desde = dias_leidos and min(dias_leidos)
             escribe_comprimido(clave_f, op.detalle_furgonetas(acu.perfil["id"], _json_de(clave_f),
-                                                              vehiculos, acu.ambito))
+                                                              vehiculos, acu.ambito, historia_km,
+                                                              rutas, empleados))
             # Lo que falta, a la vista en la respuesta: un cuadrado sin dato
             # todos los dias es un informe que no llega, no un dia flojo.
             ultimo = fichero["dias"].get(fichero["ultimo_dia"] or "", {})

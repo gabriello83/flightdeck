@@ -261,6 +261,13 @@ comprueba("jornada abierta y final por debajo del inicio",
 comprueba("una bien y otra abierta: los km de la buena, y lo que falta",
           OP.km_del_dia([(1000, 1100, True), (1100, 0, False)]), [100, 2, "sin cerrar"])
 comprueba("cero km es un dato, no un hueco", OP.km_del_dia([(1000, 1000, True)]), [0, 1, ""])
+comprueba("la misma jornada dos veces (dos rutas) cuenta una",
+          OP.km_del_dia([(43794, 43836, True, 1), (43794, 43836, True, 2)]), [42, 2, ""])
+comprueba("tramos que se pisan se juntan; dos cuentakilometros distintos se suman",
+          OP.km_del_dia([(100, 150, True), (140, 160, True), (9000, 9010, True)]), [70, 3, ""])
+comprueba("el area sale de la delegacion",
+          [OP.zona_de(d) for d in ("Andalucía - Cádiz", "Madrid - Hospital La Paz", "Cataluña - Cornella",
+                                   "Serunion Vending - CENTRAL")], ["Sur", "Centro", "Cataluña", "Otra zona"])
 
 op = OP.Operativo([DIA])
 op.desde = "2026-10-01"
@@ -284,8 +291,9 @@ op.come_jornadas(DIA, [jornada(1, 1000, 1005), jornada(2, 2000, 2010),   # dos f
 op.come_jornadas("2026-10-08", [jornada(1, 900, 1000, "1900-01-01T00:00:00")])
 fu = op.detalle_furgonetas("interno", None, MAESTRO, {})
 comprueba("la flota: activas, una por matricula, sin ficticias ni de baja",
-          fu["flota"], [["1111AAA", "CRAFTER - Ana · MASTER - Ruta 1", "Madrid"],
-                        ["2222BBB", "CADDY", "Sevilla"], ["5555EEE", "JUMPER", "Sevilla"]])
+          [(x["m"], x["n"], x["d"]) for x in fu["flota"]],
+          [("1111AAA", "CRAFTER - Ana · MASTER - Ruta 1", "Madrid"),
+           ("2222BBB", "CADDY", "Sevilla"), ("5555EEE", "JUMPER", "Sevilla")])
 comprueba("los dias con visita de cada una, tambien de la SAT, sin el ficticio",
           fu["visitas"], {"1111AAA": [DIA], "2222BBB": ["2026-10-07", DIA], "5555EEE": ["2026-10-03"]})
 comprueba("los km del dia, juntando las fichas de una matricula",
@@ -301,14 +309,35 @@ comprueba("el cuadrado no cambia: furgonetas distintas con visita, sin las de re
 op_sev = OP.Operativo([DIA])
 op_sev.dia(DIA)
 fa = op_sev.detalle_furgonetas("ope-sevilla", None, MAESTRO, {"delegaciones": ["Sevilla"]})
-comprueba("un perfil de delegacion ve las suyas", [x[0] for x in fa["flota"]], ["2222BBB", "5555EEE"])
+comprueba("un perfil de delegacion ve las suyas", [x["m"] for x in fa["flota"]], ["2222BBB", "5555EEE"])
 op_cli = OP.Operativo([DIA])
 op_cli.come_visitas_vehiculo(DIA, [dict(parte("P1", "Madrid", "R1"), vehiculo="1111AAA")])
 op_cli.come_jornadas(DIA, [jornada(1, 1000, 1005), jornada(3, 100, 200)])
 op_cli.dia(DIA)
 fc = op_cli.detalle_furgonetas("cli", None, MAESTRO, {"clientes": ["AIRBUS"]})
 comprueba("uno acotado por clientes, las que visitaron su ambito",
-          ([x[0] for x in fc["flota"]], list(fc["km"][DIA])), (["1111AAA"], ["1111AAA"]))
+          ([x["m"] for x in fc["flota"]], list(fc["km"][DIA])), (["1111AAA"], ["1111AAA"]))
+
+HISTORIA = {"2024-12-31": {"1": [[100, 900, True, 7]]},                 # antes de KM_DESDE
+            "2025-01-02": {"1": [[1000, 1100, True, 7]], "2": [[2000, 2050, True, 8]]},
+            "2025-06-01": {"1": [[1, 2, True, 9]], "4": [[100, 200, True, 9]]},  # sin anotar; 4 es de baja
+            "2026-10-08": {"10": [[500, 530, True, 9]]},
+            "2026-10-10": {"10": [[530, 999, True, 9]]}}                    # despues del ultimo dia
+RUTAS = [{"ruta": "Ruta 1", "vehiculo": "1111AAA", "reponedor_titular": "Ana", "activa": True},
+         {"ruta": "Ruta vieja", "vehiculo": "1111AAA", "reponedor_titular": "Pepe", "activa": False}]
+EMPLEADOS = [{"id": 9, "empleado": "Luis Técnico"}]
+fh = op.detalle_furgonetas("interno", None, MAESTRO, {}, HISTORIA, RUTAS, EMPLEADOS)
+por = {x["m"]: x for x in fh["flota"]}
+comprueba("km acumulados desde KM_DESDE hasta el ultimo dia, juntando fichas",
+          ({m: por[m]["km"] for m in por}, fh["km_desde"]),
+          ({"1111AAA": 150, "2222BBB": 0, "5555EEE": 30}, "2025-01-01"))
+comprueba("y las jornadas sin km de ese tiempo", por["1111AAA"]["skm"], 1)
+comprueba("la persona: el titular de la ruta activa con esa furgoneta",
+          (por["1111AAA"]["p"], por["1111AAA"]["pr"], por["1111AAA"]["r"]), ("Ana", "ruta", "Ruta 1"))
+comprueba("sin ruta, quien la llevo en su ultima jornada, y se dice",
+          (por["5555EEE"]["p"], por["5555EEE"]["pr"]), ("Luis Técnico", "jornada"))
+comprueba("sin nada, vacia", (por["2222BBB"]["p"], por["2222BBB"]["pr"]), ("", ""))
+comprueba("sin historia, los km acumulados no son un cero", (fu["flota"][0]["km"], fu["km_desde"]), (None, None))
 
 sinm = op.detalle_furgonetas("interno", None, None, {})
 comprueba("sin maestro de vehiculos se dice, no sale una flota vacia",
