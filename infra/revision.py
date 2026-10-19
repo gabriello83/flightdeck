@@ -292,6 +292,15 @@ def calcula(censo, detalle_tarifas, estado_planogramas, hoy, actividad=False):
     return _con_zonas(out)
 
 
+# Lo que no se revisa (Gabriele, 19-oct): la delegacion central de Serunion,
+# con sus maquinas, centros y clientes, no es de ninguna area de operaciones.
+DELEGACIONES_FUERA = ("SERUNION VENDING - CENTRAL",)
+
+
+def _fuera(delegacion):
+    return IN.sin_acentos(delegacion).strip() in DELEGACIONES_FUERA
+
+
 def _con_zonas(out):
     """El area de cada delegacion (Gabriele, 19-oct): la pagina abre primero un
     cuadrado por area y, dentro, las maquinas por delegacion. Las areas son las
@@ -299,6 +308,7 @@ def _con_zonas(out):
     delegs = set()
     for k in ("sin_planograma", "creados", "sin_tarifa", "precio_distinto"):
         if isinstance(out.get(k), list):
+            out[k] = [m for m in out[k] if not _fuera(m["delegacion"])]
             delegs.update(m["delegacion"] for m in out[k])
     out["zonas"] = {d: IN.zona_de(d) for d in sorted(delegs)}
     return out
