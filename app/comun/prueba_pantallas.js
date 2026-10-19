@@ -1569,6 +1569,46 @@ const servidor = http.createServer((pet, res) => {
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
     API['/api/admin/usuarios'] = antesU;
+
+    // Al crear un perfil, lo que le sale en el informe operativo con las
+    // sesiones marcadas: Revision clientes no es una sesion, va con
+    // «Instalaciones y altas» (pasó el 19-oct: no se encontraba).
+    API['/api/admin/perfiles'] = { ...antesP, niveles: { cliente: 0, operaciones: 1, direccion: 2, admin: 3 },
+      catalogo_sesiones: {
+        resumen: { nombre: 'Resumen', minimo: 'operaciones', bloques: ['servicio', 'dinero'] },
+        instalaciones: { nombre: 'Instalaciones y altas', minimo: 'operaciones', bloques: ['instalaciones'] },
+        cuadro: { nombre: 'Cuadro de mando', minimo: 'cliente', bloques: [] } },
+      catalogo_cuadrados: {
+        rutas: { nombre: 'Rutas', tablas: {}, bloque: 'servicio' },
+        ventas: { nombre: 'Ventas', tablas: {}, bloque: 'dinero' },
+        telemetria: { nombre: 'Telemetría', tablas: {}, bloque: 'instalaciones' },
+        revision: { nombre: 'Revisión clientes', tablas: {}, bloque: 'instalaciones' },
+        utilizo: { nombre: 'Utilizo', tablas: {}, bloque: 'instalaciones', solo_direccion: true, sin_ambito: true } } };
+    {
+      const c = await abre('/consola/');
+      await c.pagina.waitForSelector('#pestanas button[data-s="perfiles"]');
+      await c.pagina.click('#pestanas button[data-s="perfiles"]');
+      await c.pagina.click('#bNuevoPerfil');
+      await c.pagina.selectOption('#fTipo', 'operaciones');
+      comprueba_que('cada sesion dice que cuadrados da',
+        (await c.pagina.textContent('#cajaSesiones label:has(input[value="instalaciones"])')).includes('Revisión clientes'));
+      comprueba('sin sesiones, ningun cuadrado', await c.pagina.textContent('#rOperativo'),
+        'Ninguno con las sesiones marcadas.');
+      await c.pagina.check('#cajaSesiones input[value="instalaciones"]');
+      comprueba('con Instalaciones y altas sale Revision clientes (Utilizo es de direccion)',
+        await c.pagina.textContent('#rOperativo'),
+        'Telemetría · Revisión clientes  —  No le salen: Utilizo (de dirección para arriba).');
+      await c.pagina.selectOption('#fTipo', 'direccion');
+      await c.pagina.check('#cajaSesiones input[value="instalaciones"]');
+      comprueba('en direccion sin ambito, tambien Utilizo', await c.pagina.textContent('#rOperativo'),
+        'Telemetría · Revisión clientes · Utilizo');
+      if (FOTOS) await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-operativo.png'), fullPage: false });
+      await c.pagina.selectOption('#fTipo', 'cliente');
+      comprueba_que('un cliente no tiene informe operativo', !(await c.pagina.isVisible('#campoOperativo')));
+      comprueba('ni una peticion fuera del dominio', c.fuera, []);
+      comprueba('sin un solo error en la consola del navegador', c.errores, []);
+      await c.pagina.close();
+    }
     API['/api/admin/perfiles'] = antesP;
 
     // Las paginas, con lo que el administrador le quito a este usuario.
