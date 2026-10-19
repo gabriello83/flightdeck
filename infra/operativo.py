@@ -411,7 +411,8 @@ class Operativo:
             maquinas[mat] = dict(x, vencloud=marcada, censo={
                     "delegacion": R.v(f, "delegacion", ""), "cliente": R.v(f, "cliente", ""),
                     "num_centro": R.v(f, "num_centro", ""), "centro": R.v(f, "centro", ""),
-                    "cod_pdv": str(R.v(f, "cod_pdv", "") or ""), "ubicacion": R.v(f, "ubicacion", "")})
+                    "cod_pdv": str(R.v(f, "cod_pdv", "") or ""), "ubicacion": R.v(f, "ubicacion", ""),
+                    "modelo": str(R.v(f, "modelo", "") or "").strip()})
         self.externa = maquinas
         self.fuera = fuera
         self.foto["telemetria"] = ficheros
@@ -524,7 +525,8 @@ class Operativo:
                     "vencloud": x["vencloud"],
                     "delegacion": c["delegacion"], "cliente": c["cliente"],
                     "num_centro": c["num_centro"], "centro": c["centro"],
-                    "cod_pdv": c["cod_pdv"], "ubicacion": c["ubicacion"]}
+                    "cod_pdv": c["cod_pdv"], "ubicacion": c["ubicacion"],
+                    "modelo": c.get("modelo", "")}
             if "nayax" in x:
                 fila["nayax"] = {"id": x["nayax"]["id"], "ultima": x["nayax"]["ultima"]}
             if "prodelfi" in x:
@@ -534,6 +536,11 @@ class Operativo:
             if "nebula" in x:
                 fila["nebula"] = dict(x["nebula"])
             maquinas.append(fila)
+        # El area de cada delegacion (Gabriele, 19-oct): quien ve mas de un area
+        # abre primero un cuadrado por area y, dentro, el listado. Las cinco del
+        # Power BI, las mismas que incidencias, devoluciones y la revision.
+        # (Aqui y no arriba: incidencias importa este modulo.)
+        import incidencias as IN
         return {
             "generado": datetime.datetime.utcnow().isoformat() + "Z",
             "perfil": perfil_id,
@@ -541,13 +548,15 @@ class Operativo:
             "dias": dias,
             "ficheros": self.foto.get("telemetria"),
             "maquinas": maquinas,
+            "zonas": {d: IN.zona_de(d) for d in sorted({m["delegacion"] for m in maquinas})},
             "fuera": self.fuera,
             "_nota": ("Diferencias entre los sistemas de telemetría (ficheros de Nayax, Prodelfi y "
                       "Nebula subidos en la consola) y VenCloud: máquinas de un sistema, con "
                       "«vencloud» si el censo las marca con telemetría, y las que el censo marca "
                       "sin estar en ningún sistema (sistema «solo_vencloud»). Cada día lleva "
                       "las que mandaron venta por telemetría (informe 179) y las que mandaron "
-                      "su lectura (DEX). «fuera» son las de esos sistemas que no están en "
+                      "su lectura (DEX). «modelo» es el de VenCloud (vacío si el censo no lo "
+                      "trae). «zonas» da el área de cada delegación. «fuera» son las de esos sistemas que no están en "
                       "VenCloud; null si el perfil está acotado (no tienen centro)."),
         }
 
