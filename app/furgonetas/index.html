@@ -61,6 +61,7 @@ button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);colo
   border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
 }
 .nota.mal{border-left-color:var(--rojo)}
+[hidden]{display:none!important}
 .pestanas{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 0}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:14px}
 .kpi{background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:11px 13px;box-shadow:var(--sombra)}
@@ -135,12 +136,12 @@ th.num{text-align:right}
     </div>
     <div class="kpis" id="kpis"></div>
     <div class="pestanas" id="pestanas" role="tablist"></div>
-    <section class="caja">
+    <section class="caja" id="cajaTabla">
       <div class="cabsec"><h2 id="tTabla"></h2><span class="tenue" id="cuenta"></span></div>
       <p class="sub" id="sTabla"></p>
       <div class="tabla" id="tabla"></div>
     </section>
-    <section class="caja">
+    <section class="caja" data-tabla="dias">
       <div class="cabsec"><h2>Furgonetas activas, día a día</h2><span class="tenue" id="cuentaDias"></span></div>
       <p class="sub" id="sDias"></p>
       <div id="dias"></div>
@@ -193,6 +194,10 @@ $("#bSalir").addEventListener("click", async ()=>{
 });
 
 let D=null, PESTANA="vehiculos", TODAS=false;
+/* Las tablas que el administrador le quitó a este usuario (docs/61), y la que
+   es cada pestaña. */
+let QUITADAS = new Set();
+const TABLA_DE = {vehiculos:"vehiculos", sin:"sin_vehiculo", deleg:"delegaciones"};
 
 function fechaLarga(s){
   const d = new Date(String(s)+"T00:00:00");
@@ -283,7 +288,11 @@ function pinta(){
   const d = delDia();
   const pest = [["vehiculos", `Furgonetas · ${num((d.vehiculos||[]).length)}`],
                 ["sin", `Visitas sin vehículo · ${num(d.visitas_sin_vehiculo||0)}`],
-                ["deleg", "Por delegación"]];
+                ["deleg", "Por delegación"]].filter(([id])=>!QUITADAS.has(TABLA_DE[id]));
+  /* Sin ninguna de las tres, quedan las cifras de arriba y el día a día. */
+  $("#pestanas").hidden = $("#cajaTabla").hidden = $("#bCsv").hidden = !pest.length;
+  if(!pest.length){ kpis(); pintaDias(); return; }
+  if(!pest.some(([id])=>id===PESTANA)) PESTANA = pest[0][0];
   $("#pestanas").innerHTML = pest.map(([id,t])=>
     `<button class="btn" type="button" role="tab" data-p="${id}" aria-pressed="${id===PESTANA}">${esc(t)}</button>`).join("");
   $("#pestanas").querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{ PESTANA=b.dataset.p; TODAS=false; pinta(); }));
@@ -360,6 +369,11 @@ function csv(){
   if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
   const yo = await r.json();
   if(yo.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  /* Lo que el administrador le quitó a este usuario dentro de esta página
+     (docs/61): no se dibuja, y lo que sólo usa esa tabla ya no llega. */
+  QUITADAS = new Set((yo.tablas_ocultas||{})["furgonetas"] || []);
+  document.querySelectorAll("[data-tabla]").forEach(el=>{ if(QUITADAS.has(el.dataset.tabla)) el.hidden = true; });
+
   $("#quien").textContent = (yo.perfil ? yo.perfil + " · " : "") + (yo.nombre || yo.correo);
 
   let rf;

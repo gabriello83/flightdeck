@@ -92,6 +92,9 @@ button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);colo
 .kpi.e-ruta{border-top:4px solid var(--s1)}
 .dos{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);gap:14px}
 .dos > section.caja{margin-top:14px}
+[hidden]{display:none!important}
+/* Con una de las dos quitada al usuario (docs/61), la otra ocupa la fila. */
+.dos:has(> section[hidden]){grid-template-columns:minmax(0,1fr)}
 .dona{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:center;padding:6px 0}
 .dona svg{width:190px;height:190px;flex:0 0 auto}
 .dona .centro{font-size:22px;font-weight:650;fill:var(--tinta)}
@@ -183,18 +186,18 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
     <div class="kpis" id="kpis"></div>
 
     <div class="dos">
-      <section class="caja">
+      <section class="caja" data-tabla="rutas">
         <div class="cabsec"><h2 id="hRutas">Visitas por ruta</h2><span class="tenue" id="cRutas"></span></div>
         <p class="sub">Puntos de venta de cada ruta por estado. Uno que está en dos rutas cuenta en las dos; las visitas fuera de ruta van a la ruta con la que se hizo el parte. Pulsa una ruta para filtrar.</p>
         <div class="tabla" id="tRutas"></div>
       </section>
-      <section class="caja">
+      <section class="caja" data-tabla="estado">
         <div class="cabsec"><h2>Estado de las visitas</h2></div>
         <div id="dona"></div>
       </section>
     </div>
 
-    <section class="caja">
+    <section class="caja" data-tabla="maquinas">
       <div class="cabsec"><h2 id="hPdv">Máquinas no visitadas</h2><span class="tenue" id="cPdv"></span></div>
       <div class="pestanas" id="pestanas" role="tablist"></div>
       <div class="barra" style="margin-top:0">
@@ -205,13 +208,13 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
       <div class="tabla" id="tPdv"></div>
     </section>
 
-    <section class="caja" id="sDeleg">
+    <section class="caja" id="sDeleg" data-tabla="delegaciones">
       <div class="cabsec"><h2>Por delegación</h2><span class="tenue">Pulsa una para ver sus rutas y sus máquinas</span></div>
       <p class="sub">Cumplimiento de ruta de cada delegación. Los cuadritos son los últimos siete días; el recuadrado es festivo.</p>
       <div class="tabla" id="tDeleg"></div>
     </section>
 
-    <section class="caja">
+    <section class="caja" data-tabla="festivos">
       <div class="cabsec"><h2>Festivos por delegación</h2><span class="tenue" id="cFest"></span></div>
       <p class="sub" id="sFest"></p>
       <div class="tabla" id="tFest"></div>
@@ -607,6 +610,11 @@ function pintaDelegaciones(){
   if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
   const yo = await r.json();
   if(yo.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  /* Lo que el administrador le quitó a este usuario dentro de esta página
+     (docs/61): no se dibuja, y lo que sólo usa esa tabla ya no llega. */
+  const QUITADAS = new Set((yo.tablas_ocultas||{})["rutas"] || []);
+  document.querySelectorAll("[data-tabla]").forEach(el=>{ if(QUITADAS.has(el.dataset.tabla)) el.hidden = true; });
+
   $("#quien").textContent = (yo.perfil ? yo.perfil + " · " : "") + (yo.nombre || yo.correo);
 
   let rt;

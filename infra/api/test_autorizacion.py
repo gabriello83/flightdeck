@@ -184,6 +184,40 @@ comprueba("operaciones no", "utilizo" in A.cuadrados_de(
 comprueba("pero operaciones si ve la revision", "revision" in A.cuadrados_de(
     {"tipo": "operaciones", "sesiones": ["instalaciones"]}), True)
 
+print("\nCuadrados y tablas por usuario (docs/61): quitar, nunca dar")
+_ope = {"tipo": "operaciones", "sesiones": ["resumen"], "perfil_id": "ope"}
+_u = A.con_usuario(_ope, {"cuadrados_ocultos": ["rutas", "almacenes", "no-existe"],
+                          "tablas_ocultas": {"revision": ["tarifa", "otra"], "rutas": [{"x": 1}]}})
+comprueba("se le quita un cuadrado de su perfil", "rutas" in A.cuadrados_de(_u), False)
+comprueba("y el resto siguen", "furgonetas" in A.cuadrados_de(_u), True)
+comprueba("quitar uno que su perfil no ve no rompe nada", "almacenes" in A.cuadrados_de(_u), False)
+comprueba("marcar tablas no da el cuadrado de revision a quien no lo tiene",
+          "revision" in A.cuadrados_de(_u), False)
+comprueba("solo tablas que existen", _u["tablas_ocultas"], {"revision": ["tarifa"]})
+comprueba("el perfil leido no se toca", "cuadrados_ocultos" in _ope, False)
+comprueba("sin nada quitado, ve lo de su perfil",
+          A.cuadrados_de(A.con_usuario(_ope, {})), A.cuadrados_de(_ope))
+_rev = {"generado": "x", "sin_planograma": [1], "sin_tarifa": [2], "precio_distinto": [3],
+        "creados": [4], "creados_desde": "2026-10-01", "sin_usuario": "y", "actividad": {"grupos": []}}
+comprueba("con todo a la vista, el mismo objeto", A.recorta_tablas("revision", _rev, A.con_usuario(_ope, {})) is _rev,
+          True)
+_r = A.recorta_tablas("revision", _rev, A.con_usuario(_ope, {"tablas_ocultas": {"revision": ["tarifa", "creados"]}}))
+comprueba("revision: fuera sin tarifa y los creados, el resto sigue",
+          sorted(_r), ["actividad", "generado", "precio_distinto", "sin_planograma", "tablas_ocultas"])
+comprueba("sin tocar el original", "sin_tarifa" in _rev, True)
+_fg = {"dias": {"d1": {"activas": 3, "vehiculos": [["1234ABC"]], "sin_vehiculo": [["x"]], "delegaciones": []}}}
+_f = A.recorta_tablas("furgonetas", _fg, A.con_usuario(_ope, {"tablas_ocultas": {"furgonetas": ["vehiculos"]}}))
+comprueba("furgonetas: el dia pierde los vehiculos y guarda las cifras",
+          sorted(_f["dias"]["d1"]), ["activas", "delegaciones", "sin_vehiculo"])
+_d = {"devoluciones": [{"n": "A-1"}]}
+comprueba("devoluciones: sus tablas salen de las mismas filas, no se quita nada",
+          A.hay_recorte("devoluciones", A.con_usuario(_ope, {"tablas_ocultas": {"devoluciones": ["tecnicos"]}})),
+          False)
+comprueba("cada cuadrado con tablas es un cuadrado de verdad",
+          set(A.TABLAS) <= set(A.NOMBRE_CUADRADO) == {c for c, _ in A.CUADRADOS}, True)
+comprueba("y cada recorte, de una tabla del catalogo",
+          all(t in A.TABLAS[c] for c, rs in A._SOLO_DE_UNA.items() for t, _, _ in rs), True)
+
 print()
 if fallos:
     print(f"{len(fallos)} PRUEBAS FALLIDAS: {', '.join(fallos)}")

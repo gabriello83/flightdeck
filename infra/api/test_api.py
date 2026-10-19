@@ -735,6 +735,70 @@ del falsos.OBJETOS["cabina/interno/almacenes.json.gz"]
 comprueba("sin calcular todavia, 503",
           llama("GET", "/api/almacenes", cookie=COOKIE_JEFE)["statusCode"], 503)
 
+print("\nCuadrados y tablas por usuario (docs/61): se quitan dentro de su perfil")
+_olga = {"correo": "olga@serunion.es", "nombre": "Olga", "perfil_id": "ope-sur"}
+comprueba("el administrador le quita un cuadrado y unas tablas",
+          llama("POST", "/api/admin/usuarios", dict(
+              _olga, cuadrados_ocultos=["furgonetas", "inventado"],
+              tablas_ocultas={"rutas": ["festivos", "maquinas", "nada"], "averias": ["abiertas"],
+                              "tarifas": ["x"], "devoluciones": "no es lista"}),
+              cookie=COOKIE_JEFE)["statusCode"], 200)
+_fila = json.loads(falsos.TABLA[("USUARIO#olga@serunion.es", "FICHA")]["dato"]["S"])
+comprueba("se guarda solo lo que existe, en el orden de la pagina",
+          (_fila["cuadrados_ocultos"], _fila["tablas_ocultas"]),
+          (["furgonetas"], {"rutas": ["maquinas", "festivos"], "averias": ["abiertas"]}))
+_yo = cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_OLGA))
+comprueba("/api/yo: sus cuadrados, sin el quitado", _yo["cuadrados"],
+          ["rutas", "averias", "devoluciones", "ventas", "reposiciones"])
+comprueba("y las tablas que no ve", _yo["tablas_ocultas"],
+          {"rutas": ["maquinas", "festivos"], "averias": ["abiertas"]})
+falsos.OBJETOS["cabina/ope-sur/operativo.json"] = json.dumps(_op).encode()
+comprueba("el informe operativo ya no trae el cuadrado",
+          "furgonetas" in cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA))["cuadrados"], False)
+del falsos.OBJETOS["cabina/ope-sur/operativo.json"]
+falsos.OBJETOS["cabina/ope-sur/furgonetas.json.gz"] = gzip.compress(b'{"perfil": "ope-sur"}')
+comprueba("ni abre su pagina", llama("GET", "/api/furgonetas", cookie=COOKIE_OLGA)["statusCode"], 403)
+_rt = {"perfil": "ope-sur", "festivos": {"nacional": []}, "control_festivos": [{"fecha": "2026-10-12"}],
+       "dias": {"2026-10-12": {"total": {"previstas": 2}, "rutas": [{"ruta": "R1"}],
+                               "visitas": [["PENDIENTE", "P1"]]}}}
+falsos.OBJETOS["cabina/ope-sur/rutas.json.gz"] = gzip.compress(json.dumps(_rt).encode())
+_r = cuerpo_de(llama("GET", "/api/rutas", cookie=COOKIE_OLGA))
+comprueba("rutas: sin la lista maquina a maquina ni el control de festivos",
+          (sorted(_r["dias"]["2026-10-12"]), "control_festivos" in _r, _r["festivos"]),
+          (["rutas", "total"], False, {"nacional": []}))
+comprueba("y el fichero de S3 no se toca",
+          "visitas" in json.loads(gzip.decompress(falsos.OBJETOS["cabina/ope-sur/rutas.json.gz"]))
+          ["dias"]["2026-10-12"], True)
+_in = {"perfil": "ope-sur", "incidencias": [{"n": "A-1", "tx": "no da cambio", "u": "Hall", "p": "9"},
+                                             {"n": "A-2", "x": "2026-10-12"}]}
+falsos.OBJETOS["cabina/ope-sur/incidencias.json.gz"] = gzip.compress(json.dumps(_in).encode())
+_x = llama("GET", "/api/incidencias", cookie=COOKIE_OLGA)
+comprueba("incidencias: sin la ficha (texto, ubicacion, punto de venta), y comprimido",
+          (_x["headers"].get("content-encoding"),
+           json.loads(gzip.decompress(_b64i.b64decode(_x["body"])))["incidencias"]),
+          ("gzip", [{"n": "A-1"}, {"n": "A-2", "x": "2026-10-12"}]))
+falsos.OBJETOS["cabina/ope-sur/devoluciones.json.gz"] = gzip.compress(b'{"perfil": "ope-sur"}')
+comprueba("devoluciones, sin nada quitado, tal cual", _dev(cookie=COOKIE_OLGA), ("gzip", "ope-sur"))
+_jefe_rt = cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_JEFE))
+comprueba("a otro usuario no le afecta", (_jefe_rt["tablas_ocultas"], "furgonetas" in _jefe_rt["cuadrados"]),
+          ({}, True))
+llama("POST", "/api/admin/usuarios", _olga, cookie=COOKIE_JEFE)
+comprueba("guardado sin quitar nada, vuelve a ver lo de su perfil",
+          llama("GET", "/api/furgonetas", cookie=COOKIE_OLGA)["statusCode"], 200)
+comprueba("y su lista de rutas entera",
+          "visitas" in cuerpo_de(llama("GET", "/api/rutas", cookie=COOKIE_OLGA))["dias"]["2026-10-12"], True)
+for _k in ("furgonetas", "rutas", "incidencias", "devoluciones"):
+    del falsos.OBJETOS[f"cabina/ope-sur/{_k}.json.gz"]
+_pf = cuerpo_de(llama("GET", "/api/admin/perfiles", cookie=COOKIE_JEFE))
+comprueba("la consola recibe los cuadrados de cada perfil",
+          [p["cuadrados"] for p in _pf["perfiles"] if p["_id"] == "ope-sur"][0],
+          ["rutas", "averias", "devoluciones", "furgonetas", "ventas", "reposiciones"])
+comprueba("y un cliente no tiene ninguno",
+          [p["cuadrados"] for p in _pf["perfiles"] if p["_id"] == "cli-airbus"][0], [])
+comprueba("y el catalogo, con las tablas de cada pagina",
+          (len(_pf["catalogo_cuadrados"]), list(_pf["catalogo_cuadrados"]["rutas"]["tablas"])[:2]),
+          (12, ["rutas", "estado"]))
+
 print("\nUna ruta que no existe")
 comprueba("404", llama("GET", "/api/loquesea", cookie=COOKIE_JEFE)["statusCode"], 404)
 

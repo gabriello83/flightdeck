@@ -215,6 +215,8 @@ const TABLAS = [
 /* La actividad de las personas en VenCloud (M15) solo llega al perfil interno. */
 const ACCION = {I:"Alta", U:"Cambio", D:"Borrado"};
 let YO=null, D=null;
+/* Las tablas que el administrador le quitó a este usuario (docs/61). */
+let QUITADAS = new Set();
 
 function fechaCorta(s){
   const d = new Date(String(s).slice(0,10)+"T00:00:00");
@@ -307,6 +309,15 @@ function boton(m){
 function pinta(){
   avisa("");
   const r = ruta();
+  /* Una tabla quitada no se abre ni pidiéndola en la dirección: se va a la
+     primera que sí ve. */
+  const vistas = TABLAS.map(([k])=>k).concat(D.actividad ? ["usuarios"] : []).filter(k=>!QUITADAS.has(k));
+  if(!vistas.length){
+    $("#barra").hidden = true; $("#miga").hidden = true;
+    $("#vista").innerHTML = `<p class="vacio">No tienes ninguna tabla de la revisión de clientes concedida.</p>`;
+    return;
+  }
+  if(!vistas.includes(r.t)){ r.t = vistas[0]; r.m = null; }
   pintaFiltros(r);
   if(r.t==="usuarios" && D.actividad) return vistaUsuarios(r);
   if(r.m && (r.t==="tarifa" || r.t==="precio")) return vistaMaquina(r);
@@ -331,8 +342,8 @@ function pinta(){
 }
 
 function kpis(r, cuenta, nota){
-  const tablas = TABLAS.slice();
-  if(D.actividad){
+  const tablas = TABLAS.filter(([k])=>!QUITADAS.has(k));
+  if(D.actividad && !QUITADAS.has("usuarios")){
     const a = resumenActividad();
     tablas.push(["usuarios", "García y Marcos"]);
     cuenta.usuarios = a ? a.acciones : null;
@@ -650,6 +661,7 @@ function excelCreados(filas, dia){
   }
   D = await rr.json();
   D.sin_planograma = D.sin_planograma || [];
+  QUITADAS = new Set((YO.tablas_ocultas||{}).revision || []);
   window.addEventListener("hashchange", pinta);
   pinta();
   const gen = D.generado ? new Date(D.generado) : null;

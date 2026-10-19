@@ -347,9 +347,99 @@ CUADRADOS = (
 
 SOLO_DIRECCION = ("almacenes", "utilizo")
 
+# Como se llama cada cuadrado en la pagina y en la consola.
+NOMBRE_CUADRADO = {
+    "rutas": "Rutas", "averias": "Incidencias", "devoluciones": "Devoluciones",
+    "almacenes": "Almacenes", "furgonetas": "Furgonetas", "pdvs": "Puntos de venta activos",
+    "ventas": "Ventas", "reposiciones": "Reposiciones", "telemetria": "Telemetría",
+    "tarifas": "Tarifas", "revision": "Revisión clientes", "utilizo": "Utilizo",
+}
+
+# Las tablas (y graficos) de la pagina de cada cuadrado, en el orden de la
+# pagina (docs/61). Solo salen los cuadrados cuya pagina tiene mas de una: en
+# los demas, quitar la tabla es quitar el cuadrado. id: nombre.
+TABLAS = {
+    "rutas": {
+        "rutas": "Visitas por ruta",
+        "estado": "Estado de las visitas",
+        "maquinas": "Máquinas no visitadas",
+        "delegaciones": "Por delegación",
+        "festivos": "Festivos por delegación",
+    },
+    "averias": {
+        "zonas": "Total de incidencias por zona",
+        "tecnicas": "Los 10 centros con más averías técnicas",
+        "abiertas": "Lista de incidencias y su ficha",
+    },
+    "devoluciones": {
+        "meses": "Devoluciones por mes y canal",
+        "canal": "Por canal y por origen",
+        "zonas": "Por zona y delegación",
+        "centros": "Los 15 centros con más devoluciones",
+        "maquinas": "Las 15 máquinas con más devoluciones",
+        "tecnicos": "Por técnico",
+        "pendientes": "Devoluciones sin cerrar",
+    },
+    "furgonetas": {
+        "vehiculos": "Furgonetas con visitas",
+        "sin_vehiculo": "Visitas sin vehículo",
+        "delegaciones": "Por delegación",
+        "dias": "Furgonetas activas, día a día",
+    },
+    "revision": {
+        "planograma": "Sin planograma",
+        "tarifa": "Sin tarifa",
+        "precio": "Precio distinto",
+        "creados": "Planogramas creados",
+        "usuarios": "García y Marcos",
+    },
+}
+
+
+def con_usuario(perfil, usuario):
+    """El perfil de la sesion con lo que el administrador le quito a ESTE usuario.
+
+    El usuario hereda los cuadrados y las tablas de su perfil, y el
+    administrador le puede quitar los que quiera (docs/61). Quitar, nunca dar:
+    lo que el perfil no ve, el usuario tampoco, por mucho que se marque. Se
+    guarda lo que se le QUITA, como `cuadro_ocultas`: un cuadrado nuevo le sale
+    sin tener que tocar a cada usuario. Devuelve una copia: el perfil leido no
+    se toca.
+    """
+    out = dict(perfil)
+    out["cuadrados_ocultos"] = limpia_restricciones(usuario)["cuadrados_ocultos"]
+    out["tablas_ocultas"] = _tablas_validas(usuario.get("tablas_ocultas"))
+    return out
+
+
+def _tablas_validas(tablas):
+    """{cuadrado: [tablas]} con solo cuadrados y tablas que existen, en el
+    orden de la pagina, y sin los cuadrados que se quedan vacios."""
+    tablas = tablas if isinstance(tablas, dict) else {}
+    out = {}
+    for c in TABLAS:
+        pedidas = tablas.get(c)
+        pedidas = {x for x in pedidas if isinstance(x, str)} if isinstance(pedidas, list) else set()
+        ts = [t for t in TABLAS[c] if t in pedidas]
+        if ts:
+            out[c] = ts
+    return out
+
+
+def limpia_restricciones(d):
+    """Lo que la consola manda de un usuario, con solo ids que existen."""
+    pedidos = d.get("cuadrados_ocultos")
+    pedidos = {x for x in pedidos if isinstance(x, str)} if isinstance(pedidos, list) else set()
+    return {"cuadrados_ocultos": [c for c in NOMBRE_CUADRADO if c in pedidos],
+            "tablas_ocultas": _tablas_validas(d.get("tablas_ocultas"))}
+
 
 def cuadrados_de(perfil):
-    """Los cuadrados que ve este perfil, en el orden de la pagina."""
+    """Los cuadrados que ve este perfil, en el orden de la pagina.
+
+    Con `con_usuario` delante, los de este usuario: los de su perfil menos los
+    que el administrador le quito.
+    """
     necesarios = bloques_de(perfil)
     tipo = perfil.get("tipo", "cliente")
     out = [c for c, bloque in CUADRADOS if bloque in necesarios]
@@ -358,6 +448,82 @@ def cuadrados_de(perfil):
     ambito = perfil.get("ambito") or {}
     if any(ambito.get(k) for k in ("clientes", "centros", "delegaciones")) and "utilizo" in out:
         out.remove("utilizo")
+    quitados = set(perfil.get("cuadrados_ocultos") or [])
+    return [c for c in out if c not in quitados]
+
+
+def tablas_ocultas(perfil, cuadrado):
+    """Las tablas de la pagina de ese cuadrado que este usuario no ve."""
+    return set((perfil.get("tablas_ocultas") or {}).get(cuadrado) or []) & set(TABLAS.get(cuadrado, ()))
+
+
+def tablas_visibles(perfil, cuadrado):
+    """Las que si ve, en el orden de la pagina."""
+    fuera = tablas_ocultas(perfil, cuadrado)
+    return [t for t in TABLAS.get(cuadrado, ()) if t not in fuera]
+
+
+# Lo que solo usa una tabla, y por eso no sale del servidor si esa tabla se
+# quita. Lo que comparten varias (las filas de incidencias, de las que la
+# pagina saca todos sus graficos) no se puede quitar sin dejar a las demas con
+# ceros que no son ceros: la tabla no se dibuja, pero sus filas siguen
+# llegando para las que si se ven. Cada entrada: (tabla, donde, claves); donde
+# es "raiz" (el fichero), "dias" (cada dia de dias) o "filas:<lista>" (cada
+# fila de esa lista).
+_SOLO_DE_UNA = {
+    "rutas": (
+        ("maquinas", "dias", ("visitas",)),
+        ("festivos", "raiz", ("control_festivos",)),
+    ),
+    "averias": (
+        # La ficha de una abierta: el texto, la ubicacion y el punto de venta.
+        ("abiertas", "filas:incidencias", ("tx", "u", "p")),
+    ),
+    "furgonetas": (
+        ("vehiculos", "dias", ("vehiculos",)),
+        ("sin_vehiculo", "dias", ("sin_vehiculo",)),
+    ),
+    "revision": (
+        ("planograma", "raiz", ("sin_planograma",)),
+        ("tarifa", "raiz", ("sin_tarifa",)),
+        ("precio", "raiz", ("precio_distinto",)),
+        ("creados", "raiz", ("creados", "creados_desde", "sin_usuario")),
+        ("usuarios", "raiz", ("actividad",)),
+    ),
+}
+
+
+def hay_recorte(cuadrado, perfil):
+    """Si a este usuario hay que quitarle algo del fichero de ese cuadrado."""
+    fuera = tablas_ocultas(perfil, cuadrado)
+    return any(x[0] in fuera for x in _SOLO_DE_UNA.get(cuadrado, ()))
+
+
+def recorta_tablas(cuadrado, datos, perfil):
+    """El fichero de la pagina de un cuadrado sin lo que solo usan sus tablas quitadas.
+
+    Con todas las tablas a la vista sale el mismo objeto, sin copiar. Si no, una
+    copia: el fichero leido no se toca.
+    """
+    fuera = tablas_ocultas(perfil, cuadrado)
+    reglas = [x for x in _SOLO_DE_UNA.get(cuadrado, ()) if x[0] in fuera]
+    if not reglas:
+        return datos
+    out = dict(datos)
+    out["tablas_ocultas"] = sorted(fuera)
+    for _, donde, claves in reglas:
+        if donde == "raiz":
+            for k in claves:
+                out.pop(k, None)
+        elif donde == "dias":
+            out["dias"] = {f: ({k: v for k, v in d.items() if k not in claves}
+                               if isinstance(d, dict) else d)
+                           for f, d in (out.get("dias") or {}).items()}
+        elif donde.startswith("filas:"):
+            lista = donde.split(":", 1)[1]
+            out[lista] = [({k: v for k, v in f.items() if k not in claves}
+                           if isinstance(f, dict) else f)
+                          for f in (out.get(lista) or [])]
     return out
 
 

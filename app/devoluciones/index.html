@@ -98,6 +98,8 @@ section.caja h2{font-size:15px;margin:0;font-weight:650}
 section.caja .sub{font-size:12.5px;color:var(--tinta-2);margin:2px 0 10px}
 .dos{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .dos > section.caja{margin-top:14px}
+/* Con una de las dos quitada al usuario (docs/61), la otra ocupa la fila. */
+.dos:has(> section[hidden]){grid-template-columns:minmax(0,1fr)}
 .ficha-y-tabla{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:14px;align-items:start}
 /* Barras: una sola serie, del color de la marca. El numero va siempre escrito
    al lado, asi que la barra no es la unica forma de leerlo. */
@@ -231,7 +233,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
       <p class="tenue" id="rango"></p>
       <div class="kpis" id="kpis"></div>
 
-      <section class="caja">
+      <section class="caja" data-tabla="meses">
         <div class="cabsec"><h2>Devoluciones por mes y canal</h2>
           <button class="btn" id="bVista" type="button" aria-pressed="false">Ver como tabla</button></div>
         <p class="sub" id="sMeses"></p>
@@ -241,7 +243,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
       </section>
 
       <div class="dos">
-        <section class="caja">
+        <section class="caja" data-tabla="canal">
           <div class="cabsec"><h2>Por canal</h2><span class="tenue">Pulsa un canal para filtrar por él</span></div>
           <p class="sub" id="sCanal"></p>
           <div id="gCanal"></div>
@@ -249,26 +251,26 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
           <p class="sub">En VenCloud están en solicitudes especiales (serie E) y en atención al cliente (serie A).</p>
           <div id="gOrigen"></div>
         </section>
-        <section class="caja">
+        <section class="caja" data-tabla="zonas">
           <div class="cabsec"><h2>Por zona y delegación</h2><span class="tenue">Pulsa una delegación para filtrar</span></div>
           <p class="sub" id="sZonas"></p>
           <div id="gZonas"></div>
         </section>
       </div>
 
-      <section class="caja">
+      <section class="caja" data-tabla="centros">
         <div class="cabsec"><h2>Los 15 centros con más devoluciones</h2><span class="tenue">Pulsa un centro para filtrar por él</span></div>
         <p class="sub">Cada canal en su columna. «Sin cerrar» son las del periodo que siguen abiertas hoy.</p>
         <div class="tabla" id="tCentros"></div>
       </section>
 
       <div class="dos">
-        <section class="caja">
+        <section class="caja" data-tabla="maquinas">
           <div class="cabsec"><h2>Las 15 máquinas con más devoluciones</h2></div>
           <p class="sub">Muchas devoluciones en la misma máquina suelen apuntar al monedero, al lector de tarjetas o a un carril que no suelta el producto.</p>
           <div class="tabla" id="tMaquinas"></div>
         </section>
-        <section class="caja">
+        <section class="caja" data-tabla="tecnicos">
           <div class="cabsec"><h2>Por técnico</h2></div>
           <p class="sub">El técnico asignado a cada devolución y lo que tarda en cerrarlas.</p>
           <div class="tabla" id="tTecnicos"></div>
@@ -336,6 +338,8 @@ $("#bSalir").addEventListener("click", async ()=>{
 });
 
 let D = null, DEV = [], HOJA = "panel", TODAS_FILAS = false, TABLA = false;
+/* Las tablas que el administrador le quitó a este usuario (docs/61). */
+let QUITADAS = new Set();
 
 /* ------------------------------------------------------------ fechas */
 const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -704,6 +708,9 @@ function csv(){
 
 /* ------------------------------------------------------------ todo */
 function pintaHoja(){
+  /* Sin la lista de las sin cerrar sólo queda el panel, y no hay hojas que elegir. */
+  if(QUITADAS.has("pendientes")) HOJA = "panel";
+  $(".hojas").hidden = QUITADAS.has("pendientes");
   document.querySelectorAll(".hojas button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.h===HOJA)));
   $("#hPanel").hidden = HOJA !== "panel";
   $("#hPendientes").hidden = HOJA !== "pendientes";
@@ -723,6 +730,11 @@ function pintaTodo(){
   if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
   const yo = await r.json();
   if(yo.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  /* Lo que el administrador le quitó a este usuario dentro de esta página
+     (docs/61): no se dibuja, y lo que sólo usa esa tabla ya no llega. */
+  QUITADAS = new Set((yo.tablas_ocultas||{})["devoluciones"] || []);
+  document.querySelectorAll("[data-tabla]").forEach(el=>{ if(QUITADAS.has(el.dataset.tabla)) el.hidden = true; });
+
   $("#quien").textContent = (yo.perfil ? yo.perfil + " · " : "") + (yo.nombre || yo.correo);
 
   let ri;

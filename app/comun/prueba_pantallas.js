@@ -1457,6 +1457,129 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
+  // ------------------------------------ cuadrados y tablas por usuario
+  console.log('\nCuadrados y tablas por usuario (docs/61)');
+  {
+    const FOTOS = process.env.FOTOS_USUARIOS;
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno' };
+    const antesU = API['/api/admin/usuarios'], antesP = API['/api/admin/perfiles'];
+    API['/api/admin/usuarios'] = { usuarios: [...antesU.usuarios,
+      { _id: 'olga@serunion.es', nombre: 'Olga', perfil_id: 'ope-sur', estado: 'activo',
+        cuadrados_ocultos: ['devoluciones'], tablas_ocultas: { rutas: ['festivos'] } }] };
+    API['/api/admin/perfiles'] = { ...antesP,
+      perfiles: [...antesP.perfiles, { _id: 'ope-sur', nombre: 'Operaciones Sur', tipo: 'operaciones',
+        ambito: { delegaciones: ['SEVILLA'] }, sesiones: ['resumen'], permisos: {},
+        cuadrados: ['rutas', 'averias', 'devoluciones', 'furgonetas', 'ventas'] }],
+      catalogo_cuadrados: {
+        rutas: { nombre: 'Rutas', tablas: { rutas: 'Visitas por ruta', estado: 'Estado de las visitas',
+          maquinas: 'Máquinas no visitadas', delegaciones: 'Por delegación', festivos: 'Festivos por delegación' } },
+        averias: { nombre: 'Incidencias', tablas: { zonas: 'Total de incidencias por zona',
+          tecnicas: 'Los 10 centros con más averías técnicas', abiertas: 'Lista de incidencias y su ficha' } },
+        devoluciones: { nombre: 'Devoluciones', tablas: { meses: 'Devoluciones por mes y canal', pendientes: 'Devoluciones sin cerrar' } },
+        furgonetas: { nombre: 'Furgonetas', tablas: { vehiculos: 'Furgonetas con visitas', dias: 'Furgonetas activas, día a día' } },
+        ventas: { nombre: 'Ventas', tablas: {} } } };
+    const { pagina, errores, fuera } = await abre('/consola/');
+    await pagina.waitForSelector('[data-ed="olga@serunion.es"]');
+    comprueba_que('la lista de usuarios dice lo que se le ha quitado',
+      (await pagina.textContent('body')).includes('4 de 5 cuadrados · 1 tabla quitada'));
+    comprueba_que('y a quien no se le quita nada, que no tiene cuadrados (cliente)',
+      (await pagina.textContent('tr:has-text("eva@airbus.com")')).includes('—'));
+    await pagina.click('[data-ed="olga@serunion.es"]');
+    comprueba_que('al editarla salen los cuadrados de su perfil', await pagina.isVisible('#campoCuadrados'));
+    comprueba('con lo quitado sin marcar, y las tablas del quitado apagadas',
+      await pagina.$$eval('#cajaCuadrados fieldset', fs => fs.map(f => [f.dataset.c,
+        f.querySelector('input[data-cuadrado]').checked,
+        [...f.querySelectorAll('input[data-tabla]')].filter(i => !i.checked || i.disabled).map(i => i.value)])),
+      [['rutas', true, ['festivos']], ['averias', true, []], ['devoluciones', false, ['meses', 'pendientes']],
+       ['furgonetas', true, []], ['ventas', true, []]]);
+    comprueba_que('un cuadrado de una sola tabla lo dice',
+      (await pagina.textContent('#cajaCuadrados fieldset[data-c="ventas"]')).includes('Una sola tabla'));
+    await pagina.uncheck('#cajaCuadrados fieldset[data-c="furgonetas"] input[data-cuadrado]');
+    comprueba('quitar el cuadrado apaga sus tablas',
+      await pagina.$$eval('#cajaCuadrados fieldset[data-c="furgonetas"] input[data-tabla]', x => x.map(i => i.disabled)),
+      [true, true]);
+    await pagina.check('#cajaCuadrados fieldset[data-c="devoluciones"] input[data-cuadrado]');
+    await pagina.uncheck('#cajaCuadrados fieldset[data-c="averias"] input[value="abiertas"]');
+    if (FOTOS) {
+      await pagina.screenshot({ path: path.join(FOTOS, 'consola-claro.png'), fullPage: false });
+      await pagina.emulateMedia({ colorScheme: 'dark' });
+      await pagina.screenshot({ path: path.join(FOTOS, 'consola-oscuro.png'), fullPage: false });
+      await pagina.emulateMedia({ colorScheme: 'light' });
+    }
+    await pagina.setViewportSize({ width: 380, height: 800 });
+    await pagina.waitForTimeout(200);
+    comprueba('en movil el dialogo no se sale de la pantalla',
+      await pagina.evaluate(() => document.querySelector('#dlg').scrollWidth <= window.innerWidth), true);
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'consola-movil.png'), fullPage: false });
+    await pagina.setViewportSize({ width: 1280, height: 800 });
+    const envio = new Promise(r => pagina.on('request', q => {
+      if (q.method() === 'POST' && q.url().endsWith('/api/admin/usuarios')) r(JSON.parse(q.postData()));
+    }));
+    await pagina.click('#bGuardar');
+    const cuerpo = await envio;
+    comprueba('se guarda lo que se le quita', [cuerpo.cuadrados_ocultos, cuerpo.tablas_ocultas],
+      [['furgonetas'], { rutas: ['festivos'], averias: ['abiertas'] }]);
+    await pagina.waitForSelector('[data-ed="olga@serunion.es"]');
+    await pagina.click('[data-ed="olga@serunion.es"]');
+    await pagina.selectOption('#fPerfil', 'cli-airbus');
+    comprueba_que('un perfil de cliente no tiene cuadrados que quitar', !(await pagina.isVisible('#campoCuadrados')));
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+    API['/api/admin/usuarios'] = antesU;
+    API['/api/admin/perfiles'] = antesP;
+
+    // Las paginas, con lo que el administrador le quito a este usuario.
+    const conQuitadas = async (ruta, tablas, espera) => {
+      API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno',
+                         tablas_ocultas: tablas };
+      const x = await abre(ruta);
+      await x.pagina.waitForSelector(espera);
+      return x;
+    };
+    let x = await conQuitadas('/rutas/', { rutas: ['maquinas', 'estado'] }, '#todo:not([hidden])');
+    comprueba('rutas: sin las maquinas ni la dona, con lo demas',
+      await x.pagina.$$eval('[data-tabla]', s => s.map(e => [e.dataset.tabla, !e.hidden])),
+      [['rutas', true], ['estado', false], ['maquinas', false], ['delegaciones', true], ['festivos', true]]);
+    comprueba_que('la de rutas ocupa la fila entera',
+      await x.pagina.evaluate(() => getComputedStyle(document.querySelector('.dos')).gridTemplateColumns.split(' ').length === 1));
+    if (FOTOS) await x.pagina.screenshot({ path: path.join(FOTOS, 'rutas-sin-maquinas.png'), fullPage: true });
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+    x = await conQuitadas('/incidencias/', { averias: ['abiertas'] }, '#todo:not([hidden])');
+    comprueba('incidencias: sin la lista no hay hojas, y queda el panel',
+      [await x.pagina.isVisible('.hojas'), await x.pagina.isVisible('#hPanel'), await x.pagina.isVisible('#hAbiertas')],
+      [false, true, false]);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+    x = await conQuitadas('/incidencias/?ver=abiertas', { averias: ['abiertas'] }, '#todo:not([hidden])');
+    comprueba('ni pidiendola en la direccion', await x.pagina.isVisible('#hAbiertas'), false);
+    await x.pagina.close();
+    x = await conQuitadas('/furgonetas/', { furgonetas: ['vehiculos', 'sin_vehiculo', 'delegaciones'] }, '#todo:not([hidden])');
+    comprueba('furgonetas: sin las tres tablas quedan las cifras y el dia a dia',
+      [await x.pagina.isVisible('#cajaTabla'), await x.pagina.isVisible('#pestanas'),
+       await x.pagina.isVisible('#kpis .kpi'), await x.pagina.isVisible('[data-tabla="dias"]')], [false, false, true, true]);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+    x = await conQuitadas('/furgonetas/', { furgonetas: ['vehiculos'] }, '#todo:not([hidden])');
+    comprueba('sin una, arranca en la siguiente',
+      await x.pagina.$$eval('#pestanas button', b => b.map(e => [e.dataset.p, e.getAttribute('aria-pressed')])),
+      [['sin', 'true'], ['deleg', 'false']]);
+    await x.pagina.close();
+    x = await conQuitadas('/revision/', { revision: ['planograma', 'precio'] }, '#vista .kpi');
+    comprueba('revision: sin las quitadas, y arranca en la primera que ve',
+      await x.pagina.$$eval('#vista .kpi', b => b.map(e => [e.dataset.t, e.getAttribute('aria-pressed')])).then(l => l.slice(0, 2)),
+      [['tarifa', 'true'], ['creados', 'false']]);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+    x = await conQuitadas('/revision/#t=planograma', { revision: ['planograma', 'tarifa', 'precio', 'creados', 'usuarios'] }, '#vista .vacio');
+    comprueba_que('sin ninguna, lo dice', (await x.pagina.textContent('#vista')).includes('ninguna tabla'));
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+    delete API['/api/yo'].tablas_ocultas;
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
   await navegador.close();
   servidor.close();
   console.log();
