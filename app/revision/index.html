@@ -109,6 +109,8 @@ tr:last-child td{border-bottom:0}
 .precios .m{color:var(--tinta-3);font-size:11.5px}
 .precios .mal{color:var(--mal-tinta);font-weight:700}
 .vacio{color:var(--tinta-2);font-size:13px;padding:10px 0}
+tr.grupo td{background:var(--fila);font-weight:650;font-size:13px;color:var(--tinta)}
+.kpis.areas{margin-top:12px}
 nav.miga{margin:16px 0 4px;font-size:14px;color:var(--tinta-2);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 nav.miga a{color:var(--s1);text-decoration:none}
 nav.miga a:hover{text-decoration:underline}
@@ -235,12 +237,12 @@ const limpio = s => String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").replac
 /* ----------------------------------------------------- estado en la URL */
 function ruta(){
   const q = new URLSearchParams(location.hash.slice(1));
-  return {t: q.get("t") || "planograma", m: q.get("m"), d: q.get("d") || "", cl: q.get("cl") || "", ce: q.get("ce") || "", dia: q.get("dia") || ""};
+  return {t: q.get("t") || "planograma", m: q.get("m"), a: q.get("a") || "", d: q.get("d") || "", cl: q.get("cl") || "", ce: q.get("ce") || "", dia: q.get("dia") || ""};
 }
 function ir(cambios){
   const r = Object.assign(ruta(), cambios);
   const q = new URLSearchParams();
-  for(const k of ["t","m","d","cl","ce","dia"]) if(r[k]) q.set(k, r[k]);
+  for(const k of ["t","a","m","d","cl","ce","dia"]) if(r[k]) q.set(k, r[k]);
   location.hash = q.toString();
 }
 
@@ -269,10 +271,10 @@ function pintaFiltros(r){
   opciones($("#fCentro"), [...centros].sort((a,b)=>a[1].localeCompare(b[1],"es")), r.ce, "Todos");
   $("#barra").hidden = false;
 }
-$("#fDeleg").addEventListener("change", e=>ir({d:e.target.value, cl:"", ce:"", m:""}));
+$("#fDeleg").addEventListener("change", e=>ir({d:e.target.value, cl:"", ce:"", m:"", a:""}));
 $("#fCliente").addEventListener("change", e=>ir({cl:e.target.value, ce:"", m:""}));
 $("#fCentro").addEventListener("change", e=>ir({ce:e.target.value, m:""}));
-$("#bLimpiar").addEventListener("click", ()=>ir({d:"", cl:"", ce:"", m:""}));
+$("#bLimpiar").addEventListener("click", ()=>ir({d:"", cl:"", ce:"", m:"", a:""}));
 
 /* -------------------------------------------------- lo comun de las filas */
 function sitio(m){
@@ -334,11 +336,69 @@ function pinta(){
   v.innerHTML = kpis(r, cuenta, nota) + `<section class="caja" id="tabla"></section>`;
   conectaKpis(v);
   const caja = $("#tabla");
-  if(r.t==="tarifa") tablaTarifa(caja, st);
-  else if(r.t==="precio") tablaPrecio(caja, pd);
-  else if(r.t==="creados") tablaCreados(caja, cr, dias, r);
-  else tablaPlanograma(caja, sp);
+  if(r.t==="creados") tablaCreados(caja, cr, dias, r);
+  else {
+    /* Sin planograma, sin tarifa y precio distinto (Gabriele, 19-oct): primero
+       un cuadrado por area con sus maquinas; pulsando, la lista por delegacion.
+       Con una delegacion elegida en el filtro se va directo a su lista. */
+    const sel = r.t==="tarifa" ? st : r.t==="precio" ? pd : sp;
+    const tabla = r.t==="tarifa" ? tablaTarifa : r.t==="precio" ? tablaPrecio : tablaPlanograma;
+    if(!Array.isArray(sel)) tabla(caja, sel);
+    else if(!r.a && !r.d) vistaAreas(caja, r, sel);
+    else {
+      if(r.a){
+        const mi = $("#miga");
+        mi.innerHTML = `<a href="#" id="volverArea">${esc(TITULO_T[r.t])}</a> › <b>${esc(r.a)}</b>`;
+        mi.hidden = false;
+        $("#volverArea").addEventListener("click", e=>{ e.preventDefault(); ir({a:""}); });
+      }
+      tabla(caja, r.a ? sel.filter(m=>zonaDe(m.delegacion)===r.a) : sel);
+    }
+  }
   caja.querySelectorAll(".mat").forEach(b=>b.addEventListener("click", ()=>ir({m:b.dataset.m})));
+}
+
+/* ------------------------------------------------------------- las areas */
+const ORDEN_ZONAS = ["Centro", "Sur", "Cataluña", "Levante", "Norte", "Otra zona"];
+const TITULO_T = {planograma:"Sin planograma", tarifa:"Sin tarifa", precio:"Precio distinto"};
+const zonaDe = d => (D.zonas||{})[d] || "Otra zona";
+function vistaAreas(caja, r, filas){
+  const explica = {
+    planograma: "Las máquinas sin planograma de cada área. Pulsa un área para ver sus máquinas por delegación.",
+    tarifa: "Las máquinas con productos sin tarifa de cada área, y cuántos productos son. Pulsa un área para ver sus máquinas por delegación.",
+    precio: "Las máquinas que cobran distinto de su tarifa en cada área, y cuántos productos son. Pulsa un área para ver sus máquinas por delegación."}[r.t];
+  const excel = {planograma:()=>excelPlanograma(filas), tarifa:()=>excelTarifas(filas, "todas"), precio:()=>excelPrecios(filas, "todas")}[r.t];
+  cabecera(caja, `${TITULO_T[r.t]} por área`, explica, filas.length ? excel : null);
+  if(!filas.length){ caja.insertAdjacentHTML("beforeend", `<p class="vacio">Ninguna máquina con estos filtros.</p>`); return; }
+  const areas = new Map();
+  filas.forEach(m=>{
+    const z = zonaDe(m.delegacion);
+    const a = areas.get(z) || {maquinas:0, productos:0, delegs:new Set()};
+    a.maquinas++; a.delegs.add(m.delegacion);
+    a.productos += r.t==="tarifa" ? (m.sin_tarifa||0) : r.t==="precio" ? (m.distintos||0) : 0;
+    areas.set(z, a);
+  });
+  const orden = [...areas.keys()].sort((x,y)=>(ORDEN_ZONAS.indexOf(x)+99)%99 - (ORDEN_ZONAS.indexOf(y)+99)%99 || x.localeCompare(y,"es"));
+  caja.insertAdjacentHTML("beforeend", `<div class="kpis areas">` + orden.map(z=>{
+      const a = areas.get(z);
+      const prod = r.t==="tarifa" ? ` · ${num(a.productos)} productos sin tarifa` : r.t==="precio" ? ` · ${num(a.productos)} productos con precio distinto` : "";
+      return `<button class="kpi area" type="button" data-a="${esc(z)}"><div class="et">${esc(z)}</div>`
+        + `<div class="vl">${num(a.maquinas)}</div><div class="nt">máquinas en ${num(a.delegs.size)} ${a.delegs.size===1?"delegación":"delegaciones"}${prod}</div></button>`;
+    }).join("") + `</div>`);
+  caja.querySelectorAll(".area").forEach(b=>b.addEventListener("click", ()=>ir({a:b.dataset.a})));
+}
+/* Las filas de una tabla, con una cabecera por delegacion. */
+function porDeleg(filas, columnas, fila){
+  let actual = null, out = "";
+  const cuenta = filas.reduce((c,m)=>(c[m.delegacion]=(c[m.delegacion]||0)+1, c), {});
+  [...filas].sort((a,b)=>a.delegacion.localeCompare(b.delegacion,"es")).forEach(m=>{
+    if(m.delegacion!==actual){
+      actual = m.delegacion;
+      out += `<tr class="grupo"><td colspan="${columnas}">${esc(actual)} <span class="peq">· ${num(cuenta[actual])} ${cuenta[actual]===1?"máquina":"máquinas"}</span></td></tr>`;
+    }
+    out += fila(m);
+  });
+  return out;
 }
 
 function kpis(r, cuenta, nota){
@@ -356,7 +416,7 @@ function kpis(r, cuenta, nota){
     + `</div>`;
 }
 function conectaKpis(v){
-  v.querySelectorAll(".kpi").forEach(b=>b.addEventListener("click", ()=>ir({t:b.dataset.t, m:""})));
+  v.querySelectorAll(".kpi[data-t]").forEach(b=>b.addEventListener("click", ()=>ir({t:b.dataset.t, m:"", a:""})));
 }
 
 function cabecera(caja, titulo, explica, excel){
@@ -372,8 +432,8 @@ function tablaPlanograma(caja, filas){
     filas.length ? ()=>excelPlanograma(filas) : null);
   if(!filas.length){ caja.insertAdjacentHTML("beforeend", `<p class="vacio">Ninguna máquina sin planograma con estos filtros.</p>`); return; }
   caja.insertAdjacentHTML("beforeend", `<div class="tabla-env"><table><thead><tr><th>Máquina</th>${CAB_SITIO}<th>Qué le pasa</th></tr></thead><tbody>`
-    + filas.map(m=>`<tr><td><b>${esc(m.matricula)}</b></td>${sitio(m)}`
-      + `<td>${m.marcada ? "Marcada «sin planograma»" : "Ningún canal con artículo"}</td></tr>`).join("")
+    + porDeleg(filas, 5, m=>`<tr><td><b>${esc(m.matricula)}</b></td>${sitio(m)}`
+      + `<td>${m.marcada ? "Marcada «sin planograma»" : "Ningún canal con artículo"}</td></tr>`)
     + `</tbody></table></div>`);
 }
 
@@ -384,8 +444,8 @@ function tablaTarifa(caja, filas){
     filas.length ? ()=>excelTarifas(filas, "todas") : null);
   if(!filas.length){ caja.insertAdjacentHTML("beforeend", `<p class="vacio">Ninguna máquina con productos sin tarifa con estos filtros.</p>`); return; }
   caja.insertAdjacentHTML("beforeend", `<div class="tabla-env"><table><thead><tr><th>Máquina</th>${CAB_SITIO}<th>Nivel de las tarifas</th><th class="n">Sin tarifa</th></tr></thead><tbody>`
-    + filas.map(m=>`<tr><td>${boton(m)}</td>${sitio(m)}<td>${nivelEtq(m)}</td>`
-      + `<td class="n"><b>${num(m.sin_tarifa)}</b><div class="peq">de ${num(m.productos_total)}</div></td></tr>`).join("")
+    + porDeleg(filas, 6, m=>`<tr><td>${boton(m)}</td>${sitio(m)}<td>${nivelEtq(m)}</td>`
+      + `<td class="n"><b>${num(m.sin_tarifa)}</b><div class="peq">de ${num(m.productos_total)}</div></td></tr>`)
     + `</tbody></table></div>`);
 }
 
@@ -396,9 +456,9 @@ function tablaPrecio(caja, filas){
     filas.length ? ()=>excelPrecios(filas, "todas") : null);
   if(!filas.length){ caja.insertAdjacentHTML("beforeend", `<p class="vacio">Ninguna máquina con precio distinto con estos filtros.</p>`); return; }
   caja.insertAdjacentHTML("beforeend", `<div class="tabla-env"><table><thead><tr><th>Máquina</th>${CAB_SITIO}<th class="oculta-movil">Nivel de las tarifas</th><th class="n">Productos distintos</th><th class="n">Diferencia máxima</th></tr></thead><tbody>`
-    + filas.map(m=>`<tr><td>${boton(m)}</td>${sitio(m)}<td class="oculta-movil">${nivelEtq(m)}</td>`
+    + porDeleg(filas, 7, m=>`<tr><td>${boton(m)}</td>${sitio(m)}<td class="oculta-movil">${nivelEtq(m)}</td>`
       + `<td class="n"><b>${num(m.distintos)}</b><div class="peq">de ${num(m.comprobados)} comprobados</div></td>`
-      + `<td class="n"><span class="dif ${m.max_diferencia>0 ? "mas" : ""}">${dif(m.max_diferencia)}</span></td></tr>`).join("")
+      + `<td class="n"><span class="dif ${m.max_diferencia>0 ? "mas" : ""}">${dif(m.max_diferencia)}</span></td></tr>`)
     + `</tbody></table></div>`);
 }
 
@@ -568,6 +628,7 @@ function filaDistinto(p){
 const HOY = new Date();
 function titulo(que){
   const r = ruta(), partes = [];
+  if(r.a && !r.d) partes.push(`Área ${r.a}`);
   if(r.d) partes.push(r.d);
   if(r.cl){ const m = todas().find(x=>x.cod_cliente===r.cl); partes.push(m ? m.cliente : r.cl); }
   if(r.ce){ const m = todas().find(x=>x.num_centro===r.ce); partes.push(m ? `${m.centro} (${r.ce})` : r.ce); }
@@ -585,7 +646,7 @@ function excelPlanograma(filas){
   XLSX.descarga(XLSX.libro([{nombre:"Sin planograma", titulo:titulo("máquinas sin planograma"),
     columnas:[...COL_SITIO,{titulo:"Qué le pasa",ancho:28}],
     filas:filas.map(m=>[...base(m), m.marcada ? "Marcada sin planograma" : "Ningún canal con artículo"])}]),
-    nombre("sin_planograma", ruta().ce || ruta().cl || ruta().d || "todas"));
+    nombre("sin_planograma", ruta().ce || ruta().cl || ruta().d || ruta().a || "todas"));
 }
 function excelTarifas(maquinas, sufijo){
   const resumen = maquinas.map(m=>[...base(m), textoNivel(m), textoEstandar(m), m.sin_tarifa, m.productos_total]);
@@ -607,7 +668,7 @@ function excelTarifas(maquinas, sufijo){
        {titulo:"Cobra hoy en efectivo",ancho:12,euros:true},{titulo:"Cobra hoy con tarjeta privada",ancho:12,euros:true},
        {titulo:"Cobra hoy con tarjeta de crédito",ancho:12,euros:true},{titulo:"Precio efectivo",ancho:12,euros:true},
        {titulo:"Precio tarjeta privada",ancho:12,euros:true},{titulo:"Precio tarjeta crédito",ancho:12,euros:true}],
-     rellenar:[14,15,16]}]), nombre("sin_tarifa", sufijo==="todas" ? (ruta().ce || ruta().cl || ruta().d || "todas") : sufijo));
+     rellenar:[14,15,16]}]), nombre("sin_tarifa", sufijo==="todas" ? (ruta().ce || ruta().cl || ruta().d || ruta().a || "todas") : sufijo));
 }
 function excelPrecios(maquinas, sufijo){
   const resumen = maquinas.map(m=>[...base(m), textoNivel(m), textoEstandar(m), m.distintos, m.comprobados, m.max_diferencia]);
@@ -631,7 +692,7 @@ function excelPrecios(maquinas, sufijo){
        {titulo:"Precio tarifa",ancho:11,euros:true},{titulo:"Precio cobrado",ancho:11,euros:true},
        {titulo:"Diferencia",ancho:10,euros:true},{titulo:"Fecha de la venta",ancho:12},{titulo:"Fuente",ancho:16},
        {titulo:"Nivel",ancho:14},{titulo:"Tarifa",ancho:30}],
-     marcar:(f,i)=>i===12}]), nombre("precio_distinto", sufijo==="todas" ? (ruta().ce || ruta().cl || ruta().d || "todas") : sufijo));
+     marcar:(f,i)=>i===12}]), nombre("precio_distinto", sufijo==="todas" ? (ruta().ce || ruta().cl || ruta().d || ruta().a || "todas") : sufijo));
 }
 function excelCreados(filas, dia){
   XLSX.descarga(XLSX.libro([{nombre:"Planogramas creados", titulo:titulo(`planogramas creados el ${fechaLarga(dia)}`),

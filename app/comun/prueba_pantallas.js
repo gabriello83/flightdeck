@@ -258,6 +258,7 @@ const API = {
     const v = (p, f = iso(AYER)) => ({ venta: { precio: p, fecha: f, fuente: 'telemetria' } });
     return {
       generado: new Date().toISOString(), creados_desde: iso(new Date(AYER.getTime() - 86400000)),
+      zonas: { 'Andalucía - Sevilla': 'Sur', 'Madrid - Leganes': 'Centro' },
       sin_usuario: 'Quién lo creó todavía no se descarga de VenCloud: falta el informe con el usuario del planograma.',
       actividad: { grupos: [
         { nombre: 'M. García', cuentas: ['M.GARCIA', 'M2.GARCIA'], dias: [
@@ -1262,33 +1263,50 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre('/revision/');
     await pagina.waitForSelector('.kpi');
-    const kpis = async () => pagina.$$eval('.kpi .vl', x => x.map(e => e.textContent));
+    const kpis = async () => pagina.$$eval('.kpi[data-t] .vl', x => x.map(e => e.textContent));
     // El cambio de tabla va por el hash: hay que esperar a que se pinte.
     const tabla = async t => { await pagina.click(`.kpi[data-t="${t}"]`);
       await pagina.waitForSelector(`.kpi[data-t="${t}"][aria-pressed="true"]`); };
-    const maquina = async sel => { await pagina.click(sel); await pagina.waitForSelector('#miga:not([hidden])'); };
-    const volver = async () => { await pagina.click('#volver'); await pagina.waitForSelector('#miga[hidden]', { state: 'attached' }); };
+    const maquina = async sel => { await pagina.click(sel); await pagina.waitForSelector('#volver'); };
+    const volver = async () => { await pagina.click('#volver'); await pagina.waitForSelector('#volverArea'); };
+    // Primero un cuadrado por area; pulsando, sus maquinas por delegacion.
+    const area = async a => { await pagina.click(`.area[data-a="${a}"]`); await pagina.waitForSelector('#volverArea'); };
+    const areas = async () => { await pagina.click('#volverArea'); await pagina.waitForSelector('.area'); };
     const textos = async sel => pagina.$$eval(sel, x => x.map(e => e.textContent.replace(/\s+/g, ' ').trim()));
+    const filasMaq = '#tabla tbody tr:not(.grupo)';
     comprueba('las cuentas: sin planograma, sin tarifa, precio distinto, creados el ultimo dia y acciones de Garcia y Marcos',
-      await kpis(), ['2', '2', '1', '1', '120']);
-    comprueba('arranca en las sin planograma',
-      await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(e => e.textContent)), ['24SE0001', '24SE0002']);
+      (await kpis()).slice(0, 5), ['2', '2', '1', '1', '120']);
+    comprueba('arranca en las sin planograma, un cuadrado por area con sus maquinas',
+      [await textos('.area .et'), await textos('.area .vl')], [['Centro', 'Sur'], ['1', '1']]);
+    await area('Sur');
+    comprueba('pulsando el area, sus maquinas', await textos(`${filasMaq} td:first-child`), ['24SE0001']);
+    comprueba('por delegacion, con su cabecera', await textos('#tabla tr.grupo'), ['Andalucía - Sevilla · 1 máquina']);
     comprueba_que('el cliente va escapado', (await pagina.innerHTML('#tabla')).includes('AIRBUS &lt;OPS&gt;'));
+    await areas();
     await pagina.selectOption('#fDeleg', 'Madrid - Leganes');
+    await pagina.waitForSelector('#tabla tr.grupo');
     comprueba('la delegacion filtra las cuatro, no la actividad', await kpis(), ['1', '1', '1', '1', '120']);
+    comprueba('y con una delegacion elegida va directo a su lista', await textos(`${filasMaq} td:first-child`), ['24SE0002']);
     comprueba('y el cliente solo ofrece los de esa delegacion',
       await pagina.$$eval('#fCliente option', x => x.map(o => o.value)), ['', '20']);
     await pagina.click('#bLimpiar');
     await pagina.waitForFunction(() => document.querySelector('#fDeleg').value === '');
     await tabla('tarifa');
-    comprueba_que('la tarifa estandar va señalada, con su tabla y a quien esta asignada',
-      (await pagina.textContent('#tabla tbody tr:first-child')).includes('AIRBUS OPERATIONS SLU · asignada al cliente')
-      && await pagina.locator('#tabla tbody tr:first-child .etq.estandar').count() === 1);
-    comprueba_que('la que no tiene ninguna tarifa lo dice', (await pagina.textContent('#tabla')).includes('Ninguna tarifa'));
+    comprueba_que('sin tarifa: por area, con los productos', (await textos('.area .nt')).includes('máquinas en 1 delegación · 2 productos sin tarifa'),
+      await textos('.area .nt'));
     const [d1] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
     comprueba_que('el Excel de la tabla', /^revision_sin_tarifa_todas_\d{4}-\d\d-\d\d\.xlsx$/.test(d1.suggestedFilename()), d1.suggestedFilename());
     const t1 = fs.readFileSync(await d1.path()).toString('utf8');
     comprueba_que('con las maquinas y sus productos', t1.includes('name="Máquinas"') && t1.includes('name="Productos sin tarifa"') && t1.includes('COCA-COLA'));
+    await area('Centro');
+    comprueba_que('la que no tiene ninguna tarifa lo dice', (await pagina.textContent('#tabla')).includes('Ninguna tarifa'));
+    const [d1b] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('el Excel del area, con el area en el nombre', /^revision_sin_tarifa_Centro_/.test(d1b.suggestedFilename()), d1b.suggestedFilename());
+    await areas();
+    await area('Sur');
+    comprueba_que('la tarifa estandar va señalada, con su tabla y a quien esta asignada',
+      (await pagina.locator(filasMaq).first().textContent()).includes('AIRBUS OPERATIONS SLU · asignada al cliente')
+      && await pagina.locator(`${filasMaq} .etq.estandar`).count() === 1);
     await maquina('#tabla .mat[data-m="24SE0005"]');
     comprueba('pulsando la matricula, sus productos sin tarifa',
       await pagina.$$eval('#vista tbody tr', x => x.length), 2);
@@ -1297,8 +1315,9 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('y su Excel, con la matricula en el nombre', /^revision_sin_tarifa_24SE0005_/.test(d2.suggestedFilename()), d2.suggestedFilename());
     await volver();
     await tabla('precio');
+    await area('Centro');
     comprueba('precio distinto: cuantos productos y la diferencia maxima',
-      await textos('#tabla tbody tr td.n'), ['2de 8 comprobados', '+0,15 €']);
+      await textos(`${filasMaq} td.n`), ['2de 8 comprobados', '+0,15 €']);
     await maquina('#tabla .mat');
     comprueba('pulsando, los productos con su diferencia, la mayor primero',
       await textos('#vista tbody tr td.n'), ['+0,15 €', '-0,05 €']);

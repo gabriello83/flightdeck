@@ -14,7 +14,14 @@ configurado máquina a máquina, filtrable por **delegación, cliente y centro**
 | **Precio distinto** | una fila por máquina con cuántos productos cobran distinto de su tarifa, de cuántos comprobados, y la **diferencia más grande** (lo cobrado menos la tarifa, con su signo). Pulsando, los productos y cada medio de pago | lo mismo |
 | **Planogramas creados** | las máquinas que la noche anterior no tenían planograma y en esta sí, por día, con el **usuario** que lo creó cuando llegue | el censo de esta noche contra el de la anterior |
 
-Cada tabla y cada máquina tiene su **Excel**. El de sin tarifa lleva las tres columnas amarillas
+**Por áreas** (Gabriele, 19-oct): sin planograma, sin tarifa y precio distinto abren primero un
+cuadrado por **área** (Centro, Sur, Cataluña, Levante, Norte: las cinco del Power BI, por el
+principio del nombre de la delegación, como incidencias y devoluciones) con sus máquinas y, en sin
+tarifa y precio distinto, sus productos. Pulsando el área, sus máquinas agrupadas por delegación.
+Con una delegación elegida en el filtro se va directo a su lista. «Serunion Vending - CENTRAL» no
+empieza por ninguna zona y sale como «Otra zona» (39 máquinas sin planograma a 19-oct).
+
+Cada tabla, cada área y cada máquina tiene su **Excel**. El de sin tarifa lleva las tres columnas amarillas
 para que la delegación ponga el precio, como el de la página de tarifas.
 
 ## Por qué «sin tarifa» no es la cuenta del bloque de instalaciones
