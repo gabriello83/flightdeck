@@ -185,6 +185,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 .punta i{width:8px;height:8px;border-radius:2px;display:inline-block}
 .fb.canal .b{background:var(--kc)}
 </style>
+<script src="/comun/preferidos.js"></script>
 </head>
 <body>
 <div class="env">
@@ -234,7 +235,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
       <div class="kpis" id="kpis"></div>
 
       <section class="caja" data-tabla="meses">
-        <div class="cabsec"><h2>Devoluciones por mes y canal</h2>
+        <div class="cabsec" data-estrella="meses"><h2>Devoluciones por mes y canal</h2>
           <button class="btn" id="bVista" type="button" aria-pressed="false">Ver como tabla</button></div>
         <p class="sub" id="sMeses"></p>
         <div class="leyenda" id="leyenda"></div>
@@ -244,7 +245,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 
       <div class="dos">
         <section class="caja" data-tabla="canal">
-          <div class="cabsec"><h2>Por canal</h2><span class="tenue">Pulsa un canal para filtrar por él</span></div>
+          <div class="cabsec" data-estrella="canal"><h2>Por canal</h2><span class="tenue">Pulsa un canal para filtrar por él</span></div>
           <p class="sub" id="sCanal"></p>
           <div id="gCanal"></div>
           <div class="cabsec" style="margin-top:16px"><h2>Por origen</h2><span class="tenue">Pulsa uno para filtrar por él</span></div>
@@ -252,26 +253,26 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
           <div id="gOrigen"></div>
         </section>
         <section class="caja" data-tabla="zonas">
-          <div class="cabsec"><h2>Por zona y delegación</h2><span class="tenue">Pulsa una delegación para filtrar</span></div>
+          <div class="cabsec" data-estrella="zonas"><h2>Por zona y delegación</h2><span class="tenue">Pulsa una delegación para filtrar</span></div>
           <p class="sub" id="sZonas"></p>
           <div id="gZonas"></div>
         </section>
       </div>
 
       <section class="caja" data-tabla="centros">
-        <div class="cabsec"><h2>Los 15 centros con más devoluciones</h2><span class="tenue">Pulsa un centro para filtrar por él</span></div>
+        <div class="cabsec" data-estrella="centros"><h2>Los 15 centros con más devoluciones</h2><span class="tenue">Pulsa un centro para filtrar por él</span></div>
         <p class="sub">Cada canal en su columna. «Sin cerrar» son las del periodo que siguen abiertas hoy.</p>
         <div class="tabla" id="tCentros"></div>
       </section>
 
       <div class="dos">
         <section class="caja" data-tabla="maquinas">
-          <div class="cabsec"><h2>Las 15 máquinas con más devoluciones</h2></div>
+          <div class="cabsec" data-estrella="maquinas"><h2>Las 15 máquinas con más devoluciones</h2></div>
           <p class="sub">Muchas devoluciones en la misma máquina suelen apuntar al monedero, al lector de tarjetas o a un carril que no suelta el producto.</p>
           <div class="tabla" id="tMaquinas"></div>
         </section>
         <section class="caja" data-tabla="tecnicos">
-          <div class="cabsec"><h2>Por técnico</h2></div>
+          <div class="cabsec" data-estrella="tecnicos"><h2>Por técnico</h2></div>
           <p class="sub">El técnico asignado a cada devolución y lo que tarda en cerrarlas.</p>
           <div class="tabla" id="tTecnicos"></div>
         </section>
@@ -280,8 +281,8 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 
     <!-- ============================ hoja 2 ============================ -->
     <div id="hPendientes" hidden>
-      <section class="caja">
-        <div class="cabsec"><h2>Devoluciones sin cerrar</h2><span class="tenue" id="cLista"></span></div>
+      <section class="caja" data-tabla="pendientes">
+        <div class="cabsec" data-estrella="pendientes"><h2>Devoluciones sin cerrar</h2><span class="tenue" id="cLista"></span></div>
         <p class="sub">Todas las que siguen abiertas hoy, sean de cuando sean, la que más lleva esperando primero.</p>
         <div class="barra" style="margin-top:0">
           <label class="busca">Buscar <input id="busca" type="search" placeholder="Nº, máquina, centro, técnico…"></label>
@@ -778,6 +779,9 @@ function pintaTodo(){
     + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
     + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;
+  /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
+  Preferidos.monta("devoluciones", {ocultar: [".hojas", "#kpis"],
+    abre: t => { HOJA = t === "pendientes" ? "pendientes" : "panel"; pintaTodo(); }});
 })();
 </script>
 </body>

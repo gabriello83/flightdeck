@@ -21,7 +21,7 @@
   /* Los cuadrados sin semaforo, cada uno de su color. Ninguno es verde, ni
      ambar ni rojo, para que no se confundan con un estado. */
   --c-almacenes:#6d4fc2; --c-furgonetas:#1f6f8b; --c-pdvs:#2a62c9;
-  --c-ventas:#a63d84; --c-reposiciones:#4a5568; --c-devoluciones:#7a4e1d; --c-revision:#3d5a80; --c-utilizo:#5b4b8a;
+  --c-ventas:#a63d84; --c-reposiciones:#4a5568; --c-devoluciones:#7a4e1d; --c-revision:#3d5a80; --c-utilizo:#5b4b8a; --c-preferidos:#334155;
 }
 @media (prefers-color-scheme: dark){
   :root:where(:not([data-theme="light"])){
@@ -31,7 +31,7 @@
     --s1:#3987e5; --sombra:none;
     --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
     --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
-    --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d; --c-revision:#3a557a; --c-utilizo:#55477f;
+    --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d; --c-revision:#3a557a; --c-utilizo:#55477f; --c-preferidos:#334155;
   }
 }
 :root[data-theme="dark"]{
@@ -41,7 +41,7 @@
   --s1:#3987e5; --sombra:none;
   --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
   --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
-  --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d; --c-revision:#3a557a; --c-utilizo:#55477f;
+  --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d; --c-revision:#3a557a; --c-utilizo:#55477f; --c-preferidos:#334155;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -98,6 +98,7 @@ a.cuadro:focus-visible{outline:3px solid var(--s1);outline-offset:3px}
 }
 .cuadro.amarillo{--tinta-c:#1d1a10}
 .cuadro.amarillo .estado{background:rgba(0,0,0,.12)}
+.cuadro .et svg{width:15px;height:15px;vertical-align:-2px;margin-right:5px;fill:#f5b800;stroke:#e3a008;stroke-width:1.7}
 .cuadro.sin{
   --tinta-c:var(--tinta);background:var(--tarjeta);border:1px dashed var(--borde-fuerte);box-shadow:none
 }
@@ -222,7 +223,7 @@ const TITULO = {
 
 // Los cuadrados que no son de un dia sino la foto de la noche.
 const FOTO = new Set(["pdvs", "almacenes", "tarifas", "devoluciones", "revision", "utilizo"]);
-let YO=null, DATOS=null;
+let YO=null, DATOS=null, PREFERIDOS=null;
 
 function fechaLarga(s){
   const d = new Date(String(s)+"T00:00:00");
@@ -313,6 +314,21 @@ function pinta(){
   const ses = new Set(YO.sesiones||[]);
   const cont = $("#cuadros");
   cont.innerHTML = "";
+  /* El cuadrado de Preferidos (docs/62): las tablas y gráficos que el usuario
+     marcó con la estrella, en su propia página. Va el primero. */
+  if(PREFERIDOS){
+    const n = PREFERIDOS.length;
+    const el = document.createElement("a");
+    el.className = "cuadro"; el.dataset.id = "preferidos"; el.href = "/preferidos/";
+    el.style.setProperty("--fondo-c", "var(--c-preferidos)");
+    el.innerHTML = `<div class="et"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.83 5.74 6.33.92-4.58 4.46 1.08 6.3L12 17.25l-5.66 2.97 1.08-6.3L2.84 9.46l6.33-.92z"/></svg>Preferidos</div>`
+      + `<div class="vl">${num(n)}</div>`
+      + `<div class="sub">${n ? (n===1 ? "tabla o gráfico con estrella" : "tablas y gráficos con estrella")
+          : "Pulsa la estrella junto al título de cualquier tabla y saldrá aquí"}</div>`
+      + `<div class="pie"><span class="foto">en el orden y tamaño que elijas</span><span>Ver preferidos →</span></div>`;
+    el.setAttribute("aria-label", `Preferidos: ${num(n)}. Abrir la página.`);
+    cont.appendChild(el);
+  }
   (DATOS.cuadrados||[]).forEach(id=>{
     const c = contenido(id, d, f);
     if(!c) return;
@@ -340,7 +356,7 @@ function pinta(){
     if(va) el.setAttribute("aria-label", `${TITULO[id]}: ${c.sin ? c.sin : c.vl}. Abrir la sección.`);
     cont.appendChild(el);
   });
-  if(!cont.children.length)
+  if(!(DATOS.cuadrados||[]).length)
     cont.innerHTML = `<p style="color:var(--tinta-2)">No tienes ningún cuadrado concedido: pídeselo al administrador.</p>`;
 }
 
@@ -372,6 +388,10 @@ function avisa(texto, mal){
     return;
   }
   DATOS = await ro.json();
+  try{
+    const rp = await fetch("/api/preferidos", {credentials:"same-origin"});
+    if(rp.ok) PREFERIDOS = (await rp.json()).preferidos || [];
+  }catch(e){}
 
   const u = DATOS.umbrales || {verde:95, amarillo:75};
   const n1 = n => new Intl.NumberFormat("es-ES").format(n);

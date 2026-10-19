@@ -349,7 +349,8 @@ function pintaCuadradosUsuario(u){
   const sinT = (u && u.tablas_ocultas) || {};
   $("#cajaCuadrados").innerHTML = ids.map(c=>{
     const cat = CUADRADOS[c] || {nombre:c, tablas:{}};
-    const tablas = Object.entries(cat.tablas||{});
+    /* Una página de una sola tabla se quita con su cuadrado. */
+    const tablas = Object.entries(cat.tablas||{}).length > 1 ? Object.entries(cat.tablas) : [];
     const fuera = new Set(sinT[c] || []);
     return `<fieldset data-c="${esc(c)}" class="${sinC.has(c)?"quitado":""}">
       <legend><label><input type="checkbox" data-cuadrado value="${esc(c)}" ${sinC.has(c)?"":"checked"}>

@@ -158,6 +158,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   .barra label select{min-width:0}
 }
 </style>
+<script src="/comun/preferidos.js"></script>
 </head>
 <body>
 <div class="env">
@@ -187,18 +188,18 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 
     <div class="dos">
       <section class="caja" data-tabla="rutas">
-        <div class="cabsec"><h2 id="hRutas">Visitas por ruta</h2><span class="tenue" id="cRutas"></span></div>
+        <div class="cabsec" data-estrella="rutas"><h2 id="hRutas">Visitas por ruta</h2><span class="tenue" id="cRutas"></span></div>
         <p class="sub">Puntos de venta de cada ruta por estado. Uno que está en dos rutas cuenta en las dos; las visitas fuera de ruta van a la ruta con la que se hizo el parte. Pulsa una ruta para filtrar.</p>
         <div class="tabla" id="tRutas"></div>
       </section>
       <section class="caja" data-tabla="estado">
-        <div class="cabsec"><h2>Estado de las visitas</h2></div>
+        <div class="cabsec" data-estrella="estado"><h2>Estado de las visitas</h2></div>
         <div id="dona"></div>
       </section>
     </div>
 
     <section class="caja" data-tabla="maquinas">
-      <div class="cabsec"><h2 id="hPdv">Máquinas no visitadas</h2><span class="tenue" id="cPdv"></span></div>
+      <div class="cabsec" data-estrella="maquinas"><h2 id="hPdv">Máquinas no visitadas</h2><span class="tenue" id="cPdv"></span></div>
       <div class="pestanas" id="pestanas" role="tablist"></div>
       <div class="barra" style="margin-top:0">
         <label class="busca">Buscar <input id="busca" type="search" placeholder="Matrícula, centro, ruta, reponedor…"></label>
@@ -209,13 +210,13 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
     </section>
 
     <section class="caja" id="sDeleg" data-tabla="delegaciones">
-      <div class="cabsec"><h2>Por delegación</h2><span class="tenue">Pulsa una para ver sus rutas y sus máquinas</span></div>
+      <div class="cabsec" data-estrella="delegaciones"><h2>Por delegación</h2><span class="tenue">Pulsa una para ver sus rutas y sus máquinas</span></div>
       <p class="sub">Cumplimiento de ruta de cada delegación. Los cuadritos son los últimos siete días; el recuadrado es festivo.</p>
       <div class="tabla" id="tDeleg"></div>
     </section>
 
     <section class="caja" data-tabla="festivos">
-      <div class="cabsec"><h2>Festivos por delegación</h2><span class="tenue" id="cFest"></span></div>
+      <div class="cabsec" data-estrella="festivos"><h2>Festivos por delegación</h2><span class="tenue" id="cFest"></span></div>
       <p class="sub" id="sFest"></p>
       <div class="tabla" id="tFest"></div>
     </section>
@@ -656,6 +657,8 @@ function pintaDelegaciones(){
     + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
     + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;
+  /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
+  Preferidos.monta("rutas", {ocultar: ["#kpis"]});
 })();
 </script>
 </body>

@@ -98,6 +98,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   .barra label.busca{flex:1 1 100%}
 }
 </style>
+<script src="/comun/preferidos.js"></script>
 </head>
 <body>
 <div class="env">
@@ -134,7 +135,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
     <div class="pestanas" id="pestanas" role="tablist"></div>
     <div class="kpis" id="kpis"></div>
     <section class="caja">
-      <div class="cabsec"><h2 id="tTabla"></h2><span class="tenue" id="cuenta"></span></div>
+      <div class="cabsec" data-estrella="maquinas"><h2 id="tTabla"></h2><span class="tenue" id="cuenta"></span></div>
       <p class="sub" id="sTabla"></p>
       <div class="tabla" id="tabla"></div>
     </section>
@@ -415,6 +416,8 @@ function pintaFicheros(){
     + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
     + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;
+  /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
+  Preferidos.monta("telemetria", {});
 })();
 </script>
 </body>

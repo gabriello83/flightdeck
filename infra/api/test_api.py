@@ -799,6 +799,33 @@ comprueba("y el catalogo, con las tablas de cada pagina",
           (len(_pf["catalogo_cuadrados"]), list(_pf["catalogo_cuadrados"]["rutas"]["tablas"])[:2]),
           (12, ["rutas", "estado"]))
 
+print("\nPreferidos (docs/62): de cada usuario, y solo lo que puede ver")
+comprueba("un cliente no tiene", llama("GET", "/api/preferidos", cookie=COOKIE_ANA)["statusCode"], 403)
+comprueba("al principio, ninguno", cuerpo_de(llama("GET", "/api/preferidos", cookie=COOKIE_OLGA))["preferidos"], [])
+_p = cuerpo_de(llama("PUT", "/api/preferidos", {"preferidos": [
+    {"c": "rutas", "t": "maquinas", "ancho": "entera", "alto": "todo"},
+    {"c": "furgonetas", "t": "dias", "ancho": "gigante"},
+    {"c": "rutas", "t": "maquinas"},
+    {"c": "almacenes", "t": "productos"},
+    {"c": "rutas", "t": "no-existe"}, "basura"]}, cookie=COOKIE_OLGA))["preferidos"]
+comprueba("se guardan los buenos, sin repetidos ni lo que su perfil no ve",
+          _p, [{"c": "rutas", "t": "maquinas", "ancho": "entera", "alto": "todo"},
+               {"c": "furgonetas", "t": "dias", "ancho": "media", "alto": "medio"}])
+_g = cuerpo_de(llama("GET", "/api/preferidos", cookie=COOKIE_OLGA))
+comprueba("y vuelven igual, con los nombres de sus tablas",
+          (_g["preferidos"] == _p, _g["nombres"]["rutas"]["tablas"]["maquinas"], "almacenes" in _g["nombres"]),
+          (True, "Máquinas no visitadas", False))
+comprueba("son suyos: otro usuario no los ve",
+          cuerpo_de(llama("GET", "/api/preferidos", cookie=COOKIE_JEFE))["preferidos"], [])
+llama("POST", "/api/admin/usuarios", dict(_olga, cuadrados_ocultos=["furgonetas"],
+                                          tablas_ocultas={"rutas": ["maquinas"]}), cookie=COOKIE_JEFE)
+comprueba("lo que el administrador le quita deja de salir en sus preferidos",
+          cuerpo_de(llama("GET", "/api/preferidos", cookie=COOKIE_OLGA))["preferidos"], [])
+llama("POST", "/api/admin/usuarios", _olga, cookie=COOKIE_JEFE)
+comprueba("y vuelve si se lo devuelve", len(cuerpo_de(llama("GET", "/api/preferidos", cookie=COOKIE_OLGA))["preferidos"]), 2)
+comprueba("una lista que no es lista, 400",
+          llama("PUT", "/api/preferidos", {"preferidos": "x"}, cookie=COOKIE_OLGA)["statusCode"], 400)
+
 print("\nUna ruta que no existe")
 comprueba("404", llama("GET", "/api/loquesea", cookie=COOKIE_JEFE)["statusCode"], 404)
 

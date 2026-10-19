@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preferidos · digivend</title>
+<!-- Un solo origen. Esta pagina habla con /api/* del mismo dominio y con nadie
+     mas: hay redes de cliente que cortan las paginas que llaman fuera. La
+     cabecera de verdad la pone CloudFront; esta va por si se abre suelta. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M3 3h4v4H3zm6 0h4v4H9zM3 9h4v4H3zm6 0h4v4H9z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6;
+  --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+  /* El semaforo. El amarillo lleva texto oscuro: con blanco no se lee. */
+  --verde:#15803d; --amarillo:#f2b705; --rojo:#c62828;
+  /* Los cuadrados sin semaforo, cada uno de su color. Ninguno es verde, ni
+     ambar ni rojo, para que no se confundan con un estado. */
+  --c-almacenes:#6d4fc2; --c-furgonetas:#1f6f8b; --c-pdvs:#2a62c9;
+  --c-ventas:#a63d84; --c-reposiciones:#4a5568; --c-devoluciones:#7a4e1d; --c-revision:#3d5a80; --c-utilizo:#5b4b8a;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --sombra:none;
+    --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
+    --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
+    --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d; --c-revision:#3a557a; --c-utilizo:#55477f;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --sombra:none;
+  --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
+  --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
+  --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d; --c-revision:#3a557a; --c-utilizo:#55477f;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1240px;margin:0 auto;padding:18px 16px 72px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+.marca{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn,a.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);text-decoration:none;
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
+button.btn:hover,a.btn:hover{border-color:var(--tinta-3)}
+.barra{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:16px 0 6px}
+.barra label{font-size:13px;color:var(--tinta-2);display:flex;align-items:center;gap:8px}
+.barra select{
+  font:inherit;font-size:14px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:5px 8px
+}
+
+.nota{
+  margin:12px 0 4px;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+.nota.mal{border-left-color:var(--rojo)}
+.sub{color:var(--tinta-2);font-size:13.5px;margin:10px 0 0}
+/* Los recuadros: dos por fila, o la fila entera. */
+.rejilla{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px;align-items:start}
+.pref{
+  background:var(--tarjeta);border:1px solid var(--borde);border-radius:12px;box-shadow:var(--sombra);
+  display:flex;flex-direction:column;min-width:0;overflow:hidden
+}
+.pref.entera{grid-column:1 / -1}
+.pref.arrastrando{opacity:.45}
+.pref.destino-antes{box-shadow:-4px 0 0 var(--s1)}
+.pref.destino-despues{box-shadow:4px 0 0 var(--s1)}
+.cab{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--borde);flex-wrap:wrap}
+.asa{
+  all:unset;cursor:grab;color:var(--tinta-3);font-size:18px;line-height:1;padding:4px 4px;border-radius:6px;user-select:none
+}
+.asa:active{cursor:grabbing}
+.asa:focus-visible,.cab button:focus-visible,.cab select:focus-visible,.cab a:focus-visible{outline:2px solid var(--s1);outline-offset:1px}
+.tit{flex:1 1 180px;min-width:0;font-size:14px;line-height:1.3}
+.tit b{display:block;overflow-wrap:anywhere}
+.tit span{font-size:12px;color:var(--tinta-3)}
+.mandos{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mandos select{
+  font:inherit;font-size:12.5px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:7px;padding:3px 6px
+}
+.mini{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);text-decoration:none;
+  border:1px solid var(--borde-fuerte);border-radius:7px;padding:3px 8px;cursor:pointer;line-height:1.4
+}
+.mini:hover{border-color:var(--tinta-3)}
+.mini:disabled{opacity:.4;cursor:default}
+.quita{all:unset;cursor:pointer;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:7px}
+.quita svg{fill:#f5b800;stroke:#e3a008;stroke-width:1.7;stroke-linejoin:round}
+.quita:hover{background:var(--fondo)}
+.marco{position:relative;background:var(--tarjeta)}
+.marco iframe{display:block;width:100%;border:0;background:var(--tarjeta)}
+.vacio{padding:26px 18px;border:1px dashed var(--borde-fuerte);border-radius:12px;margin-top:16px;color:var(--tinta-2);background:var(--tarjeta)}
+.vacio svg{fill:none;stroke:var(--tinta-3);stroke-width:1.7;vertical-align:-4px}
+footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+#cargando{padding:40px 0;color:var(--tinta-2)}
+@media (max-width:820px){ .rejilla{grid-template-columns:minmax(0,1fr)} }
+@media (max-width:560px){ .mandos .mini.mover{padding:3px 10px} }
+</style>
+</head>
+<body>
+<div class="env">
+  <header class="top">
+    <div class="marca">
+      <b>Preferidos</b>
+      <span id="quien"></span>
+    </div>
+    <div class="acciones">
+      <a class="btn" href="/operativo/">Informe general</a>
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn" id="bSalir" type="button">Salir</button>
+    </div>
+  </header>
+  <p class="sub" id="ayuda" hidden>Las tablas y gráficos que marcaste con la estrella. Arrástralos por el asa
+    <b aria-hidden="true">⠿</b> (o con las flechas) para ordenarlos, y elige su ancho y su alto. Se guarda solo.</p>
+
+  <div id="cargando">Cargando…</div>
+  <div class="nota" id="aviso" hidden></div>
+  <div class="rejilla" id="rejilla" hidden></div>
+
+  <footer id="pie" hidden></footer>
+</div>
+
+<script>
+/* ===================================================================
+   Preferidos · digivend.es  (docs/62)
+
+   Las tablas y gráficos que el usuario marcó con la estrella, juntos, en el
+   orden y el tamaño que él quiera. Cada recuadro es la página de su cuadrado
+   en su vista suelta (?solo=<tabla>), así que se dibuja con el código de su
+   propia página, con sus filtros, y con los mismos permisos: la API sirve lo
+   que el usuario ve y nada más. El orden y el tamaño se guardan en el
+   servidor (/api/preferidos).
+   =================================================================== */
+const CLAVE_TEMA = "digivend.tema";
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = s => document.querySelector(s);
+const ESTRELLA = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">'
+  + '<path d="M12 2.8l2.83 5.74 6.33.92-4.58 4.46 1.08 6.3L12 17.25l-5.66 2.97 1.08-6.3L2.84 9.46l6.33-.92z"/></svg>';
+
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = $("#bTema");
+  const oscuro = () => document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const pinta = () => { b.textContent = oscuro() ? "Modo claro" : "Modo oscuro"; };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const n = oscuro() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+    /* Los recuadros son páginas del mismo dominio: cambian con ella. */
+    document.querySelectorAll(".marco iframe").forEach(f=>{
+      try{ f.contentDocument.documentElement.setAttribute("data-theme", n); }catch(e){}
+    });
+  });
+})();
+$("#bSalir").addEventListener("click", async ()=>{
+  try{ await fetch("/api/salir", {method:"POST", credentials:"same-origin"}); }catch(e){}
+  location.href = "/";
+});
+
+/* La página de cada cuadrado. */
+const PAGINA = {
+  rutas:"/rutas/", averias:"/incidencias/", devoluciones:"/devoluciones/", almacenes:"/almacenes/",
+  furgonetas:"/furgonetas/", telemetria:"/telemetria/", tarifas:"/tarifas/", revision:"/revision/",
+  utilizo:"/utilizo/",
+};
+const ALTO = {bajo:340, medio:540};
+const ALTOS = [["bajo","Bajo"],["medio","Medio"],["todo","Entero"]];
+const ANCHOS = [["media","Media fila"],["entera","Fila entera"]];
+let LISTA = [], NOMBRES = {}, espera = null;
+
+function avisa(t, mal){ const a=$("#aviso"); a.textContent=t||""; a.hidden=!t; a.classList.toggle("mal", !!mal); }
+
+function guarda(){
+  clearTimeout(espera);
+  espera = setTimeout(async ()=>{
+    try{
+      const r = await fetch("/api/preferidos", {method:"PUT", credentials:"same-origin",
+        headers:{"content-type":"application/json"}, body: JSON.stringify({preferidos: LISTA})});
+      if(!r.ok) throw new Error();
+      avisa("");
+    }catch(e){ avisa("No se ha podido guardar el cambio. Vuelve a intentarlo.", true); }
+  }, 350);
+}
+
+const clave = x => `${x.c}|${x.t}`;
+const nombreDe = x => ({cuadrado: (NOMBRES[x.c]||{}).nombre || x.c, tabla: ((NOMBRES[x.c]||{}).tablas||{})[x.t] || x.t});
+const opciones = (lista, v) => lista.map(([k,n])=>`<option value="${k}"${k===v?" selected":""}>${esc(n)}</option>`).join("");
+
+/* El alto «Entero» sigue al contenido de la página de dentro, que puede crecer
+   al cambiar un filtro: se mide con un ResizeObserver dentro del recuadro. */
+function ajusta(f, x){
+  const doc = (()=>{ try{ return f.contentDocument; }catch(e){ return null; } })();
+  if(x.alto !== "todo"){ f.style.height = ALTO[x.alto] + "px"; return; }
+  if(!doc || !doc.body) return;
+  const mide = () => { f.style.height = Math.max(160, doc.documentElement.scrollHeight) + "px"; };
+  mide();
+  if(!f._obs){ f._obs = new ResizeObserver(mide); f._obs.observe(doc.body); }
+}
+
+function recuadro(x, i){
+  const n = nombreDe(x);
+  const el = document.createElement("section");
+  el.className = "pref" + (x.ancho === "entera" ? " entera" : "");
+  el.dataset.k = clave(x);
+  el.setAttribute("aria-label", `${n.cuadrado}: ${n.tabla}`);
+  el.innerHTML = `<div class="cab">
+      <button class="asa" type="button" title="Arrastra para mover" aria-label="Mover ${esc(n.tabla)}">⠿</button>
+      <div class="tit"><b>${esc(n.tabla)}</b><span>${esc(n.cuadrado)}</span></div>
+      <div class="mandos">
+        <button class="mini mover" type="button" data-m="-1" aria-label="Antes" title="Antes" ${i===0?"disabled":""}>←</button>
+        <button class="mini mover" type="button" data-m="1" aria-label="Después" title="Después" ${i===LISTA.length-1?"disabled":""}>→</button>
+        <select data-q="ancho" aria-label="Ancho">${opciones(ANCHOS, x.ancho)}</select>
+        <select data-q="alto" aria-label="Alto">${opciones(ALTOS, x.alto)}</select>
+        <a class="mini" href="${esc(PAGINA[x.c])}" title="Abrir su página">Abrir</a>
+        <button class="quita" type="button" title="Quitar de preferidos" aria-label="Quitar ${esc(n.tabla)} de preferidos">${ESTRELLA}</button>
+      </div>
+    </div>
+    <div class="marco"><iframe title="${esc(n.cuadrado)}: ${esc(n.tabla)}" loading="lazy"
+      src="${esc(PAGINA[x.c])}?solo=${encodeURIComponent(x.t)}"></iframe></div>`;
+  const f = el.querySelector("iframe");
+  f.style.height = (ALTO[x.alto] || ALTO.medio) + "px";
+  f.addEventListener("load", ()=>{
+    /* Un enlace de dentro que salga de la vista suelta (otra página entera)
+       se abre fuera del recuadro, no dentro. */
+    try{
+      f.contentDocument.addEventListener("click", e=>{
+        const a = e.target.closest && e.target.closest("a[href]");
+        if(a && !a.getAttribute("href").startsWith("#")){ e.preventDefault(); location.href = a.href; }
+      });
+    }catch(e){}
+    ajusta(f, x);
+  });
+  el.querySelectorAll("[data-m]").forEach(b=>b.addEventListener("click", ()=>mueve(clave(x), Number(b.dataset.m))));
+  el.querySelectorAll("select[data-q]").forEach(s=>s.addEventListener("change", ()=>{
+    x[s.dataset.q] = s.value;
+    el.classList.toggle("entera", x.ancho === "entera");
+    if(s.dataset.q === "alto"){ if(f._obs){ f._obs.disconnect(); f._obs = null; } ajusta(f, x); }
+    guarda();
+  }));
+  el.querySelector(".quita").addEventListener("click", ()=>{
+    LISTA = LISTA.filter(y => clave(y) !== clave(x));
+    el.remove(); guarda(); flechas();
+    if(!LISTA.length) vacio();
+  });
+  arrastre(el);
+  return el;
+}
+
+/* Las flechas del primero y del último, apagadas. */
+function flechas(){
+  const els = [...document.querySelectorAll(".pref")];
+  els.forEach((el, i)=>{
+    el.querySelector('[data-m="-1"]').disabled = i === 0;
+    el.querySelector('[data-m="1"]').disabled = i === els.length - 1;
+  });
+}
+
+/* Mover sin volver a cargar los recuadros: se mueve el nodo, y el iframe se
+   recarga solo si el navegador lo pide (Chromium lo recarga al moverlo). */
+function mueve(k, paso){
+  const i = LISTA.findIndex(x => clave(x) === k), j = i + paso;
+  if(i < 0 || j < 0 || j >= LISTA.length) return;
+  coloca(k, LISTA[j] ? clave(LISTA[j]) : null, paso > 0);
+  const el = document.querySelector(`.pref[data-k="${CSS.escape(k)}"] [data-m="${paso}"]`);
+  if(el && !el.disabled) el.focus();
+}
+function coloca(k, junto, despues){
+  if(k === junto) return;
+  const x = LISTA.find(y => clave(y) === k);
+  LISTA = LISTA.filter(y => clave(y) !== k);
+  let j = junto ? LISTA.findIndex(y => clave(y) === junto) : LISTA.length;
+  if(despues) j++;
+  LISTA.splice(j, 0, x);
+  const r = $("#rejilla"), el = r.querySelector(`.pref[data-k="${CSS.escape(k)}"]`);
+  const ref = LISTA[j+1] ? r.querySelector(`.pref[data-k="${CSS.escape(clave(LISTA[j+1]))}"]`) : null;
+  r.insertBefore(el, ref);
+  flechas(); guarda();
+}
+
+/* Arrastrar por el asa. Se suelta antes o después del recuadro de debajo,
+   según la mitad en la que caiga. */
+let ARRASTRA = null;
+function arrastre(el){
+  /* El recuadro entero se arrastra, pero sólo si se cogió por el asa: así los
+     selectores y la tabla de dentro siguen funcionando como siempre. */
+  let porAsa = false;
+  el.draggable = true;
+  el.addEventListener("pointerdown", e=>{ porAsa = !!e.target.closest(".asa"); });
+  el.addEventListener("dragstart", e=>{
+    if(!porAsa){ e.preventDefault(); return; }
+    ARRASTRA = el.dataset.k; el.classList.add("arrastrando");
+    e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", ARRASTRA);
+  });
+  el.addEventListener("dragend", ()=>{
+    porAsa = false; el.classList.remove("arrastrando"); ARRASTRA = null;
+    document.querySelectorAll(".destino-antes,.destino-despues").forEach(x=>x.classList.remove("destino-antes","destino-despues"));
+  });
+  el.addEventListener("dragover", e=>{
+    if(!ARRASTRA || ARRASTRA === el.dataset.k) return;
+    e.preventDefault();
+    const r = el.getBoundingClientRect();
+    const despues = (e.clientX - r.left) / r.width > .5;
+    el.classList.toggle("destino-despues", despues); el.classList.toggle("destino-antes", !despues);
+  });
+  el.addEventListener("dragleave", ()=>el.classList.remove("destino-antes","destino-despues"));
+  el.addEventListener("drop", e=>{
+    if(!ARRASTRA) return;
+    e.preventDefault();
+    const despues = el.classList.contains("destino-despues");
+    el.classList.remove("destino-antes","destino-despues");
+    coloca(ARRASTRA, el.dataset.k, despues);
+  });
+}
+
+function vacio(){
+  $("#rejilla").hidden = true; $("#ayuda").hidden = true;
+  let v = $("#vacio");
+  if(!v){ v = document.createElement("div"); v.id = "vacio"; v.className = "vacio"; $("#rejilla").after(v); }
+  v.innerHTML = `Todavía no tienes preferidos. Pulsa la estrella ${ESTRELLA} junto al título de cualquier tabla o
+    gráfico de las páginas del <a href="/operativo/">informe general</a> y saldrá aquí.`;
+}
+
+(async function arranca(){
+  let r;
+  try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(r.status === 401){ location.href = "/"; return; }
+  if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
+  const yo = await r.json();
+  if(yo.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  $("#quien").textContent = (yo.perfil ? yo.perfil + " · " : "") + (yo.nombre || yo.correo);
+
+  let rp;
+  try{ rp = await fetch("/api/preferidos", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(rp.status === 401){ location.href = "/"; return; }
+  $("#cargando").hidden = true;
+  if(!rp.ok){ avisa("Los preferidos no están disponibles ahora mismo.", true); return; }
+  const d = await rp.json();
+  LISTA = (d.preferidos || []).filter(x => PAGINA[x.c]);
+  NOMBRES = d.nombres || {};
+  $("#pie").textContent = "Cada recuadro es la tabla de su página, con sus filtros y con los mismos datos que "
+    + "ves allí. Lo que el administrador te quite deja de salir aquí también.";
+  $("#pie").hidden = false;
+  if(!LISTA.length) return vacio();
+  $("#ayuda").hidden = false;
+  const rej = $("#rejilla");
+  LISTA.forEach((x, i) => rej.appendChild(recuadro(x, i)));
+  rej.hidden = false;
+})();
+</script>
+</body>
+</html>

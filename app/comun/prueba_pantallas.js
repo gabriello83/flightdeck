@@ -470,6 +470,20 @@ const INDICE_CUADRO = {
   preventivos: { fuente: 'sat_averias' }, _preventivos: 'las tareas de SAT con operacion de preventivo'
 };
 
+// Los preferidos del usuario de la prueba (docs/62), y los nombres que manda la API.
+let PREFS = [];
+const NOMBRES_TABLAS = {
+  rutas: { nombre: 'Rutas', tablas: { rutas: 'Visitas por ruta', estado: 'Estado de las visitas',
+    maquinas: 'Máquinas no visitadas', delegaciones: 'Por delegación', festivos: 'Festivos por delegación' } },
+  averias: { nombre: 'Incidencias', tablas: { zonas: 'Total de incidencias por zona',
+    tecnicas: 'Los 10 centros con más averías técnicas', abiertas: 'Lista de incidencias y su ficha' } },
+  furgonetas: { nombre: 'Furgonetas', tablas: { vehiculos: 'Furgonetas con visitas', sin_vehiculo: 'Visitas sin vehículo',
+    delegaciones: 'Por delegación', dias: 'Furgonetas activas, día a día' } },
+  revision: { nombre: 'Revisión clientes', tablas: { planograma: 'Sin planograma', tarifa: 'Sin tarifa',
+    precio: 'Precio distinto', creados: 'Planogramas creados', usuarios: 'García y Marcos' } },
+  almacenes: { nombre: 'Almacenes', tablas: { productos: 'Productos de los almacenes' } }
+};
+
 const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8' };
 
 const servidor = http.createServer((pet, res) => {
@@ -521,6 +535,15 @@ const servidor = http.createServer((pet, res) => {
       if (c === null) return json(RESUMEN_TARIFAS);
       if (c !== CENTRO_TARIFAS.num_centro) { res.writeHead(400); return res.end('{"error":"Ese centro no está en las tarifas de este perfil."}'); }
       return json(CENTRO_TARIFAS);
+    }
+    if (u.pathname === '/api/preferidos') {
+      // Como la API: los guarda y los devuelve, con los nombres de cada tabla.
+      if (pet.method === 'PUT') {
+        let b = '';
+        pet.on('data', c => { b += c; });
+        return pet.on('end', () => { PREFS = JSON.parse(b).preferidos; json({ preferidos: PREFS }); });
+      }
+      return json({ preferidos: PREFS, nombres: NOMBRES_TABLAS });
     }
     if (API[u.pathname]) return json(API[u.pathname]);
     res.writeHead(404); return res.end('{"error":"no existe"}');
@@ -856,9 +879,9 @@ const servidor = http.createServer((pet, res) => {
     const { pagina, errores, fuera } = await abre('/operativo/');
     await pagina.waitForSelector('#cuadros .cuadro');
     comprueba('arranca en ayer', await pagina.inputValue('#dia'), iso(AYER));
-    comprueba('los once cuadrados, en su orden',
+    comprueba('los cuadrados en su orden, con Preferidos el primero',
       await pagina.$$eval('#cuadros .cuadro', x => x.map(c => c.dataset.id)),
-      ['rutas', 'averias', 'devoluciones', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas', 'revision', 'utilizo']);
+      ['preferidos', 'rutas', 'averias', 'devoluciones', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas', 'revision', 'utilizo']);
     comprueba('revision clientes: las maquinas sin planograma, sin semaforo, y lleva a su pagina',
       [(await pagina.textContent('.cuadro[data-id="revision"] .vl')).trim(),
        await pagina.$eval('.cuadro[data-id="revision"]', c => ['verde', 'amarillo', 'rojo'].some(k => c.classList.contains(k))),
@@ -1596,6 +1619,125 @@ const servidor = http.createServer((pet, res) => {
     comprueba('sin un solo error en la consola del navegador', x.errores, []);
     await x.pagina.close();
     delete API['/api/yo'].tablas_ocultas;
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  // ------------------------------------------------------------ preferidos
+  console.log('\nPreferidos (docs/62): la estrella y su pagina');
+  {
+    const FOTOS = process.env.FOTOS_USUARIOS;
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
+    PREFS = [];
+    let x = await abre('/rutas/');
+    await x.pagina.waitForSelector('[data-estrella="maquinas"] .estrella');
+    comprueba('rutas: una estrella junto al titulo de cada tabla, apagadas',
+      await x.pagina.$$eval('.estrella', b => b.map(e => [e.closest('[data-estrella]').dataset.estrella, e.getAttribute('aria-pressed')])),
+      [['rutas', 'false'], ['estado', 'false'], ['maquinas', 'false'], ['delegaciones', 'false'], ['festivos', 'false']]);
+    const guardado = () => x.pagina.waitForRequest(q => q.method() === 'PUT' && q.url().endsWith('/api/preferidos'));
+    let put = guardado();
+    await x.pagina.click('[data-estrella="maquinas"] .estrella');
+    comprueba('al pulsarla se pone amarilla y se guarda',
+      [await x.pagina.getAttribute('[data-estrella="maquinas"] .estrella', 'aria-pressed'), JSON.parse((await put).postData()).preferidos],
+      ['true', [{ c: 'rutas', t: 'maquinas', ancho: 'media', alto: 'medio' }]]);
+    comprueba_que('amarilla de verdad',
+      (await x.pagina.$eval('[data-estrella="maquinas"] .estrella svg', s => getComputedStyle(s).fill)) === 'rgb(245, 184, 0)');
+    await x.pagina.click('#pestanas button[data-p]:nth-child(2)');
+    await x.pagina.waitForTimeout(100);
+    comprueba_que('y sigue al repintar la tabla', (await x.pagina.$$('[data-estrella="maquinas"] .estrella[aria-pressed="true"]')).length === 1);
+    if (FOTOS) await x.pagina.screenshot({ path: path.join(FOTOS, 'estrella-rutas.png'), clip: { x: 0, y: 0, width: 1280, height: 700 } });
+    comprueba('ni una peticion fuera del dominio', x.fuera, []);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+
+    x = await abre('/furgonetas/');
+    await x.pagina.waitForSelector('#cajaTabla .estrella');
+    put = guardado();
+    await x.pagina.click('#pestanas button[data-p="sin"]');
+    await x.pagina.waitForTimeout(100);
+    await x.pagina.click('#cajaTabla .estrella');
+    await put;
+    comprueba('furgonetas: la estrella de las pestanas es la de la que se ve',
+      PREFS.map(p => p.t), ['maquinas', 'sin_vehiculo']);
+    await x.pagina.click('#pestanas button[data-p="vehiculos"]');
+    await x.pagina.waitForTimeout(100);
+    comprueba('al cambiar de pestana, la de esa otra (apagada)',
+      await x.pagina.getAttribute('#cajaTabla .estrella', 'aria-pressed'), 'false');
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+
+    x = await abre('/almacenes/');
+    await x.pagina.waitForSelector('.marca .estrella');
+    comprueba_que('una pagina de una sola tabla la lleva junto a su titulo',
+      (await x.pagina.$$('.marca b .estrella')).length === 1);
+    await x.pagina.close();
+
+    PREFS = [{ c: 'rutas', t: 'maquinas', ancho: 'media', alto: 'medio' },
+             { c: 'furgonetas', t: 'dias', ancho: 'media', alto: 'todo' },
+             { c: 'revision', t: 'tarifa', ancho: 'entera', alto: 'bajo' }];
+    x = await abre('/preferidos/');
+    await x.pagina.waitForSelector('.pref iframe');
+    comprueba('preferidos: un recuadro por tabla, en su orden y su ancho',
+      await x.pagina.$$eval('.pref', p => p.map(e => [e.dataset.k, e.classList.contains('entera')])),
+      [['rutas|maquinas', false], ['furgonetas|dias', false], ['revision|tarifa', true]]);
+    const marco = k => x.pagina.frameLocator(`.pref[data-k="${k}"] iframe`);
+    await marco('rutas|maquinas').locator('#tPdv table').waitFor();
+    const fr = x.pagina.frames().find(f => f.url().includes('/rutas/?solo=maquinas'));
+    comprueba('dentro, la pagina de rutas con solo esa tabla, sin cabecera ni estrellas',
+      await fr.evaluate(() => [...document.querySelectorAll('[data-tabla]')].filter(e => e.offsetParent).map(e => e.dataset.tabla)
+        .concat([document.querySelector('header').offsetParent === null, document.querySelectorAll('.estrella').length])),
+      ['maquinas', true, 0]);
+    await marco('furgonetas|dias').locator('#dias .barras').waitFor();
+    const ff = x.pagina.frames().find(f => f.url().includes('/furgonetas/?solo=dias'));
+    comprueba('furgonetas: solo el dia a dia',
+      await ff.evaluate(() => [!!document.querySelector('#cajaTabla').offsetParent, !!document.querySelector('[data-tabla="dias"]').offsetParent]),
+      [false, true]);
+    await marco('revision|tarifa').locator('#tabla h2').waitFor();
+    const fv = x.pagina.frames().find(f => f.url().includes('/revision/'));
+    comprueba('revision: abre en sin tarifa, sin los botones de las otras',
+      await fv.evaluate(() => [location.hash.includes('t=tarifa'), !!document.querySelector('#vista > .kpis').offsetParent]), [true, false]);
+    await x.pagina.waitForTimeout(400);
+    const altos = await x.pagina.$$eval('.pref iframe', f => f.map(e => e.getBoundingClientRect().height));
+    comprueba_que('alto medio 540, bajo 340, entero lo que mida', altos[0] === 540 && altos[2] === 340 && altos[1] > 160, JSON.stringify(altos));
+    if (FOTOS) {
+      await x.pagina.screenshot({ path: path.join(FOTOS, 'preferidos-claro.png'), fullPage: true });
+      await x.pagina.click('#bTema');
+      await x.pagina.waitForTimeout(300);
+      await x.pagina.screenshot({ path: path.join(FOTOS, 'preferidos-oscuro.png'), fullPage: true });
+      await x.pagina.click('#bTema');
+    }
+    let put2 = x.pagina.waitForRequest(q => q.method() === 'PUT' && q.url().endsWith('/api/preferidos'));
+    await x.pagina.click('.pref[data-k="furgonetas|dias"] [data-m="-1"]');
+    comprueba('mover antes cambia el orden y se guarda',
+      [await x.pagina.$$eval('.pref', p => p.map(e => e.dataset.k)), JSON.parse((await put2).postData()).preferidos.map(p => p.t)],
+      [['furgonetas|dias', 'rutas|maquinas', 'revision|tarifa'], ['dias', 'maquinas', 'tarifa']]);
+    put2 = x.pagina.waitForRequest(q => q.method() === 'PUT' && q.url().endsWith('/api/preferidos'));
+    // Los dos recuadros a la vista a la vez: mientras se arrastra no se desplaza.
+    await x.pagina.setViewportSize({ width: 1280, height: 2400 });
+    await x.pagina.dragAndDrop('.pref[data-k="revision|tarifa"] .asa', '.pref[data-k="furgonetas|dias"]', { targetPosition: { x: 20, y: 20 } });
+    comprueba('arrastrar por el asa tambien', JSON.parse((await put2).postData()).preferidos.map(p => p.t), ['tarifa', 'dias', 'maquinas']);
+    put2 = x.pagina.waitForRequest(q => q.method() === 'PUT' && q.url().endsWith('/api/preferidos'));
+    await x.pagina.selectOption('.pref[data-k="rutas|maquinas"] select[data-q="ancho"]', 'entera');
+    comprueba('el ancho se cambia y se guarda',
+      [await x.pagina.$eval('.pref[data-k="rutas|maquinas"]', e => e.classList.contains('entera')),
+       JSON.parse((await put2).postData()).preferidos.find(p => p.t === 'maquinas').ancho], [true, 'entera']);
+    put2 = x.pagina.waitForRequest(q => q.method() === 'PUT' && q.url().endsWith('/api/preferidos'));
+    await x.pagina.click('.pref[data-k="revision|tarifa"] .quita');
+    comprueba('la estrella del recuadro lo quita', [await x.pagina.$$eval('.pref', p => p.length),
+      JSON.parse((await put2).postData()).preferidos.length], [2, 2]);
+    await x.pagina.setViewportSize({ width: 380, height: 800 });
+    await x.pagina.waitForTimeout(300);
+    comprueba('en movil no se sale de la pantalla',
+      await x.pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    if (FOTOS) await x.pagina.screenshot({ path: path.join(FOTOS, 'preferidos-movil.png'), fullPage: false });
+    comprueba('ni una peticion fuera del dominio', x.fuera, []);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+
+    PREFS = [];
+    x = await abre('/preferidos/');
+    await x.pagina.waitForSelector('#vacio');
+    comprueba_que('sin ninguno, dice como se marcan', (await x.pagina.textContent('#vacio')).includes('Pulsa la estrella'));
+    await x.pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 

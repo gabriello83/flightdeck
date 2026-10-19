@@ -106,13 +106,15 @@ Resources:
                 "AWS:SourceArn": !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribucion}"
 
   # Las cabeceras de seguridad. Aqui va frame-ancestors, que en una etiqueta
-  # <meta> el navegador ignora: solo vale como cabecera HTTP.
+  # <meta> el navegador ignora: solo vale como cabecera HTTP. 'self' y
+  # SAMEORIGIN, no 'none': la pagina de preferidos (docs/62) mete en recuadros
+  # las paginas de este mismo dominio. Ninguna otra web puede incrustarlas.
   Cabeceras:
     Type: AWS::CloudFront::ResponseHeadersPolicy
     Properties:
       ResponseHeadersPolicyConfig:
         Name: !Sub "${Prefijo}-cabeceras"
-        Comment: Un solo origen, sin terceros, sin incrustar en otra pagina.
+        Comment: Un solo origen, sin terceros, sin incrustar en otra web.
         SecurityHeadersConfig:
           ContentSecurityPolicy:
             Override: true
@@ -125,14 +127,14 @@ Resources:
               connect-src 'self';
               form-action 'self';
               base-uri 'self';
-              frame-ancestors 'none';
+              frame-ancestors 'self';
               object-src 'none'
           StrictTransportSecurity:
             Override: true
             AccessControlMaxAgeSec: 31536000
             IncludeSubdomains: true
           ContentTypeOptions: { Override: true }
-          FrameOptions: { Override: true, FrameOption: DENY }
+          FrameOptions: { Override: true, FrameOption: SAMEORIGIN }
           ReferrerPolicy: { Override: true, ReferrerPolicy: same-origin }
         CustomHeadersConfig:
           Items:

@@ -331,6 +331,26 @@ def encamina(evento, metodo, ruta):
             escribe(clave, {"orden": [str(x)[:40] for x in orden]}, "ORDEN")
             return r(200, {"ok": True})
 
+    # Las tablas y graficos con estrella (docs/62): de cada usuario, en el
+    # servidor como el orden, para que los encuentre igual desde otro ordenador.
+    # Solo se guardan y se devuelven las que puede ver hoy.
+    if ruta == "/api/preferidos":
+        if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
+            raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
+        clave = f"PREF#{usuario['correo']}"
+        if metodo == "GET":
+            guardados = (lee(clave, "PREFERIDOS") or {}).get("preferidos")
+            return r(200, {"preferidos": A.preferidos_validos(guardados, perfil),
+                           "nombres": {c: {"nombre": A.NOMBRE_CUADRADO[c], "tablas": dict(A.TABLAS[c])}
+                                       for c in A.cuadrados_de(perfil) if c in A.TABLAS}})
+        if metodo == "PUT":
+            lista_ = cuerpo(evento).get("preferidos")
+            if not isinstance(lista_, list) or len(lista_) > 4 * A.MAX_PREFERIDOS:
+                raise ValueError("Preferidos no validos.")
+            buenos = A.preferidos_validos(lista_, perfil)
+            escribe(clave, {"preferidos": buenos}, "PREFERIDOS")
+            return r(200, {"preferidos": buenos})
+
     # El catalogo lo sirve la API para que el formulario del navegador no lleve
     # una copia que se quede vieja en cuanto alguien anada una fuente.
     if ruta == "/api/catalogo-alarmas" and metodo == "GET":

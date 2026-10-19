@@ -356,8 +356,9 @@ NOMBRE_CUADRADO = {
 }
 
 # Las tablas (y graficos) de la pagina de cada cuadrado, en el orden de la
-# pagina (docs/61). Solo salen los cuadrados cuya pagina tiene mas de una: en
-# los demas, quitar la tabla es quitar el cuadrado. id: nombre.
+# pagina (docs/61). En la consola solo se eligen las de las paginas con mas de
+# una: en las demas, quitar la tabla es quitar el cuadrado. Todas llevan su
+# estrella de preferidos (docs/62). id: nombre.
 TABLAS = {
     "rutas": {
         "rutas": "Visitas por ruta",
@@ -386,6 +387,12 @@ TABLAS = {
         "delegaciones": "Por delegación",
         "dias": "Furgonetas activas, día a día",
     },
+    # Las paginas de una sola tabla: en la consola van con su cuadrado, pero la
+    # tabla tiene su estrella de preferidos como las demas.
+    "almacenes": {"productos": "Productos de los almacenes"},
+    "telemetria": {"maquinas": "Máquinas por sistema de telemetría"},
+    "tarifas": {"centros": "Tarifas por centro"},
+    "utilizo": {"uso": "Uso de VenCloud por usuario"},
     "revision": {
         "planograma": "Sin planograma",
         "tarifa": "Sin tarifa",
@@ -560,3 +567,35 @@ def contexto_asistente(panel_recortado, perfil):
         },
         "datos": panel_recortado,
     }
+
+
+# ----------------------------------------------------------------------
+# los preferidos (docs/62)
+# ----------------------------------------------------------------------
+ANCHOS = ("media", "entera")
+ALTOS = ("bajo", "medio", "todo")
+MAX_PREFERIDOS = 40
+
+
+def preferidos_validos(lista, perfil):
+    """Las tablas preferidas de un usuario que existen y que puede ver hoy.
+
+    Lo que guardo antes de que se le quitara un cuadrado o una tabla no sale:
+    la estrella no abre nada que el administrador haya cerrado. Sin repetidas,
+    en el orden que eligio, con su ancho y su alto.
+    """
+    ve = {c: set(tablas_visibles(perfil, c)) for c in cuadrados_de(perfil)}
+    out, vistos = [], set()
+    for x in lista if isinstance(lista, list) else []:
+        if not isinstance(x, dict):
+            continue
+        c, t = x.get("c"), x.get("t")
+        if not isinstance(c, str) or not isinstance(t, str) or t not in ve.get(c, ()) or (c, t) in vistos:
+            continue
+        vistos.add((c, t))
+        out.append({"c": c, "t": t,
+                    "ancho": x.get("ancho") if x.get("ancho") in ANCHOS else "media",
+                    "alto": x.get("alto") if x.get("alto") in ALTOS else "medio"})
+        if len(out) >= MAX_PREFERIDOS:
+            break
+    return out

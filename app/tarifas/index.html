@@ -126,11 +126,12 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 }
 @media (max-width:360px){ .cuadros{grid-template-columns:1fr} }
 </style>
+<script src="/comun/preferidos.js"></script>
 </head>
 <body>
 <div class="env">
   <header class="top">
-    <div class="marca">
+    <div class="marca" data-estrella="centros">
       <b>Tarifas</b>
       <span id="quien"></span>
     </div>
@@ -464,6 +465,8 @@ function pinta(){
     + "tiene venta electrónica no entra en el porcentaje: se cuenta aparte. "
     + esc(RES.subvencion || "") + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;
+  /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
+  Preferidos.monta("tarifas", {});
 })();
 </script>
 </body>

@@ -139,6 +139,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   section.caja{padding:10px 10px 12px}
 }
 </style>
+<script src="/comun/preferidos.js"></script>
 </head>
 <body>
 <div class="env">
@@ -218,7 +219,7 @@ const TABLAS = [
 const ACCION = {I:"Alta", U:"Cambio", D:"Borrado"};
 let YO=null, D=null;
 /* Las tablas que el administrador le quitó a este usuario (docs/61). */
-let QUITADAS = new Set();
+let QUITADAS = new Set(), VISTA_T = null;
 
 function fechaCorta(s){
   const d = new Date(String(s).slice(0,10)+"T00:00:00");
@@ -321,6 +322,9 @@ function pinta(){
   }
   if(!vistas.includes(r.t)){ r.t = vistas[0]; r.m = null; }
   pintaFiltros(r);
+  /* La tabla que se ve, para su estrella de preferidos (docs/62); la ficha de
+     una máquina no es una tabla. */
+  VISTA_T = r.m ? null : r.t;
   if(r.t==="usuarios" && D.actividad) return vistaUsuarios(r);
   if(r.m && (r.t==="tarifa" || r.t==="precio")) return vistaMaquina(r);
   $("#miga").hidden = true;
@@ -420,7 +424,7 @@ function conectaKpis(v){
 }
 
 function cabecera(caja, titulo, explica, excel){
-  caja.innerHTML = `<div class="cabsec"><h2>${esc(titulo)}</h2>`
+  caja.innerHTML = `<div class="cabsec" data-estrella="*"><h2>${esc(titulo)}</h2>`
     + (excel ? `<button class="btn primario" id="bExcel" type="button">Descargar Excel</button>` : "")
     + `</div><p class="explica">${explica}</p>`;
   if(excel) $("#bExcel").addEventListener("click", excel);
@@ -729,6 +733,11 @@ function excelCreados(filas, dia){
   $("#pie").textContent = "Sin planograma es la misma regla que el bloque de instalaciones. Sin tarifa y precio distinto son el detalle de la página de tarifas, máquina a máquina: productos repuestos en seis meses, precio exacto por medio de pago."
     + (gen ? ` Calculado el ${gen.toLocaleString("es-ES")}.` : "");
   $("#pie").hidden = false;
+  /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
+  Preferidos.monta("revision", {
+    actual: () => VISTA_T,
+    abre: t => { if(ruta().t !== t || ruta().m) ir({t, m: ""}); },
+    ocultar: ["#vista > .kpis"]});
 })();
 </script>
 </body>

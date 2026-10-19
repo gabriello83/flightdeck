@@ -109,6 +109,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 th.num{text-align:right}
 @media (max-width:700px){ .num,th.num{text-align:left} }
 </style>
+<script src="/comun/preferidos.js"></script>
 </head>
 <body>
 <div class="env">
@@ -137,12 +138,12 @@ th.num{text-align:right}
     <div class="kpis" id="kpis"></div>
     <div class="pestanas" id="pestanas" role="tablist"></div>
     <section class="caja" id="cajaTabla">
-      <div class="cabsec"><h2 id="tTabla"></h2><span class="tenue" id="cuenta"></span></div>
+      <div class="cabsec" data-estrella="*"><h2 id="tTabla"></h2><span class="tenue" id="cuenta"></span></div>
       <p class="sub" id="sTabla"></p>
       <div class="tabla" id="tabla"></div>
     </section>
     <section class="caja" data-tabla="dias">
-      <div class="cabsec"><h2>Furgonetas activas, día a día</h2><span class="tenue" id="cuentaDias"></span></div>
+      <div class="cabsec" data-estrella="dias"><h2>Furgonetas activas, día a día</h2><span class="tenue" id="cuentaDias"></span></div>
       <p class="sub" id="sDias"></p>
       <div id="dias"></div>
     </section>
@@ -409,6 +410,11 @@ function csv(){
     + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
     + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;
+  /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
+  Preferidos.monta("furgonetas", {
+    actual: () => $("#cajaTabla").hidden ? null : TABLA_DE[PESTANA],
+    abre: t => { const p = Object.keys(TABLA_DE).find(k => TABLA_DE[k] === t); if(p){ PESTANA = p; pinta(); } },
+    ocultar: ["#kpis", "#pestanas"].concat(Preferidos.solo === "dias" ? ["#cajaTabla", "#bCsv"] : [])});
 })();
 </script>
 </body>

@@ -56,7 +56,8 @@ fichero sale tal cual, sin abrirlo, como antes.
 
 ## Qué tablas tiene cada cuadrado
 
-Sólo se ofrecen tablas en las páginas que tienen más de una (`autorizacion.TABLAS`):
+En la consola sólo se eligen tablas en las páginas que tienen más de una (`autorizacion.TABLAS`, que
+lleva también las de una sola tabla para la estrella de preferidos, docs/62):
 
 - **Rutas**: Visitas por ruta, Estado de las visitas, Máquinas no visitadas, Por delegación,
   Festivos por delegación.
