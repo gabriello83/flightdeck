@@ -538,6 +538,18 @@ del falsos.OBJETOS["cabina/ope-sur/operativo.json"]
 comprueba("sin calcular todavia, 503",
           llama("GET", "/api/operativo", cookie=COOKIE_OLGA)["statusCode"], 503)
 
+print("\nEl informe con historia (docs/66): comprimido, y el reparto por delegacion recortado igual")
+_dia_d = dict(_dia, por_delegacion={"rutas": {"Sur - Sevilla": {"previstas": 10, "hechas": 9}},
+                                    "telemetria": {"Sur - Sevilla": {"auditables": 3, "con_dex": 1}}})
+falsos.OBJETOS["cabina/ope-sur/operativo.json.gz"] = gzip.compress(json.dumps(dict(
+    _op, primer_dia="2025-01-01", zonas={"Sur - Sevilla": "Sur"},
+    dias={"2026-10-12": _dia_d})).encode())
+o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA))
+comprueba("lee el comprimido", (o["primer_dia"], o["zonas"]), ("2025-01-01", {"Sur - Sevilla": "Sur"}))
+comprueba("por delegacion, solo los cuadrados que ve",
+          sorted(o["dias"]["2026-10-12"]["por_delegacion"]), ["rutas"])
+del falsos.OBJETOS["cabina/ope-sur/operativo.json.gz"]
+
 print("\nTarifas (docs/52): el resumen del perfil, y un centro solo si es suyo")
 import gzip as _gz  # noqa: E402
 _res = {"total": {"pct": 80.0}, "delegaciones": [{"delegacion": "Sevilla", "centros": [

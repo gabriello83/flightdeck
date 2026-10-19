@@ -140,16 +140,46 @@ const API = {
   // El informe general operativo (docs/51), con la forma que escribe
   // infra/operativo.py ya recortada por la API: un dia con todo y uno sin plan.
   '/api/operativo': {
-    generado: new Date().toISOString(), ultimo_dia: iso(AYER), umbrales: { verde: 95, amarillo: 75 },
+    generado: new Date().toISOString(), ultimo_dia: iso(AYER), primer_dia: '2026-10-01', umbrales: { verde: 95, amarillo: 75 },
+    zonas: { 'Madrid - Leganes': 'Centro', 'Levante - Murcia': 'Levante', 'Levante - Valencia': 'Levante' },
     cuadrados: ['rutas', 'averias', 'devoluciones', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas', 'revision', 'utilizo'],
     dias: {
       [iso(AYER)]: {
         rutas: { previstas: 400, hechas: 350, pct: 87.5, color: 'amarillo', visitas: 1100, fuera_de_plan: 12 },
         averias: { cerradas: 43, a_tiempo: 30, pct: 69.8, color: 'rojo', horas: 24, sin_tarea: 2 },
-        furgonetas: { activas: 40, visitas: 1100, visitas_sin_vehiculo: 110 },
+        furgonetas: { activas: 3, visitas: 1100, visitas_sin_vehiculo: 110, vehiculos: ['1111AAA', '2222BBB', '3333CCC'] },
         ventas: { importe: 49859.02, unidades: 54119, maquinas: 1893, fuente: 'telemetria', imposibles: 0 },
         reposiciones: { unidades: 52168, por_clase: [{ clase: 'Snack', unidades: 30340 }, { clase: 'Bebida fría', unidades: 19448 }], consumibles: 88124, valor: 27616 },
-        telemetria: { auditables: 2253, con_dex: 2200, pct: 97.6, color: 'verde' }
+        telemetria: { auditables: 2253, con_dex: 2200, pct: 97.6, color: 'verde' },
+        // El reparto por delegacion (docs/66): cifras que se suman.
+        por_delegacion: {
+          rutas: { 'Madrid - Leganes': { previstas: 300, hechas: 290, fuera: 2, visitas: 800 },
+                   'Levante - Murcia': { previstas: 100, hechas: 60, fuera: 10, visitas: 300 } },
+          averias: { 'Madrid - Leganes': { cerradas: 40, a_tiempo: 29 }, 'Levante - Murcia': { cerradas: 3, a_tiempo: 1 } },
+          furgonetas: { 'Madrid - Leganes': { vehiculos: ['1111AAA', '2222BBB'], visitas: 800, visitas_sin_vehiculo: 100 },
+                        'Levante - Murcia': { vehiculos: ['2222BBB', '3333CCC'], visitas: 300, visitas_sin_vehiculo: 10 } },
+          ventas: { 'Madrid - Leganes': { importe: 40000, unidades: 44000, maquinas: 1500 },
+                    'Levante - Murcia': { importe: 9859.02, unidades: 10119, maquinas: 393 } },
+          reposiciones: { 'Madrid - Leganes': { unidades: 40000, consumibles: 80000, por_clase: { Snack: 25000, 'Bebida fría': 15000 } },
+                          'Levante - Murcia': { unidades: 12168, consumibles: 8124, por_clase: { Snack: 5340, 'Bebida fría': 4448 } } },
+          telemetria: { 'Madrid - Leganes': { auditables: 2000, con_dex: 1990 }, 'Levante - Murcia': { auditables: 253, con_dex: 210 } }
+        }
+      },
+      [iso(new Date(AYER.getTime() - 86400000))]: {
+        rutas: { previstas: 100, hechas: 50, pct: 50, color: 'rojo', visitas: 300, fuera_de_plan: 0 },
+        averias: { sin_dato: 'Ese día no se cerró ninguna avería.', cerradas: 0, sin_tarea: 0 },
+        furgonetas: { activas: 2, visitas: 300, visitas_sin_vehiculo: 0, vehiculos: ['3333CCC', '4444DDD'] },
+        ventas: { importe: 1000, unidades: 900, maquinas: 100, fuente: 'telemetria', imposibles: 0 },
+        reposiciones: { unidades: 1000, por_clase: [{ clase: 'Snack', unidades: 1000 }], consumibles: 0, valor: 1 },
+        telemetria: { auditables: 2253, con_dex: 53, pct: 2.4, color: 'rojo' },
+        por_delegacion: {
+          rutas: { 'Levante - Murcia': { previstas: 100, hechas: 50, fuera: 0, visitas: 300 } },
+          averias: {},
+          furgonetas: { 'Levante - Murcia': { vehiculos: ['3333CCC', '4444DDD'], visitas: 300, visitas_sin_vehiculo: 0 } },
+          ventas: { 'Levante - Murcia': { importe: 1000, unidades: 900, maquinas: 100 } },
+          reposiciones: { 'Levante - Murcia': { unidades: 1000, consumibles: 0, por_clase: { Snack: 1000 } } },
+          telemetria: { 'Madrid - Leganes': { auditables: 2000, con_dex: 0 }, 'Levante - Murcia': { auditables: 253, con_dex: 53 } }
+        }
       },
       '2026-10-01': {
         rutas: { sin_dato: 'Falta el plan de visitas.', visitas: 900 },
@@ -160,7 +190,7 @@ const API = {
         telemetria: { auditables: 2253, con_dex: 900, pct: 39.9, color: 'rojo' }
       }
     },
-    foto: { pdvs: { activos: 3195, maquinas: 3165 },
+    foto: { pdvs: { activos: 3195, maquinas: 3165, por_delegacion: { 'Madrid - Leganes': { activos: 3000, maquinas: 2900 }, 'Levante - Murcia': { activos: 195, maquinas: 265 } } },
             devoluciones: { mes: iso(AYER).slice(0, 7), hasta: iso(AYER), total: 518, mes_anterior: 569, sin_cerrar: 76, especiales: 92,
                             por_canal: [['En el sitio', 244], ['Transferencia', 181]] },
             tarifas: { pct: 81.3, color: 'amarillo', coinciden: 13, controlados: 16, sin_tarifa: 2, sin_dato_productos: 1, desde: '2026-04-14' },
@@ -891,7 +921,7 @@ const servidor = http.createServer((pet, res) => {
       catalogo_sesiones: { resumen: 'Resumen', venta_consumo: 'Venta y consumo', disponibilidad: 'Disponibilidad', instalaciones: 'Instalaciones y altas' } };
     const { pagina, errores, fuera } = await abre('/operativo/');
     await pagina.waitForSelector('#cuadros .cuadro');
-    comprueba('arranca en ayer', await pagina.inputValue('#dia'), iso(AYER));
+    comprueba_que('arranca en ayer', pagina.url().includes(`dia=${iso(AYER)}`), pagina.url());
     comprueba('los cuadrados en su orden, con Preferidos el primero',
       await pagina.$$eval('#cuadros .cuadro', x => x.map(c => c.dataset.id)),
       ['preferidos', 'rutas', 'averias', 'devoluciones', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas', 'revision', 'utilizo']);
@@ -931,12 +961,62 @@ const servidor = http.createServer((pet, res) => {
     comprueba('los que tienen pagina propia dicen Ver detalle',
       await pagina.$$eval('#cuadros .cuadro', x => x.filter(c => ['rutas', 'furgonetas', 'averias'].includes(c.dataset.id))
         .map(c => c.textContent.includes('Ver detalle'))), [true, true, true]);
-    await pagina.selectOption('#dia', '2026-10-01');
+    // El calendario (docs/66): el mes; pulsando el titulo, los meses; otra vez, los años.
+    await pagina.click('#bFecha');
+    comprueba_que('el calendario abre en el mes de ayer, con ayer marcado',
+      (await pagina.getAttribute('#cal .cal-rej button.sel', 'data-dia')) === iso(AYER));
+    comprueba_que('los dias sin dato salen apagados',
+      await pagina.$eval(`#cal .cal-rej button[data-dia="${iso(HOY)}"]`, b => b.disabled).catch(() => true));
+    await pagina.click('#cal .cal-cab .tit');
+    comprueba('pulsando el mes, los doce meses', await pagina.locator('#cal .cal-rej button').count(), 12);
+    await pagina.click('#cal .cal-cab .tit');
+    comprueba_que('pulsando el año, los años', (await pagina.$$eval('#cal .cal-rej button', x => x.map(b => b.dataset.anio))).includes(String(HOY.getFullYear() - (iso(AYER).slice(0, 4) === String(HOY.getFullYear()) ? 0 : 1))));
+    await pagina.click('#cal .cal-rej button:not(:disabled)');
+    await pagina.click('#cal .cal-rej button[data-mes="9"]');
+    await pagina.click('#cal .cal-rej button[data-dia="2026-10-01"]');
+    comprueba_que('elegir un dia lo pinta', pagina.url().includes('dia=2026-10-01'), pagina.url());
     comprueba_que('un dia sin plan dice el motivo, no un cero',
       (await pagina.textContent('.cuadro[data-id="rutas"]')).includes('Falta el plan de visitas'));
     comprueba('y ese cuadrado no lleva color de semaforo',
       await pagina.$eval('.cuadro[data-id="rutas"]', c => c.classList.contains('sin')), true);
-    await pagina.selectOption('#dia', iso(AYER));
+    comprueba_que('el calendario se cierra al elegir', await pagina.$eval('#cal', c => c.hidden));
+    await pagina.click('#bFecha');
+    await pagina.click('#cal .cal-pie button[data-atajo="ultimo"]');
+    comprueba_que('«Último día calculado» vuelve a ayer', pagina.url().includes(`dia=${iso(AYER)}`), pagina.url());
+
+    // Varios dias: lo que se suma se suma, el porcentaje sale del total y las
+    // furgonetas son las distintas.
+    const antier = iso(new Date(AYER.getTime() - 86400000));
+    await pagina.click('#mVarios');
+    await pagina.click('#bFecha');
+    await pagina.click(`#cal .cal-rej button[data-dia="${antier}"]`);
+    await pagina.click(`#cal .cal-rej button[data-dia="${iso(AYER)}"]`);
+    comprueba_que('el rango va en la direccion', pagina.url().includes(`desde=${antier}`) && pagina.url().includes(`hasta=${iso(AYER)}`), pagina.url());
+    comprueba('rutas de los dos dias: 400 de 500, el 80 %',
+      (await pagina.textContent('.cuadro[data-id="rutas"] .vl')).trim(), '80 %');
+    comprueba('furgonetas distintas en los dos dias: cuatro, no cinco',
+      (await pagina.textContent('.cuadro[data-id="furgonetas"] .vl')).trim(), '4');
+    comprueba('incidencias: el dia sin cierres no rebaja el porcentaje',
+      (await pagina.textContent('.cuadro[data-id="averias"] .vl')).trim(), '69,8 %');
+    comprueba_que('ventas sumadas', (await pagina.textContent('.cuadro[data-id="ventas"] .vl')).includes('50.859'));
+
+    // Area y delegacion.
+    comprueba('las areas del usuario', await pagina.$$eval('#area option', x => x.map(o => o.value)), ['', 'Centro', 'Levante']);
+    await pagina.selectOption('#area', 'Levante');
+    comprueba('el area deja sus delegaciones', await pagina.$$eval('#deleg option', x => x.map(o => o.value)),
+      ['', 'Levante - Murcia', 'Levante - Valencia']);
+    comprueba('rutas de Levante en los dos dias: 110 de 200',
+      (await pagina.textContent('.cuadro[data-id="rutas"] .vl')).trim(), '55 %');
+    comprueba('furgonetas de Levante: tres distintas',
+      (await pagina.textContent('.cuadro[data-id="furgonetas"] .vl')).trim(), '3');
+    comprueba('puntos de venta de Levante, de la foto', (await pagina.textContent('.cuadro[data-id="pdvs"] .vl')).trim(), '195');
+    comprueba_que('lo que no se reparte por delegacion lo dice',
+      (await pagina.textContent('.cuadro[data-id="tarifas"]')).includes('no se reparte por delegación'));
+    await pagina.selectOption('#deleg', 'Levante - Murcia');
+    comprueba_que('y la delegacion va en la direccion', pagina.url().includes('delegacion=Levante'), pagina.url());
+    await pagina.selectOption('#area', '');
+    await pagina.click('#mUno');
+    comprueba_que('un dia vuelve al ultimo del rango', pagina.url().includes(`dia=${iso(AYER)}`), pagina.url());
     comprueba('el cuadrado de averias se llama Incidencias',
       await pagina.textContent('.cuadro[data-id="averias"] .et'), 'Incidencias');
     await Promise.all([pagina.waitForURL('**/incidencias/**'), pagina.click('.cuadro[data-id="averias"]')]);

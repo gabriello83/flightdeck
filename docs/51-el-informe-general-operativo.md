@@ -62,9 +62,9 @@ abierta antes de la ventana de 120 días no se puede medir y se cuenta aparte (`
 
 El plan de un día pasado no se reconstruye con los maestros de hoy, las furgonetas distintas no se
 suman, y puntos de venta, telemetría auditable y almacenes son una foto. Así que la noche escribe
-`cabina/<perfil>/operativo.json` con los **últimos siete días** tal cual, encima de los que ya
-había (guarda 62). Cada día queda con el plan y el censo de la noche en que se cerró. En un relleno
-histórico no se escribe.
+`cabina/<perfil>/operativo.json.gz` con los **últimos siete días** tal cual, encima de los que ya
+había (guarda toda la historia, docs/66). Cada día queda con el plan y el censo de la noche en que se
+cerró. El relleno histórico también lo escribe, sin la foto (docs/66).
 
 El ámbito se aplica al escribir, como todo: un fichero por perfil. Los almacenes son de una
 delegación: un perfil acotado por clientes o centros no tiene almacenes y lo dice; uno por

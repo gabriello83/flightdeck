@@ -602,10 +602,16 @@ def recorta_operativo(datos, perfil):
     Lo que no ve no sale de aqui: ni en el dia, ni en la foto.
     """
     ve = cuadrados_de(perfil)
-    out = {k: datos.get(k) for k in ("generado", "ultimo_dia", "umbrales", "_nota")}
+    out = {k: datos.get(k) for k in ("generado", "ultimo_dia", "primer_dia", "umbrales", "zonas", "_nota")}
     out["cuadrados"] = ve
-    out["dias"] = {f: {c: v for c, v in (d or {}).items() if c in ve}
-                   for f, d in (datos.get("dias") or {}).items()}
+    dias = {}
+    for f, d in (datos.get("dias") or {}).items():
+        x = {c: v for c, v in (d or {}).items() if c in ve}
+        # El reparto por delegacion (docs/66), con la misma tijera.
+        if "por_delegacion" in (d or {}):
+            x["por_delegacion"] = {c: v for c, v in d["por_delegacion"].items() if c in ve}
+        dias[f] = x
+    out["dias"] = dias
     out["foto"] = {c: v for c, v in (datos.get("foto") or {}).items() if c in ve}
     return out
 
