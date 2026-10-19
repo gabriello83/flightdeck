@@ -317,7 +317,7 @@ const API = {
   '/api/estado-carga': { ultima_carga: new Date().toISOString(), dias_pedidos: [iso(AYER)], descargas_ok: 75, descargas_fallidas: 0, bytes: 12345678, filas_por_informe: { visita_cabecera: 1000 }, errores: [], retraso_dias: 0 },
   '/api/admin/usuarios': { usuarios: [{ _id: 'eva@airbus.com', nombre: 'Eva', perfil_id: 'cli-airbus', estado: 'activo' }] },
   '/api/admin/perfiles': {
-    perfiles: [{ _id: 'cli-airbus', nombre: 'AIRBUS', tipo: 'cliente', ambito: { centros: ['500092'] }, sesiones: ['resumen'], permisos: {}, panel: { existe: true, calculado: new Date().toISOString() } }],
+    perfiles: [{ _id: 'cli-airbus', nombre: 'AIRBUS', tipo: 'cliente', ambito: { centros: ['500092'] }, sesiones: ['resumen', 'cuadro'], permisos: {}, panel: { existe: true, calculado: new Date().toISOString() } }],
     catalogo_sesiones: { resumen: { nombre: 'Resumen', minimo: 'operaciones' }, cuadro: { nombre: 'Cuadro de mando', minimo: 'cliente' } },
     catalogo_cuadro: { indicadores: { nombre: 'Indicadores', flujos: ['ventas', 'visitas', 'incidencias'] },
                        articulos: { nombre: 'Mix de artículos', flujos: ['ventas'] },
@@ -664,6 +664,23 @@ const servidor = http.createServer((pet, res) => {
       (await pagina.textContent('#kpis .kpi .vl')).trim(), '999');
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
+
+    // Los paneles que el administrador le quito a su perfil (docs/63).
+    const todos = async () => {
+      const x = await abre('/panel/');
+      await x.pagina.waitForSelector('#rejilla .panel');
+      const ids = await x.pagina.$$eval('#rejilla .panel', p => p.map(e => e.dataset.id));
+      await x.pagina.close();
+      return ids;
+    };
+    const conTodos = await todos();
+    API['/api/yo'] = { ...API['/api/yo'], paneles_ocultos: ['centros', 'sat'] };
+    const sinDos = await todos();
+    comprueba_que('con paneles quitados no se dibujan',
+      conTodos.includes('centros') && conTodos.includes('sat') && !sinDos.includes('centros') && !sinDos.includes('sat'),
+      JSON.stringify(sinDos));
+    comprueba('y los demas siguen', sinDos, conTodos.filter(i => i !== 'centros' && i !== 'sat'));
+    delete API['/api/yo'].paneles_ocultos;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente' };
   }
 
@@ -768,6 +785,7 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('y lo elegido dice con cuantos centros encaja',
       (await pagina.textContent('#rDelegaciones')).includes('MADRID: 2 centros')
       && (await pagina.textContent('#rClientes')).includes('CONSUM: entero, 1 centro'), await pagina.textContent('#rClientes'));
+    await pagina.uncheck('#cajaSesiones input[value="cuadro"]');
     comprueba_que('sin el cuadro marcado no hay partes que elegir', !(await pagina.isVisible('#campoCuadro')));
     await pagina.check('#cajaSesiones input[value="cuadro"]');
     comprueba('al marcarlo salen todas, puestas',
@@ -1605,6 +1623,79 @@ const servidor = http.createServer((pet, res) => {
       if (FOTOS) await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-operativo.png'), fullPage: false });
       await c.pagina.selectOption('#fTipo', 'cliente');
       comprueba_que('un cliente no tiene informe operativo', !(await c.pagina.isVisible('#campoOperativo')));
+      comprueba('ni una peticion fuera del dominio', c.fuera, []);
+      comprueba('sin un solo error en la consola del navegador', c.errores, []);
+      await c.pagina.close();
+    }
+    API['/api/admin/perfiles'] = antesP;
+
+    // Al crear un perfil: el cuadro de mando de los clientes se enciende o se
+    // apaga, y en cada sesion del personal se eligen sus paneles (docs/63).
+    API['/api/admin/perfiles'] = { ...antesP, niveles: { cliente: 0, operaciones: 1, direccion: 2, admin: 3 },
+      catalogo_sesiones: {
+        resumen: { nombre: 'Resumen', minimo: 'operaciones', bloques: ['servicio', 'dinero'],
+          paneles: { visitas_dia: 'Visitas por día', semana: 'Patrón semanal' } },
+        rutas: { nombre: 'Rutas y jornada', minimo: 'operaciones', bloques: ['jornadas'], paneles: {} },
+        cuadro: { nombre: 'Cuadro de mando', minimo: 'cliente', bloques: [], paneles: {} } },
+      catalogo_cuadrados: { rutas: { nombre: 'Rutas', tablas: {}, bloque: 'servicio' } } };
+    {
+      const c = await abre('/consola/');
+      await c.pagina.waitForSelector('#pestanas button[data-s="perfiles"]');
+      await c.pagina.click('#pestanas button[data-s="perfiles"]');
+      comprueba_que('la lista dice si el cliente tiene el cuadro',
+        (await c.pagina.textContent('tr:has-text("cli-airbus")')).includes('Cuadro de mando'));
+      await c.pagina.click('#bNuevoPerfil');
+      comprueba('un cliente nuevo trae el cuadro encendido, con sus partes',
+        [await c.pagina.isVisible('#fCuadroOn'), await c.pagina.isChecked('#fCuadroOn'), await c.pagina.isVisible('#campoCuadro')],
+        [true, true, true]);
+      await c.pagina.uncheck('#fCuadroOn');
+      comprueba_que('apagado, no hay partes que elegir', !(await c.pagina.isVisible('#campoCuadro')));
+      if (FOTOS) await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-cliente-sin-cuadro.png'), fullPage: false });
+      await c.pagina.fill('#fPid', 'cli-prueba');
+      await c.pagina.fill('#fNombreP', 'Prueba');
+      let envio = new Promise(r => c.pagina.on('request', q => {
+        if (q.method() === 'POST' && q.url().endsWith('/api/admin/perfiles')) r(JSON.parse(q.postData()));
+      }));
+      await c.pagina.click('#bGuardar');
+      comprueba('se guarda sin la sesion del cuadro', (await envio).sesiones, []);
+
+      await c.pagina.waitForSelector('#bNuevoPerfil');
+      await c.pagina.click('#bNuevoPerfil');
+      await c.pagina.selectOption('#fTipo', 'operaciones');
+      comprueba_que('el personal no tiene el interruptor del cliente', !(await c.pagina.isVisible('#fCuadroOn')));
+      comprueba_que('sin la sesion marcada no salen sus paneles',
+        !(await c.pagina.isVisible('.sesion[data-s="resumen"] .paneles')));
+      await c.pagina.check('#cajaSesiones input[data-sesion][value="resumen"]');
+      comprueba('marcada, salen sus paneles, todos puestos',
+        await c.pagina.$$eval('.sesion[data-s="resumen"] input[data-panel]', x => x.map(i => [i.value, i.checked])),
+        [['visitas_dia', true], ['semana', true]]);
+      comprueba_que('una sesion sin paneles propios no ofrece ninguno',
+        (await c.pagina.locator('.sesion[data-s="rutas"] input[data-panel]').count()) === 0);
+      await c.pagina.uncheck('.sesion[data-s="resumen"] input[value="semana"]');
+      await c.pagina.selectOption('#fTipo', 'direccion');
+      comprueba('cambiar de tipo no pierde lo quitado',
+        await c.pagina.isChecked('.sesion[data-s="resumen"] input[value="semana"]'), false);
+      await c.pagina.check('#cajaSesiones input[data-sesion][value="resumen"]');
+      if (FOTOS) {
+        await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-paneles-claro.png'), fullPage: false });
+        await c.pagina.emulateMedia({ colorScheme: 'dark' });
+        await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-paneles-oscuro.png'), fullPage: false });
+        await c.pagina.emulateMedia({ colorScheme: 'light' });
+      }
+      await c.pagina.setViewportSize({ width: 380, height: 800 });
+      await c.pagina.waitForTimeout(200);
+      comprueba('en movil el dialogo no se sale de la pantalla',
+        await c.pagina.evaluate(() => document.querySelector('#dlg').scrollWidth <= window.innerWidth), true);
+      if (FOTOS) await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-paneles-movil.png'), fullPage: false });
+      await c.pagina.setViewportSize({ width: 1280, height: 800 });
+      await c.pagina.fill('#fPid', 'dir-prueba');
+      await c.pagina.fill('#fNombreP', 'Prueba');
+      envio = new Promise(r => c.pagina.on('request', q => {
+        if (q.method() === 'POST' && q.url().endsWith('/api/admin/perfiles')) r(JSON.parse(q.postData()));
+      }));
+      await c.pagina.click('#bGuardar');
+      const cuerpo = await envio;
+      comprueba('se guardan la sesion y el panel quitado', [cuerpo.sesiones, cuerpo.paneles_ocultos], [['resumen'], ['semana']]);
       comprueba('ni una peticion fuera del dominio', c.fuera, []);
       comprueba('sin un solo error en la consola del navegador', c.errores, []);
       await c.pagina.close();

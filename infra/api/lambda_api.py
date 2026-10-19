@@ -148,6 +148,8 @@ def encamina(evento, metodo, ruta):
             "cuadrados": A.cuadrados_de(perfil)
             if A.nivel_de(perfil.get("tipo", "cliente")) >= A.NIVEL["operaciones"] else [],
             "tablas_ocultas": perfil.get("tablas_ocultas") or {},
+            # Los paneles de /panel/ que su perfil no ve (docs/63).
+            "paneles_ocultos": A.paneles_ocultos(perfil),
             "permisos": permisos,
             "asistente": {"habilitado": ok_ia, "motivo": motivo},
             "umbral": perfil.get("reglas_negocio", {}).get(
@@ -889,7 +891,8 @@ def administra(evento, metodo, ruta, admin):
                                        "solo_direccion": c in A.SOLO_DIRECCION,
                                        "sin_ambito": c in A.SIN_AMBITO}
                                    for c, bloque in A.CUADRADOS},
-            "catalogo_sesiones": {k: {"nombre": v[0], "minimo": v[1], "bloques": list(v[2])}
+            "catalogo_sesiones": {k: {"nombre": v[0], "minimo": v[1], "bloques": list(v[2]),
+                                      "paneles": dict(A.PANELES_SESION.get(k, {}))}
                                   for k, v in A.SESIONES.items()},
             # Las partes del cuadro, para las casillas de «Qué ve en el cuadro».
             "catalogo_cuadro": {k: {"nombre": v[0], "flujos": list(v[1])}
@@ -920,6 +923,8 @@ def administra(evento, metodo, ruta, admin):
             # Las partes del cuadro que se le QUITAN; vacio = las ve todas.
             "cuadro_ocultas": [s for s in (d.get("cuadro_ocultas") or [])
                                if s in A.SECCIONES_CUADRO],
+            # Y los paneles de /panel/ que se le QUITAN (docs/63).
+            "paneles_ocultos": A.paneles_ocultos(d),
             # Se guarda lo que marque el admin; el techo se aplica al servir.
             "permisos": {k: bool(v) for k, v in (d.get("permisos") or {}).items()},
             "reglas_negocio": d.get("reglas_negocio") or {},

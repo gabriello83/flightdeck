@@ -107,6 +107,41 @@ def flujos_cuadro(perfil):
     return [f for f in TODOS_FLUJOS if f in pedidos]
 
 
+# ----------------------------------------------------------------------
+# los paneles de cada sesion (docs/63)
+# ----------------------------------------------------------------------
+# Lo que dibuja /panel/ dentro de cada sesion, en el orden de la pagina. El
+# perfil guarda los que se le QUITAN (`paneles_ocultos`), como cuadro_ocultas:
+# un panel nuevo sale a todos sin tocar ningun perfil. Una sesion que no esta
+# aqui no tiene paneles propios en /panel/ (da cuadrados del informe operativo,
+# o pantallas de la consola). «inc_detalle» son las tablas de cada clase de
+# instalacion a medias, que la pagina pinta una por clase (inc_<clase>).
+#
+# Se quitan en la pagina, no en el fichero: los paneles de una sesion salen de
+# los mismos bloques, y quitar un bloque dejaria a los demas con ceros que no
+# son ceros. Para que un dato no llegue, se quita la sesion entera.
+PANELES_SESION = {
+    "resumen": {"visitas_dia": "Visitas por día", "centros": "Visitas por centro",
+                "semana": "Patrón semanal", "duracion": "Duración de la visita"},
+    "venta_consumo": {"recaudacion": "Recaudación por mes", "ciego": "Efectivo sin telemetría",
+                      "carga": "Reposición del periodo"},
+    "servicio": {"merma": "Merma por motivo", "merma_art": "Caducidad por artículo"},
+    "disponibilidad": {"sat": "Disponibilidad y averías", "reincidentes": "Máquinas reincidentes"},
+    "instalaciones": {"censo": "Lo que hay instalado", "altas": "Altas recientes",
+                      "incidencias": "Instalaciones a medias",
+                      "inc_detalle": "Instalaciones a medias, una tabla por clase"},
+}
+PANELES = {p for d in PANELES_SESION.values() for p in d}
+
+
+def paneles_ocultos(perfil):
+    """Los paneles de /panel/ que este perfil no ve. Solo ids del catalogo."""
+    pedidos = perfil.get("paneles_ocultos")
+    if not isinstance(pedidos, list):
+        return []
+    return [p for d in PANELES_SESION.values() for p in d if p in pedidos]
+
+
 # Lo que cada flujo pone en el indice (por mes y en cabecera) y en un mes.
 _CAMPOS_MES_INDICE = {
     "ventas": ("filas", "unidades", "importe", "maquinas_con_venta", "fuente"),

@@ -840,9 +840,16 @@ function conPeriodo(base, T, hoy){
 let PANELES=[], PANEL=null, YO=null, ORDEN=[], FILTRO="todo";
 let PANEL_VENTANA=null, SERIE=null, SELECTOR=null;
 
+/* Los paneles que el administrador le quitó a su perfil (docs/63). Las tablas
+   de cada clase de instalación a medias van juntas: «inc_detalle». */
+function quitado(p){
+  const fuera = (YO && YO.paneles_ocultos) || [];
+  return fuera.includes(p.id.startsWith("inc_") ? "inc_detalle" : p.id);
+}
+
 function visibles(){
   const ses = new Set((YO&&YO.sesiones)||[]);
-  const dentro = PANELES.filter(p => !p.sesion || ses.has(p.sesion));
+  const dentro = PANELES.filter(p => (!p.sesion || ses.has(p.sesion)) && !quitado(p));
   const filtrados = FILTRO==="todo" ? dentro : dentro.filter(p=>p.sesion===FILTRO);
   if(!ORDEN.length) return filtrados;
   const porId=new Map(filtrados.map(p=>[p.id,p]));
@@ -947,7 +954,7 @@ $("#bSalir").addEventListener("click", async ()=>{
 
 function pintaFiltros(){
   const cont=$("#filtros");
-  const ses = (YO.sesiones||[]).filter(s => PANELES.some(p=>p.sesion===s));
+  const ses = (YO.sesiones||[]).filter(s => PANELES.some(p=>p.sesion===s && !quitado(p)));
   if(ses.length < 2) return;                    /* con una sola, el filtro estorba */
   const cat = YO.catalogo_sesiones || {};
   const todos = [["todo","Todo"]].concat(ses.map(s=>[s, cat[s]||s]));

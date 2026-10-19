@@ -110,6 +110,10 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--s1);outline-offs
 .marcas label.fuera span{text-decoration:line-through}
 .marcas .porque{font-size:11.5px;color:var(--tinta-3);text-decoration:none}
 .cuadros-perfil{margin:2px 0 0;font-size:13.5px;color:var(--tinta-2)}
+.marcas .sesion{display:grid;gap:4px;align-content:start}
+.marcas .sesion.con-paneles{grid-column:1/-1;border:1px solid var(--borde);border-radius:8px;padding:7px 10px}
+.marcas .paneles{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;padding-left:24px;font-size:13px}
+.marcas .paneles[hidden]{display:none}
 /* Los cuadrados del usuario, cada uno con sus tablas debajo (docs/61). */
 .cuadrados{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px 14px}
 .cuadrados fieldset{border:1px solid var(--borde);border-radius:8px;padding:8px 10px;margin:0;min-width:0}
@@ -488,7 +492,10 @@ function vistaPerfiles(){
       <td><b>${esc(p.nombre||p._id)}</b><br><span class="cond">${esc(p._id)}</span></td>
       <td data-et="Tipo">${esc(tipoLegible(p.tipo||"cliente"))}</td>
       <td data-et="Ámbito"><span class="cond">${esc(trozos.join(" · ") || (pan.existe ? "todo (interno)" : "sin ámbito: no se calcula"))}</span></td>
-      <td data-et="Sesiones" class="n">${num((p.sesiones||[]).length)}</td>
+      <td data-et="Sesiones" class="n">${(p.tipo||"cliente")==="cliente"
+        ? ((p.sesiones||[]).includes("cuadro") ? "Cuadro de mando" : `<span class="pill c">sin cuadro</span>`)
+        : num((p.sesiones||[]).length) + ((p.paneles_ocultos||[]).length
+          ? `<br><span class="cond">${num(p.paneles_ocultos.length)} panel${p.paneles_ocultos.length===1?"":"es"} quitado${p.paneles_ocultos.length===1?"":"s"}</span>` : "")}</td>
       <td data-et="Usuarios" class="n">${num(cuantos)}</td>
       <td data-et="Panel">${panel}</td>
       <td class="n">
@@ -519,7 +526,7 @@ function formPerfil(pid){
     <div class="fila">
       <div class="campo">
         <label for="fPid">Identificador</label>
-        <input id="fPid" required maxlength="40" pattern="[a-z0-9-]+" ${p?"disabled":""} value="${esc(p?p._id:"")}" placeholder="cli-airbus">
+        <input id="fPid" required maxlength="40" pattern="[a-z0-9\\-]+" ${p?"disabled":""} value="${esc(p?p._id:"")}" placeholder="cli-airbus">
         <p class="pista">Minúsculas y guiones. No se cambia después: es el nombre de la carpeta de su panel.</p>
       </div>
       <div class="campo">
@@ -565,6 +572,13 @@ function formPerfil(pid){
         como dice cada casilla de arriba. Revisión clientes, Tarifas y Telemetría van con
         «Instalaciones y altas». Luego, a cada usuario se le pueden quitar cuadrados y tablas.</p>
     </div>
+    <div class="campo" id="campoCuadroOn">
+      <label>Cuadro de mando</label>
+      <div class="marcas"><label><input type="checkbox" id="fCuadroOn" ${!p || (p.sesiones||[]).includes("cuadro") ? "checked" : ""}>
+        <span>Activado</span></label></div>
+      <p class="pista">Es lo único que ve un cliente. Apagado, sus usuarios entran y leen que su perfil todavía no
+        tiene el cuadro de mando: no se les enseña nada más.</p>
+    </div>
     <div class="campo" id="campoCuadro">
       <label>Qué ve en el cuadro de mando</label>
       <div class="marcas" id="cajaCuadro"></div>
@@ -588,8 +602,11 @@ function formPerfil(pid){
       const esCliente = $("#fTipo").value === "cliente";
       /* Un cliente sólo tiene el cuadro de mando, y lo tiene siempre: por eso
          no se le enseñan las sesiones. */
-      const sesiones = esCliente ? ["cuadro"]
-        : [...document.querySelectorAll("#cajaSesiones input:checked")].map(i=>i.value);
+      const sesiones = esCliente ? ($("#fCuadroOn").checked ? ["cuadro"] : [])
+        : [...document.querySelectorAll("#cajaSesiones input[data-sesion]:checked")].map(i=>i.value);
+      /* Los paneles que se le QUITAN, como las partes del cuadro (docs/63). */
+      const paneles_ocultos = esCliente ? []
+        : [...document.querySelectorAll("#cajaSesiones input[data-panel]:not(:checked)")].map(i=>i.value);
       /* Se guardan las partes que se le QUITAN: una parte nueva del cuadro le
          saldrá sin tener que volver a editar el perfil. */
       const cuadro_ocultas = [...document.querySelectorAll("#cajaCuadro input:not(:checked)")].map(i=>i.value);
@@ -601,7 +618,7 @@ function formPerfil(pid){
         nombre: $("#fNombreP").value.trim(),
         tipo: $("#fTipo").value,
         ambito: ambito(esCliente),
-        sesiones, permisos, cuadro_ocultas,
+        sesiones, permisos, cuadro_ocultas, paneles_ocultos,
         reglas_negocio: umbral ? {umbral_rentabilidad_mes: Number(umbral)} : {},
       });
       avisa(res.ignorados && res.ignorados.length
@@ -617,6 +634,7 @@ function formPerfil(pid){
     $("#campoSesiones").hidden = esCliente;
     $("#campoDelegaciones").hidden = esCliente;
     $("#campoOperativo").hidden = esCliente;
+    $("#campoCuadroOn").hidden = !esCliente;
     pintaOperativoPerfil();
   };
   $("#fTipo").addEventListener("change", repinta);
@@ -641,7 +659,7 @@ function pintaOperativoPerfil(){
   const tipo = $("#fTipo").value;
   const nivel = NIVELES[tipo] != null ? NIVELES[tipo] : 0;
   const sesiones = tipo === "admin" ? Object.keys(SESIONES)
-    : [...document.querySelectorAll("#cajaSesiones input:checked")].map(i=>i.value);
+    : [...document.querySelectorAll("#cajaSesiones input[data-sesion]:checked")].map(i=>i.value);
   const bloques = new Set([].concat(...sesiones.map(s=>(SESIONES[s] || {}).bloques || [])));
   const amb = AMBITO_PERFIL ? AMBITO_PERFIL(false) : {};
   const conAmbito = ["clientes","centros","delegaciones"].some(k=>(amb[k] || []).length);
@@ -922,10 +940,12 @@ function pintaCuadro(p){
       <span>${esc(c.nombre)}</span></label>`).join("");
   const mira = () => {
     const conCuadro = $("#fTipo").value === "cliente"
-      || !!document.querySelector('#cajaSesiones input[value="cuadro"]:checked');
+      ? $("#fCuadroOn").checked
+      : !!document.querySelector('#cajaSesiones input[value="cuadro"]:checked');
     $("#campoCuadro").hidden = !conCuadro;
   };
   $("#cajaSesiones").addEventListener("change", mira);
+  $("#fCuadroOn").addEventListener("change", mira);
   $("#fTipo").addEventListener("change", mira);
   mira();
 }
@@ -935,14 +955,31 @@ function pintaCasillas(p){
   const nivel = NIVELES[tipo] != null ? NIVELES[tipo] : 0;
   /* Un perfil de cliente nuevo trae marcado el cuadro: es lo único que puede tener. */
   const puestas = new Set(p ? (p.sesiones||[]) : (tipo==="cliente" ? ["cuadro"] : []));
+  /* Lo que se marque de las casillas sobrevive a un cambio de tipo. */
+  const antes = document.querySelector("#cajaSesiones input[data-panel]")
+    ? new Set([...document.querySelectorAll("#cajaSesiones input[data-panel]:not(:checked)")].map(i=>i.value))
+    : new Set((p && p.paneles_ocultos) || []);
+  /* Cada sesión con sus paneles debajo (docs/63): marcada la sesión, se
+     eligen los que ve dentro. Todos puestos de serie; se guarda lo quitado. */
   $("#cajaSesiones").innerHTML = Object.entries(SESIONES).map(([id,s])=>{
     const alcanza = (NIVELES[s.minimo] != null ? NIVELES[s.minimo] : 0) <= nivel;
-    return `<label class="${alcanza?"":"fuera"}">
-      <input type="checkbox" value="${esc(id)}" ${puestas.has(id)?"checked":""} ${alcanza?"":"disabled"}>
+    const paneles = Object.entries(s.paneles || {});
+    return `<div class="sesion${paneles.length && alcanza ? " con-paneles" : ""}" data-s="${esc(id)}">
+      <label class="${alcanza?"":"fuera"}">
+      <input type="checkbox" data-sesion value="${esc(id)}" ${puestas.has(id)?"checked":""} ${alcanza?"":"disabled"}>
       <span>${esc(s.nombre)}</span>${alcanza
         ? (cuadradosDeSesion(id).length ? `<span class="porque">· ${esc(cuadradosDeSesion(id).join(", "))}</span>` : "")
-        : `<span class="porque">· desde ${esc(tipoLegible(s.minimo))}</span>`}</label>`;
+        : `<span class="porque">· desde ${esc(tipoLegible(s.minimo))}</span>`}</label>
+      ${paneles.length && alcanza ? `<div class="paneles" ${puestas.has(id) ? "" : "hidden"}>
+        <span class="porque">En el panel ve:</span>
+        ${paneles.map(([pid, n])=>`<label><input type="checkbox" data-panel value="${esc(pid)}" ${antes.has(pid)?"":"checked"}>
+          <span>${esc(n)}</span></label>`).join("")}</div>` : ""}
+    </div>`;
   }).join("");
+  $("#cajaSesiones").querySelectorAll("input[data-sesion]").forEach(i=>i.addEventListener("change", ()=>{
+    const caja = i.closest(".sesion").querySelector(".paneles");
+    if(caja) caja.hidden = !i.checked;
+  }));
 
   const techo = new Set(TECHO[tipo] || []);
   const implicitos = new Set(IMPLICITOS[tipo] || []);
