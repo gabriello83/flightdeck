@@ -403,6 +403,11 @@ llama("POST", "/api/admin/perfiles",
 comprueba("quitar una parte cuyo flujo usa otra no quita el dato",
           cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))["cuadro"]["flujos"],
           ["ventas", "visitas", "incidencias"])
+llama("POST", "/api/admin/perfiles",
+      dict(_perfil_airbus, perfil_id="cli-airbus", sesiones=[]), cookie=COOKIE_JEFE)
+comprueba("un cliente con el cuadro apagado no lo tiene (docs/63)",
+          ("cuadro" in cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_ANA))["sesiones"],
+           llama("GET", "/api/cuadro", cookie=COOKIE_ANA)["statusCode"]), (False, 403))
 pon_fila("PERFIL#cli-airbus", dict(_perfil_airbus, sesiones=["resumen", "cuadro"]))
 
 del falsos.OBJETOS["cabina/cli-airbus/cuadro/indice.json"]
@@ -804,6 +809,23 @@ comprueba("y con que sesion sale cada cuadrado: Revision con Instalaciones y alt
            _pf["catalogo_cuadrados"]["utilizo"]["solo_direccion"], _pf["catalogo_cuadrados"]["utilizo"]["sin_ambito"],
            _pf["catalogo_cuadrados"]["revision"]["sin_ambito"]),
           (["instalaciones"], True, True, False))
+
+print("\nLos paneles de cada sesion (docs/63)")
+_ope0 = L.lee("PERFIL#ope-sur")
+comprueba("la consola recibe los paneles de cada sesion",
+          (_pf["catalogo_sesiones"]["resumen"]["paneles"]["semana"], _pf["catalogo_sesiones"]["rutas"]["paneles"]),
+          ("Patrón semanal", {}))
+llama("POST", "/api/admin/perfiles",
+      {"perfil_id": "ope-sur", "nombre": "Operaciones Sur", "tipo": "operaciones",
+       "ambito": _ope0.get("ambito"), "sesiones": _ope0.get("sesiones"),
+       "paneles_ocultos": ["semana", "no-existe", "inc_detalle"]}, cookie=COOKIE_JEFE)
+comprueba("se guardan los quitados, sin los que no existen",
+          L.lee("PERFIL#ope-sur")["paneles_ocultos"], ["semana", "inc_detalle"])
+comprueba("y /api/yo se los dice a la pagina",
+          cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_OLGA))["paneles_ocultos"], ["semana", "inc_detalle"])
+comprueba("algo que no es una lista no quita nada",
+          L.A.paneles_ocultos({"paneles_ocultos": "semana"}), [])
+pon_fila("PERFIL#ope-sur", _ope0)
 
 print("\nPreferidos (docs/62): de cada usuario, y solo lo que puede ver")
 comprueba("un cliente no tiene", llama("GET", "/api/preferidos", cookie=COOKIE_ANA)["statusCode"], 403)

@@ -218,6 +218,24 @@ comprueba("cada cuadrado con tablas es un cuadrado de verdad",
 comprueba("y cada recorte, de una tabla del catalogo",
           all(t in A.TABLAS[c] for c, rs in A._SOLO_DE_UNA.items() for t, _, _ in rs), True)
 
+print("\nLos paneles de cada sesion (docs/63)")
+# El catalogo y la pagina tienen que decir lo mismo: un panel que no este en el
+# catalogo no se podria quitar, y uno del catalogo que no exista seria una
+# casilla que no hace nada.
+import os  # noqa: E402
+import re as _re  # noqa: E402
+_html = open(os.path.join(os.path.dirname(__file__), "..", "..", "app", "panel", "index.html"),
+             encoding="utf-8").read()
+_pag = {}
+for _id, _ses in _re.findall(r'paneles\.push\(\{ id:("[a-z_]+"|"inc_"\+x\.k), sesion:"([a-z_]+)"', _html):
+    _pag.setdefault(_ses, set()).add("inc_detalle" if "+" in _id else _id.strip('"'))
+comprueba("cada panel de /panel/ esta en el catalogo, en su sesion",
+          {k: sorted(v) for k, v in _pag.items()},
+          {k: sorted(v) for k, v in A.PANELES_SESION.items()})
+comprueba("y cada sesion del catalogo existe", set(A.PANELES_SESION) <= set(A.SESIONES), True)
+comprueba("se quitan solo los del catalogo, en su orden",
+          A.paneles_ocultos({"paneles_ocultos": ["inc_detalle", "x", "semana"]}), ["semana", "inc_detalle"])
+
 print()
 if fallos:
     print(f"{len(fallos)} PRUEBAS FALLIDAS: {', '.join(fallos)}")
