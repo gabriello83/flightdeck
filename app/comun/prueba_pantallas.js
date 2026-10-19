@@ -767,25 +767,19 @@ const servidor = http.createServer((pet, res) => {
     let cuerpo = await envio;
     comprueba('se guarda: el cliente con centros marcados, solo sus centros; y solo el cuadro',
       [cuerpo.ambito, cuerpo.sesiones],
-      [{ clientes: [], centros: ['500092', '500100'], delegaciones: [] }, ['cuadro']]);
+      [{ clientes: [], centros: ['500092', '500100'] }, ['cuadro']]);
 
     console.log('  · un perfil de operaciones');
     await pagina.waitForSelector('[data-ed="cli-airbus"]');
     await pagina.click('[data-ed="cli-airbus"]');
     await pagina.selectOption('#fTipo', 'operaciones');
-    comprueba('tiene delegaciones y sesiones',
-      [await pagina.isVisible('#campoDelegaciones'), await pagina.isVisible('#campoSesiones')], [true, true]);
+    comprueba('tiene sesiones, y las delegaciones ya no (se eligen en cada usuario, docs/65)',
+      [await pagina.isVisible('#campoSesiones'), await pagina.$('#fDelegaciones') === null], [true, true]);
     await pagina.click('#mClientes .elegido button');
     await pagina.click('#fClientes');
     await pagina.click('#fClientesLista li:has-text("CONSUM")');
-    await pagina.click('#fDelegaciones');
-    await pagina.keyboard.type('zz');
-    comprueba_que('lo que no esta en los datos se dice', await pagina.isVisible('#fDelegacionesLista li.nada'));
-    await pagina.fill('#fDelegaciones', 'mad');
-    await pagina.keyboard.press('Enter');
-    comprueba_que('y lo elegido dice con cuantos centros encaja',
-      (await pagina.textContent('#rDelegaciones')).includes('MADRID: 2 centros')
-      && (await pagina.textContent('#rClientes')).includes('CONSUM: entero, 1 centro'), await pagina.textContent('#rClientes'));
+    comprueba_que('lo elegido dice con cuantos centros encaja',
+      (await pagina.textContent('#rClientes')).includes('CONSUM: entero, 1 centro'), await pagina.textContent('#rClientes'));
     await pagina.uncheck('#cajaSesiones input[value="cuadro"]');
     comprueba_que('sin el cuadro marcado no hay partes que elegir', !(await pagina.isVisible('#campoCuadro')));
     await pagina.check('#cajaSesiones input[value="cuadro"]');
@@ -795,8 +789,8 @@ const servidor = http.createServer((pet, res) => {
     envio = guardado();
     await pagina.click('#bGuardar');
     cuerpo = await envio;
-    comprueba('se guarda el cliente entero y la delegacion', [cuerpo.ambito, cuerpo.sesiones],
-      [{ clientes: ['CONSUM'], centros: [], delegaciones: ['MADRID'] }, ['resumen', 'cuadro']]);
+    comprueba('se guarda el cliente entero, sin delegaciones', [cuerpo.ambito, cuerpo.sesiones],
+      [{ clientes: ['CONSUM'], centros: [] }, ['resumen', 'cuadro']]);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
@@ -1543,6 +1537,8 @@ const servidor = http.createServer((pet, res) => {
     await pagina.waitForSelector('[data-ed="olga@serunion.es"]');
     comprueba_que('la lista de usuarios dice lo que se le ha quitado',
       (await pagina.textContent('body')).includes('4 de 5 cuadrados · 1 tabla quitada'));
+    comprueba_que('y las delegaciones que ve: sin marcar, las de su perfil de antes',
+      (await pagina.textContent('tr:has-text("olga@serunion.es") td[data-et="Delegaciones"]')).includes('SEVILLA (del perfil, de antes)'));
     comprueba_que('y a quien no se le quita nada, que no tiene cuadrados (cliente)',
       (await pagina.textContent('tr:has-text("eva@airbus.com")')).includes('—'));
     await pagina.click('[data-ed="olga@serunion.es"]');
@@ -1561,6 +1557,18 @@ const servidor = http.createServer((pet, res) => {
       [true, true]);
     await pagina.check('#cajaCuadrados fieldset[data-c="devoluciones"] input[data-cuadrado]');
     await pagina.uncheck('#cajaCuadrados fieldset[data-c="averias"] input[value="abiertas"]');
+    // Las delegaciones, en el usuario (docs/65): salen marcadas las que su
+    // perfil tenia de antes, para que guardarlo no le cambie lo que ve.
+    comprueba('sus delegaciones: las que el perfil tenia de antes',
+      await pagina.$$eval('#mDelegacionesU .elegido > span', x => x.map(s => s.textContent)), ['SEVILLA']);
+    await pagina.click('#fDelegacionesU');
+    await pagina.fill('#fDelegacionesU', 'mad');
+    await pagina.keyboard.press('Enter');
+    await pagina.keyboard.press('Escape');
+    comprueba_que('y cada una dice con cuantos centros encaja',
+      (await pagina.textContent('#rDelegacionesU')).includes('MADRID: 2 centros')
+      && (await pagina.textContent('#rDelegacionesU')).includes('SEVILLA: 1 centro'),
+      await pagina.textContent('#rDelegacionesU'));
     if (FOTOS) {
       await pagina.screenshot({ path: path.join(FOTOS, 'consola-claro.png'), fullPage: false });
       await pagina.emulateMedia({ colorScheme: 'dark' });
@@ -1580,10 +1588,12 @@ const servidor = http.createServer((pet, res) => {
     const cuerpo = await envio;
     comprueba('se guarda lo que se le quita', [cuerpo.cuadrados_ocultos, cuerpo.tablas_ocultas],
       [['furgonetas'], { rutas: ['festivos'], averias: ['abiertas'] }]);
+    comprueba('y sus delegaciones', cuerpo.delegaciones, ['SEVILLA', 'MADRID']);
     await pagina.waitForSelector('[data-ed="olga@serunion.es"]');
     await pagina.click('[data-ed="olga@serunion.es"]');
     await pagina.selectOption('#fPerfil', 'cli-airbus');
     comprueba_que('un perfil de cliente no tiene cuadrados que quitar', !(await pagina.isVisible('#campoCuadrados')));
+    comprueba_que('ni delegaciones: son organizacion interna', !(await pagina.isVisible('#campoDelegacionesU')));
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();

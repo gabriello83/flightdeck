@@ -213,7 +213,7 @@ def lambda_handler(evento, contexto_lambda):
     if len(pregunta) > 2000:
         return r(400, {"error": "La pregunta es demasiado larga."})
 
-    panel = panel_de(perfil.get("perfil_id", ""))
+    panel = panel_de(perfil.get("cabina") or perfil.get("perfil_id", ""))
     if panel is None:
         return r(503, {"error": "Todavia no hay datos calculados para este perfil."})
 

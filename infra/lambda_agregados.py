@@ -60,6 +60,7 @@ Variables de entorno:
 
 import datetime
 import gzip
+import hashlib
 import json
 import os
 from collections import defaultdict
@@ -417,6 +418,88 @@ def perfiles_de_la_consola():
         return [], f"{type(e).__name__}: {e}"[:300]
 
 
+def usuarios_de_la_consola():
+    """Los usuarios de la consola: de cada uno, su perfil y sus delegaciones.
+
+    Con las delegaciones que el administrador le marca a cada usuario del
+    personal (docs/65) se le escribe su propio panel. Si la tabla no se puede
+    leer, nadie gana nada: esos usuarios se quedan sin su panel esa noche, y la
+    API no les da el de su perfil en su lugar.
+    """
+    try:
+        ddb = boto3.client("dynamodb")
+        out, arranque = [], None
+        while True:
+            kw = {"TableName": TABLA,
+                  "FilterExpression": "begins_with(pk, :p) AND sk = :s",
+                  "ExpressionAttributeValues": {":p": {"S": "USUARIO#"}, ":s": {"S": "FICHA"}}}
+            if arranque:
+                kw["ExclusiveStartKey"] = arranque
+            res = ddb.scan(**kw)
+            for it in res.get("Items", []):
+                d = json.loads(it.get("dato", {}).get("S", "{}"))
+                out.append({"perfil_id": str(d.get("perfil_id", "")),
+                            "delegaciones": d.get("delegaciones") or []})
+            arranque = res.get("LastEvaluatedKey")
+            if not arranque:
+                return out, None
+    except Exception as e:
+        return [], f"{type(e).__name__}: {e}"[:300]
+
+
+def cabina_de(perfil_id, delegaciones):
+    """La carpeta de cabina/ de un perfil con esas delegaciones.
+
+    La MISMA cuenta esta en infra/api/comun.py (cabina_de), que es donde la API
+    decide de que carpeta lee cada sesion. Las dos pruebas fijan el mismo valor.
+    """
+    ds = sorted({str(d) for d in delegaciones or []})
+    if not perfil_id or not ds:
+        return perfil_id
+    return f"{perfil_id}~{hashlib.sha1(chr(10).join(ds).encode('utf-8')).hexdigest()[:12]}"
+
+
+def paneles_por_usuario(perfiles, de_la_consola, usuarios):
+    """Un perfil a calcular por cada usuario del personal con delegaciones.
+
+    Las delegaciones se eligen en el usuario, no en el perfil (docs/65). El
+    ambito se sigue aplicando aqui, al escribir: cada combinacion de perfil y
+    delegaciones tiene su carpeta, `<perfil>~<huella>`, con esas delegaciones y
+    ninguna otra. Dos usuarios con las mismas comparten panel.
+
+    - Las delegaciones del usuario sustituyen a las que tuviera el perfil de
+      antes; los clientes y centros del perfil, si los tiene, se quedan.
+    - Un cliente no lleva: la delegacion es organizacion interna de Serunion.
+    - El perfil puede no estar en `perfiles` (uno del personal sin ambito no se
+      calcula: sus usuarios sin delegaciones leen el del interno). Su panel con
+      delegaciones si se calcula, porque las delegaciones ya lo acotan.
+    """
+    consola = {c["id"]: c for c in de_la_consola}
+    calculados = {p.get("id"): p for p in perfiles}
+    out = {}
+    for u in usuarios:
+        pid = u.get("perfil_id", "")
+        c = consola.get(pid)
+        if not c or c.get("tipo", "cliente") == "cliente":
+            continue
+        ds = sorted({str(d).strip()[:80] for d in (u.get("delegaciones") or [])
+                     if str(d).strip()})[:200]
+        if not ds:
+            continue
+        cid = cabina_de(pid, ds)
+        if cid in out:
+            continue
+        base = (calculados.get(pid) or c).get("ambito") or {}
+        p = {"id": cid, "nombre": c.get("nombre", ""), "tipo": c["tipo"],
+             "ambito": {"clientes": [str(x) for x in base.get("clientes", [])],
+                        "centros": [str(x) for x in base.get("centros", [])],
+                        "delegaciones": ds}}
+        if "cuadro" in c:
+            p["cuadro"] = c["cuadro"]
+        out[cid] = p
+    return list(out.values())
+
+
 def junta_perfiles(del_fichero, de_la_consola):
     """Una lista de perfiles a calcular, con las dos fuentes.
 
@@ -427,7 +510,9 @@ def junta_perfiles(del_fichero, de_la_consola):
     - Un perfil que solo esta en la consola entra si tiene ambito. SIN ambito
       NO entra: un ambito vacio es «todo el parque», y eso solo se declara en el
       fichero, a proposito y a mano. Un perfil de cliente creado con el ambito
-      sin rellenar veria entonces los datos de todos los clientes.
+      sin rellenar veria entonces los datos de todos los clientes. Uno del
+      personal sin ambito tampoco entra, pero no por eso: es todo el parque, y
+      sus usuarios leen el panel del interno, o el de sus delegaciones (docs/65).
     - Un perfil que solo esta en el fichero se queda como esta.
 
     Devuelve la lista y los que se han dejado fuera, para el resumen.
@@ -451,8 +536,10 @@ def junta_perfiles(del_fichero, de_la_consola):
                 p["cuadro"] = c["cuadro"]
         elif tiene_ambito(amb_c):
             por_id[c["id"]] = c
-        else:
+        elif c.get("tipo", "cliente") == "cliente":
             fuera.append(c["id"])
+        # Uno del personal sin ambito no se calcula ni es un aviso: es todo el
+        # parque, y sus usuarios leen el panel del interno (docs/65).
     return list(por_id.values()), fuera
 
 
@@ -1393,6 +1480,12 @@ def lambda_handler(event, context):
         print(f"AVISO: no se han podido leer los perfiles de la consola ({fallo_consola}). "
               f"Se calculan solo los de {CLAVE_PERFILES}.")
     perfiles, sin_ambito = junta_perfiles(del_fichero, de_la_consola)
+    usuarios, fallo_usuarios = usuarios_de_la_consola()
+    if fallo_usuarios:
+        print(f"AVISO: no se han podido leer los usuarios de la consola ({fallo_usuarios}). "
+              f"Los paneles por delegaciones de cada usuario no se calculan esta vez.")
+    de_usuarios = paneles_por_usuario(perfiles, de_la_consola, usuarios)
+    perfiles = perfiles + [p for p in de_usuarios if p["id"] not in {q.get("id") for q in perfiles}]
     for pid in sin_ambito:
         print(f"AVISO: el perfil {pid} de la consola no tiene ambito y no se calcula. "
               f"Ponle sus clientes o centros en la consola.")
@@ -1675,7 +1768,10 @@ def lambda_handler(event, context):
         # no se ha podido leer la tabla; `sin_ambito`, los perfiles de la
         # consola que no se calculan porque no dicen de que cliente son.
         "consola": {"leidos": len(de_la_consola), "error": fallo_consola,
-                    "sin_ambito": sin_ambito},
+                    "sin_ambito": sin_ambito,
+                    # Los paneles por delegaciones de los usuarios (docs/65).
+                    "por_usuario": [p["id"] for p in de_usuarios],
+                    "error_usuarios": fallo_usuarios},
         "ficheros": escritos,
         # Que fuente de venta uso el cuadro y cuantas maquinas del censo tienen
         # venta. «visita_ventas» es la parcial: falta el informe de telemetria.

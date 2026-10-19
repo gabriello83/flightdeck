@@ -31,8 +31,8 @@ import boto3
 import autorizacion as A
 import catalogo as CAT
 import telemetria as TE
-from comun import (abre_sesion, borra, cierra_sesion, config, cookie_sesion,
-                   cuerpo, escribe, lee, lista, panel_de, quien_es, r, s3, BUCKET)
+from comun import (abre_sesion, borra, cabina_y_ambito, cierra_sesion, config, cookie_sesion,
+                   cuerpo, delegaciones_de, escribe, lee, lista, panel_de, quien_es, r, s3, BUCKET)
 
 cog = boto3.client("cognito-idp")
 
@@ -157,7 +157,7 @@ def encamina(evento, metodo, ruta):
         })
 
     if ruta == "/api/panel":
-        p = panel_de(perfil.get("perfil_id", ""))
+        p = panel_de(_cabina(perfil))
         if p is None:
             return r(503, {"error": "El panel todavia no se ha calculado.",
                            "_nota": "Los agregados corren a las 4:45; recien desplegado, lanzalos a mano."})
@@ -191,7 +191,7 @@ def encamina(evento, metodo, ruta):
         if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
             raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
         try:
-            datos = json.loads(_crudo(f"cabina/{perfil.get('perfil_id', '')}/operativo.json"))
+            datos = json.loads(_crudo(f"cabina/{_cabina(perfil)}/operativo.json"))
         except Exception:
             return r(503, {"error": "El informe operativo todavia no se ha calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
@@ -215,7 +215,7 @@ def encamina(evento, metodo, ruta):
         if "telemetria" not in A.cuadrados_de(perfil):
             raise PermissionError("Este perfil no ve la telemetría.")
         try:
-            return _como_json(_crudo(f"cabina/{perfil.get('perfil_id', '')}/telemetria.json"))
+            return _como_json(_crudo(f"cabina/{_cabina(perfil)}/telemetria.json"))
         except Exception:
             return r(503, {"error": "Todavía no hay cruce de telemetría: sube los ficheros de "
                                     "Nayax, Prodelfi y Nebula en la consola y espera a la noche.",
@@ -229,7 +229,7 @@ def encamina(evento, metodo, ruta):
         if "rutas" not in A.cuadrados_de(perfil):
             raise PermissionError("Este perfil no ve las rutas.")
         try:
-            return _con_tablas("rutas", perfil, _crudo(f"cabina/{perfil.get('perfil_id', '')}/rutas.json.gz"))
+            return _con_tablas("rutas", perfil, _crudo(f"cabina/{_cabina(perfil)}/rutas.json.gz"))
         except Exception:
             return r(503, {"error": "Las rutas todavía no se han calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
@@ -243,7 +243,7 @@ def encamina(evento, metodo, ruta):
             raise PermissionError("Este perfil no ve las furgonetas.")
         try:
             return _con_tablas("furgonetas", perfil,
-                               _crudo(f"cabina/{perfil.get('perfil_id', '')}/furgonetas.json.gz"))
+                               _crudo(f"cabina/{_cabina(perfil)}/furgonetas.json.gz"))
         except Exception:
             return r(503, {"error": "Las furgonetas todavía no se han calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
@@ -258,7 +258,7 @@ def encamina(evento, metodo, ruta):
         if "averias" not in A.cuadrados_de(perfil):
             raise PermissionError("Este perfil no ve las incidencias.")
         try:
-            comprimido = s3.get_object(Bucket=BUCKET, Key=f"cabina/{perfil.get('perfil_id', '')}/"
+            comprimido = s3.get_object(Bucket=BUCKET, Key=f"cabina/{_cabina(perfil)}/"
                                                            "incidencias.json.gz")["Body"].read()
         except Exception:
             return r(503, {"error": "Las incidencias todavía no se han calculado.",
@@ -274,7 +274,7 @@ def encamina(evento, metodo, ruta):
         if "revision" not in A.cuadrados_de(perfil):
             raise PermissionError("Este perfil no ve la revisión de clientes.")
         try:
-            comprimido = s3.get_object(Bucket=BUCKET, Key=f"cabina/{perfil.get('perfil_id', '')}/"
+            comprimido = s3.get_object(Bucket=BUCKET, Key=f"cabina/{_cabina(perfil)}/"
                                                            "revision.json.gz")["Body"].read()
         except Exception:
             return r(503, {"error": "La revisión de clientes todavía no se ha calculado.",
@@ -287,7 +287,7 @@ def encamina(evento, metodo, ruta):
         if "utilizo" not in A.cuadrados_de(perfil):
             raise PermissionError("Este perfil no ve el uso de VenCloud.")
         try:
-            comprimido = s3.get_object(Bucket=BUCKET, Key=f"cabina/{perfil.get('perfil_id', '')}/"
+            comprimido = s3.get_object(Bucket=BUCKET, Key=f"cabina/{_cabina(perfil)}/"
                                                            "utilizo.json.gz")["Body"].read()
         except Exception:
             return r(503, {"error": "El uso de VenCloud todavía no se ha calculado.",
@@ -302,7 +302,7 @@ def encamina(evento, metodo, ruta):
         if "devoluciones" not in A.cuadrados_de(perfil):
             raise PermissionError("Este perfil no ve las devoluciones.")
         try:
-            comprimido = s3.get_object(Bucket=BUCKET, Key=f"cabina/{perfil.get('perfil_id', '')}/"
+            comprimido = s3.get_object(Bucket=BUCKET, Key=f"cabina/{_cabina(perfil)}/"
                                                            "devoluciones.json.gz")["Body"].read()
         except Exception:
             return r(503, {"error": "Las devoluciones todavía no se han calculado.",
@@ -407,6 +407,12 @@ def encamina(evento, metodo, ruta):
 # ----------------------------------------------------------------------
 # el cuadro de mando
 # ----------------------------------------------------------------------
+def _cabina(perfil):
+    """La carpeta de cabina/ de la sesion: la de su perfil o, si el usuario
+    tiene delegaciones, la suya (comun.cabina_y_ambito, docs/65)."""
+    return perfil.get("cabina") or perfil.get("perfil_id", "")
+
+
 def _crudo(clave):
     """El fichero de S3 tal cual, descomprimido si viene comprimido.
 
@@ -495,7 +501,7 @@ def sesiones_visibles(perfil):
     contestando 503 a quien lo pida a mano.
     """
     sesiones = A.sesiones_de(perfil.get("tipo", "cliente"), perfil.get("sesiones", []))
-    if "cuadro" in sesiones and not _hay_cuadro(perfil.get("perfil_id", "")):
+    if "cuadro" in sesiones and not _hay_cuadro(_cabina(perfil)):
         sesiones.remove("cuadro")
     return sesiones
 
@@ -508,7 +514,7 @@ def cuadro(perfil, mes=None):
     que ya no necesita (docs/49): ocultar la seccion en la pagina no basta,
     porque el dato seguiria llegando al navegador.
     """
-    base = f"cabina/{perfil.get('perfil_id', '')}/cuadro/"
+    base = f"cabina/{_cabina(perfil)}/cuadro/"
     entero = A.flujos_cuadro(perfil) == list(A.TODOS_FLUJOS)
     try:
         indice = _crudo(base + "indice.json")
@@ -534,8 +540,7 @@ def serie(perfil, mes=None):
     perfil que no ve el dinero en el panel tampoco puede verlo aqui dia a dia.
     Si no se recortara, la serie seria la puerta de atras del panel.
     """
-    perfil_id = perfil.get("perfil_id", "")
-    base = f"cabina/{perfil_id}/serie/"
+    base = f"cabina/{_cabina(perfil)}/serie/"
     try:
         indice = _crudo(base + "indice.json")
     except Exception:
@@ -552,7 +557,7 @@ def serie(perfil, mes=None):
 
 def tarifas(perfil, centro=None):
     """El resumen de tarifas del perfil de la sesion, o el detalle de un centro."""
-    base = f"cabina/{perfil.get('perfil_id', '')}/tarifas/"
+    base = f"cabina/{_cabina(perfil)}/tarifas/"
     try:
         resumen = _crudo(base + "resumen.json.gz")
     except Exception:
@@ -574,7 +579,7 @@ CODIGO_ARTICULO = re.compile(r"[A-Za-z0-9._-]{1,40}")
 def almacenes(perfil, art=None):
     """Los almacenes del perfil de la sesion, o la foto de uno de sus productos."""
     try:
-        cuerpo = _crudo(f"cabina/{perfil.get('perfil_id', '')}/almacenes.json.gz")
+        cuerpo = _crudo(f"cabina/{_cabina(perfil)}/almacenes.json.gz")
     except Exception:
         return r(503, {"error": "Los almacenes todavía no se han calculado.",
                        "_nota": "Lo escriben los agregados cada noche (4:45)."})
@@ -626,7 +631,7 @@ def indice_serie_visible(indice, perfil):
 def serie_centros(perfil, mes):
     """El mismo dia partido por centro, para el filtro de delegacion, cliente y
     centro. Con la misma tijera que la fila del dia, centro a centro."""
-    base = f"cabina/{perfil.get('perfil_id', '')}/serie/"
+    base = f"cabina/{_cabina(perfil)}/serie/"
     try:
         indice = json.loads(_crudo(base + "indice.json"))
     except Exception:
@@ -813,7 +818,17 @@ def administra(evento, metodo, ruta, admin):
     d = cuerpo(evento)
 
     if resto == "usuarios" and metodo == "GET":
-        return r(200, {"usuarios": lista("USUARIO#")})
+        # Con su panel quien tiene delegaciones (docs/65): el suyo se escribe
+        # en la pasada de agregados siguiente a marcarlas, y hasta entonces
+        # entra a una pantalla que dice que todavia no hay datos.
+        perfiles = {p["_id"]: p for p in lista("PERFIL#")}
+        usuarios = lista("USUARIO#")
+        for u in usuarios:
+            p = perfiles.get(u.get("perfil_id", ""), {"tipo": "cliente"})
+            u["delegaciones"] = delegaciones_de(p, u)
+            if u["delegaciones"]:
+                u["panel"] = _hay_panel(cabina_y_ambito(u.get("perfil_id", ""), p, u)[0])
+        return r(200, {"usuarios": usuarios})
 
     if resto == "usuarios" and metodo == "POST":
         correo = str(d.get("correo", "")).strip().lower()
@@ -822,7 +837,8 @@ def administra(evento, metodo, ruta, admin):
         clave = str(d.get("clave", ""))
         if "@" not in correo or not nombre or not perfil_id:
             raise ValueError("Hacen falta nombre, correo y perfil.")
-        if not lee(f"PERFIL#{perfil_id}"):
+        perfil = lee(f"PERFIL#{perfil_id}")
+        if not perfil:
             raise ValueError("Ese perfil no existe.")
         nuevo = not lee(f"USUARIO#{correo}")
         if nuevo:
@@ -847,6 +863,9 @@ def administra(evento, metodo, ruta, admin):
             # Los cuadrados y las tablas que se le QUITAN dentro de su perfil
             # (docs/61). Vacio = ve lo mismo que su perfil.
             **A.limpia_restricciones(d),
+            # Las delegaciones que ve (docs/65), solo del personal: se eligen
+            # aqui y no en el perfil. Vacio = todas las de su perfil.
+            "delegaciones": delegaciones_de(perfil, d),
             "alta_por": admin["correo"],
         })
         return r(200, {"ok": True, "nuevo": nuevo})
@@ -878,7 +897,9 @@ def administra(evento, metodo, ruta, admin):
         return r(200, {
             # Con los cuadrados que ve cada perfil: los que la consola deja
             # quitar a cada uno de sus usuarios (docs/61).
-            "perfiles": [dict(p, panel=_hay_panel(p.get("_id", "")),
+            # El panel del que leen sus usuarios sin delegaciones: el suyo o,
+            # del personal sin ambito, el del interno (docs/65).
+            "perfiles": [dict(p, panel=_hay_panel(cabina_y_ambito(p.get("_id", ""), p, {})[0]),
                               cuadrados=A.cuadrados_de(p)
                               if A.nivel_de(p.get("tipo", "cliente")) >= A.NIVEL["operaciones"] else [])
                          for p in lista("PERFIL#")],
@@ -934,12 +955,22 @@ def administra(evento, metodo, ruta, admin):
                         for p in ps if p not in elegidos}
             paneles_ocultos = A.paneles_ocultos({"paneles_ocultos": paneles_ocultos + sorted(quitados)})
         extra = {} if cuadrados is None else {"cuadrados": cuadrados}
+        # Las delegaciones ya no son del perfil sino de cada usuario (docs/65).
+        # Las que tuviera de antes pasan a sus usuarios que no tengan ninguna,
+        # para que guardar el perfil no le cambie a nadie lo que ve.
+        antes = lee(f"PERFIL#{pid}") or {}
+        heredadas = [str(x)[:80] for x in ((antes.get("ambito") or {}).get("delegaciones") or [])][:200]
+        if heredadas and tipo != "cliente":
+            for u in lista("USUARIO#"):
+                if u.get("perfil_id") == pid and not delegaciones_de({"tipo": tipo}, u):
+                    correo_u = u.pop("_id")
+                    escribe(f"USUARIO#{correo_u}", dict(u, delegaciones=sorted(set(heredadas))))
         escribe(f"PERFIL#{pid}", {
             **extra,
             "nombre": str(d.get("nombre", pid))[:80],
             "tipo": tipo,
-            "ambito": {k: [str(x)[:80] for x in (amb.get(k) or [])][:200]
-                       for k in ("clientes", "centros", "delegaciones")},
+            "ambito": {**{k: [str(x)[:80] for x in (amb.get(k) or [])][:200]
+                          for k in ("clientes", "centros")}, "delegaciones": []},
             "sesiones": [s for s in A.SESIONES if s in sesiones],
             "paneles": [str(x)[:40] for x in (d.get("paneles") or [])][:64],
             # Las partes del cuadro que se le QUITAN; vacio = las ve todas.
