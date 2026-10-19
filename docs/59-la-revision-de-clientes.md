@@ -18,8 +18,11 @@ configurado máquina a máquina, filtrable por **delegación, cliente y centro**
 cuadrado por **área** (Centro, Sur, Cataluña, Levante, Norte: las cinco del Power BI, por el
 principio del nombre de la delegación, como incidencias y devoluciones) con sus máquinas y, en sin
 tarifa y precio distinto, sus productos. Pulsando el área, sus máquinas agrupadas por delegación.
-Con una delegación elegida en el filtro se va directo a su lista. «Serunion Vending - CENTRAL» no
-empieza por ninguna zona y sale como «Otra zona» (39 máquinas sin planograma a 19-oct).
+Con una delegación elegida en el filtro se va directo a su lista.
+
+**Fuera de la revisión** (Gabriele, 19-oct): la delegación «Serunion Vending - CENTRAL», con sus
+máquinas, centros y clientes (`revision.DELEGACIONES_FUERA`). Eran 39 máquinas sin planograma y
+ninguna en sin tarifa ni precio distinto: el interno pasa de 301 a 262 sin planograma.
 
 Cada tabla, cada área y cada máquina tiene su **Excel**. El de sin tarifa lleva las tres columnas amarillas
 para que la delegación ponga el precio, como el de la página de tarifas.

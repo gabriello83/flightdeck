@@ -145,6 +145,13 @@ comprueba("cada delegacion con su area", _z["zonas"],
 comprueba("tambien sin maestro de tarifas", RV.calcula([maquina("Z3", canales=0)], None, None, HOY)["zonas"],
           {"Andalucía - Sevilla": "Sur"})
 
+print("\nLa delegacion central de Serunion no se revisa")
+_c = RV.calcula([maquina("C1", delegacion="Serunion Vending - CENTRAL", canales=0),
+                 maquina("C2", canales=0)], {}, None, HOY)
+comprueba("ni sus maquinas sin planograma", [m["matricula"] for m in _c["sin_planograma"]], ["C2"])
+comprueba("ni su area", sorted(_c["zonas"]), ["Andalucía - Sevilla"])
+comprueba("y el cuadrado no la cuenta", RV.cuadrado(_c, HOY)["sin_planograma"], 1)
+
 if fallos:
     print(f"\n{fallos} PRUEBAS FALLIDAS")
     sys.exit(1)
