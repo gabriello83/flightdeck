@@ -319,6 +319,7 @@ const API = {
   '/api/admin/perfiles': {
     perfiles: [{ _id: 'cli-airbus', nombre: 'AIRBUS', tipo: 'cliente', ambito: { centros: ['500092'] }, sesiones: ['resumen', 'cuadro'], permisos: {}, panel: { existe: true, calculado: new Date().toISOString() } }],
     catalogo_sesiones: { resumen: { nombre: 'Resumen', minimo: 'operaciones' }, cuadro: { nombre: 'Cuadro de mando', minimo: 'cliente' } },
+    otras_pantallas: ['resumen', 'cuadro'],
     catalogo_cuadro: { indicadores: { nombre: 'Indicadores', flujos: ['ventas', 'visitas', 'incidencias'] },
                        articulos: { nombre: 'Mix de artículos', flujos: ['ventas'] },
                        listado_visitas: { nombre: 'Listado de visitas', flujos: ['visitas'] } },
@@ -1588,56 +1589,28 @@ const servidor = http.createServer((pet, res) => {
     await pagina.close();
     API['/api/admin/usuarios'] = antesU;
 
-    // Al crear un perfil, lo que le sale en el informe operativo con las
-    // sesiones marcadas: Revision clientes no es una sesion, va con
-    // «Instalaciones y altas» (pasó el 19-oct: no se encontraba).
-    API['/api/admin/perfiles'] = { ...antesP, niveles: { cliente: 0, operaciones: 1, direccion: 2, admin: 3 },
-      catalogo_sesiones: {
-        resumen: { nombre: 'Resumen', minimo: 'operaciones', bloques: ['servicio', 'dinero'] },
-        instalaciones: { nombre: 'Instalaciones y altas', minimo: 'operaciones', bloques: ['instalaciones'] },
-        cuadro: { nombre: 'Cuadro de mando', minimo: 'cliente', bloques: [] } },
-      catalogo_cuadrados: {
-        rutas: { nombre: 'Rutas', tablas: {}, bloque: 'servicio' },
-        ventas: { nombre: 'Ventas', tablas: {}, bloque: 'dinero' },
-        telemetria: { nombre: 'Telemetría', tablas: {}, bloque: 'instalaciones' },
-        revision: { nombre: 'Revisión clientes', tablas: {}, bloque: 'instalaciones' },
-        utilizo: { nombre: 'Utilizo', tablas: {}, bloque: 'instalaciones', solo_direccion: true, sin_ambito: true } } };
-    {
-      const c = await abre('/consola/');
-      await c.pagina.waitForSelector('#pestanas button[data-s="perfiles"]');
-      await c.pagina.click('#pestanas button[data-s="perfiles"]');
-      await c.pagina.click('#bNuevoPerfil');
-      await c.pagina.selectOption('#fTipo', 'operaciones');
-      comprueba_que('cada sesion dice que cuadrados da',
-        (await c.pagina.textContent('#cajaSesiones label:has(input[value="instalaciones"])')).includes('Revisión clientes'));
-      comprueba('sin sesiones, ningun cuadrado', await c.pagina.textContent('#rOperativo'),
-        'Ninguno con las sesiones marcadas.');
-      await c.pagina.check('#cajaSesiones input[value="instalaciones"]');
-      comprueba('con Instalaciones y altas sale Revision clientes (Utilizo es de direccion)',
-        await c.pagina.textContent('#rOperativo'),
-        'Telemetría · Revisión clientes  —  No le salen: Utilizo (de dirección para arriba).');
-      await c.pagina.selectOption('#fTipo', 'direccion');
-      await c.pagina.check('#cajaSesiones input[value="instalaciones"]');
-      comprueba('en direccion sin ambito, tambien Utilizo', await c.pagina.textContent('#rOperativo'),
-        'Telemetría · Revisión clientes · Utilizo');
-      if (FOTOS) await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-operativo.png'), fullPage: false });
-      await c.pagina.selectOption('#fTipo', 'cliente');
-      comprueba_que('un cliente no tiene informe operativo', !(await c.pagina.isVisible('#campoOperativo')));
-      comprueba('ni una peticion fuera del dominio', c.fuera, []);
-      comprueba('sin un solo error en la consola del navegador', c.errores, []);
-      await c.pagina.close();
-    }
-    API['/api/admin/perfiles'] = antesP;
-
-    // Al crear un perfil: el cuadro de mando de los clientes se enciende o se
-    // apaga, y en cada sesion del personal se eligen sus paneles (docs/63).
+    // Al crear un perfil, el cuadro de mando de los clientes se enciende o se
+    // apaga (docs/63), y el personal se elige cuadrado a cuadrado, con sus
+    // tablas, sin sesiones que agrupen varios (docs/64).
     API['/api/admin/perfiles'] = { ...antesP, niveles: { cliente: 0, operaciones: 1, direccion: 2, admin: 3 },
       catalogo_sesiones: {
         resumen: { nombre: 'Resumen', minimo: 'operaciones', bloques: ['servicio', 'dinero'],
           paneles: { visitas_dia: 'Visitas por día', semana: 'Patrón semanal' } },
-        rutas: { nombre: 'Rutas y jornada', minimo: 'operaciones', bloques: ['jornadas'], paneles: {} },
+        avisos: { nombre: 'Avisos y acciones', minimo: 'operaciones', bloques: ['alarmas'], paneles: {} },
+        instalaciones: { nombre: 'Instalaciones y altas', minimo: 'operaciones', bloques: ['instalaciones'], paneles: {} },
         cuadro: { nombre: 'Cuadro de mando', minimo: 'cliente', bloques: [], paneles: {} } },
-      catalogo_cuadrados: { rutas: { nombre: 'Rutas', tablas: {}, bloque: 'servicio' } } };
+      otras_pantallas: ['resumen', 'avisos', 'cuadro'],
+      catalogo_cuadrados: {
+        rutas: { nombre: 'Rutas', bloque: 'servicio', paneles: {},
+          tablas: { rutas: 'Visitas por ruta', estado: 'Estado de las visitas', maquinas: 'Máquinas no visitadas' } },
+        almacenes: { nombre: 'Almacenes', bloque: 'inventario', solo_direccion: true, paneles: {}, tablas: { productos: 'Productos' } },
+        ventas: { nombre: 'Ventas', bloque: 'dinero', tablas: {},
+          paneles: { recaudacion: 'Recaudación por mes', ciego: 'Efectivo sin telemetría' } },
+        telemetria: { nombre: 'Telemetría', bloque: 'instalaciones', paneles: {}, tablas: { maquinas: 'Máquinas' } },
+        revision: { nombre: 'Revisión clientes', bloque: 'instalaciones', paneles: {},
+          tablas: { planograma: 'Sin planograma', tarifa: 'Sin tarifa', precio: 'Precio distinto' } },
+        utilizo: { nombre: 'Utilizo', bloque: 'instalaciones', solo_direccion: true, sin_ambito: true, paneles: {},
+          tablas: { uso: 'Uso de VenCloud' } } } };
     {
       const c = await abre('/consola/');
       await c.pagina.waitForSelector('#pestanas button[data-s="perfiles"]');
@@ -1645,9 +1618,10 @@ const servidor = http.createServer((pet, res) => {
       comprueba_que('la lista dice si el cliente tiene el cuadro',
         (await c.pagina.textContent('tr:has-text("cli-airbus")')).includes('Cuadro de mando'));
       await c.pagina.click('#bNuevoPerfil');
-      comprueba('un cliente nuevo trae el cuadro encendido, con sus partes',
-        [await c.pagina.isVisible('#fCuadroOn'), await c.pagina.isChecked('#fCuadroOn'), await c.pagina.isVisible('#campoCuadro')],
-        [true, true, true]);
+      comprueba('un cliente nuevo trae el cuadro encendido, con sus partes, y sin cuadrados',
+        [await c.pagina.isVisible('#fCuadroOn'), await c.pagina.isChecked('#fCuadroOn'),
+         await c.pagina.isVisible('#campoCuadro'), await c.pagina.isVisible('#campoSesiones')],
+        [true, true, true, false]);
       await c.pagina.uncheck('#fCuadroOn');
       comprueba_que('apagado, no hay partes que elegir', !(await c.pagina.isVisible('#campoCuadro')));
       if (FOTOS) await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-cliente-sin-cuadro.png'), fullPage: false });
@@ -1657,36 +1631,56 @@ const servidor = http.createServer((pet, res) => {
         if (q.method() === 'POST' && q.url().endsWith('/api/admin/perfiles')) r(JSON.parse(q.postData()));
       }));
       await c.pagina.click('#bGuardar');
-      comprueba('se guarda sin la sesion del cuadro', (await envio).sesiones, []);
+      const cli = await envio;
+      comprueba('se guarda sin la sesion del cuadro y sin cuadrados', [cli.sesiones, 'cuadrados' in cli], [[], false]);
 
       await c.pagina.waitForSelector('#bNuevoPerfil');
       await c.pagina.click('#bNuevoPerfil');
       await c.pagina.selectOption('#fTipo', 'operaciones');
       comprueba_que('el personal no tiene el interruptor del cliente', !(await c.pagina.isVisible('#fCuadroOn')));
-      comprueba_que('sin la sesion marcada no salen sus paneles',
-        !(await c.pagina.isVisible('.sesion[data-s="resumen"] .paneles')));
-      await c.pagina.check('#cajaSesiones input[data-sesion][value="resumen"]');
-      comprueba('marcada, salen sus paneles, todos puestos',
-        await c.pagina.$$eval('.sesion[data-s="resumen"] input[data-panel]', x => x.map(i => [i.value, i.checked])),
-        [['visitas_dia', true], ['semana', true]]);
-      comprueba_que('una sesion sin paneles propios no ofrece ninguno',
-        (await c.pagina.locator('.sesion[data-s="rutas"] input[data-panel]').count()) === 0);
-      await c.pagina.uncheck('.sesion[data-s="resumen"] input[value="semana"]');
+      comprueba('cada cuadrado por separado, en el orden del informe',
+        await c.pagina.$$eval('#cajaSesiones input[data-cuadrado]', x => x.map(i => i.value)),
+        ['rutas', 'almacenes', 'ventas', 'telemetria', 'revision', 'utilizo']);
+      comprueba('y aparte, lo que no es un cuadrado',
+        await c.pagina.$$eval('#cajaSesiones input[data-sesion]', x => x.map(i => i.value)),
+        ['resumen', 'avisos', 'cuadro']);
+      comprueba_que('ninguna casilla agrupa cuadrados',
+        !(await c.pagina.textContent('#cajaSesiones')).includes('Instalaciones y altas'));
+      comprueba('almacenes y utilizo son de direccion: apagados en operaciones',
+        await c.pagina.$$eval('#cajaSesiones input[data-cuadrado]:disabled', x => x.map(i => i.value)), ['almacenes', 'utilizo']);
+      comprueba('sin marcar, sus tablas apagadas',
+        await c.pagina.$$eval('fieldset[data-c="revision"] input[data-tabla]', x => x.every(i => i.disabled)), true);
+      await c.pagina.check('#cajaSesiones input[data-cuadrado][value="revision"]');
+      comprueba('marcado, sus tablas, todas puestas',
+        await c.pagina.$$eval('fieldset[data-c="revision"] input[data-tabla]', x => x.map(i => [i.value, i.checked, i.disabled])),
+        [['planograma', true, false], ['tarifa', true, false], ['precio', true, false]]);
+      await c.pagina.uncheck('fieldset[data-c="revision"] input[value="precio"]');
+      await c.pagina.check('#cajaSesiones input[data-cuadrado][value="ventas"]');
+      comprueba('ventas lleva al panel: dentro, sus paneles',
+        await c.pagina.$$eval('fieldset[data-c="ventas"] input[data-panel]', x => x.map(i => i.value)), ['recaudacion', 'ciego']);
+      await c.pagina.uncheck('fieldset[data-c="ventas"] input[value="ciego"]');
       await c.pagina.selectOption('#fTipo', 'direccion');
-      comprueba('cambiar de tipo no pierde lo quitado',
-        await c.pagina.isChecked('.sesion[data-s="resumen"] input[value="semana"]'), false);
-      await c.pagina.check('#cajaSesiones input[data-sesion][value="resumen"]');
+      comprueba('cambiar de tipo no pierde lo marcado',
+        [await c.pagina.isChecked('#cajaSesiones input[data-cuadrado][value="revision"]'),
+         await c.pagina.isChecked('fieldset[data-c="revision"] input[value="precio"]'),
+         await c.pagina.isEnabled('#cajaSesiones input[data-cuadrado][value="utilizo"]')], [true, false, true]);
+      await c.pagina.check('#cajaSesiones input[data-cuadrado][value="utilizo"]');
+      await c.pagina.check('#cajaSesiones input[data-sesion][value="avisos"]');
       if (FOTOS) {
-        await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-paneles-claro.png'), fullPage: false });
+        await c.pagina.evaluate(() => document.querySelector('#campoSesiones').scrollIntoView());
+        await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-cuadrados-claro.png'), fullPage: false });
         await c.pagina.emulateMedia({ colorScheme: 'dark' });
-        await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-paneles-oscuro.png'), fullPage: false });
+        await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-cuadrados-oscuro.png'), fullPage: false });
         await c.pagina.emulateMedia({ colorScheme: 'light' });
       }
       await c.pagina.setViewportSize({ width: 380, height: 800 });
       await c.pagina.waitForTimeout(200);
       comprueba('en movil el dialogo no se sale de la pantalla',
         await c.pagina.evaluate(() => document.querySelector('#dlg').scrollWidth <= window.innerWidth), true);
-      if (FOTOS) await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-paneles-movil.png'), fullPage: false });
+      if (FOTOS) {
+        await c.pagina.evaluate(() => document.querySelector('#campoSesiones').scrollIntoView());
+        await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-cuadrados-movil.png'), fullPage: false });
+      }
       await c.pagina.setViewportSize({ width: 1280, height: 800 });
       await c.pagina.fill('#fPid', 'dir-prueba');
       await c.pagina.fill('#fNombreP', 'Prueba');
@@ -1695,7 +1689,9 @@ const servidor = http.createServer((pet, res) => {
       }));
       await c.pagina.click('#bGuardar');
       const cuerpo = await envio;
-      comprueba('se guardan la sesion y el panel quitado', [cuerpo.sesiones, cuerpo.paneles_ocultos], [['resumen'], ['semana']]);
+      comprueba('se guardan los cuadrados, sus tablas y paneles quitados, y las otras pantallas',
+        [cuerpo.cuadrados, cuerpo.tablas_ocultas, cuerpo.paneles_ocultos, cuerpo.sesiones],
+        [['ventas', 'revision', 'utilizo'], { revision: ['precio'] }, ['ciego'], ['avisos']]);
       comprueba('ni una peticion fuera del dominio', c.fuera, []);
       comprueba('sin un solo error en la consola del navegador', c.errores, []);
       await c.pagina.close();

@@ -109,11 +109,9 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--s1);outline-offs
 .marcas label.fuera{color:var(--tinta-3)}
 .marcas label.fuera span{text-decoration:line-through}
 .marcas .porque{font-size:11.5px;color:var(--tinta-3);text-decoration:none}
-.cuadros-perfil{margin:2px 0 0;font-size:13.5px;color:var(--tinta-2)}
-.marcas .sesion{display:grid;gap:4px;align-content:start}
-.marcas .sesion.con-paneles{grid-column:1/-1;border:1px solid var(--borde);border-radius:8px;padding:7px 10px}
-.marcas .paneles{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;padding-left:24px;font-size:13px}
-.marcas .paneles[hidden]{display:none}
+.cuadrados .porque{font-size:11.5px;font-weight:400;color:var(--tinta-3)}
+.cuadrados label.fuera{color:var(--tinta-3)}
+.cuadrados .aparte{grid-column:1/-1;margin:6px 0 0;font-size:12px;font-weight:600;color:var(--tinta-3);text-transform:uppercase;letter-spacing:.04em}
 /* Los cuadrados del usuario, cada uno con sus tablas debajo (docs/61). */
 .cuadrados{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px 14px}
 .cuadrados fieldset{border:1px solid var(--borde);border-radius:8px;padding:8px 10px;margin:0;min-width:0}
@@ -267,7 +265,7 @@ function avisa(t, bien){
 }
 
 /* ---------- estado ---------- */
-let YO=null, USUARIOS=[], PERFILES=[], SESIONES={}, TECHO={}, NIVELES={}, IMPLICITOS={}, PARTES_CUADRO={}, CUADRADOS={},
+let YO=null, USUARIOS=[], PERFILES=[], SESIONES={}, TECHO={}, NIVELES={}, IMPLICITOS={}, PARTES_CUADRO={}, CUADRADOS={}, OTRAS=[],
     CONFIG={}, TELEFONOS=[], COLA=[], CARGA=null, TELE=null, SECCION="usuarios", guardando=null;
 /* El histórico: la serie diaria del perfil de la sesión y lo último que se
    sumó. Se queda en memoria para que volver a esta pestaña no vuelva a pedirlo. */
@@ -355,7 +353,10 @@ function pintaCuadradosUsuario(u){
   $("#cajaCuadrados").innerHTML = ids.map(c=>{
     const cat = CUADRADOS[c] || {nombre:c, tablas:{}};
     /* Una página de una sola tabla se quita con su cuadrado. */
-    const tablas = Object.entries(cat.tablas||{}).length > 1 ? Object.entries(cat.tablas) : [];
+    /* Las que su perfil ya no ve no se ofrecen (docs/64). */
+    const delPerfil = new Set(((p.tablas_ocultas||{})[c]) || []);
+    const suyas = Object.entries(cat.tablas||{}).filter(([t])=>!delPerfil.has(t));
+    const tablas = suyas.length > 1 ? suyas : [];
     const fuera = new Set(sinT[c] || []);
     return `<fieldset data-c="${esc(c)}" class="${sinC.has(c)?"quitado":""}">
       <legend><label><input type="checkbox" data-cuadrado value="${esc(c)}" ${sinC.has(c)?"":"checked"}>
@@ -492,9 +493,9 @@ function vistaPerfiles(){
       <td><b>${esc(p.nombre||p._id)}</b><br><span class="cond">${esc(p._id)}</span></td>
       <td data-et="Tipo">${esc(tipoLegible(p.tipo||"cliente"))}</td>
       <td data-et="Ámbito"><span class="cond">${esc(trozos.join(" · ") || (pan.existe ? "todo (interno)" : "sin ámbito: no se calcula"))}</span></td>
-      <td data-et="Sesiones" class="n">${(p.tipo||"cliente")==="cliente"
+      <td data-et="Ve" class="n">${(p.tipo||"cliente")==="cliente"
         ? ((p.sesiones||[]).includes("cuadro") ? "Cuadro de mando" : `<span class="pill c">sin cuadro</span>`)
-        : num((p.sesiones||[]).length) + ((p.paneles_ocultos||[]).length
+        : `${num((p.cuadrados||[]).length)} cuadrado${(p.cuadrados||[]).length===1?"":"s"}` + ((p.paneles_ocultos||[]).length
           ? `<br><span class="cond">${num(p.paneles_ocultos.length)} panel${p.paneles_ocultos.length===1?"":"es"} quitado${p.paneles_ocultos.length===1?"":"s"}</span>` : "")}</td>
       <td data-et="Usuarios" class="n">${num(cuantos)}</td>
       <td data-et="Panel">${panel}</td>
@@ -513,7 +514,7 @@ function vistaPerfiles(){
       pantalla que dice que todavía no hay datos. Un perfil <b>sin ámbito</b> no se calcula nunca:
       ponle de qué cliente o centros es.</div>` : ""}
     ${PERFILES.length ? `<div class="tabla"><table>
-      <thead><tr><th>Perfil</th><th>Tipo</th><th>Ámbito</th><th class="n">Sesiones</th><th class="n">Usuarios</th><th>Panel</th><th></th></tr></thead>
+      <thead><tr><th>Perfil</th><th>Tipo</th><th>Ámbito</th><th class="n">Ve</th><th class="n">Usuarios</th><th>Panel</th><th></th></tr></thead>
       <tbody>${filas}</tbody></table></div>` : `<p class="vacio">No hay ningún perfil.</p>`}
   </section>`;
 }
@@ -562,15 +563,9 @@ function formPerfil(pid){
       todo, no se calcula ninguno (el «todo el parque» del interno sólo se da en config/perfiles.json).</p>
     <div class="campo" id="campoSesiones">
       <label>Sesiones que ve</label>
-      <div class="marcas" id="cajaSesiones"></div>
-      <p class="pista">El panel es de operaciones para arriba.</p>
-    </div>
-    <div class="campo" id="campoOperativo">
-      <label>Qué ve en el informe operativo</label>
-      <p class="cuadros-perfil" id="rOperativo"></p>
-      <p class="pista">No se marca aparte: cada cuadrado sale con la sesión del panel que lleva sus datos,
-        como dice cada casilla de arriba. Revisión clientes, Tarifas y Telemetría van con
-        «Instalaciones y altas». Luego, a cada usuario se le pueden quitar cuadrados y tablas.</p>
+      <div class="cuadrados" id="cajaSesiones"></div>
+      <p class="pista">Cada cuadrado del informe operativo, y dentro lo que ve de él. Lo que no se marca no
+        se le enseña ni abre su página. Luego, a cada usuario se le pueden quitar cuadrados y tablas.</p>
     </div>
     <div class="campo" id="campoCuadroOn">
       <label>Cuadro de mando</label>
@@ -604,9 +599,18 @@ function formPerfil(pid){
          no se le enseñan las sesiones. */
       const sesiones = esCliente ? ($("#fCuadroOn").checked ? ["cuadro"] : [])
         : [...document.querySelectorAll("#cajaSesiones input[data-sesion]:checked")].map(i=>i.value);
-      /* Los paneles que se le QUITAN, como las partes del cuadro (docs/63). */
+      /* Cuadrado a cuadrado (docs/64): los que ve, y dentro de cada uno las
+         tablas y los paneles que se le QUITAN. La sesión de los que llevan al
+         panel la pone el servidor. */
+      const cuadrados = esCliente ? null
+        : [...document.querySelectorAll("#cajaSesiones input[data-cuadrado]:checked")].map(i=>i.value);
       const paneles_ocultos = esCliente ? []
         : [...document.querySelectorAll("#cajaSesiones input[data-panel]:not(:checked)")].map(i=>i.value);
+      const tablas_ocultas = {};
+      if(!esCliente) document.querySelectorAll("#cajaSesiones fieldset[data-c]").forEach(fs=>{
+        const ts = [...fs.querySelectorAll("input[data-tabla]:not(:checked)")].map(i=>i.value);
+        if(ts.length) tablas_ocultas[fs.dataset.c] = ts;
+      });
       /* Se guardan las partes que se le QUITAN: una parte nueva del cuadro le
          saldrá sin tener que volver a editar el perfil. */
       const cuadro_ocultas = [...document.querySelectorAll("#cajaCuadro input:not(:checked)")].map(i=>i.value);
@@ -618,7 +622,8 @@ function formPerfil(pid){
         nombre: $("#fNombreP").value.trim(),
         tipo: $("#fTipo").value,
         ambito: ambito(esCliente),
-        sesiones, permisos, cuadro_ocultas, paneles_ocultos,
+        sesiones, permisos, cuadro_ocultas, paneles_ocultos, tablas_ocultas,
+        ...(cuadrados ? {cuadrados} : {}),
         reglas_negocio: umbral ? {umbral_rentabilidad_mes: Number(umbral)} : {},
       });
       avisa(res.ignorados && res.ignorados.length
@@ -633,45 +638,12 @@ function formPerfil(pid){
     const esCliente = $("#fTipo").value === "cliente";
     $("#campoSesiones").hidden = esCliente;
     $("#campoDelegaciones").hidden = esCliente;
-    $("#campoOperativo").hidden = esCliente;
     $("#campoCuadroOn").hidden = !esCliente;
-    pintaOperativoPerfil();
   };
   $("#fTipo").addEventListener("change", repinta);
-  $("#cajaSesiones").addEventListener("change", pintaOperativoPerfil);
   repinta();
   pintaCuadro(p);
   const ambito = montaAmbito(p);
-  AMBITO_PERFIL = ambito;
-  pintaOperativoPerfil();
-}
-
-/* Los cuadrados del informe operativo que le salen al perfil con lo marcado,
-   con las reglas de autorizacion.cuadrados_de (docs/61): el informe no tiene
-   casillas propias, cada cuadrado va con el bloque del panel que lleva sus
-   datos. Se repinta al tocar las sesiones, el tipo o el ámbito. */
-let AMBITO_PERFIL = null;
-const cuadradosDeSesion = id => Object.values(CUADRADOS)
-  .filter(c => ((SESIONES[id] || {}).bloques || []).includes(c.bloque)).map(c => c.nombre);
-function pintaOperativoPerfil(){
-  const caja = $("#rOperativo");
-  if(!caja || $("#campoOperativo").hidden) return;
-  const tipo = $("#fTipo").value;
-  const nivel = NIVELES[tipo] != null ? NIVELES[tipo] : 0;
-  const sesiones = tipo === "admin" ? Object.keys(SESIONES)
-    : [...document.querySelectorAll("#cajaSesiones input[data-sesion]:checked")].map(i=>i.value);
-  const bloques = new Set([].concat(...sesiones.map(s=>(SESIONES[s] || {}).bloques || [])));
-  const amb = AMBITO_PERFIL ? AMBITO_PERFIL(false) : {};
-  const conAmbito = ["clientes","centros","delegaciones"].some(k=>(amb[k] || []).length);
-  const fuera = [];
-  const ve = Object.values(CUADRADOS).filter(c=>{
-    if(!bloques.has(c.bloque)) return false;
-    if(c.solo_direccion && nivel < NIVELES.direccion){ fuera.push(`${c.nombre} (de dirección para arriba)`); return false; }
-    if(c.sin_ambito && conAmbito){ fuera.push(`${c.nombre} (sólo sin ámbito)`); return false; }
-    return true;
-  }).map(c=>c.nombre);
-  caja.textContent = (ve.length ? ve.join(" · ") : "Ninguno con las sesiones marcadas.")
-    + (fuera.length ? `  —  No le salen: ${fuera.join(", ")}.` : "");
 }
 
 /* ---------- el ámbito, elegido de una lista ----------
@@ -769,7 +741,6 @@ function montaAmbito(p){
       rCl.className = "pista";
       rCl.textContent = "Sin el histórico cargado no hay lista de la que elegir: se escribe a mano y se pone con Intro.";
       rCe.textContent = rDe.textContent = "";
-      pintaOperativoPerfil();
       return;
     }
     const ce = mCe.valores();
@@ -797,7 +768,6 @@ function montaAmbito(p){
       return `${d}: ${num(n)} ${n===1?"centro":"centros"}`;
     }).join(" · ");
     rDe.className = "pista" + (mal ? " mal" : "");
-    pintaOperativoPerfil();
   };
 
   const mCl = multiple($("#mClientes"), {id: "fClientes", todas: D.clientes, opciones: () => D.clientes,
@@ -941,7 +911,7 @@ function pintaCuadro(p){
   const mira = () => {
     const conCuadro = $("#fTipo").value === "cliente"
       ? $("#fCuadroOn").checked
-      : !!document.querySelector('#cajaSesiones input[value="cuadro"]:checked');
+      : !!document.querySelector('#cajaSesiones input[data-sesion][value="cuadro"]:checked');
     $("#campoCuadro").hidden = !conCuadro;
   };
   $("#cajaSesiones").addEventListener("change", mira);
@@ -953,32 +923,63 @@ function pintaCuadro(p){
 function pintaCasillas(p){
   const tipo = $("#fTipo").value;
   const nivel = NIVELES[tipo] != null ? NIVELES[tipo] : 0;
-  /* Un perfil de cliente nuevo trae marcado el cuadro: es lo único que puede tener. */
-  const puestas = new Set(p ? (p.sesiones||[]) : (tipo==="cliente" ? ["cuadro"] : []));
-  /* Lo que se marque de las casillas sobrevive a un cambio de tipo. */
-  const antes = document.querySelector("#cajaSesiones input[data-panel]")
-    ? new Set([...document.querySelectorAll("#cajaSesiones input[data-panel]:not(:checked)")].map(i=>i.value))
-    : new Set((p && p.paneles_ocultos) || []);
-  /* Cada sesión con sus paneles debajo (docs/63): marcada la sesión, se
-     eligen los que ve dentro. Todos puestos de serie; se guarda lo quitado. */
-  $("#cajaSesiones").innerHTML = Object.entries(SESIONES).map(([id,s])=>{
+  /* El cuadro de un cliente va en su propio interruptor (#fCuadroOn): aquí,
+     un perfil nuevo empieza sin nada marcado. */
+  const puestas = new Set(p ? (p.sesiones||[]) : []);
+  /* Lo marcado sobrevive a un cambio de tipo: se lee de las casillas si ya
+     están pintadas, y del perfil si no. */
+  const caja = $("#cajaSesiones");
+  const pintado = !!caja.querySelector("fieldset");
+  const lee = sel => new Set([...caja.querySelectorAll(sel)].map(i=>i.value));
+  /* Una casilla apagada por el tipo guarda lo que tenía (data-marcado): así
+     pasar por «cliente» no borra lo elegido. */
+  const marcadas = sel => new Set([...caja.querySelectorAll(sel)]
+    .filter(i => i.disabled ? i.dataset.marcado === "1" : i.checked).map(i=>i.value));
+  const conC = pintado ? marcadas("input[data-cuadrado]") : new Set((p && p.cuadrados) || []);
+  const conS = pintado ? marcadas("input[data-sesion]") : puestas;
+  const sinP = pintado ? lee("input[data-panel]:not(:checked)") : new Set((p && p.paneles_ocultos) || []);
+  const sinT = {};
+  if(pintado) caja.querySelectorAll("fieldset[data-c]").forEach(fs=>{
+    sinT[fs.dataset.c] = [...fs.querySelectorAll("input[data-tabla]:not(:checked)")].map(i=>i.value); });
+  else Object.assign(sinT, (p && p.tablas_ocultas) || {});
+
+  /* Cuadrado a cuadrado (docs/64), en el orden del informe operativo, cada
+     uno con sus tablas (o sus paneles, los que llevan al panel). Sin agrupar:
+     lo que se marca es lo que ve. Después, lo demás que se puede ver. */
+  const casillas = (attr, lista, fuera, apagado) => lista.length
+    ? lista.map(([id,n])=>`<label><input type="checkbox" ${attr} value="${esc(id)}" ${fuera.has(id)?"":"checked"} ${apagado?"disabled":""}>
+        <span>${esc(n)}</span></label>`).join("")
+    : `<span class="tenue">Una sola tabla: va con el cuadrado.</span>`;
+  const bloque = (clase, attr, id, nombre, marcado, porque, alcanza, dentro) =>
+    `<fieldset ${clase} class="${marcado && alcanza ? "" : "quitado"}">
+      <legend><label class="${alcanza?"":"fuera"}"><input type="checkbox" ${attr} value="${esc(id)}"
+        data-marcado="${marcado ? 1 : 0}" ${marcado && alcanza ? "checked" : ""} ${alcanza ? "" : "disabled"}>
+        <span>${esc(nombre)}</span>${porque ? `<span class="porque">· ${esc(porque)}</span>` : ""}</label></legend>
+      <div class="tablas">${dentro(!(marcado && alcanza))}</div>
+    </fieldset>`;
+  const cuadrados = Object.entries(CUADRADOS).map(([c,x])=>{
+    const alcanza = !(x.solo_direccion && nivel < NIVELES.direccion);
+    const porque = !alcanza ? "desde dirección" : x.sin_ambito ? "sólo sin ámbito" : "";
+    const tablas = Object.entries(x.tablas||{}).length > 1 ? Object.entries(x.tablas) : [];
+    const paneles = Object.entries(x.paneles||{});
+    return bloque(`data-c="${esc(c)}"`, "data-cuadrado", c, x.nombre, conC.has(c), porque, alcanza, apagado =>
+      paneles.length ? casillas("data-panel", paneles, sinP, apagado)
+                     : casillas("data-tabla", tablas, new Set(sinT[c] || []), apagado));
+  }).join("");
+  const otras = (OTRAS || []).filter(id=>SESIONES[id]).map(id=>{
+    const s = SESIONES[id];
     const alcanza = (NIVELES[s.minimo] != null ? NIVELES[s.minimo] : 0) <= nivel;
     const paneles = Object.entries(s.paneles || {});
-    return `<div class="sesion${paneles.length && alcanza ? " con-paneles" : ""}" data-s="${esc(id)}">
-      <label class="${alcanza?"":"fuera"}">
-      <input type="checkbox" data-sesion value="${esc(id)}" ${puestas.has(id)?"checked":""} ${alcanza?"":"disabled"}>
-      <span>${esc(s.nombre)}</span>${alcanza
-        ? (cuadradosDeSesion(id).length ? `<span class="porque">· ${esc(cuadradosDeSesion(id).join(", "))}</span>` : "")
-        : `<span class="porque">· desde ${esc(tipoLegible(s.minimo))}</span>`}</label>
-      ${paneles.length && alcanza ? `<div class="paneles" ${puestas.has(id) ? "" : "hidden"}>
-        <span class="porque">En el panel ve:</span>
-        ${paneles.map(([pid, n])=>`<label><input type="checkbox" data-panel value="${esc(pid)}" ${antes.has(pid)?"":"checked"}>
-          <span>${esc(n)}</span></label>`).join("")}</div>` : ""}
-    </div>`;
+    return bloque(`data-s="${esc(id)}"`, "data-sesion", id, s.nombre, conS.has(id),
+      alcanza ? "" : "desde " + tipoLegible(s.minimo), alcanza, apagado =>
+        paneles.length ? casillas("data-panel", paneles, sinP, apagado)
+                       : `<span class="tenue">Una sola pantalla.</span>`);
   }).join("");
-  $("#cajaSesiones").querySelectorAll("input[data-sesion]").forEach(i=>i.addEventListener("change", ()=>{
-    const caja = i.closest(".sesion").querySelector(".paneles");
-    if(caja) caja.hidden = !i.checked;
+  caja.innerHTML = cuadrados + (otras ? `<p class="aparte">Además del informe operativo</p>${otras}` : "");
+  caja.querySelectorAll("input[data-cuadrado], input[data-sesion]").forEach(i=>i.addEventListener("change", ()=>{
+    const fs = i.closest("fieldset");
+    fs.classList.toggle("quitado", !i.checked);
+    fs.querySelectorAll("input[data-tabla], input[data-panel]").forEach(t=>{ t.disabled = !i.checked; });
   }));
 
   const techo = new Set(TECHO[tipo] || []);
@@ -1448,6 +1449,7 @@ async function carga(){
   SESIONES = pf.catalogo_sesiones || {};
   PARTES_CUADRO = pf.catalogo_cuadro || {};
   CUADRADOS = pf.catalogo_cuadrados || {};
+  OTRAS = pf.otras_pantallas || [];
   TECHO = pf.techo || {};
   NIVELES = pf.niveles || {};
   IMPLICITOS = pf.implicitos || {};

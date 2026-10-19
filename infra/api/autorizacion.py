@@ -384,6 +384,20 @@ SOLO_DIRECCION = ("almacenes", "utilizo")
 # Y los que solo ve un perfil sin ambito: son de toda la empresa.
 SIN_AMBITO = ("utilizo",)
 
+# El perfil se elige cuadrado a cuadrado (docs/64): la consola guarda en
+# `cuadrados` los que ve, y eso manda sobre las sesiones. Los cuadrados que no
+# tienen pagina propia llevan al panel: elegirlos da la sesion que abren, y de
+# esa sesion se ven solo sus paneles. Los de un cuadrado no elegido se quitan
+# (paneles_ocultos), aunque compartan sesion con uno elegido.
+PANEL_DE_CUADRADO = {
+    "pdvs": ("instalaciones", ("censo", "altas", "incidencias", "inc_detalle")),
+    "ventas": ("venta_consumo", ("recaudacion", "ciego")),
+    "reposiciones": ("venta_consumo", ("carga",)),
+}
+# Lo que no es un cuadrado y se sigue eligiendo: el resto del panel, los
+# avisos y el cuadro de mando.
+OTRAS_PANTALLAS = ("resumen", "servicio", "disponibilidad", "avisos", "cuadro")
+
 # Como se llama cada cuadrado en la pagina y en la consola.
 NOMBRE_CUADRADO = {
     "rutas": "Rutas", "averias": "Incidencias", "devoluciones": "Devoluciones",
@@ -452,7 +466,12 @@ def con_usuario(perfil, usuario):
     """
     out = dict(perfil)
     out["cuadrados_ocultos"] = limpia_restricciones(usuario)["cuadrados_ocultos"]
-    out["tablas_ocultas"] = _tablas_validas(usuario.get("tablas_ocultas"))
+    # Las tablas que no ve: las que se le quitaron al perfil (docs/64) y,
+    # ademas, las que se le quitaron a el.
+    del_perfil = _tablas_validas(perfil.get("tablas_ocultas"))
+    del_usuario = _tablas_validas(usuario.get("tablas_ocultas"))
+    out["tablas_ocultas"] = _tablas_validas(
+        {c: del_perfil.get(c, []) + del_usuario.get(c, []) for c in TABLAS})
     return out
 
 
@@ -484,9 +503,15 @@ def cuadrados_de(perfil):
     Con `con_usuario` delante, los de este usuario: los de su perfil menos los
     que el administrador le quito.
     """
-    necesarios = bloques_de(perfil)
     tipo = perfil.get("tipo", "cliente")
-    out = [c for c, bloque in CUADRADOS if bloque in necesarios]
+    elegidos = perfil.get("cuadrados")
+    if isinstance(elegidos, list):
+        # Elegido cuadrado a cuadrado en la consola (docs/64).
+        out = [c for c, _ in CUADRADOS if c in elegidos]
+    else:
+        # Un perfil guardado antes: los cuadrados salen de sus sesiones.
+        necesarios = bloques_de(perfil)
+        out = [c for c, bloque in CUADRADOS if bloque in necesarios]
     if nivel_de(tipo) < NIVEL["direccion"]:
         out = [c for c in out if c not in SOLO_DIRECCION]
     ambito = perfil.get("ambito") or {}
