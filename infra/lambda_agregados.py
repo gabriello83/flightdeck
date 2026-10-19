@@ -71,6 +71,8 @@ import serie as S
 import cuadro as CU
 import operativo as OP
 import tarifas as TA
+import revision as RV
+import utilizo as UT
 import telemetria as TE
 import almacenes as AL
 import incidencias as IN
@@ -119,6 +121,19 @@ CARPETA_FOTOS = "cabina/_articulos/fotos/"
 # cobrado, seis meses (tarifas.py explica por que no se relee todo).
 CLAVE_TARIFAS = os.environ.get("TARIFAS", "maestros/tarifas/m_tarifas.json.gz")
 CLAVE_ESTADO_TARIFAS = "cabina/_tarifas/estado.json.gz"
+# Las maquinas sin planograma de la noche anterior, para saber cuales se han
+# creado (revision.py explica por que hace falta guardarlas).
+CLAVE_ESTADO_PLANOGRAMAS = "cabina/_revision/planogramas.json.gz"
+# Quien toca el planograma de cada maquina (docs/17, M14): de ahi sale el
+# usuario de cada planograma creado.
+# Lo que hace cada persona en VenCloud (docs/17, M15), dia a dia, y su historia.
+DESTINO_ACTIVIDAD = "crudo/actividad_usuarios"
+# Los dias de M15 que se releen cada noche: la ventana de reproceso de la
+# extraccion, y uno mas.
+DIAS_ACTIVIDAD_NOCHE = 4
+CLAVE_ESTADO_ACTIVIDAD = "cabina/_utilizo/actividad.json.gz"
+CLAVE_PLANOGRAMA_USUARIOS = os.environ.get(
+    "PLANOGRAMA_USUARIOS", "maestros/planograma_usuarios/m_planograma_usuarios.json.gz")
 # Que hace el observador de tarifas con cada fuente. Va con el fichero ENTERO,
 # antes de filtrar por perfil: el estado es uno para todos.
 TARIFAS_COME = {"lineas": "come_cargas", "telemetria": "come_telemetria",
@@ -1188,7 +1203,7 @@ def escribe_tarifas(acu, op, tarifas, censo, observador, hoy):
     """
     if tarifas is None:
         op.foto["tarifas"] = {"sin_dato": TA.SIN_MAESTRO}
-        return {"sin_dato": TA.SIN_MAESTRO}
+        return {"sin_dato": TA.SIN_MAESTRO}, None
     resumen, detalle = TA.calcula(censo, tarifas, observador, hoy, OP.semaforo)
     base = f"cabina/{acu.perfil['id']}/tarifas"
     for num, d in detalle.items():
@@ -1197,7 +1212,47 @@ def escribe_tarifas(acu, op, tarifas, censo, observador, hoy):
     op.foto["tarifas"] = TA.cuadrado(resumen, OP.semaforo)
     t = resumen["total"]
     return {"pct": t["pct"], "controlados": t["controlados"], "sin_tarifa": t["sin_tarifa"],
-            "sin_dato": t["sin_dato"], "centros": len(detalle)}
+            "sin_dato": t["sin_dato"], "centros": len(detalle)}, detalle
+
+
+def dias_actividad(hoy, desde=None):
+    """Los dias de M15 que se leen esta noche, del mas viejo al de ayer."""
+    if desde:
+        primero = datetime.date.fromisoformat(str(desde)[:10])
+    else:
+        primero = hoy - datetime.timedelta(days=DIAS_ACTIVIDAD_NOCHE)
+    n = (hoy - primero).days
+    return [primero + datetime.timedelta(days=i) for i in range(max(n, 0))]
+
+
+def _sin_ambito(acu):
+    return not any(acu.ambito.get(k) for k in ("clientes", "centros", "delegaciones"))
+
+
+def escribe_utilizo(acumuladores, operativos, actividad, hoy):
+    """Utilizo (docs/60): cuanto usa VenCloud cada persona. Una sola pagina, de
+    toda la red, que solo se escribe a los perfiles sin ambito."""
+    f = UT.fichero(actividad, hoy)
+    c = UT.cuadrado(f)
+    for acu in acumuladores:
+        if _sin_ambito(acu):
+            escribe_comprimido(f"cabina/{acu.perfil['id']}/utilizo.json.gz", f)
+            operativos[acu.perfil["id"]].foto["utilizo"] = c
+    return c
+
+
+def escribe_revision(acu, op, censo, detalle_tarifas, planogramas, hoy, actividad=None):
+    """La revision de clientes de un perfil (docs/59): su pagina y su cuadrado.
+
+    Va despues de las tarifas: las tablas de sin tarifa y precio distinto son
+    su detalle, maquina a maquina.
+    """
+    # La actividad de las personas solo va al perfil sin ambito (el interno).
+    fichero = RV.calcula(censo, detalle_tarifas, planogramas, hoy,
+                         actividad if _sin_ambito(acu) else False)
+    escribe_comprimido(f"cabina/{acu.perfil['id']}/revision.json.gz", fichero)
+    op.foto["revision"] = RV.cuadrado(fichero, hoy)
+    return op.foto["revision"]
 
 
 def escribe_incidencias(acumuladores, operativos, incidencias, mapa, hoy):
@@ -1496,25 +1551,54 @@ def lambda_handler(event, context):
     escribe_comprimido(CLAVE_ESTADO_TARIFAS, observador.estado())
 
     escritos, cuadros, resumen_operativo, resumen_tarifas, resumen_almacenes = [], {}, {}, {}, {}
+    resumen_revision, resumen_utilizo = {}, None
     if not historico:
         rutas = _filas(_json_de(CLAVE_RUTAS))
         maestro_tarifas = _filas(_json_de(CLAVE_TARIFAS))
         tarifas = TA.Tarifas(maestro_tarifas) if maestro_tarifas else None
-        censo = _filas(_json_de(CLAVE_CENSO)) if tarifas else []
+        censo = _filas(_json_de(CLAVE_CENSO))
+        # Los planogramas creados se miran en toda la red, una vez: cada perfil
+        # se queda luego con sus maquinas.
+        usuarios_plano = _json_de(CLAVE_PLANOGRAMA_USUARIOS)
+        planogramas = RV.planogramas(_json_de(CLAVE_ESTADO_PLANOGRAMAS), censo, hoy,
+                                     _filas(usuarios_plano) if usuarios_plano else None) \
+            if censo else None
+        if planogramas is not None:
+            escribe_comprimido(CLAVE_ESTADO_PLANOGRAMAS, planogramas)
+        # Utilizo (docs/60): la historia de la actividad, con los dias de esta
+        # noche. Tras un relleno historico de M15, el evento
+        # {"utilizo_desde": "2025-01-01"} relee todos los dias desde esa fecha.
+        # Si M15 no llega, se sigue ensenando la guardada.
+        # Dia a dia: un relleno de anos no cabe entero en memoria.
+        actividad, leidos = _json_de(CLAVE_ESTADO_ACTIVIDAD), 0
+        for dia in dias_actividad(hoy, event.get("utilizo_desde")):
+            filas_actividad = lee_dia(DESTINO_ACTIVIDAD, "actividad_usuarios", dia)
+            if filas_actividad:
+                actividad = UT.actividad(actividad, filas_actividad, hoy)
+                leidos += 1
+        if leidos:
+            escribe_comprimido(CLAVE_ESTADO_ACTIVIDAD, actividad)
+        resumen_utilizo = escribe_utilizo(acumuladores, operativos, actividad, hoy)
         escribe_incidencias(acumuladores, operativos, incidencias, mapa, hoy)
         for acu in acumuladores:
             op = operativos[acu.perfil["id"]]
             op.pon_almacenes(OP.almacenes(op.balance, rutas, acu.ambito))
-            resumen_tarifas[acu.perfil["id"]] = escribe_tarifas(
-                acu, op, tarifas, [f for f in censo if en_ambito(f, acu.ambito, mapa)],
-                observador, hoy)
+            censo_perfil = [f for f in censo if en_ambito(f, acu.ambito, mapa)]
+            resumen_tarifas[acu.perfil["id"]], detalle_tarifas = escribe_tarifas(
+                acu, op, tarifas, censo_perfil, observador, hoy)
+            if censo:
+                resumen_revision[acu.perfil["id"]] = escribe_revision(
+                    acu, op, censo_perfil, detalle_tarifas, planogramas, hoy, actividad)
+            else:
+                op.foto["revision"] = {"sin_dato": "Falta el censo de instalaciones "
+                                                   "(EXT_INSTALACIONES) de esta noche."}
         resumen_almacenes = escribe_almacenes(acumuladores, operativos, existencias, rutas, hoy)
         festivos = _json_de(CLAVE_FESTIVOS)
         # Donde esta cada maquina dentro del centro («Planta 4»), para la lista de
         # la pagina de rutas: el plan y los partes no lo traen, el censo si.
         ubicaciones = {str(R.v(f, "matricula", "") or "").strip():
                        str(R.v(f, "ubicacion", "") or "").strip()[:60]
-                       for f in _filas(_json_de(CLAVE_CENSO))
+                       for f in censo
                        if R.v(f, "matricula", "") and R.v(f, "ubicacion", "")}
         for acu in acumuladores:
             op = operativos[acu.perfil["id"]]
@@ -1613,6 +1697,10 @@ def lambda_handler(event, context):
         # Los almacenes por dentro (docs/54): productos y bajo minimo por perfil,
         # y si han llegado el maestro de articulos y las fotos.
         "almacenes": resumen_almacenes,
+        # La revision de clientes (docs/59): sin planograma, sin tarifa, precio
+        # distinto y planogramas creados ayer, por perfil.
+        "revision": resumen_revision,
+        "utilizo": resumen_utilizo,
     }
     if parado_en:
         # Esto tiene que verse en la RESPUESTA, no solo en el registro: es la

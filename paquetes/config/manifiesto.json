@@ -340,6 +340,22 @@
       "clave_fecha": "ninguna",
       "destino": "maestros/sat_incidencias",
       "filas_mes": 48120
+    },
+    {
+      "id": "m_planograma_usuarios",
+      "nombre": "M14_EXT_PLANOGRAMA_USUARIOS",
+      "informe": 195,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/planograma_usuarios",
+      "filas_mes": 253
+    },
+    {
+      "id": "actividad_usuarios",
+      "nombre": "M15_EXT_ACTIVIDAD_USUARIOS",
+      "informe": 196,
+      "clave_fecha": "propia",
+      "destino": "crudo/actividad_usuarios",
+      "filas_mes": 3000
     }
   ],
   "descartados": {

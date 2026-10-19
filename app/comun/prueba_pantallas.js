@@ -141,7 +141,7 @@ const API = {
   // infra/operativo.py ya recortada por la API: un dia con todo y uno sin plan.
   '/api/operativo': {
     generado: new Date().toISOString(), ultimo_dia: iso(AYER), umbrales: { verde: 95, amarillo: 75 },
-    cuadrados: ['rutas', 'averias', 'devoluciones', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas'],
+    cuadrados: ['rutas', 'averias', 'devoluciones', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas', 'revision', 'utilizo'],
     dias: {
       [iso(AYER)]: {
         rutas: { previstas: 400, hechas: 350, pct: 87.5, color: 'amarillo', visitas: 1100, fuera_de_plan: 12 },
@@ -164,6 +164,8 @@ const API = {
             devoluciones: { mes: iso(AYER).slice(0, 7), hasta: iso(AYER), total: 518, mes_anterior: 569, sin_cerrar: 76, especiales: 92,
                             por_canal: [['En el sitio', 244], ['Transferencia', 181]] },
             tarifas: { pct: 81.3, color: 'amarillo', coinciden: 13, controlados: 16, sin_tarifa: 2, sin_dato_productos: 1, desde: '2026-04-14' },
+            revision: { sin_planograma: 301, creados_ayer: 4, sin_tarifa: 1894, precio_distinto: 1541 },
+            utilizo: { dia: iso(AYER), usuarios: 37, acciones: 4210, horas: 160 },
             almacenes: { valor: 502429.74, periodo: '2026-09', por_almacen: [{ almacen: 'A', delegacion: '', valor: 1 }] } }
   },
   // Los almacenes por dentro (docs/54), con la forma que escribe infra/almacenes.py.
@@ -232,6 +234,62 @@ const API = {
         delegaciones: [['Madrid - Leganes', 2, 15, 0], ['Andalucía - Málaga', 1, 10, 5]] }
     }
   },
+  // Utilizo (docs/60), con la forma que escribe infra/utilizo.py.
+  '/api/utilizo': (() => {
+    const d1 = iso(AYER), d2 = iso(new Date(AYER.getTime() - 86400000));
+    // Un dia de hace mas de dos meses: llega sin su detalle, solo las cifras.
+    const viejo = iso(new Date(AYER.getTime() - 100 * 86400000));
+    const dia = (dia, acciones, horas, cuentas, por_hora, entidades) => ({ dia, acciones, horas, primera: '08:05:00', ultima: '17:40:10', cuentas, por_hora, entidades });
+    return {
+      generado: iso(new Date()), dias: [d1, d2, viejo], detalle_desde: iso(new Date(AYER.getTime() - 61 * 86400000)),
+      personas: [
+        { nombre: 'M. García', cuentas: ['M.GARCIA', 'M2.GARCIA'], dias: [
+          dia(d1, 120, 6, ['M.GARCIA', 'M2.GARCIA'], { 8: 50, 9: 40, 17: 30 }, [['MaquinaCanal', 'U', 100], ['Maquina', 'I', 20]]),
+          dia(d2, 30, 2, ['M.GARCIA'], { 10: 30 }, [['MaquinaCanal', 'U', 30]])] },
+        { nombre: 'J. Marcos', cuentas: ['J.MARCOS', 'J2.MARCOS'], dias: [dia(d2, 15, 1, ['J2.MARCOS'], { 12: 15 }, [['Pdv', 'U', 15]])] },
+        { nombre: 'A.PEREZ <X>', cuentas: ['A.PEREZ <X>'], dias: [dia(d1, 300, 8, ['A.PEREZ <X>'], { 9: 300 }, [['Pdv', 'D', 300]]),
+          { dia: viejo, acciones: 40, horas: 3, primera: '09:00:00', ultima: '12:00:00', cuentas: ['A.PEREZ <X>'] }] }]
+    };
+  })(),
+  // La revision de clientes (docs/59), con la forma que escribe infra/revision.py.
+  '/api/revision': (() => {
+    const sitio = (mat, d, cl, cli, ce, cen) => ({ matricula: mat, delegacion: d, cod_cliente: cl, cliente: cli,
+      num_centro: ce, centro: cen, cod_pdv: 'P' + mat, ubicacion: 'Planta 1' });
+    const v = (p, f = iso(AYER)) => ({ venta: { precio: p, fecha: f, fuente: 'telemetria' } });
+    return {
+      generado: new Date().toISOString(), creados_desde: iso(new Date(AYER.getTime() - 86400000)),
+      zonas: { 'Andalucía - Sevilla': 'Sur', 'Madrid - Leganes': 'Centro' },
+      sin_usuario: 'Quién lo creó todavía no se descarga de VenCloud: falta el informe con el usuario del planograma.',
+      actividad: { grupos: [
+        { nombre: 'M. García', cuentas: ['M.GARCIA', 'M2.GARCIA'], dias: [
+          { dia: iso(AYER), acciones: 120, horas: 6, primera: '08:05:00', ultima: '17:40:10', cuentas: ['M.GARCIA', 'M2.GARCIA'],
+            por_hora: { 8: 50, 9: 40, 17: 30 }, entidades: [['MaquinaCanal', 'U', 100], ['Maquina', 'I', 20]] }] },
+        { nombre: 'J. Marcos', cuentas: ['J.MARCOS', 'J2.MARCOS'], dias: [] }] },
+      sin_planograma: [
+        { ...sitio('24SE0001', 'Andalucía - Sevilla', '10', 'AIRBUS <OPS>', '500092', 'AIRBUS GETAFE'), marcada: true, canales: 0 },
+        { ...sitio('24SE0002', 'Madrid - Leganes', '20', 'CONSUM', '600', 'CONSUM MURCIA'), marcada: false, canales: 0 }],
+      creados: [
+        { ...sitio('24SE0003', 'Andalucía - Sevilla', '10', 'AIRBUS <OPS>', '500092', 'AIRBUS GETAFE'), dia: iso(AYER), detectado: iso(new Date()), canales: 24 },
+        { ...sitio('24SE0004', 'Madrid - Leganes', '20', 'CONSUM', '600', 'CONSUM MURCIA'), dia: iso(new Date(AYER.getTime() - 86400000)), detectado: iso(AYER), canales: 30 }],
+      sin_tarifa: [
+        { ...sitio('24SE0005', 'Andalucía - Sevilla', '10', 'AIRBUS <OPS>', '500092', 'AIRBUS GETAFE'), subvencion: false,
+          productos_total: 12, sin_tarifa: 2, nivel: 'estandar', niveles: { estandar: 9, pdv: 1 },
+          estandar: [{ tarifa: 'AIRBUS OPERATIONS SLU', asignada: 'cliente', productos: 9 }],
+          productos: [{ cod_articulo: '100', articulo: 'AGUA <0,5>', ultima_carga: iso(AYER), medios: { ef: v(0.9) } },
+                      { cod_articulo: '101', articulo: 'KIT KAT', ultima_carga: iso(AYER), medios: {} }] },
+        { ...sitio('24SE0006', 'Madrid - Leganes', '20', 'CONSUM', '600', 'CONSUM MURCIA'), subvencion: false,
+          productos_total: 5, sin_tarifa: 5, nivel: null, niveles: {}, estandar: [],
+          productos: [{ cod_articulo: '102', articulo: 'COCA-COLA', ultima_carga: iso(AYER), medios: { ef: v(1.6) } }] }],
+      precio_distinto: [
+        { ...sitio('24SE0007', 'Madrid - Leganes', '20', 'CONSUM', '600', 'CONSUM MURCIA'), subvencion: false,
+          productos_total: 10, distintos: 2, comprobados: 8, max_diferencia: 0.15, nivel: 'centro', niveles: { centro: 10 }, estandar: [],
+          productos: [
+            { cod_articulo: '200', articulo: 'BOCADILLO', nivel: 'centro', tarifa: '', asignada: '', cambio_tarifa: '', diferencia: 0.15,
+              medios: { ef: { tarifa: 2.2, ...v(2.35), ok: false }, tc: { tarifa: 2.2, ...v(2.2), ok: true } } },
+            { cod_articulo: '201', articulo: 'ZUMO', nivel: 'centro', tarifa: '', asignada: '', cambio_tarifa: '', diferencia: -0.05,
+              medios: { ef: { tarifa: 1.3, ...v(1.25), ok: false } } }] }]
+    };
+  })(),
   // Las devoluciones (docs/57), con la forma que escribe infra/devoluciones.py.
   '/api/devoluciones': (() => {
     const d = (n, h = '09:00') => `${iso(new Date(AYER.getTime() - n * 86400000))} ${h}`;
@@ -798,9 +856,18 @@ const servidor = http.createServer((pet, res) => {
     const { pagina, errores, fuera } = await abre('/operativo/');
     await pagina.waitForSelector('#cuadros .cuadro');
     comprueba('arranca en ayer', await pagina.inputValue('#dia'), iso(AYER));
-    comprueba('los diez cuadrados, en su orden',
+    comprueba('los once cuadrados, en su orden',
       await pagina.$$eval('#cuadros .cuadro', x => x.map(c => c.dataset.id)),
-      ['rutas', 'averias', 'devoluciones', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas']);
+      ['rutas', 'averias', 'devoluciones', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas', 'revision', 'utilizo']);
+    comprueba('revision clientes: las maquinas sin planograma, sin semaforo, y lleva a su pagina',
+      [(await pagina.textContent('.cuadro[data-id="revision"] .vl')).trim(),
+       await pagina.$eval('.cuadro[data-id="revision"]', c => ['verde', 'amarillo', 'rojo'].some(k => c.classList.contains(k))),
+       await pagina.getAttribute('.cuadro[data-id="revision"]', 'href')], ['301', false, '/revision/']);
+    comprueba_que('y al lado los creados ayer, sin tarifa y precio distinto',
+      (await pagina.textContent('.cuadro[data-id="revision"] .sub')).includes('4 creados ayer'));
+    comprueba('utilizo: los usuarios del ultimo dia, y lleva a su pagina',
+      [(await pagina.textContent('.cuadro[data-id="utilizo"] .vl')).trim(),
+       await pagina.getAttribute('.cuadro[data-id="utilizo"]', 'href')], ['37', '/utilizo/']);
     comprueba('devoluciones: el total del mes, sin semaforo, y lleva a su pagina',
       [(await pagina.textContent('.cuadro[data-id="devoluciones"] .vl')).trim(),
        await pagina.$eval('.cuadro[data-id="devoluciones"]', c => ['verde', 'amarillo', 'rojo'].some(k => c.classList.contains(k))),
@@ -1179,6 +1246,158 @@ const servidor = http.createServer((pet, res) => {
     await pagina.click('#pestanas button[data-p="deleg"]');
     comprueba('por delegacion', await pagina.$$eval('#tabla tbody tr', x => x.length), 2);
     comprueba('el dia a dia, con los dos dias', await pagina.$$eval('#dias .fb', x => x.length), 2);
+    await pagina.setViewportSize({ width: 380, height: 800 });
+    comprueba('en movil no se sale de la pantalla',
+      await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await pagina.emulateMedia({ colorScheme: 'dark' });
+    comprueba_que('en oscuro el fondo es oscuro',
+      (await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(18, 18, 17)');
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nLa revision de clientes (docs/59)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre('/revision/');
+    await pagina.waitForSelector('.kpi');
+    const kpis = async () => pagina.$$eval('.kpi[data-t] .vl', x => x.map(e => e.textContent));
+    // El cambio de tabla va por el hash: hay que esperar a que se pinte.
+    const tabla = async t => { await pagina.click(`.kpi[data-t="${t}"]`);
+      await pagina.waitForSelector(`.kpi[data-t="${t}"][aria-pressed="true"]`); };
+    const maquina = async sel => { await pagina.click(sel); await pagina.waitForSelector('#volver'); };
+    const volver = async () => { await pagina.click('#volver'); await pagina.waitForSelector('#volverArea'); };
+    // Primero un cuadrado por area; pulsando, sus maquinas por delegacion.
+    const area = async a => { await pagina.click(`.area[data-a="${a}"]`); await pagina.waitForSelector('#volverArea'); };
+    const areas = async () => { await pagina.click('#volverArea'); await pagina.waitForSelector('.area'); };
+    const textos = async sel => pagina.$$eval(sel, x => x.map(e => e.textContent.replace(/\s+/g, ' ').trim()));
+    const filasMaq = '#tabla tbody tr:not(.grupo)';
+    comprueba('las cuentas: sin planograma, sin tarifa, precio distinto, creados el ultimo dia y acciones de Garcia y Marcos',
+      (await kpis()).slice(0, 5), ['2', '2', '1', '1', '120']);
+    comprueba('arranca en las sin planograma, un cuadrado por area con sus maquinas',
+      [await textos('.area .et'), await textos('.area .vl')], [['Centro', 'Sur'], ['1', '1']]);
+    await area('Sur');
+    comprueba('pulsando el area, sus maquinas', await textos(`${filasMaq} td:first-child`), ['24SE0001']);
+    comprueba('por delegacion, con su cabecera', await textos('#tabla tr.grupo'), ['Andalucía - Sevilla · 1 máquina']);
+    comprueba_que('el cliente va escapado', (await pagina.innerHTML('#tabla')).includes('AIRBUS &lt;OPS&gt;'));
+    await areas();
+    await pagina.selectOption('#fDeleg', 'Madrid - Leganes');
+    await pagina.waitForSelector('#tabla tr.grupo');
+    comprueba('la delegacion filtra las cuatro, no la actividad', await kpis(), ['1', '1', '1', '1', '120']);
+    comprueba('y con una delegacion elegida va directo a su lista', await textos(`${filasMaq} td:first-child`), ['24SE0002']);
+    comprueba('y el cliente solo ofrece los de esa delegacion',
+      await pagina.$$eval('#fCliente option', x => x.map(o => o.value)), ['', '20']);
+    await pagina.click('#bLimpiar');
+    await pagina.waitForFunction(() => document.querySelector('#fDeleg').value === '');
+    await tabla('tarifa');
+    comprueba_que('sin tarifa: por area, con los productos', (await textos('.area .nt')).includes('máquinas en 1 delegación · 2 productos sin tarifa'),
+      await textos('.area .nt'));
+    const [d1] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('el Excel de la tabla', /^revision_sin_tarifa_todas_\d{4}-\d\d-\d\d\.xlsx$/.test(d1.suggestedFilename()), d1.suggestedFilename());
+    const t1 = fs.readFileSync(await d1.path()).toString('utf8');
+    comprueba_que('con las maquinas y sus productos', t1.includes('name="Máquinas"') && t1.includes('name="Productos sin tarifa"') && t1.includes('COCA-COLA'));
+    await area('Centro');
+    comprueba_que('la que no tiene ninguna tarifa lo dice', (await pagina.textContent('#tabla')).includes('Ninguna tarifa'));
+    const [d1b] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('el Excel del area, con el area en el nombre', /^revision_sin_tarifa_Centro_/.test(d1b.suggestedFilename()), d1b.suggestedFilename());
+    await areas();
+    await area('Sur');
+    comprueba_que('la tarifa estandar va señalada, con su tabla y a quien esta asignada',
+      (await pagina.locator(filasMaq).first().textContent()).includes('AIRBUS OPERATIONS SLU · asignada al cliente')
+      && await pagina.locator(`${filasMaq} .etq.estandar`).count() === 1);
+    await maquina('#tabla .mat[data-m="24SE0005"]');
+    comprueba('pulsando la matricula, sus productos sin tarifa',
+      await pagina.$$eval('#vista tbody tr', x => x.length), 2);
+    comprueba_que('con lo que cobra hoy', (await pagina.textContent('#vista tbody')).includes('0,90'));
+    const [d2] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('y su Excel, con la matricula en el nombre', /^revision_sin_tarifa_24SE0005_/.test(d2.suggestedFilename()), d2.suggestedFilename());
+    await volver();
+    await tabla('precio');
+    await area('Centro');
+    comprueba('precio distinto: cuantos productos y la diferencia maxima',
+      await textos(`${filasMaq} td.n`), ['2de 8 comprobados', '+0,15 €']);
+    await maquina('#tabla .mat');
+    comprueba('pulsando, los productos con su diferencia, la mayor primero',
+      await textos('#vista tbody tr td.n'), ['+0,15 €', '-0,05 €']);
+    const [d3] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    const t3 = fs.readFileSync(await d3.path()).toString('utf8');
+    comprueba_que('el Excel lleva solo los medios que no cuadran', t3.includes('<v>2.35</v>') && !t3.includes('Tarjeta crédito</t>'));
+    await volver();
+    await tabla('creados');
+    comprueba('los creados, del ultimo dia', await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(e => e.textContent)), ['24SE0003']);
+    comprueba_que('y dice que el usuario aun no llega', (await pagina.textContent('#tabla')).includes('falta el informe con el usuario'));
+    await pagina.selectOption('#fDia', iso(new Date(AYER.getTime() - 86400000)));
+    await pagina.waitForFunction(() => location.hash.includes('dia='));
+    comprueba('el dia anterior', await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(e => e.textContent)), ['24SE0004']);
+    await tabla('usuarios');
+    comprueba('Garcia y Marcos, con sus dos cuentas', await textos('.persona h3'), ['M. García', 'J. Marcos']);
+    comprueba('las acciones, las horas y de que hora a que hora', await textos('.persona:first-child .cifras b'),
+      ['120', '6', '08:05 – 17:40']);
+    comprueba('que toco, con la accion en castellano', await textos('.persona:first-child tbody td'),
+      ['MaquinaCanal', 'Cambio', '100', 'Maquina', 'Alta', '20']);
+    comprueba_que('el que no hizo nada lo dice', (await pagina.textContent('.persona:nth-child(2)')).includes('Ninguna acción'));
+    comprueba('sin los filtros de delegacion', await pagina.$eval('#barra', e => e.hidden), true);
+    const [d4] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('y su Excel', /^revision_garcia_marcos_/.test(d4.suggestedFilename()), d4.suggestedFilename());
+    await pagina.setViewportSize({ width: 380, height: 800 });
+    comprueba('en movil no se sale de la pantalla',
+      await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await pagina.emulateMedia({ colorScheme: 'dark' });
+    comprueba_que('en oscuro el fondo es oscuro',
+      (await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(18, 18, 17)');
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nUtilizo (docs/60)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre('/utilizo/');
+    await pagina.waitForSelector('#tabla tbody tr');
+    const textos = async sel => pagina.$$eval(sel, x => x.map(e => e.textContent.replace(/\s+/g, ' ').trim()));
+    const viejoMes = API['/api/utilizo'].dias[2].slice(0, 7);
+    comprueba('el ultimo dia: usuarios, acciones y horas', await textos('.kpi .vl'), ['2', '420', '14']);
+    comprueba('todos los usuarios, el que mas primero', await textos('#tabla tbody tr td:first-child .mat'), ['A.PEREZ <X>', 'M. García']);
+    comprueba_que('el nombre va escapado', (await pagina.innerHTML('#tabla')).includes('A.PEREZ &lt;X&gt;'));
+    comprueba_que('Garcia, con sus dos cuentas juntas', (await pagina.textContent('#tabla')).includes('M.GARCIA + M2.GARCIA'));
+    await pagina.fill('#fBusca', 'garcia');
+    await pagina.waitForFunction(() => document.querySelectorAll('#tabla tbody tr').length === 1);
+    comprueba('buscar, sin tildes', await textos('#tabla tbody tr td:first-child .mat'), ['M. García']);
+    const [d1] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('el Excel del dia', /^utilizo_\d{4}-\d\d-\d\d\.xlsx$/.test(d1.suggestedFilename()), d1.suggestedFilename());
+    const t1 = fs.readFileSync(await d1.path()).toString('utf8');
+    comprueba_que('con el dia, que toco y la historia', t1.includes('name="Día"') && t1.includes('name="Qué tocó"') && t1.includes('name="Día a día"'));
+    await pagina.click('#tabla .mat');
+    await pagina.waitForSelector('#miga:not([hidden])');
+    comprueba('pulsando, su detalle: veinticuatro horas', await pagina.locator('.horas span').count(), 24);
+    comprueba('y su historia mes a mes: los dos dias suman 150',
+      (await textos('#mesames tbody tr td:nth-child(2)')).reduce((a, t) => a + Number(t.replace(/\./g, '')), 0), 150);
+    await pagina.selectOption('#fDia', iso(new Date(AYER.getTime() - 86400000)));
+    await pagina.waitForFunction(() => document.querySelector('.persona-cab b') && document.querySelector('.persona-cab b').textContent === '30');
+    comprueba_que('el otro dia, con una sola cuenta', (await pagina.textContent('#vista')).includes('Sólo trabajó con M.GARCIA'));
+    const [d2] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('y su Excel', /^utilizo_M_Garcia_/.test(d2.suggestedFilename()), d2.suggestedFilename());
+    await pagina.click('#volver');
+    await pagina.waitForSelector('#miga[hidden]', { state: 'attached' });
+    await pagina.fill('#fBusca', '');
+    await pagina.waitForFunction(() => !location.hash.includes('q='));
+    await pagina.selectOption('#fPer', 'mes');
+    await pagina.waitForSelector('#lMes:not([hidden])');
+    await pagina.selectOption('#fMes', viejoMes);
+    await pagina.waitForFunction(m => location.hash.includes('mes=' + m), viejoMes);
+    comprueba('un mes de hace tiempo: el usuario con sus cifras', await textos('#tabla tbody tr td:first-child .mat'), ['A.PEREZ <X>']);
+    comprueba_que('y dice que no hay detalle', (await pagina.textContent('#tabla tbody')).includes('sin detalle'));
+    const [d3] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('el Excel del mes', d3.suggestedFilename() === `utilizo_${viejoMes}.xlsx`, d3.suggestedFilename());
+    await pagina.click('#tabla .mat');
+    await pagina.waitForSelector('#miga:not([hidden])');
+    comprueba_que('su mes, sin detalle, lo dice', (await pagina.textContent('#vista')).includes('dos últimos meses'));
+    await pagina.click('#volver');
+    await pagina.waitForSelector('#miga[hidden]', { state: 'attached' });
     await pagina.setViewportSize({ width: 380, height: 800 });
     comprueba('en movil no se sale de la pantalla',
       await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);

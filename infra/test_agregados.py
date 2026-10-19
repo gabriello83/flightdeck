@@ -851,6 +851,15 @@ comprueba("suma las 20.000 visitas", acu.visitas, 20000)
 comprueba("y ocupa menos de la vigesima parte de las filas",
           acumulado < crudo_en_memoria / 20, True)
 
+print("\nUtilizo (docs/60): los dias de M15 que se leen")
+_h = datetime.date(2026, 10, 19)
+comprueba("de noche, los cuatro anteriores a hoy",
+          [d.isoformat() for d in L.dias_actividad(_h)],
+          ["2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"])
+_r = L.dias_actividad(_h, "2025-01-01")
+comprueba("con utilizo_desde, desde esa fecha hasta ayer",
+          (_r[0].isoformat(), _r[-1].isoformat(), len(_r)), ("2025-01-01", "2026-10-18", 656))
+
 print()
 if fallos:
     print(f"{len(fallos)} PRUEBAS FALLIDAS: {', '.join(fallos)}")

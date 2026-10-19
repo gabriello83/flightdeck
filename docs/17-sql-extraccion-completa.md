@@ -2005,6 +2005,216 @@ where a.obsoleto = false
                  and d.fecha >= current_date - 120)
 ```
 
+## M14Z · EXT_SONDA_PLANOGRAMA  *(sin parámetros, se lanza una vez)*
+
+No es un informe de datos: es la pregunta «¿guarda VenCloud **quién** crea un planograma, y
+**cuándo**?». La revisión de clientes ([59-la-revision-de-clientes.md](59-la-revision-de-clientes.md))
+ya ve cada mañana qué máquinas han pasado de no tener planograma a tenerlo, comparando una noche
+con la anterior, pero el usuario no está en ningún informe de los que se bajan. Puede estar en
+una columna de alta o de modificación de las propias tablas del planograma, o en una tabla de
+registro aparte. Esta sonda lista las columnas de las tres tablas del planograma y las de toda
+tabla cuyo nombre suene a registro, a histórico o a usuarios. Se lanza una vez, se sube el
+Excel, y con lo que diga se escribe el informe del usuario.
+
+```sql
+select
+  c.table_schema as esquema,
+  c.table_name   as tabla,
+  c.column_name  as columna,
+  c.data_type    as tipo
+from information_schema.columns c
+where c.table_schema not in ('pg_catalog', 'information_schema')
+  and (
+        (c.table_schema = 'recursos'
+         and c.table_name in ('maquinas', 'maquinascanales', 'maquinascarriles'))
+     or c.table_name ilike '%planog%'
+     or c.table_name ilike '%log%'
+     or c.table_name ilike '%audit%'
+     or c.table_name ilike '%histor%'
+     or c.table_name ilike '%usuario%'
+     or c.table_name ilike '%cambio%'
+  )
+order by c.table_schema, c.table_name, c.ordinal_position
+```
+
+**Leída el 18-oct-2026.** Ni `recursos.maquinascanales` ni `maquinascarriles` guardan usuario ni
+fecha de alta, y `maquinas` sólo tiene `fechaultcambioplanograma`, que no se rellena. Hay dos
+tablas de registro con usuario que pueden llevar la creación del planograma:
+`control.activitylog` (`date`, `application`, `action`, `entity`, `element`, `userid` →
+`general.usuarios.nombre`) y `control.veneventlog` (`fecha`, `usuarioid`, `usuarionombre`,
+`entidad`, `elementoid`, `codelemento`, `proceso`, `texto`). Qué apuntan, lo dice la siguiente.
+
+## M14Y · EXT_SONDA_REGISTRO  *(sin parámetros, se lanza una vez)*
+
+Qué entidades y acciones apuntan los dos registros de VenCloud en los últimos treinta días, con
+cuántas veces, un ejemplo y la última. Si el planograma de una máquina aparece (una entidad que
+suene a canales, planograma o máquina), con eso se escribe el informe del usuario.
+
+```sql
+select
+  'activitylog'                   as registro,
+  a.application                   as aplicacion,
+  a.action                        as accion,
+  a.entity                        as entidad,
+  count(*)                        as veces,
+  max(a.element)                  as ejemplo,
+  cast(max(a.date) as text)       as ultima
+from control.activitylog a
+where a.date >= current_date - 30
+group by a.application, a.action, a.entity
+union all
+select
+  'veneventlog'                   as registro,
+  cast(e.proceso as text)         as aplicacion,
+  left(max(e.texto), 200)         as accion,
+  e.entidad                       as entidad,
+  count(*)                        as veces,
+  max(e.codelemento)              as ejemplo,
+  cast(max(e.fecha) as text)      as ultima
+from control.veneventlog e
+where e.fecha >= current_date - 30
+group by e.proceso, e.entidad
+order by 1, 5 desc
+```
+
+**Leída el 18-oct-2026.** `control.activitylog` apunta cada alta (`I`), cambio (`U`) y borrado
+(`D`) de las entidades de VenCloud con su usuario (`userid`) y el id del registro tocado
+(`element`). En treinta días hay 919 cambios de `MaquinaCanal`, 65 de `MaquinaCarril` y 962 de
+`Maquina`, y ningún alta de canal: un planograma se crea poniendo artículo a canales que ya
+existen. `control.veneventlog` apunta además el «borrado de pedidos de reponedor por cambio de
+planograma» (1.203 en treinta días), con el nombre del usuario y el punto de venta. De ahí sale
+M14.
+
+## M14 · EXT_PLANOGRAMA_USUARIOS  *(sin parámetros)*
+
+Quién ha tocado el planograma de cada máquina en los últimos siete días, y cuándo: los cambios de
+canales, de carriles y de la ficha de la máquina en `control.activitylog`, y los avisos de
+cambio de planograma de `control.veneventlog`. Una fila por máquina, origen, acción y usuario.
+La revisión de clientes (docs/59) se queda, para cada planograma creado, con el usuario que más
+cambios hizo desde la noche anterior.
+
+`element` es texto: sólo se cruza cuando es un número, para que un registro raro no tumbe el
+informe.
+
+```sql
+select
+  'canal'                            as origen,
+  m.codigo                           as matricula,
+  a.action                           as accion,
+  coalesce(u.nombre, cast(a.userid as text)) as usuario,
+  count(*)                           as cambios,
+  cast(min(a.date) as text)          as primera,
+  cast(max(a.date) as text)          as ultima
+from control.activitylog a
+join recursos.maquinascanales c on c.id = case when a.element ~ '^[0-9]+$'
+                                               then cast(a.element as bigint) end
+join recursos.maquinas m        on m.id = c.maquinaid
+left join general.usuarios u    on u.id = a.userid
+where a.entity = 'MaquinaCanal'
+  and a.date >= current_date - 7
+group by m.codigo, a.action, u.nombre, a.userid
+union all
+select
+  'carril'                           as origen,
+  m.codigo                           as matricula,
+  a.action                           as accion,
+  coalesce(u.nombre, cast(a.userid as text)) as usuario,
+  count(*)                           as cambios,
+  cast(min(a.date) as text)          as primera,
+  cast(max(a.date) as text)          as ultima
+from control.activitylog a
+join recursos.maquinascarriles c on c.id = case when a.element ~ '^[0-9]+$'
+                                                then cast(a.element as bigint) end
+join recursos.maquinas m         on m.id = c.maquinaid
+left join general.usuarios u     on u.id = a.userid
+where a.entity = 'MaquinaCarril'
+  and a.date >= current_date - 7
+group by m.codigo, a.action, u.nombre, a.userid
+union all
+select
+  'maquina'                          as origen,
+  m.codigo                           as matricula,
+  a.action                           as accion,
+  coalesce(u.nombre, cast(a.userid as text)) as usuario,
+  count(*)                           as cambios,
+  cast(min(a.date) as text)          as primera,
+  cast(max(a.date) as text)          as ultima
+from control.activitylog a
+join recursos.maquinas m      on m.id = case when a.element ~ '^[0-9]+$'
+                                             then cast(a.element as bigint) end
+left join general.usuarios u  on u.id = a.userid
+where a.entity = 'Maquina'
+  and a.date >= current_date - 7
+group by m.codigo, a.action, u.nombre, a.userid
+union all
+select
+  'evento'                           as origen,
+  m.codigo                           as matricula,
+  'planograma'                       as accion,
+  coalesce(e.usuarionombre, cast(e.usuarioid as text)) as usuario,
+  count(*)                           as cambios,
+  cast(min(e.fecha) as text)         as primera,
+  cast(max(e.fecha) as text)         as ultima
+from control.veneventlog e
+join recursos.maquinas m on m.pdvid = e.pdvid
+where e.texto ilike '%planograma%'
+  and e.fecha >= current_date - 7
+group by m.codigo, e.usuarionombre, e.usuarioid
+order by 2, 1, 7
+```
+
+## M15 · EXT_ACTIVIDAD_USUARIOS
+
+Lo que hace cada persona en VenCloud, día a día, de `control.activitylog`, sólo usuarios de verdad
+(los procesos de VenCloud llevan id negativo). Lleva las dos fechas como los informes de visitas:
+de noche se baja día a día la ventana de reproceso, y con el relleno histórico se baja hacia atrás
+todo lo que guarde VenCloud. Es el informe 196 (`actividad_usuarios`, `crudo/actividad_usuarios`).
+Dos clases de fila:
+
+- `tipo = 'hora'`: cuántas acciones hizo en cada hora del día. Sirve para contar las **horas con
+  actividad** juntando dos cuentas de la misma persona (M.GARCIA y M2.GARCIA), que sumando no se
+  puede.
+- `tipo = 'entidad'`: cuántas altas (`I`), cambios (`U`) y borrados (`D`) hizo de cada cosa
+  (`ParteVisita`, `MaquinaCanal`, `TarifaVendingProducto`…).
+
+Lo usan el cuadrado Utilizo (docs/60), con todos los usuarios, y la revisión de clientes
+(docs/59), con M. García y J. Marcos.
+
+```sql
+select
+  'hora'                                    as tipo,
+  u.nombre                                  as usuario,
+  cast(cast(a.date as date) as text)        as dia,
+  cast(extract(hour from a.date) as integer) as hora,
+  ''                                        as entidad,
+  ''                                        as accion,
+  count(*)                                  as veces,
+  cast(min(a.date) as text)                 as primera,
+  cast(max(a.date) as text)                 as ultima
+from control.activitylog a
+join general.usuarios u on u.id = a.userid
+where a.date >= '{0}' and a.date <= '{1} 23:59:59'
+  and a.userid > 0
+group by u.nombre, cast(a.date as date), extract(hour from a.date)
+union all
+select
+  'entidad'                                 as tipo,
+  u.nombre                                  as usuario,
+  cast(cast(a.date as date) as text)        as dia,
+  -1                                        as hora,
+  a.entity                                  as entidad,
+  a.action                                  as accion,
+  count(*)                                  as veces,
+  cast(min(a.date) as text)                 as primera,
+  cast(max(a.date) as text)                 as ultima
+from control.activitylog a
+join general.usuarios u on u.id = a.userid
+where a.date >= '{0}' and a.date <= '{1} 23:59:59'
+  and a.userid > 0
+group by u.nombre, cast(a.date as date), a.entity, a.action
+order by 2, 3, 1, 4, 5
+```
+
 ## M11 · EXT_MAESTRO_EMPLEADOS  *(sin parámetros)*
 
 Informe 190. Los empleados con su cargo y sus marcas de rol, sin teléfono, email ni DNI. El

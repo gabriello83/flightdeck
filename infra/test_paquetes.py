@@ -34,6 +34,8 @@ ESPERADO = {
                       "serie.py": "infra/serie.py",
                       "operativo.py": "infra/operativo.py",
                       "tarifas.py": "infra/tarifas.py",
+                      "revision.py": "infra/revision.py",
+                      "utilizo.py": "infra/utilizo.py",
                       "telemetria.py": "infra/telemetria.py",
                       "almacenes.py": "infra/almacenes.py",
                       "incidencias.py": "infra/incidencias.py",
