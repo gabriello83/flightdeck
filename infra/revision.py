@@ -38,6 +38,7 @@ Sin dependencias: se prueba con `python3 infra/test_revision.py`.
 
 import datetime
 
+import incidencias as IN
 import reglas as R
 import utilizo as UT
 
@@ -248,7 +249,7 @@ def calcula(censo, detalle_tarifas, estado_planogramas, hoy, actividad=False):
         import tarifas as TA
         out["sin_tarifa"] = {"sin_dato": TA.SIN_MAESTRO}
         out["precio_distinto"] = {"sin_dato": TA.SIN_MAESTRO}
-        return out
+        return _con_zonas(out)
 
     sin_tarifa, distinto = [], []
     for num, det in sorted(detalle_tarifas.items()):
@@ -288,6 +289,18 @@ def calcula(censo, detalle_tarifas, estado_planogramas, hoy, actividad=False):
     clave = lambda m: (m["delegacion"], m["cliente"], m["centro"], m["matricula"])
     out["sin_tarifa"] = sorted(sin_tarifa, key=clave)
     out["precio_distinto"] = sorted(distinto, key=clave)
+    return _con_zonas(out)
+
+
+def _con_zonas(out):
+    """El area de cada delegacion (Gabriele, 19-oct): la pagina abre primero un
+    cuadrado por area y, dentro, las maquinas por delegacion. Las areas son las
+    cinco del Power BI, las mismas que incidencias y devoluciones."""
+    delegs = set()
+    for k in ("sin_planograma", "creados", "sin_tarifa", "precio_distinto"):
+        if isinstance(out.get(k), list):
+            delegs.update(m["delegacion"] for m in out[k])
+    out["zonas"] = {d: IN.zona_de(d) for d in sorted(delegs)}
     return out
 
 

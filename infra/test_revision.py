@@ -137,6 +137,14 @@ print("\nOtro perfil no ve los creados de una maquina que no es suya")
 fich = RV.calcula([maquina("Z9")], {}, e2, HOY)
 comprueba("ninguno", fich["creados"], [])
 
+print("\nEl area de cada delegacion, para los cuadrados de la pagina")
+_z = RV.calcula([maquina("Z1", delegacion="Andalucía - Sevilla", canales=0),
+                 maquina("Z2", delegacion="Levante - Murcia", canales=0)], {}, None, HOY)
+comprueba("cada delegacion con su area", _z["zonas"],
+          {"Andalucía - Sevilla": "Sur", "Levante - Murcia": "Levante"})
+comprueba("tambien sin maestro de tarifas", RV.calcula([maquina("Z3", canales=0)], None, None, HOY)["zonas"],
+          {"Andalucía - Sevilla": "Sur"})
+
 if fallos:
     print(f"\n{fallos} PRUEBAS FALLIDAS")
     sys.exit(1)
