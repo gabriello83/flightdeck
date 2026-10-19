@@ -133,11 +133,12 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   .prod td.c-cod{grid-column:1 / 4}
 }
 </style>
+<script src="/comun/preferidos.js"></script>
 </head>
 <body>
 <div class="env">
   <header class="top">
-    <div class="marca">
+    <div class="marca" data-estrella="productos">
       <b>Almacenes</b>
       <span id="quien"></span>
     </div>
@@ -402,6 +403,8 @@ function avisa(texto){
     + `albarán de compra. Un producto está bajo mínimo cuando le queda menos del ${esc(DATOS.umbral_pct)} % `
     + `de lo que se compró la última vez. Donde no hay dato, se dice en vez de estimarse.`;
   $("#pie").hidden = false;
+  /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
+  Preferidos.monta("almacenes", {});
 })();
 </script>
 </body>

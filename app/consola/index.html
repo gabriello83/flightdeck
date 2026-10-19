@@ -109,6 +109,16 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--s1);outline-offs
 .marcas label.fuera{color:var(--tinta-3)}
 .marcas label.fuera span{text-decoration:line-through}
 .marcas .porque{font-size:11.5px;color:var(--tinta-3);text-decoration:none}
+/* Los cuadrados del usuario, cada uno con sus tablas debajo (docs/61). */
+.cuadrados{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px 14px}
+.cuadrados fieldset{border:1px solid var(--borde);border-radius:8px;padding:8px 10px;margin:0;min-width:0}
+.cuadrados fieldset.quitado{opacity:.6}
+.cuadrados legend{padding:0 4px}
+.cuadrados legend label{display:flex;align-items:center;gap:7px;font-weight:600;font-size:13.5px;margin:0}
+.cuadrados legend input,.cuadrados .tablas input{width:auto;flex-shrink:0}
+.cuadrados .tablas{display:grid;gap:4px;margin-top:4px;font-size:13px;color:var(--tinta-2)}
+.cuadrados .tablas label{display:flex;align-items:center;gap:7px;font-weight:400;margin:0}
+.cuadrados .tablas .tenue{font-size:12px;color:var(--tinta-3)}
 .pista{font-size:12px;color:var(--tinta-3);margin:4px 0 0}
 .pista.mal{color:var(--grave)}
 /* El ámbito se elige de una lista, varios a la vez: lo elegido queda arriba
@@ -252,7 +262,7 @@ function avisa(t, bien){
 }
 
 /* ---------- estado ---------- */
-let YO=null, USUARIOS=[], PERFILES=[], SESIONES={}, TECHO={}, NIVELES={}, IMPLICITOS={}, PARTES_CUADRO={},
+let YO=null, USUARIOS=[], PERFILES=[], SESIONES={}, TECHO={}, NIVELES={}, IMPLICITOS={}, PARTES_CUADRO={}, CUADRADOS={},
     CONFIG={}, TELEFONOS=[], COLA=[], CARGA=null, TELE=null, SECCION="usuarios", guardando=null;
 /* El histórico: la serie diaria del perfil de la sesión y lo último que se
    sumó. Se queda en memoria para que volver a esta pestaña no vuelva a pedirlo. */
@@ -291,6 +301,7 @@ function vistaUsuarios(){
     <td data-et="Perfil">${esc(nombrePerfil(u.perfil_id))}</td>
     <td data-et="Estado">${u.estado==="bloqueado"
       ? `<span class="pill c">bloqueado</span>` : `<span class="pill b">activo</span>`}</td>
+    <td data-et="Informe">${esc(resumenInforme(u))}</td>
     <td data-et="Asistente">${u.asistente===false ? `<span class="pill g">no</span>` : "sí"}
       ${u.limite_preguntas_dia ? `<br><span class="cond">${num(u.limite_preguntas_dia)}/día</span>` : ""}</td>
     <td class="n">
@@ -303,10 +314,69 @@ function vistaUsuarios(){
       <button class="btn fuerte" id="bNuevoUsuario" type="button">Nuevo usuario</button></div>
     <p class="sub">${USUARIOS.length} de alta. La contraseña inicial la entregas tú: el usuario tiene que cambiarla al entrar.</p>
     ${USUARIOS.length ? `<div class="tabla"><table>
-      <thead><tr><th>Quién</th><th>Perfil</th><th>Estado</th><th>Asistente</th><th></th></tr></thead>
+      <thead><tr><th>Quién</th><th>Perfil</th><th>Estado</th><th>Informe operativo</th><th>Asistente</th><th></th></tr></thead>
       <tbody>${filas}</tbody></table></div>`
      : `<p class="vacio">Todavía no hay ningún usuario además de ti.</p>`}
   </section>`;
+}
+
+/* Lo que el usuario ve del informe operativo, en una línea: lo de su perfil, o
+   lo que se le ha quitado. */
+function resumenInforme(u){
+  const p = PERFILES.find(x=>x._id===u.perfil_id);
+  if(!p || !(p.cuadrados||[]).length) return "—";
+  const quitados = (u.cuadrados_ocultos||[]).filter(c=>p.cuadrados.includes(c)).length;
+  const tablas = Object.entries(u.tablas_ocultas||{})
+    .filter(([c])=>p.cuadrados.includes(c) && !(u.cuadrados_ocultos||[]).includes(c))
+    .reduce((n,[,ts])=>n+ts.length, 0);
+  if(!quitados && !tablas) return "Todo lo de su perfil";
+  const ve = p.cuadrados.length - quitados;
+  return `${num(ve)} de ${num(p.cuadrados.length)} cuadrados`
+    + (tablas ? ` · ${num(tablas)} ${tablas===1?"tabla quitada":"tablas quitadas"}` : "");
+}
+
+/* Los cuadrados del perfil elegido, con sus tablas, para quitarle a este
+   usuario lo que no deba ver (docs/61). Todo puesto de serie: se guarda lo que
+   se QUITA, así un cuadrado o una tabla nueva le sale sin volver a editarlo.
+   Sólo se ofrece lo que su perfil ve: al usuario se le puede quitar, no dar. */
+function pintaCuadradosUsuario(u){
+  const p = PERFILES.find(x=>x._id===$("#fPerfil").value);
+  const ids = (p && p.cuadrados) || [];
+  const campo = $("#campoCuadrados");
+  campo.hidden = !ids.length;
+  if(!ids.length){ $("#cajaCuadrados").innerHTML = ""; return; }
+  const sinC = new Set((u && u.cuadrados_ocultos) || []);
+  const sinT = (u && u.tablas_ocultas) || {};
+  $("#cajaCuadrados").innerHTML = ids.map(c=>{
+    const cat = CUADRADOS[c] || {nombre:c, tablas:{}};
+    /* Una página de una sola tabla se quita con su cuadrado. */
+    const tablas = Object.entries(cat.tablas||{}).length > 1 ? Object.entries(cat.tablas) : [];
+    const fuera = new Set(sinT[c] || []);
+    return `<fieldset data-c="${esc(c)}" class="${sinC.has(c)?"quitado":""}">
+      <legend><label><input type="checkbox" data-cuadrado value="${esc(c)}" ${sinC.has(c)?"":"checked"}>
+        <span>${esc(cat.nombre)}</span></label></legend>
+      <div class="tablas">${tablas.length
+        ? tablas.map(([t,n])=>`<label><input type="checkbox" data-tabla value="${esc(t)}" ${fuera.has(t)?"":"checked"} ${sinC.has(c)?"disabled":""}>
+            <span>${esc(n)}</span></label>`).join("")
+        : `<span class="tenue">Una sola tabla: va con el cuadrado.</span>`}</div>
+    </fieldset>`;
+  }).join("");
+  $("#cajaCuadrados").querySelectorAll("input[data-cuadrado]").forEach(i=>i.addEventListener("change", ()=>{
+    const fs = i.closest("fieldset");
+    fs.classList.toggle("quitado", !i.checked);
+    fs.querySelectorAll("input[data-tabla]").forEach(t=>{ t.disabled = !i.checked; });
+  }));
+}
+function restriccionesUsuario(){
+  if($("#campoCuadrados").hidden) return {cuadrados_ocultos: [], tablas_ocultas: {}};
+  const cuadrados_ocultos = [], tablas_ocultas = {};
+  $("#cajaCuadrados").querySelectorAll("fieldset").forEach(fs=>{
+    const c = fs.dataset.c;
+    if(!fs.querySelector("input[data-cuadrado]").checked) cuadrados_ocultos.push(c);
+    const ts = [...fs.querySelectorAll("input[data-tabla]:not(:checked)")].map(i=>i.value);
+    if(ts.length) tablas_ocultas[c] = ts;
+  });
+  return {cuadrados_ocultos, tablas_ocultas};
 }
 
 function formUsuario(correo){
@@ -331,6 +401,13 @@ function formUsuario(correo){
        <label for="fPerfil">Perfil</label>
        <select id="fPerfil" required>${PERFILES.map(p=>
          `<option value="${esc(p._id)}" ${u&&u.perfil_id===p._id?"selected":""}>${esc(p.nombre||p._id)} · ${esc(tipoLegible(p.tipo||""))}</option>`).join("")}</select>
+     </div>
+     <div class="campo" id="campoCuadrados" hidden>
+       <label>Qué ve en el informe operativo</label>
+       <div class="cuadrados" id="cajaCuadrados"></div>
+       <p class="pista">Salen los cuadrados de su perfil, todos puestos de serie. Lo que le quites no se le
+         enseña ni le llega: sin el cuadrado tampoco abre su página, y sin una tabla, lo que sólo usa esa
+         tabla no sale del servidor.</p>
      </div>
      <div class="fila">
        <div class="campo">
@@ -363,6 +440,7 @@ function formUsuario(correo){
         asistente: $("#fAsistente").checked,
         limite_preguntas_dia: Number($("#fLimite").value)||0,
         telefono: $("#fTelefono").value.trim(),
+        ...restriccionesUsuario(),
       };
       if(!u) cuerpo.clave = $("#fClave").value;
       const res = await api("POST","/api/admin/usuarios",cuerpo);
@@ -370,6 +448,10 @@ function formUsuario(correo){
                       : "Usuario guardado.", true);
       await carga();
     });
+  /* Al cambiar de perfil cambian los cuadrados que se pueden quitar: lo que
+     tuviera quitado de otro perfil se olvida. */
+  $("#fPerfil").addEventListener("change", ()=>pintaCuadradosUsuario(u && u.perfil_id===$("#fPerfil").value ? u : null));
+  pintaCuadradosUsuario(u);
 }
 
 function nuevaClave(correo){
@@ -1283,6 +1365,7 @@ async function carga(){
   PERFILES = pf.perfiles || [];
   SESIONES = pf.catalogo_sesiones || {};
   PARTES_CUADRO = pf.catalogo_cuadro || {};
+  CUADRADOS = pf.catalogo_cuadrados || {};
   TECHO = pf.techo || {};
   NIVELES = pf.niveles || {};
   IMPLICITOS = pf.implicitos || {};

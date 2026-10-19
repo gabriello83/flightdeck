@@ -145,11 +145,12 @@ a.dia,a.mes{color:var(--s1)}
   .horas-et span:nth-child(odd){visibility:hidden}
 }
 </style>
+<script src="/comun/preferidos.js"></script>
 </head>
 <body>
 <div class="env">
   <header class="top">
-    <div class="marca">
+    <div class="marca" data-estrella="uso">
       <b>Utilizo</b>
       <span id="quien"></span>
     </div>
@@ -517,6 +518,8 @@ function excelPersona(p, dia, mes){
   $("#pie").textContent = "Sale del registro de actividad de VenCloud (control.activitylog): cada alta, cambio o borrado que hace un usuario, con su hora. Los procesos automáticos de VenCloud no cuentan. El día de hoy no sale hasta mañana, cuando está completo. Se guarda toda la historia; el detalle por hora y qué tocó, de los dos últimos meses."
     + (D.generado ? ` Calculado con la carga del ${fechaCorta(D.generado)}.` : "");
   $("#pie").hidden = false;
+  /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
+  Preferidos.monta("utilizo", {});
 })();
 </script>
 </body>

@@ -162,6 +162,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   .kpi .vl{font-size:22px}
 }
 </style>
+<script src="/comun/preferidos.js"></script>
 </head>
 <body>
 <div class="env">
@@ -212,13 +213,13 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
     <div id="hPanel">
       <p class="tenue" id="rango"></p>
       <div class="kpis" id="kpis"></div>
-      <section class="caja">
-        <div class="cabsec"><h2>Total de incidencias por zona</h2><span class="tenue">Pulsa una delegación para filtrar por ella</span></div>
+      <section class="caja" data-tabla="zonas">
+        <div class="cabsec" data-estrella="zonas"><h2>Total de incidencias por zona</h2><span class="tenue">Pulsa una delegación para filtrar por ella</span></div>
         <p class="sub" id="sZonas"></p>
         <div id="gZonas"></div>
       </section>
-      <section class="caja">
-        <div class="cabsec"><h2>Los 10 centros con más averías técnicas</h2></div>
+      <section class="caja" data-tabla="tecnicas">
+        <div class="cabsec" data-estrella="tecnicas"><h2>Los 10 centros con más averías técnicas</h2></div>
         <p class="sub">Fallos técnicos por operación, sin las solicitudes especiales. Pulsa un centro para filtrar por él.</p>
         <div id="gTecnicas"></div>
       </section>
@@ -228,8 +229,8 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
     <div id="hAbiertas" hidden>
       <div class="kpis" id="tarjetas"></div>
       <div class="ficha-y-tabla">
-        <section class="caja">
-          <div class="cabsec"><h2 id="hLista">Incidencias</h2><span class="tenue" id="cLista"></span></div>
+        <section class="caja" data-tabla="abiertas">
+          <div class="cabsec" data-estrella="abiertas"><h2 id="hLista">Incidencias</h2><span class="tenue" id="cLista"></span></div>
           <p class="sub" id="sLista"></p>
           <div class="barra" style="margin-top:0">
             <label class="busca">Buscar <input id="busca" type="search" placeholder="Nº, máquina, centro, operación…"></label>
@@ -290,6 +291,8 @@ $("#bSalir").addEventListener("click", async ()=>{
 });
 
 let D = null, M = {}, INC = [], HOJA = "panel", TARJETA = "tecnicas", ELEGIDA = null, TODAS_FILAS = false;
+/* Las tablas que el administrador le quitó a este usuario (docs/61). */
+let QUITADAS = new Set();
 
 /* ------------------------------------------------------------ fechas */
 const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -626,6 +629,9 @@ function csv(){
 
 /* ------------------------------------------------------------ todo */
 function pintaHoja(){
+  /* Sin la lista de incidencias sólo queda el panel, y no hay hojas que elegir. */
+  if(QUITADAS.has("abiertas")) HOJA = "panel";
+  $(".hojas").hidden = QUITADAS.has("abiertas");
   document.querySelectorAll(".hojas button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.h===HOJA)));
   $("#hPanel").hidden = HOJA !== "panel";
   $("#hAbiertas").hidden = HOJA !== "abiertas";
@@ -647,6 +653,11 @@ function pintaTodo(){
   if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
   const yo = await r.json();
   if(yo.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  /* Lo que el administrador le quitó a este usuario dentro de esta página
+     (docs/61): no se dibuja, y lo que sólo usa esa tabla ya no llega. */
+  QUITADAS = new Set((yo.tablas_ocultas||{})["averias"] || []);
+  document.querySelectorAll("[data-tabla]").forEach(el=>{ if(QUITADAS.has(el.dataset.tabla)) el.hidden = true; });
+
   $("#quien").textContent = (yo.perfil ? yo.perfil + " · " : "") + (yo.nombre || yo.correo);
 
   let ri;
@@ -701,6 +712,9 @@ function pintaTodo(){
     + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
     + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;
+  /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
+  Preferidos.monta("averias", {ocultar: [".hojas", "#kpis"],
+    abre: t => { HOJA = t === "abiertas" ? "abiertas" : "panel"; pintaTodo(); }});
 })();
 </script>
 </body>

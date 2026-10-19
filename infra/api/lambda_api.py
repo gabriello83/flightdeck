@@ -119,6 +119,10 @@ def encamina(evento, metodo, ruta):
     if not sesion:
         return r(401, {"error": "Sin sesion."})
     usuario, perfil = sesion["usuario"], sesion["perfil"]
+    # Lo que el administrador le quito a este usuario dentro de su perfil
+    # (docs/61): cuadrados y tablas. Desde aqui, cada regla que mira el perfil
+    # mira ya el del usuario.
+    perfil = A.con_usuario(perfil, usuario)
     c = config()
     permisos = A.permisos_efectivos(perfil, usuario, c)
 
@@ -139,6 +143,11 @@ def encamina(evento, metodo, ruta):
             # Que partes del cuadro ve, y que datos le llegan para ellas.
             "cuadro": {"secciones": A.secciones_cuadro(perfil),
                        "flujos": A.flujos_cuadro(perfil)},
+            # Los cuadrados del informe operativo que ve, y lo que no ve dentro
+            # de la pagina de cada uno (docs/61).
+            "cuadrados": A.cuadrados_de(perfil)
+            if A.nivel_de(perfil.get("tipo", "cliente")) >= A.NIVEL["operaciones"] else [],
+            "tablas_ocultas": perfil.get("tablas_ocultas") or {},
             "permisos": permisos,
             "asistente": {"habilitado": ok_ia, "motivo": motivo},
             "umbral": perfil.get("reglas_negocio", {}).get(
@@ -218,7 +227,7 @@ def encamina(evento, metodo, ruta):
         if "rutas" not in A.cuadrados_de(perfil):
             raise PermissionError("Este perfil no ve las rutas.")
         try:
-            return _como_json(_crudo(f"cabina/{perfil.get('perfil_id', '')}/rutas.json.gz"))
+            return _con_tablas("rutas", perfil, _crudo(f"cabina/{perfil.get('perfil_id', '')}/rutas.json.gz"))
         except Exception:
             return r(503, {"error": "Las rutas todavía no se han calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
@@ -231,7 +240,8 @@ def encamina(evento, metodo, ruta):
         if "furgonetas" not in A.cuadrados_de(perfil):
             raise PermissionError("Este perfil no ve las furgonetas.")
         try:
-            return _como_json(_crudo(f"cabina/{perfil.get('perfil_id', '')}/furgonetas.json.gz"))
+            return _con_tablas("furgonetas", perfil,
+                               _crudo(f"cabina/{perfil.get('perfil_id', '')}/furgonetas.json.gz"))
         except Exception:
             return r(503, {"error": "Las furgonetas todavía no se han calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
@@ -251,7 +261,7 @@ def encamina(evento, metodo, ruta):
         except Exception:
             return r(503, {"error": "Las incidencias todavía no se han calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
-        return _comprimido(comprimido)
+        return _con_tablas("averias", perfil, comprimido)
 
     # La revision de clientes (docs/59): las maquinas del perfil con lo que
     # tienen mal configurado. La misma regla que el cuadrado que lleva a ella.
@@ -267,7 +277,7 @@ def encamina(evento, metodo, ruta):
         except Exception:
             return r(503, {"error": "La revisión de clientes todavía no se ha calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
-        return _comprimido(comprimido)
+        return _con_tablas("revision", perfil, comprimido)
 
     # Utilizo (docs/60): cuanto usa VenCloud cada persona. Solo se escribe a
     # los perfiles sin ambito, y solo lo pide quien ve su cuadrado.
@@ -295,7 +305,7 @@ def encamina(evento, metodo, ruta):
         except Exception:
             return r(503, {"error": "Las devoluciones todavía no se han calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
-        return _comprimido(comprimido)
+        return _con_tablas("devoluciones", perfil, comprimido)
 
     # Los almacenes por dentro (docs/54): el fichero del perfil, y la foto de un
     # producto. Quien ve el cuadrado de almacenes ve la pagina; la foto solo si
@@ -320,6 +330,26 @@ def encamina(evento, metodo, ruta):
                 raise ValueError("Orden no valido.")
             escribe(clave, {"orden": [str(x)[:40] for x in orden]}, "ORDEN")
             return r(200, {"ok": True})
+
+    # Las tablas y graficos con estrella (docs/62): de cada usuario, en el
+    # servidor como el orden, para que los encuentre igual desde otro ordenador.
+    # Solo se guardan y se devuelven las que puede ver hoy.
+    if ruta == "/api/preferidos":
+        if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
+            raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
+        clave = f"PREF#{usuario['correo']}"
+        if metodo == "GET":
+            guardados = (lee(clave, "PREFERIDOS") or {}).get("preferidos")
+            return r(200, {"preferidos": A.preferidos_validos(guardados, perfil),
+                           "nombres": {c: {"nombre": A.NOMBRE_CUADRADO[c], "tablas": dict(A.TABLAS[c])}
+                                       for c in A.cuadrados_de(perfil) if c in A.TABLAS}})
+        if metodo == "PUT":
+            lista_ = cuerpo(evento).get("preferidos")
+            if not isinstance(lista_, list) or len(lista_) > 4 * A.MAX_PREFERIDOS:
+                raise ValueError("Preferidos no validos.")
+            buenos = A.preferidos_validos(lista_, perfil)
+            escribe(clave, {"preferidos": buenos}, "PREFERIDOS")
+            return r(200, {"preferidos": buenos})
 
     # El catalogo lo sirve la API para que el formulario del navegador no lleve
     # una copia que se quede vieja en cuanto alguien anada una fuente.
@@ -401,6 +431,24 @@ def _comprimido(cuerpo):
                         "content-encoding": "gzip", "cache-control": "no-store"},
             "isBase64Encoded": True,
             "body": base64.b64encode(cuerpo).decode("ascii")}
+
+
+def _con_tablas(cuadrado, perfil, cuerpo):
+    """El fichero de la pagina de un cuadrado, sin lo que solo usan las tablas
+    que el administrador le quito a este usuario (docs/61).
+
+    Sin nada que quitar, sale tal cual, comprimido o no, como hasta ahora: ni
+    se abre. Con algo, se abre, se recorta y se vuelve a comprimir si venia
+    comprimido.
+    """
+    import gzip
+    comprimido = cuerpo[:2] == b"\x1f\x8b"
+    if not A.hay_recorte(cuadrado, perfil):
+        return _comprimido(cuerpo) if comprimido else _como_json(cuerpo)
+    datos = json.loads(gzip.decompress(cuerpo) if comprimido else cuerpo)
+    texto = json.dumps(A.recorta_tablas(cuadrado, datos, perfil),
+                       ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return _comprimido(gzip.compress(texto)) if comprimido else _como_json(texto)
 
 
 def _como_json(cuerpo):
@@ -794,6 +842,9 @@ def administra(evento, metodo, ruta, admin):
             "asistente": bool(d.get("asistente", True)),
             "limite_preguntas_dia": max(0, int(d.get("limite_preguntas_dia", 0))),
             "telefono": str(d.get("telefono", ""))[:30],
+            # Los cuadrados y las tablas que se le QUITAN dentro de su perfil
+            # (docs/61). Vacio = ve lo mismo que su perfil.
+            **A.limpia_restricciones(d),
             "alta_por": admin["correo"],
         })
         return r(200, {"ok": True, "nuevo": nuevo})
@@ -823,7 +874,15 @@ def administra(evento, metodo, ruta, admin):
 
     if resto == "perfiles" and metodo == "GET":
         return r(200, {
-            "perfiles": [dict(p, panel=_hay_panel(p.get("_id", ""))) for p in lista("PERFIL#")],
+            # Con los cuadrados que ve cada perfil: los que la consola deja
+            # quitar a cada uno de sus usuarios (docs/61).
+            "perfiles": [dict(p, panel=_hay_panel(p.get("_id", "")),
+                              cuadrados=A.cuadrados_de(p)
+                              if A.nivel_de(p.get("tipo", "cliente")) >= A.NIVEL["operaciones"] else [])
+                         for p in lista("PERFIL#")],
+            "catalogo_cuadrados": {c: {"nombre": A.NOMBRE_CUADRADO[c],
+                                       "tablas": dict(A.TABLAS.get(c, {}))}
+                                   for c, _ in A.CUADRADOS},
             "catalogo_sesiones": {k: {"nombre": v[0], "minimo": v[1]} for k, v in A.SESIONES.items()},
             # Las partes del cuadro, para las casillas de «Qué ve en el cuadro».
             "catalogo_cuadro": {k: {"nombre": v[0], "flujos": list(v[1])}
