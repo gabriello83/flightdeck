@@ -889,8 +889,14 @@ def administra(evento, metodo, ruta, admin):
                                        "tablas": dict(A.TABLAS.get(c, {})),
                                        "bloque": bloque,
                                        "solo_direccion": c in A.SOLO_DIRECCION,
-                                       "sin_ambito": c in A.SIN_AMBITO}
+                                       "sin_ambito": c in A.SIN_AMBITO,
+                                       # Los que llevan al panel: sus paneles (docs/64).
+                                       "paneles": {p: A.PANELES_SESION[A.PANEL_DE_CUADRADO[c][0]][p]
+                                                   for p in A.PANEL_DE_CUADRADO[c][1]}
+                                       if c in A.PANEL_DE_CUADRADO else {}}
                                    for c, bloque in A.CUADRADOS},
+            # Lo que se elige en el perfil ademas de los cuadrados.
+            "otras_pantallas": list(A.OTRAS_PANTALLAS),
             "catalogo_sesiones": {k: {"nombre": v[0], "minimo": v[1], "bloques": list(v[2]),
                                       "paneles": dict(A.PANELES_SESION.get(k, {}))}
                                   for k, v in A.SESIONES.items()},
@@ -913,18 +919,36 @@ def administra(evento, metodo, ruta, admin):
         if not pid or tipo not in A.TECHO:
             raise ValueError("Perfil o tipo no validos.")
         amb = d.get("ambito") or {}
+        sesiones = [s for s in (d.get("sesiones") or []) if s in A.SESIONES]
+        paneles_ocultos = A.paneles_ocultos(d)
+        # Elegido cuadrado a cuadrado (docs/64): los que llevan al panel dan su
+        # sesion, y los paneles de los que no se eligen se quitan.
+        cuadrados = None
+        if isinstance(d.get("cuadrados"), list):
+            cuadrados = [c for c, _ in A.CUADRADOS if c in d["cuadrados"]]
+            for c, (sesion, paneles) in A.PANEL_DE_CUADRADO.items():
+                if c in cuadrados and sesion not in sesiones:
+                    sesiones.append(sesion)
+            elegidos = {p for c in cuadrados for p in A.PANEL_DE_CUADRADO.get(c, ("", ()))[1]}
+            quitados = {p for c, (_, ps) in A.PANEL_DE_CUADRADO.items() if c not in cuadrados
+                        for p in ps if p not in elegidos}
+            paneles_ocultos = A.paneles_ocultos({"paneles_ocultos": paneles_ocultos + sorted(quitados)})
+        extra = {} if cuadrados is None else {"cuadrados": cuadrados}
         escribe(f"PERFIL#{pid}", {
+            **extra,
             "nombre": str(d.get("nombre", pid))[:80],
             "tipo": tipo,
             "ambito": {k: [str(x)[:80] for x in (amb.get(k) or [])][:200]
                        for k in ("clientes", "centros", "delegaciones")},
-            "sesiones": [s for s in (d.get("sesiones") or []) if s in A.SESIONES],
+            "sesiones": [s for s in A.SESIONES if s in sesiones],
             "paneles": [str(x)[:40] for x in (d.get("paneles") or [])][:64],
             # Las partes del cuadro que se le QUITAN; vacio = las ve todas.
             "cuadro_ocultas": [s for s in (d.get("cuadro_ocultas") or [])
                                if s in A.SECCIONES_CUADRO],
-            # Y los paneles de /panel/ que se le QUITAN (docs/63).
-            "paneles_ocultos": A.paneles_ocultos(d),
+            # Y los paneles de /panel/ que se le QUITAN (docs/63), y las tablas
+            # de cada cuadrado (docs/64).
+            "paneles_ocultos": paneles_ocultos,
+            "tablas_ocultas": A._tablas_validas(d.get("tablas_ocultas")),
             # Se guarda lo que marque el admin; el techo se aplica al servir.
             "permisos": {k: bool(v) for k, v in (d.get("permisos") or {}).items()},
             "reglas_negocio": d.get("reglas_negocio") or {},

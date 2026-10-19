@@ -827,6 +827,37 @@ comprueba("algo que no es una lista no quita nada",
           L.A.paneles_ocultos({"paneles_ocultos": "semana"}), [])
 pon_fila("PERFIL#ope-sur", _ope0)
 
+print("\nEl perfil, cuadrado a cuadrado (docs/64)")
+_ope0 = L.lee("PERFIL#ope-sur")
+llama("POST", "/api/admin/perfiles",
+      {"perfil_id": "ope-sur", "nombre": "Operaciones Sur", "tipo": "operaciones",
+       "ambito": _ope0.get("ambito"), "sesiones": ["avisos"],
+       "cuadrados": ["revision", "ventas", "no-existe", "almacenes"],
+       "tablas_ocultas": {"revision": ["precio", "inventada"], "nada": ["x"]}}, cookie=COOKIE_JEFE)
+_g = L.lee("PERFIL#ope-sur")
+comprueba("se guardan los cuadrados elegidos, sin los que no existen",
+          _g["cuadrados"], ["almacenes", "ventas", "revision"])
+comprueba("ventas lleva al panel: le da su sesion, y quita los paneles de los no elegidos",
+          (_g["sesiones"], _g["paneles_ocultos"]),
+          (["venta_consumo", "avisos"], ["carga", "censo", "altas", "incidencias", "inc_detalle"]))
+comprueba("y las tablas quitadas del perfil, solo las que existen",
+          _g["tablas_ocultas"], {"revision": ["precio"]})
+_yo = cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_OLGA))
+comprueba("ve solo lo elegido (almacenes es de direccion)", _yo["cuadrados"], ["ventas", "revision"])
+comprueba("revision sin sesion de instalaciones: entra a su pagina",
+          llama("GET", "/api/revision", cookie=COOKIE_OLGA)["statusCode"] != 403, True)
+comprueba("y lo no elegido no abre", llama("GET", "/api/rutas", cookie=COOKIE_OLGA)["statusCode"], 403)
+comprueba("la tabla quitada al perfil le llega a la pagina", _yo["tablas_ocultas"], {"revision": ["precio"]})
+comprueba("y se suma a lo que se le quite al usuario",
+          L.A.con_usuario({"tablas_ocultas": {"revision": ["precio"]}},
+                        {"tablas_ocultas": {"revision": ["planograma"]}})["tablas_ocultas"],
+          {"revision": ["planograma", "precio"]})
+_pf2 = cuerpo_de(llama("GET", "/api/admin/perfiles", cookie=COOKIE_JEFE))
+comprueba("la consola recibe los paneles de los cuadrados del panel y las otras pantallas",
+          (_pf2["catalogo_cuadrados"]["reposiciones"]["paneles"], _pf2["otras_pantallas"]),
+          ({"carga": "Reposición del periodo"}, ["resumen", "servicio", "disponibilidad", "avisos", "cuadro"]))
+pon_fila("PERFIL#ope-sur", _ope0)
+
 print("\nPreferidos (docs/62): de cada usuario, y solo lo que puede ver")
 comprueba("un cliente no tiene", llama("GET", "/api/preferidos", cookie=COOKIE_ANA)["statusCode"], 403)
 comprueba("al principio, ninguno", cuerpo_de(llama("GET", "/api/preferidos", cookie=COOKIE_OLGA))["preferidos"], [])
