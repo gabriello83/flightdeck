@@ -880,10 +880,17 @@ def administra(evento, metodo, ruta, admin):
                               cuadrados=A.cuadrados_de(p)
                               if A.nivel_de(p.get("tipo", "cliente")) >= A.NIVEL["operaciones"] else [])
                          for p in lista("PERFIL#")],
+            # Con el bloque del panel de cada cuadrado y los bloques de cada
+            # sesion: el formulario del perfil dice al marcar las sesiones que
+            # cuadrados del informe operativo le salen (cuadrados_de).
             "catalogo_cuadrados": {c: {"nombre": A.NOMBRE_CUADRADO[c],
-                                       "tablas": dict(A.TABLAS.get(c, {}))}
-                                   for c, _ in A.CUADRADOS},
-            "catalogo_sesiones": {k: {"nombre": v[0], "minimo": v[1]} for k, v in A.SESIONES.items()},
+                                       "tablas": dict(A.TABLAS.get(c, {})),
+                                       "bloque": bloque,
+                                       "solo_direccion": c in A.SOLO_DIRECCION,
+                                       "sin_ambito": c in A.SIN_AMBITO}
+                                   for c, bloque in A.CUADRADOS},
+            "catalogo_sesiones": {k: {"nombre": v[0], "minimo": v[1], "bloques": list(v[2])}
+                                  for k, v in A.SESIONES.items()},
             # Las partes del cuadro, para las casillas de «Qué ve en el cuadro».
             "catalogo_cuadro": {k: {"nombre": v[0], "flujos": list(v[1])}
                                 for k, v in A.SECCIONES_CUADRO.items()},

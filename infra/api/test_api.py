@@ -798,6 +798,12 @@ comprueba("y un cliente no tiene ninguno",
 comprueba("y el catalogo, con las tablas de cada pagina",
           (len(_pf["catalogo_cuadrados"]), list(_pf["catalogo_cuadrados"]["rutas"]["tablas"])[:2]),
           (12, ["rutas", "estado"]))
+comprueba("y con que sesion sale cada cuadrado: Revision con Instalaciones y altas",
+          ([s for s, v in _pf["catalogo_sesiones"].items()
+            if _pf["catalogo_cuadrados"]["revision"]["bloque"] in v["bloques"]],
+           _pf["catalogo_cuadrados"]["utilizo"]["solo_direccion"], _pf["catalogo_cuadrados"]["utilizo"]["sin_ambito"],
+           _pf["catalogo_cuadrados"]["revision"]["sin_ambito"]),
+          (["instalaciones"], True, True, False))
 
 print("\nPreferidos (docs/62): de cada usuario, y solo lo que puede ver")
 comprueba("un cliente no tiene", llama("GET", "/api/preferidos", cookie=COOKIE_ANA)["statusCode"], 403)

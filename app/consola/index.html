@@ -109,6 +109,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--s1);outline-offs
 .marcas label.fuera{color:var(--tinta-3)}
 .marcas label.fuera span{text-decoration:line-through}
 .marcas .porque{font-size:11.5px;color:var(--tinta-3);text-decoration:none}
+.cuadros-perfil{margin:2px 0 0;font-size:13.5px;color:var(--tinta-2)}
 /* Los cuadrados del usuario, cada uno con sus tablas debajo (docs/61). */
 .cuadrados{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px 14px}
 .cuadrados fieldset{border:1px solid var(--borde);border-radius:8px;padding:8px 10px;margin:0;min-width:0}
@@ -557,6 +558,13 @@ function formPerfil(pid){
       <div class="marcas" id="cajaSesiones"></div>
       <p class="pista">El panel es de operaciones para arriba.</p>
     </div>
+    <div class="campo" id="campoOperativo">
+      <label>Qué ve en el informe operativo</label>
+      <p class="cuadros-perfil" id="rOperativo"></p>
+      <p class="pista">No se marca aparte: cada cuadrado sale con la sesión del panel que lleva sus datos,
+        como dice cada casilla de arriba. Revisión clientes, Tarifas y Telemetría van con
+        «Instalaciones y altas». Luego, a cada usuario se le pueden quitar cuadrados y tablas.</p>
+    </div>
     <div class="campo" id="campoCuadro">
       <label>Qué ve en el cuadro de mando</label>
       <div class="marcas" id="cajaCuadro"></div>
@@ -608,11 +616,44 @@ function formPerfil(pid){
     const esCliente = $("#fTipo").value === "cliente";
     $("#campoSesiones").hidden = esCliente;
     $("#campoDelegaciones").hidden = esCliente;
+    $("#campoOperativo").hidden = esCliente;
+    pintaOperativoPerfil();
   };
   $("#fTipo").addEventListener("change", repinta);
+  $("#cajaSesiones").addEventListener("change", pintaOperativoPerfil);
   repinta();
   pintaCuadro(p);
   const ambito = montaAmbito(p);
+  AMBITO_PERFIL = ambito;
+  pintaOperativoPerfil();
+}
+
+/* Los cuadrados del informe operativo que le salen al perfil con lo marcado,
+   con las reglas de autorizacion.cuadrados_de (docs/61): el informe no tiene
+   casillas propias, cada cuadrado va con el bloque del panel que lleva sus
+   datos. Se repinta al tocar las sesiones, el tipo o el ámbito. */
+let AMBITO_PERFIL = null;
+const cuadradosDeSesion = id => Object.values(CUADRADOS)
+  .filter(c => ((SESIONES[id] || {}).bloques || []).includes(c.bloque)).map(c => c.nombre);
+function pintaOperativoPerfil(){
+  const caja = $("#rOperativo");
+  if(!caja || $("#campoOperativo").hidden) return;
+  const tipo = $("#fTipo").value;
+  const nivel = NIVELES[tipo] != null ? NIVELES[tipo] : 0;
+  const sesiones = tipo === "admin" ? Object.keys(SESIONES)
+    : [...document.querySelectorAll("#cajaSesiones input:checked")].map(i=>i.value);
+  const bloques = new Set([].concat(...sesiones.map(s=>(SESIONES[s] || {}).bloques || [])));
+  const amb = AMBITO_PERFIL ? AMBITO_PERFIL(false) : {};
+  const conAmbito = ["clientes","centros","delegaciones"].some(k=>(amb[k] || []).length);
+  const fuera = [];
+  const ve = Object.values(CUADRADOS).filter(c=>{
+    if(!bloques.has(c.bloque)) return false;
+    if(c.solo_direccion && nivel < NIVELES.direccion){ fuera.push(`${c.nombre} (de dirección para arriba)`); return false; }
+    if(c.sin_ambito && conAmbito){ fuera.push(`${c.nombre} (sólo sin ámbito)`); return false; }
+    return true;
+  }).map(c=>c.nombre);
+  caja.textContent = (ve.length ? ve.join(" · ") : "Ninguno con las sesiones marcadas.")
+    + (fuera.length ? `  —  No le salen: ${fuera.join(", ")}.` : "");
 }
 
 /* ---------- el ámbito, elegido de una lista ----------
@@ -710,6 +751,7 @@ function montaAmbito(p){
       rCl.className = "pista";
       rCl.textContent = "Sin el histórico cargado no hay lista de la que elegir: se escribe a mano y se pone con Intro.";
       rCe.textContent = rDe.textContent = "";
+      pintaOperativoPerfil();
       return;
     }
     const ce = mCe.valores();
@@ -737,6 +779,7 @@ function montaAmbito(p){
       return `${d}: ${num(n)} ${n===1?"centro":"centros"}`;
     }).join(" · ");
     rDe.className = "pista" + (mal ? " mal" : "");
+    pintaOperativoPerfil();
   };
 
   const mCl = multiple($("#mClientes"), {id: "fClientes", todas: D.clientes, opciones: () => D.clientes,
@@ -896,7 +939,9 @@ function pintaCasillas(p){
     const alcanza = (NIVELES[s.minimo] != null ? NIVELES[s.minimo] : 0) <= nivel;
     return `<label class="${alcanza?"":"fuera"}">
       <input type="checkbox" value="${esc(id)}" ${puestas.has(id)?"checked":""} ${alcanza?"":"disabled"}>
-      <span>${esc(s.nombre)}</span>${alcanza?"":`<span class="porque">· desde ${esc(tipoLegible(s.minimo))}</span>`}</label>`;
+      <span>${esc(s.nombre)}</span>${alcanza
+        ? (cuadradosDeSesion(id).length ? `<span class="porque">· ${esc(cuadradosDeSesion(id).join(", "))}</span>` : "")
+        : `<span class="porque">· desde ${esc(tipoLegible(s.minimo))}</span>`}</label>`;
   }).join("");
 
   const techo = new Set(TECHO[tipo] || []);

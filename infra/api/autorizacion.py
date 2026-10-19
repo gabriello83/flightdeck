@@ -346,6 +346,8 @@ CUADRADOS = (
 )
 
 SOLO_DIRECCION = ("almacenes", "utilizo")
+# Y los que solo ve un perfil sin ambito: son de toda la empresa.
+SIN_AMBITO = ("utilizo",)
 
 # Como se llama cada cuadrado en la pagina y en la consola.
 NOMBRE_CUADRADO = {
@@ -453,8 +455,8 @@ def cuadrados_de(perfil):
     if nivel_de(tipo) < NIVEL["direccion"]:
         out = [c for c in out if c not in SOLO_DIRECCION]
     ambito = perfil.get("ambito") or {}
-    if any(ambito.get(k) for k in ("clientes", "centros", "delegaciones")) and "utilizo" in out:
-        out.remove("utilizo")
+    if any(ambito.get(k) for k in ("clientes", "centros", "delegaciones")):
+        out = [c for c in out if c not in SIN_AMBITO]
     quitados = set(perfil.get("cuadrados_ocultos") or [])
     return [c for c in out if c not in quitados]
 
