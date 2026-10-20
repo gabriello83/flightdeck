@@ -16,6 +16,7 @@
   --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
   --s1:#2a78d6;
   --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+  --rango:rgba(42,120,214,.15);
   /* El semaforo. El amarillo lleva texto oscuro: con blanco no se lee. */
   --verde:#15803d; --amarillo:#f2b705; --rojo:#c62828;
   /* Los cuadrados sin semaforo, cada uno de su color. Ninguno es verde, ni
@@ -28,7 +29,7 @@
     color-scheme: dark;
     --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
     --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
-    --s1:#3987e5; --sombra:none;
+    --s1:#3987e5; --sombra:none; --rango:rgba(57,135,229,.28);
     --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
     --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
     --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d; --c-revision:#3a557a; --c-utilizo:#55477f; --c-preferidos:#334155;
@@ -38,7 +39,7 @@
   color-scheme: dark;
   --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
   --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
-  --s1:#3987e5; --sombra:none;
+  --s1:#3987e5; --sombra:none; --rango:rgba(57,135,229,.28);
   --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
   --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
   --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d; --c-revision:#3a557a; --c-utilizo:#55477f; --c-preferidos:#334155;
@@ -104,9 +105,45 @@ a.cuadro:focus-visible{outline:3px solid var(--s1);outline-offset:3px}
 }
 .cuadro.sin .vl{font-size:22px;color:var(--tinta-2);font-weight:600;letter-spacing:-.01em}
 .cuadro.sin .sub{color:var(--tinta-2)}
+/* El calendario (Gabriele, 19-oct): el mes con sus dias; pulsando el titulo,
+   los meses del año; otra vez, los años. Los dias sin dato van apagados. */
+.fecha{position:relative}
+.fecha > button.btn{font-size:14px;padding:6px 12px;display:inline-flex;align-items:center;gap:8px}
+.fecha > button.btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8}
+.modo{display:inline-flex;border:1px solid var(--borde-fuerte);border-radius:8px;overflow:hidden}
+.modo button{font:inherit;font-size:13px;border:0;background:var(--tarjeta);color:var(--tinta-2);padding:6px 11px;cursor:pointer}
+.modo button[aria-pressed="true"]{background:var(--s1);color:#fff}
+.cal{
+  position:absolute;z-index:20;top:calc(100% + 6px);left:0;width:300px;
+  background:var(--tarjeta);border:1px solid var(--borde-fuerte);border-radius:12px;
+  box-shadow:0 10px 30px rgba(0,0,0,.18);padding:10px 12px 12px
+}
+.cal-cab{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px}
+.cal-cab button{font:inherit;border:0;background:none;color:var(--tinta);cursor:pointer;border-radius:8px;padding:5px 9px}
+.cal-cab button:hover:not(:disabled){background:var(--fondo)}
+.cal-cab button:disabled{color:var(--tinta-3);cursor:default;opacity:.4}
+.cal-cab .tit{font-weight:650;font-size:14.5px}
+.cal-rej{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-rej.ancha{grid-template-columns:repeat(3,1fr);gap:6px}
+.cal-rej .ds{font-size:11.5px;color:var(--tinta-3);text-align:center;padding:4px 0;text-transform:uppercase}
+.cal-rej button{
+  font:inherit;font-size:13.5px;border:0;background:none;color:var(--tinta);border-radius:8px;
+  height:34px;cursor:pointer;font-variant-numeric:tabular-nums;text-transform:capitalize
+}
+.cal-rej.ancha button{height:44px}
+.cal-rej button:hover:not(:disabled){background:var(--fondo)}
+.cal-rej button:disabled{color:var(--tinta-3);opacity:.45;cursor:default}
+.cal-rej button.hoy{box-shadow:inset 0 0 0 1px var(--borde-fuerte)}
+.cal-rej button.en{background:var(--rango);border-radius:0}
+.cal-rej button.sel{background:var(--s1);color:#fff;border-radius:8px}
+.cal-rej button:focus-visible,.cal-cab button:focus-visible,.cal-pie button:focus-visible{outline:2px solid var(--s1);outline-offset:1px}
+.cal-pie{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;border-top:1px solid var(--borde);padding-top:10px}
+.cal-pie button{font:inherit;font-size:12.5px;border:1px solid var(--borde-fuerte);background:var(--tarjeta);color:var(--tinta);border-radius:999px;padding:3px 10px;cursor:pointer}
+.cal-pie .ayuda{font-size:12.5px;color:var(--tinta-2);width:100%}
 footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
 #cargando{padding:40px 0;color:var(--tinta-2)}
 @media (max-width:560px){
+  .cal{position:fixed;left:16px;right:16px;top:auto;width:auto;margin-top:6px}
   .cuadros{grid-template-columns:1fr 1fr;gap:10px}
   .cuadro{aspect-ratio:auto;min-height:168px;padding:13px 13px}
   .cuadro .vl{font-size:28px}
@@ -133,7 +170,19 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   </header>
 
   <div class="barra" id="barra" hidden>
-    <label>Día <select id="dia"></select></label>
+    <div class="modo" role="group" aria-label="Días">
+      <button type="button" id="mUno" aria-pressed="true">Un día</button>
+      <button type="button" id="mVarios" aria-pressed="false">Varios días</button>
+    </div>
+    <div class="fecha">
+      <button class="btn" type="button" id="bFecha" aria-haspopup="dialog" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+        <span id="tFecha"></span>
+      </button>
+      <div class="cal" id="cal" role="dialog" aria-label="Elegir día" hidden></div>
+    </div>
+    <label id="lArea" hidden>Área <select id="area"></select></label>
+    <label id="lDeleg" hidden>Delegación <select id="deleg"></select></label>
     <div class="leyenda" aria-label="Colores">
       <span><i style="background:var(--verde)"></i><span id="lVerde"></span></span>
       <span><i style="background:var(--amarillo)"></i><span id="lAmarillo"></span></span>
@@ -244,12 +293,21 @@ function contenido(id, d, f){
   const x = FOTO.has(id) ? f[id] : d[id];
   if(!x) return null;
   if(x.sin_dato) return {sin:x.sin_dato};
+  const c = contenidoDe(id, x);
+  /* Varios dias: cuantos tienen el dato, si no son todos. Se dice; no se
+     reparte lo que falta entre los demas. */
+  if(c && !FOTO.has(id) && x.de > 1 && x.dias < x.de)
+    c.sub += ` · solo ${num(x.dias)} de ${num(x.de)} días tienen el dato`;
+  return c;
+}
+function contenidoDe(id, x){
+  const varios = x.de > 1;
   switch(id){
     case "rutas": return {vl:pct(x.pct), pct:x.pct,
       sub:`${num(x.hechas)} de ${num(x.previstas)} visitas previstas`
         + (x.fuera_de_plan ? ` · ${num(x.fuera_de_plan)} fuera del plan` : "")};
     case "averias": return {vl:pct(x.pct), pct:x.pct,
-      sub:`${num(x.a_tiempo)} de ${num(x.cerradas)} cerradas en menos de ${num(x.horas)} h`};
+      sub:`${num(x.a_tiempo)} de ${num(x.cerradas)} cerradas en menos de ${num(x.horas||24)} h`};
     case "telemetria": {
       /* El dato es siempre el de VenCloud. Si se han subido los ficheros de
          Nayax, Prodelfi y Nebula, debajo van las diferencias con ellos, y el
@@ -257,7 +315,8 @@ function contenido(id, d, f){
       const df = x.diferencias;
       const n = df ? (df.sin_marca||0) + (df.solo_vencloud||0) + (df.fuera||0) : 0;
       return {vl:pct(x.pct), pct:x.pct,
-        sub:`${num(x.con_dex)} de ${num(x.auditables)} máquinas mandaron su lectura (DEX)`
+        sub:(varios ? `${num(x.con_dex)} de ${num(x.auditables)} lecturas (DEX) esperadas, máquina a máquina y día a día`
+                    : `${num(x.con_dex)} de ${num(x.auditables)} máquinas mandaron su lectura (DEX)`)
           + (df ? ` · ${num(n)} diferencias con Nayax, Prodelfi y Nebula` : "")};
     }
     case "devoluciones": {
@@ -272,7 +331,7 @@ function contenido(id, d, f){
       sub:`Cierre de ${mesLargo(x.periodo)} · ${num((x.por_almacen||[]).length)} almacenes`
         + (x.bajo_minimo ? ` · ${num(x.bajo_minimo)} productos bajo mínimo` : "")};
     case "furgonetas": return {vl:num(x.activas),
-      sub:`con visitas ese día · ${num(x.visitas)} visitas`
+      sub:`${varios ? "distintas con visitas en esos días" : "con visitas ese día"} · ${num(x.visitas)} visitas`
         + (x.visitas_sin_vehiculo ? ` (${num(x.visitas_sin_vehiculo)} sin vehículo)` : "")};
     case "pdvs": return {vl:num(x.activos), sub:`${num(x.maquinas)} máquinas instaladas`};
     case "tarifas": return {vl:pct(x.pct), pct:x.pct,
@@ -288,7 +347,8 @@ function contenido(id, d, f){
       return {vl:num(x.usuarios), sub:`usuarios en VenCloud el ${dia} · ${num(x.acciones)} acciones`};
     }
     case "ventas": return {vl:eur(x.importe),
-      sub:`${num(x.unidades)} unidades · ${num(x.maquinas)} máquinas`
+      sub:`${num(x.unidades)} unidades`
+        + (x.maquinas!=null ? ` · ${num(x.maquinas)} máquinas` : varios ? ` en ${num(x.dias)} días` : "")
         + (x.fuente==="telemetria" ? " · por telemetría" : x.fuente==="visita_ventas" ? " · del parte, parcial" : "")};
     case "reposiciones": {
       const partes = (x.por_clase||[]).slice(0,3).map(c=>`${c.clase} ${num(c.unidades)}`).join(" · ");
@@ -308,9 +368,10 @@ function semaforo(p){
 const ESTADO = {verde:"En objetivo", amarillo:"Vigilar", rojo:"Por debajo"};
 
 function pinta(){
-  const fecha = $("#dia").value;
-  const d = (DATOS.dias||{})[fecha] || {};
-  const f = DATOS.foto || {};
+  const fecha = SEL.hasta;
+  const {d, f} = vista();
+  pintaFecha();
+  guardaEnUrl();
   const ses = new Set(YO.sesiones||[]);
   const cont = $("#cuadros");
   cont.innerHTML = "";
@@ -360,6 +421,354 @@ function pinta(){
     cont.innerHTML = `<p style="color:var(--tinta-2)">No tienes ningún cuadrado concedido: pídeselo al administrador.</p>`;
 }
 
+/* ===================================================================
+   Lo elegido: un dia o varios, y area y delegacion (Gabriele, 19-oct).
+
+   La noche deja cada dia con su cifra y su reparto por delegacion, ya con el
+   ambito del usuario aplicado (docs/66). Aqui solo se elige y se suma: lo que
+   se suma se suma, los porcentajes salen del total y las furgonetas son las
+   distintas. Lo que un dia no tiene, se dice; no se rellena con los demas.
+   =================================================================== */
+const SEL = {modo:"uno", desde:null, hasta:null, area:"", deleg:""};
+let DIAS = [], HAY = new Set();
+const NO_SE_REPARTE = "Este cuadrado no se reparte por delegación: quita el filtro para verlo.";
+const SIN_REPARTO = "Estos días son de antes de que el informe se repartiera por delegación.";
+
+function masDias(iso, n){
+  const d = new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); return isoLocal(d);
+}
+function diasEntre(a, b){
+  const out = [];
+  for(let x=a; x<=b; x=masDias(x,1)) out.push(x);
+  return out;
+}
+function fechasElegidas(){
+  return SEL.modo==="uno" ? [SEL.hasta] : diasEntre(SEL.desde, SEL.hasta);
+}
+function delegsElegidas(){
+  if(SEL.deleg) return [SEL.deleg];
+  if(SEL.area) return Object.keys(DATOS.zonas||{}).filter(k=>DATOS.zonas[k]===SEL.area);
+  return null;
+}
+
+/* Un cuadrado de dia sumado sobre `fechas` y, si hay filtro, sobre `delegs`.
+   Devuelve la misma forma que un dia, mas `dias` (los que aportan) y `de`
+   (los del rango). */
+function sumaCuadrado(id, fechas, delegs){
+  const de = fechas.length;
+  let dias = 0, motivo = null, reparto = false;
+  const acc = {};
+  const add = (k, v) => { acc[k] = (acc[k]||0) + (+v||0); };
+  const vehiculos = new Set(); let sinLista = false;
+  const clases = {};
+  for(const f of fechas){
+    const dia = (DATOS.dias||{})[f];
+    if(!dia) continue;
+    const x = dia[id];
+    if(!x) continue;
+    // Un dia sin dato: rutas sin plan, ventas sin venta, telemetria sin censo.
+    // Las averias sin cierres si son un dato: cero cerradas.
+    if(x.sin_dato && id!=="averias"){ motivo = x.sin_dato; continue; }
+    let partes;
+    if(delegs){
+      const por = dia.por_delegacion;
+      if(!por || !(id in por)){ reparto = true; continue; }
+      partes = delegs.map(dl=>por[id][dl]).filter(Boolean);
+    } else partes = null;
+    dias++;
+    switch(id){
+      case "rutas":
+        if(partes) partes.forEach(p=>{ add("previstas",p.previstas); add("hechas",p.hechas); add("fuera",p.fuera); });
+        else { add("previstas",x.previstas); add("hechas",x.hechas); add("fuera",x.fuera_de_plan); }
+        break;
+      case "averias":
+        if(partes) partes.forEach(p=>{ add("cerradas",p.cerradas); add("a_tiempo",p.a_tiempo); });
+        else { add("cerradas",x.cerradas); add("a_tiempo",x.a_tiempo); }
+        break;
+      case "furgonetas":
+        (partes || [x]).forEach(p=>{
+          add("visitas",p.visitas); add("sin",p.visitas_sin_vehiculo);
+          if(Array.isArray(p.vehiculos)) p.vehiculos.forEach(v=>vehiculos.add(v));
+          else { sinLista = true; add("activas",p.activas); }
+        });
+        break;
+      case "ventas":
+        (partes || [x]).forEach(p=>{ add("importe",p.importe); add("unidades",p.unidades); add("maquinas",p.maquinas); });
+        if(!partes) acc.fuente = acc.fuente===undefined || acc.fuente===x.fuente ? x.fuente : null;
+        break;
+      case "reposiciones":
+        if(partes) partes.forEach(p=>{
+          add("unidades",p.unidades); add("consumibles",p.consumibles);
+          Object.entries(p.por_clase||{}).forEach(([k,u])=>{ clases[k]=(clases[k]||0)+u; });
+        });
+        else {
+          add("unidades",x.unidades); add("consumibles",x.consumibles);
+          (x.por_clase||[]).forEach(c=>{ clases[c.clase]=(clases[c.clase]||0)+c.unidades; });
+        }
+        break;
+      case "telemetria":
+        (partes || [x]).forEach(p=>{ add("auditables",p.auditables); add("con_dex",p.con_dex); });
+        break;
+    }
+  }
+  if(!dias){
+    if(reparto) return {sin_dato: SIN_REPARTO};
+    if(motivo) return {sin_dato: de===1 ? motivo : "Ninguno de esos días tiene este dato. " + motivo};
+    return {sin_dato: de===1 ? "Ese día no tiene este dato." : "Ninguno de esos días tiene este dato."};
+  }
+  const base = {dias, de};
+  const pctDe = (a,b) => b ? Math.round(1000*a/b)/10 : null;
+  switch(id){
+    case "rutas":
+      if(!acc.previstas) return {sin_dato: delegs ? "Esa selección no tenía visitas previstas en el plan."
+                                                  : "El plan no tenía ninguna visita prevista."};
+      return Object.assign(base, {previstas:acc.previstas, hechas:acc.hechas||0,
+        fuera_de_plan:acc.fuera||0, pct:pctDe(acc.hechas||0, acc.previstas)});
+    case "averias":
+      if(!acc.cerradas) return {sin_dato: de===1 ? "Ese día no se cerró ninguna avería."
+                                                 : "En esos días no se cerró ninguna avería."};
+      return Object.assign(base, {cerradas:acc.cerradas, a_tiempo:acc.a_tiempo||0, horas:24,
+        pct:pctDe(acc.a_tiempo||0, acc.cerradas)});
+    case "furgonetas":
+      // Distintas en varios dias solo con la lista de matriculas de cada uno.
+      if(sinLista && (de>1 || delegs)) return {sin_dato: "Las furgonetas distintas de varios días solo "
+        + "se pueden contar en los días que guardan su lista de matrículas."};
+      return Object.assign(base, {activas: sinLista ? acc.activas : vehiculos.size,
+        visitas:acc.visitas||0, visitas_sin_vehiculo:acc.sin||0});
+    case "ventas":
+      return Object.assign(base, {importe:acc.importe||0, unidades:acc.unidades||0,
+        // Las maquinas de varios dias no se suman: serian la misma muchas veces.
+        maquinas: de===1 ? acc.maquinas||0 : null, fuente: de===1 && !delegs ? acc.fuente : null});
+    case "reposiciones":
+      return Object.assign(base, {unidades:acc.unidades||0, consumibles:acc.consumibles||0,
+        por_clase:Object.entries(clases).map(([clase,unidades])=>({clase,unidades})).sort((a,b)=>b.unidades-a.unidades)});
+    case "telemetria":
+      return Object.assign(base, {auditables:acc.auditables||0, con_dex:acc.con_dex||0,
+        pct:pctDe(acc.con_dex||0, acc.auditables)});
+  }
+  return null;
+}
+
+/* La foto de la noche, con el filtro: puntos de venta y almacenes se reparten
+   por delegacion; los demas no, y lo dicen. */
+function fotoFiltrada(delegs){
+  const f = DATOS.foto || {};
+  if(!delegs) return f;
+  const out = {};
+  for(const [id, x] of Object.entries(f)){
+    if(!x || x.sin_dato){ out[id] = x; continue; }
+    if(id==="pdvs"){
+      const por = x.por_delegacion;
+      if(!por){ out[id] = {sin_dato: "La foto de puntos de venta por delegación llega con la carga de la noche."}; continue; }
+      const s = {activos:0, maquinas:0};
+      delegs.forEach(dl=>{ if(por[dl]){ s.activos += por[dl].activos; s.maquinas += por[dl].maquinas; } });
+      out[id] = s;
+    } else if(id==="almacenes"){
+      const lista = (x.por_almacen||[]).filter(a=>delegs.includes(a.delegacion));
+      out[id] = lista.length ? {valor: lista.reduce((t,a)=>t+a.valor,0), periodo:x.periodo, por_almacen:lista}
+                             : {sin_dato: "Ningún almacén de esa selección tiene cierre."};
+    } else out[id] = {sin_dato: NO_SE_REPARTE};
+  }
+  return out;
+}
+
+const DE_UN_DIA = ["rutas","averias","furgonetas","ventas","reposiciones","telemetria"];
+function vista(){
+  const fechas = fechasElegidas(), delegs = delegsElegidas();
+  const unoSolo = fechas.length===1 && !delegs;
+  const d = {};
+  for(const id of DE_UN_DIA){
+    if(unoSolo){ const x = ((DATOS.dias||{})[fechas[0]]||{})[id]; if(x) d[id] = x; }
+    else d[id] = sumaCuadrado(id, fechas, delegs);
+  }
+  return {d, f: fotoFiltrada(delegs)};
+}
+
+/* ------------------------------------------------------------- el calendario */
+const CAL = {vista:"dias", y:0, m:0, pendiente:null};
+const fmtMes = new Intl.DateTimeFormat("es-ES",{month:"long", year:"numeric"});
+const fmtMesCorto = new Intl.DateTimeFormat("es-ES",{month:"short"});
+function corta(iso){
+  return new Date(iso+"T00:00:00").toLocaleDateString("es-ES",{day:"numeric", month:"short", year:"numeric"});
+}
+const mayuscula = t => t.charAt(0).toUpperCase() + t.slice(1);
+function pintaFecha(){
+  $("#tFecha").textContent = SEL.modo==="uno" ? fechaLarga(SEL.hasta)
+    : `${corta(SEL.desde)} – ${corta(SEL.hasta)} · ${num(diasEntre(SEL.desde, SEL.hasta).length)} días`;
+  $("#mUno").setAttribute("aria-pressed", SEL.modo==="uno");
+  $("#mVarios").setAttribute("aria-pressed", SEL.modo==="varios");
+}
+function mesDe(iso){ return iso.slice(0,7); }
+function abreCal(){
+  const ref = SEL.hasta || DIAS[DIAS.length-1];
+  CAL.y = +ref.slice(0,4); CAL.m = +ref.slice(5,7)-1; CAL.vista = "dias"; CAL.pendiente = null;
+  $("#cal").hidden = false; $("#bFecha").setAttribute("aria-expanded","true");
+  pintaCal();
+  const foco = $("#cal .cal-rej button.sel:not(:disabled)") || $("#cal .cal-rej button:not(:disabled)");
+  if(foco) foco.focus();
+}
+function cierraCal(volver){
+  if($("#cal").hidden) return;
+  // Un rango a medias (solo el primer dia) se queda en ese dia.
+  CAL.pendiente = null;
+  $("#cal").hidden = true; $("#bFecha").setAttribute("aria-expanded","false");
+  if(volver) $("#bFecha").focus();
+}
+function boton(txt, attrs, cls){
+  return `<button type="button"${cls?` class="${cls}"`:""} ${attrs||""}>${txt}</button>`;
+}
+function pintaCal(){
+  const c = $("#cal");
+  const primero = DIAS[0], ultimo = DIAS[DIAS.length-1];
+  const y0 = +primero.slice(0,4), y1 = +ultimo.slice(0,4);
+  let cab, rej, ancha = false;
+  if(CAL.vista==="dias"){
+    const ini = new Date(CAL.y, CAL.m, 1);
+    const clave = `${CAL.y}-${String(CAL.m+1).padStart(2,"0")}`;
+    cab = boton("‹", `data-nav="-1" aria-label="Mes anterior"${clave<=mesDe(primero)?" disabled":""}`)
+      + boton(mayuscula(fmtMes.format(ini)), `data-ir="meses" aria-label="Ver los meses de ${CAL.y}"`, "tit")
+      + boton("›", `data-nav="1" aria-label="Mes siguiente"${clave>=mesDe(ultimo)?" disabled":""}`);
+    const lun = ["L","M","X","J","V","S","D"].map(x=>`<span class="ds" aria-hidden="true">${x}</span>`).join("");
+    const hueco = (ini.getDay()+6)%7;
+    let celdas = "<span></span>".repeat(hueco);
+    const n = new Date(CAL.y, CAL.m+1, 0).getDate();
+    const hoy = isoLocal(new Date());
+    const [a, b] = SEL.modo==="uno" ? [SEL.hasta, SEL.hasta]
+      : CAL.pendiente ? [CAL.pendiente, CAL.pendiente] : [SEL.desde, SEL.hasta];
+    for(let i=1;i<=n;i++){
+      const iso = `${clave}-${String(i).padStart(2,"0")}`;
+      const sel = iso===a || iso===b, en = iso>a && iso<b;
+      // En varios dias se puede elegir cualquier dia del rango de datos: los
+      // que falten se diran en cada cuadrado. En uno, solo los que tienen dato.
+      const vale = SEL.modo==="uno" ? HAY.has(iso) : iso>=primero && iso<=ultimo;
+      celdas += boton(String(i), `data-dia="${iso}" aria-label="${esc(fechaLarga(iso))}"${sel?' aria-pressed="true"':""}${vale?"":" disabled"}`,
+        [sel?"sel":"", en?"en":"", iso===hoy?"hoy":""].filter(Boolean).join(" "));
+    }
+    rej = lun + celdas;
+  } else if(CAL.vista==="meses"){
+    ancha = true;
+    cab = boton("‹", `data-navy="-1" aria-label="Año anterior"${CAL.y<=y0?" disabled":""}`)
+      + boton(String(CAL.y), `data-ir="anios" aria-label="Ver los años"`, "tit")
+      + boton("›", `data-navy="1" aria-label="Año siguiente"${CAL.y>=y1?" disabled":""}`);
+    rej = "";
+    for(let m=0;m<12;m++){
+      const clave = `${CAL.y}-${String(m+1).padStart(2,"0")}`;
+      const vale = clave>=mesDe(primero) && clave<=mesDe(ultimo);
+      const sel = SEL.hasta && mesDe(SEL.hasta)===clave;
+      rej += boton(fmtMesCorto.format(new Date(CAL.y, m, 1)).replace(".",""),
+        `data-mes="${m}" aria-label="${esc(fmtMes.format(new Date(CAL.y, m, 1)))}"${vale?"":" disabled"}`, sel?"sel":"");
+    }
+  } else {
+    ancha = true;
+    cab = `<span></span>` + `<span class="tit">${y0===y1 ? y0 : `${y0} – ${y1}`}</span>` + `<span></span>`;
+    rej = "";
+    for(let y=y0;y<=y1;y++)
+      rej += boton(String(y), `data-anio="${y}"`, SEL.hasta && +SEL.hasta.slice(0,4)===y ? "sel" : "");
+  }
+  let pie = "";
+  if(SEL.modo==="varios"){
+    pie = `<span class="ayuda">${CAL.pendiente ? "Ahora pulsa el último día." : "Pulsa el primer día y luego el último."}</span>`
+      + boton("Últimos 7 días", `data-atajo="7"`) + boton("Últimos 30 días", `data-atajo="30"`)
+      + boton("Este mes", `data-atajo="mes"`) + boton("Mes anterior", `data-atajo="anterior"`);
+  } else {
+    pie = boton("Último día calculado", `data-atajo="ultimo"`);
+  }
+  c.innerHTML = `<div class="cal-cab">${cab}</div><div class="cal-rej${ancha?" ancha":""}">${rej}</div><div class="cal-pie">${pie}</div>`;
+}
+function eligeRango(a, b){
+  if(b < a) [a, b] = [b, a];
+  SEL.desde = a; SEL.hasta = b;
+}
+function atajo(k){
+  const ultimo = DIAS[DIAS.length-1];
+  if(k==="ultimo"){ SEL.hasta = ultimo; return; }
+  if(k==="7" || k==="30") return eligeRango(masDias(ultimo, 1-(+k)) < DIAS[0] ? DIAS[0] : masDias(ultimo, 1-(+k)), ultimo);
+  if(k==="mes") return eligeRango(ultimo.slice(0,8)+"01" < DIAS[0] ? DIAS[0] : ultimo.slice(0,8)+"01", ultimo);
+  if(k==="anterior"){
+    const d = new Date(ultimo.slice(0,8)+"01T00:00:00"); d.setMonth(d.getMonth()-1);
+    const ini = isoLocal(d), fin = masDias(ultimo.slice(0,8)+"01", -1);
+    return eligeRango(ini < DIAS[0] ? DIAS[0] : ini, fin);
+  }
+}
+function montaCal(){
+  $("#bFecha").addEventListener("click", ()=> $("#cal").hidden ? abreCal() : cierraCal(true));
+  $("#cal").addEventListener("click", e=>{
+    const b = e.target.closest("button"); if(!b || b.disabled) return;
+    e.stopPropagation();
+    if(b.dataset.nav){ CAL.m += +b.dataset.nav; if(CAL.m<0){CAL.m=11;CAL.y--;} if(CAL.m>11){CAL.m=0;CAL.y++;} }
+    else if(b.dataset.navy) CAL.y += +b.dataset.navy;
+    else if(b.dataset.ir) CAL.vista = b.dataset.ir;
+    else if(b.dataset.anio){ CAL.y = +b.dataset.anio; CAL.vista = "meses"; }
+    else if(b.dataset.mes){ CAL.m = +b.dataset.mes; CAL.vista = "dias"; }
+    else if(b.dataset.atajo){ atajo(b.dataset.atajo); cierraCal(true); pinta(); return; }
+    else if(b.dataset.dia){
+      const iso = b.dataset.dia;
+      if(SEL.modo==="uno"){ SEL.hasta = iso; cierraCal(true); pinta(); return; }
+      if(!CAL.pendiente){ CAL.pendiente = iso; }
+      else { eligeRango(CAL.pendiente, iso); CAL.pendiente = null; cierraCal(true); pinta(); return; }
+    }
+    pintaCal();
+    const foco = $("#cal .cal-rej button.sel:not(:disabled)") || $("#cal .cal-cab .tit");
+    if(foco && foco.focus) foco.focus();
+  });
+  document.addEventListener("click", e=>{ if(!e.target.closest(".fecha")) cierraCal(false); });
+  document.addEventListener("keydown", e=>{ if(e.key==="Escape") cierraCal(true); });
+  const modo = m => {
+    if(SEL.modo===m) return;
+    SEL.modo = m;
+    // De un dia a varios: la semana que acaba en ese dia. De varios a uno: el ultimo.
+    if(m==="varios") eligeRango(masDias(SEL.hasta,-6) < DIAS[0] ? DIAS[0] : masDias(SEL.hasta,-6), SEL.hasta);
+    else if(!HAY.has(SEL.hasta)) SEL.hasta = DIAS.filter(x=>x<=SEL.hasta).pop() || DIAS[DIAS.length-1];
+    cierraCal(false); pinta();
+  };
+  $("#mUno").addEventListener("click", ()=>modo("uno"));
+  $("#mVarios").addEventListener("click", ()=>modo("varios"));
+}
+
+/* ------------------------------------------------------------- area y delegacion */
+function montaFiltros(){
+  const zonas = DATOS.zonas || {};
+  const delegs = Object.keys(zonas).sort((a,b)=>a.localeCompare(b,"es"));
+  // Con una sola delegacion no hay nada que filtrar.
+  if(delegs.length < 2) return;
+  const areas = [...new Set(delegs.map(d=>zonas[d]))].sort((a,b)=>a.localeCompare(b,"es"));
+  if(SEL.area && !areas.includes(SEL.area)) SEL.area = "";
+  if(SEL.deleg && !delegs.includes(SEL.deleg)) SEL.deleg = "";
+  const llenaDelegs = () => {
+    const lista = delegs.filter(d=>!SEL.area || zonas[d]===SEL.area);
+    if(SEL.deleg && !lista.includes(SEL.deleg)) SEL.deleg = "";
+    $("#deleg").innerHTML = `<option value="">${SEL.area ? "Todas las de " + esc(SEL.area) : "Todas"}</option>`
+      + lista.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join("");
+    $("#deleg").value = SEL.deleg;
+  };
+  if(areas.length > 1){
+    $("#area").innerHTML = `<option value="">Todas</option>` + areas.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join("");
+    $("#area").value = SEL.area;
+    $("#lArea").hidden = false;
+  }
+  llenaDelegs();
+  $("#lDeleg").hidden = false;
+  $("#area").addEventListener("change", ()=>{ SEL.area = $("#area").value; llenaDelegs(); pinta(); });
+  $("#deleg").addEventListener("change", ()=>{ SEL.deleg = $("#deleg").value; pinta(); });
+}
+
+/* Lo elegido va en la direccion: se puede guardar o mandar el enlace. */
+function leeDeUrl(){
+  const q = new URLSearchParams(location.search);
+  const ok = s => /^\d{4}-\d{2}-\d{2}$/.test(s||"");
+  if(ok(q.get("desde")) && ok(q.get("hasta"))){ SEL.modo = "varios"; eligeRango(q.get("desde"), q.get("hasta")); }
+  else if(ok(q.get("dia"))) SEL.hasta = q.get("dia");
+  SEL.area = q.get("area") || ""; SEL.deleg = q.get("delegacion") || "";
+}
+function guardaEnUrl(){
+  const q = new URLSearchParams();
+  if(SEL.modo==="varios"){ q.set("desde", SEL.desde); q.set("hasta", SEL.hasta); }
+  else q.set("dia", SEL.hasta);
+  if(SEL.area) q.set("area", SEL.area);
+  if(SEL.deleg) q.set("delegacion", SEL.deleg);
+  try{ history.replaceState(null, "", "?" + q.toString()); }catch(e){}
+}
+
 function avisa(texto, mal){
   const a = $("#aviso");
   a.textContent = texto; a.hidden = !texto; a.classList.toggle("mal", !!mal);
@@ -399,16 +808,24 @@ function avisa(texto, mal){
   $("#lAmarillo").textContent = `del ${n1(u.amarillo)} al ${n1(u.verde)} %`;
   $("#lRojo").textContent = `menos del ${n1(u.amarillo)} %`;
 
-  const dias = Object.keys(DATOS.dias||{}).sort().reverse();
-  if(!dias.length){ avisa("Todavía no hay ningún día calculado.", true); return; }
-  $("#dia").innerHTML = dias.map(f=>`<option value="${esc(f)}">${esc(fechaLarga(f))}</option>`).join("");
+  DIAS = Object.keys(DATOS.dias||{}).sort();
+  HAY = new Set(DIAS);
+  if(!DIAS.length){ avisa("Todavía no hay ningún día calculado.", true); return; }
+  const ultimo = DIAS[DIAS.length-1];
   /* Arranca en ayer. Si lo ultimo no es ayer, la carga de anoche no ha llegado
      y se dice: no se ensena el dia anterior como si fuera el de ayer. */
   const hoy = new Date(), ayer = isoLocal(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()-1));
-  $("#dia").value = dias.includes(ayer) ? ayer : dias[0];
-  if(!dias.includes(ayer))
-    avisa(`Todavía no hay datos de ayer: lo último calculado es del ${fechaLarga(dias[0])}.`, true);
-  $("#dia").addEventListener("change", pinta);
+  SEL.hasta = HAY.has(ayer) ? ayer : ultimo;
+  if(!HAY.has(ayer))
+    avisa(`Todavía no hay datos de ayer: lo último calculado es del ${fechaLarga(ultimo)}.`, true);
+  /* Un enlace con dia, rango o delegacion abre en lo que dice, si existe. */
+  leeDeUrl();
+  if(SEL.modo==="varios"){
+    eligeRango(SEL.desde < DIAS[0] ? DIAS[0] : SEL.desde, SEL.hasta > ultimo ? ultimo : SEL.hasta);
+    if(SEL.desde > SEL.hasta){ SEL.modo = "uno"; SEL.hasta = ultimo; }
+  } else if(!HAY.has(SEL.hasta)) SEL.hasta = HAY.has(ayer) ? ayer : ultimo;
+  montaCal();
+  montaFiltros();
   $("#barra").hidden = false;
   $("#cuadros").hidden = false;
   pinta();

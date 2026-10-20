@@ -42,6 +42,23 @@ AMARILLO = 75.0
 # que una semana cubre de sobra lo que pueda llegar tarde.
 DIAS_NOCHE = 7
 DIAS_GUARDADOS = 62
+# El informe general guarda toda la historia (Gabriele, 19-oct: calendario,
+# historico y varios dias). Desde el 1-ene-2025 son unos 660 dias; el tope solo
+# esta para que el fichero no crezca sin fin. Va comprimido.
+DIAS_HISTORIA = 1100
+
+# En un relleno historico, cuantos dias antes del primero se leen las tareas de
+# la SAT y sus eventos: una averia cerrada el 1 de marzo pudo abrirse en
+# febrero, y sin su apertura no se mide. La misma ventana que la noche.
+DIAS_PREVIOS_AVERIAS = 120
+
+# Una fila sin delegacion (un punto de venta que no esta en el censo, una
+# maquina sin centro) va con esta clave. Cuenta en el total y no en ninguna
+# delegacion, y la pagina la ensena como «Sin delegación».
+SIN_DELEGACION = ""
+
+# Lo que un relleno historico no sobrescribe de un dia que ya escribio la noche.
+NO_PISA_EL_RELLENO = ("telemetria", "averias")
 
 # El estado de un punto de venta en servicio (`pdv.estado`, docs/04, informe 20).
 PDV_ACTIVO = 1
@@ -79,6 +96,15 @@ SIN_VEHICULOS = ("Falta el maestro de vehículos (M12, informe 191 de VenCloud) 
 
 SIN_PLAN = ("No hay plan de visitas de este día: el informe D12 (VenCloud 184) "
             "no lo trae.")
+SIN_CENSO_HISTORICO = ("En el relleno histórico no hay foto del censo de ese día: no se sabe "
+                       "qué máquinas llevaban telemetría entonces.")
+
+
+def delegacion_de_la_fila(fila):
+    """La delegacion que trae la propia fila. La Lambda de agregados pasa una
+    que, si la fila no la trae (las lineas de reposicion), la saca del centro
+    de su maquina."""
+    return str(R.v(fila, "delegacion", "") or "").strip()
 
 
 def semaforo(pct):
@@ -267,8 +293,10 @@ def tiene_telemetria(fila):
 class DiaOperativo:
     """Lo que un perfil acumula de UN dia para los cuadrados. Nada guarda filas."""
 
-    def __init__(self, fecha):
+    def __init__(self, fecha, deleg_de=None):
         self.fecha = fecha.isoformat() if hasattr(fecha, "isoformat") else str(fecha)[:10]
+        # De que delegacion es una fila, para el filtro de area y delegacion.
+        self.deleg_de = deleg_de or delegacion_de_la_fila
         self.plan = None             # None = no hay informe del plan ese dia
         self.visitados = set()       # puntos de venta con visita real
         self.visitas = 0
@@ -280,6 +308,13 @@ class DiaOperativo:
         self.repo_consumibles = 0.0
         self.repo_valor = 0.0
         self.venta = None
+        # Lo mismo, por delegacion: unidades por clase y carriles de cafe, y la
+        # venta de los centros de cada una.
+        self.repo_deleg = {}         # delegacion -> {clase: unidades}
+        self.consumibles_deleg = {}  # delegacion -> unidades
+        self.venta_deleg = None      # delegacion -> {"importe","unidades","maquinas"}
+        self.vehiculos_deleg = {}    # delegacion -> {matriculas con visita}
+        self.sin_vehiculo_deleg = {} # delegacion -> visitas sin vehiculo informado
         # Para la pagina de rutas (docs/55): de que delegacion, ruta y centro es
         # cada punto de venta del plan y cada uno visitado, y cuantas visitas
         # hizo cada delegacion. Un punto de venta, una entrada: no guarda filas.
@@ -318,8 +353,10 @@ class DiaOperativo:
                 v = R.v(p, "vehiculo", "")
                 if vehiculo_real(v):
                     self.vehiculos.add(str(v).strip())
+                    self.vehiculos_deleg.setdefault(deleg, set()).add(str(v).strip())
                 else:
                     self.visitas_sin_vehiculo += 1
+                    self.sin_vehiculo_deleg[deleg] = self.sin_vehiculo_deleg.get(deleg, 0) + 1
             elif es_lectura_remota(p):
                 m = R.v(p, "matricula", "")
                 if m:
@@ -370,15 +407,23 @@ class DiaOperativo:
             if R.v(l, "tipo_linea") != "CM":
                 continue
             u = float(R.v(l, "cantidad", 0) or 0)
+            deleg = self.deleg_de(l)
             if R.es_consumible_de_cafe(l):
                 self.repo_consumibles += u
+                self.consumibles_deleg[deleg] = self.consumibles_deleg.get(deleg, 0.0) + u
                 continue
             clase = nombre_clase(clase_de.get(R.v(l, "matricula", "")))
             self.repo[clase] = self.repo.get(clase, 0.0) + u
+            por = self.repo_deleg.setdefault(deleg, {})
+            por[clase] = por.get(clase, 0.0) + u
 
-    def pon_venta(self, dia_serie):
+    def pon_venta(self, dia_serie, deleg_del_centro=None):
         """La venta del dia, de la MISMA cuenta que la serie (serie.Dia): una
-        sola regla de venta, no dos."""
+        sola regla de venta, no dos.
+
+        Por delegacion, la de los centros de cada una: el mismo dia partido por
+        centro que usa el filtro de la serie (serie.PorCentro), sumado por la
+        delegacion de cada centro. `deleg_del_centro(clave)` dice cual es."""
         self.venta = {
             "importe": round(dia_serie.venta_importe, 2),
             "unidades": round(dia_serie.venta_unidades, 2),
@@ -386,6 +431,18 @@ class DiaOperativo:
             "fuente": dia_serie.venta_fuente,
             "imposibles": dia_serie.venta_imposibles,
         }
+        por_centro = getattr(dia_serie, "por_centro", None)
+        if por_centro is None or deleg_del_centro is None:
+            return
+        self.venta_deleg = {}
+        for clave, c in por_centro.c.items():
+            if not (c.venta_unidades or c.venta_importe):
+                continue
+            x = self.venta_deleg.setdefault(deleg_del_centro(clave) or SIN_DELEGACION,
+                                            {"importe": 0.0, "unidades": 0.0, "maquinas": 0})
+            x["importe"] += c.venta_importe
+            x["unidades"] += c.venta_unidades
+            x["maquinas"] += len(c.venta_maquinas)
 
 
 # ----------------------------------------------------------------------
@@ -400,8 +457,16 @@ class Operativo:
     y se cuentan al final.
     """
 
-    def __init__(self, publicar):
+    def __init__(self, publicar, historico=False, deleg_de=None):
         self.dias = {d.isoformat() if hasattr(d, "isoformat") else str(d): None for d in publicar}
+        # En un relleno historico no se escribe foto (el censo de hoy no es el
+        # de enero de 2025) y cada dia se cierra en cuanto se ha leido, para no
+        # tener meses de partes en memoria: queda solo su cifra (`cerrados`).
+        self.historico = historico
+        self.cerrados = {}
+        self.deleg_de = deleg_de or delegacion_de_la_fila
+        self.deleg_tarea = {}    # id de tarea -> delegacion
+        self._deleg_maquina = {} # matricula -> delegacion, del censo
         self.fallo = {}          # id de tarea -> es un fallo tecnico
         self.apertura = {}
         self.cierre = {}
@@ -427,8 +492,19 @@ class Operativo:
         if f not in self.dias:
             return None
         if self.dias[f] is None:
-            self.dias[f] = DiaOperativo(f)
+            if f in self.cerrados:
+                return None
+            self.dias[f] = DiaOperativo(f, self.deleg_de)
         return self.dias[f]
+
+    def cierra(self, fecha):
+        """Un dia del relleno historico ya leido: se queda su cifra y se suelta
+        lo demas. Las averias se cuentan al final, con toda la ventana."""
+        f = fecha.isoformat() if hasattr(fecha, "isoformat") else str(fecha)[:10]
+        d = self.dias.get(f)
+        if d is not None:
+            self.cerrados[f] = self._del_dia(d)
+            self.dias[f] = None
 
     # ------------------------------------------------------------- furgonetas
     def come_visitas_vehiculo(self, fecha, filas):
@@ -471,6 +547,8 @@ class Operativo:
             if ident is None:
                 continue
             self.fallo[ident] = R.es_fallo_tecnico(t) and not R.es_solicitud_especial(t)
+            if self.fallo[ident]:
+                self.deleg_tarea[ident] = self.deleg_de(t)
 
     def come_sat_eventos(self, filas):
         for e in filas:
@@ -493,7 +571,13 @@ class Operativo:
         Un cierre de una tarea abierta antes no se puede medir: no se cuenta, y
         se dice cuantos son (`sin_tarea`).
         """
+        cerradas, a_tiempo, sin_tarea, _ = self._averias(fecha)
+        return cerradas, a_tiempo, sin_tarea
+
+    def _averias(self, fecha):
+        """averias_del_dia, y ademas las mismas cuentas por delegacion."""
         cerradas = a_tiempo = sin_tarea = 0
+        por = {}
         for ident, cierre in self.cierre.items():
             if cierre[:10] != fecha:
                 continue
@@ -504,16 +588,21 @@ class Operativo:
                 continue
             horas = (datetime.datetime.fromisoformat(cierre)
                      - datetime.datetime.fromisoformat(self.apertura[ident])).total_seconds() / 3600
+            x = por.setdefault(self.deleg_tarea.get(ident, SIN_DELEGACION),
+                               {"cerradas": 0, "a_tiempo": 0})
             cerradas += 1
+            x["cerradas"] += 1
             if horas < HORAS_A_TIEMPO:
                 a_tiempo += 1
-        return cerradas, a_tiempo, sin_tarea
+                x["a_tiempo"] += 1
+        return cerradas, a_tiempo, sin_tarea, por
 
     # ------------------------------------------------------------- la foto
     def come_censo(self, filas):
         """Lo que es foto de hoy: puntos de venta activos y maquinas que se
         pueden auditar en remoto. Las filas ya vienen del ambito del perfil."""
         pdvs, maquinas, auditables = set(), set(), set()
+        por = {}
         for f in filas:
             if (R.es_centinela(f) or not R.cliente_vivo(f) or not R.centro_vivo(f)
                     or not R.pdv_vivo(f)):
@@ -522,14 +611,21 @@ class Operativo:
             # Activo es el estado 1 de VenCloud, el mismo que usa su informe 20.
             # El estado 0 son sitios sin maquina puesta: 2.012 en el parque de
             # octubre de 2026, que no son puntos de venta que atender.
+            deleg = delegacion_de_la_fila(f)
+            x = por.setdefault(deleg, [set(), set()])
             if pdv and str(R.v(f, "estado_pdv", "")) == str(PDV_ACTIVO):
                 pdvs.add(pdv)
+                x[0].add(pdv)
             m = R.v(f, "matricula", "")
             if m:
                 maquinas.add(m)
+                x[1].add(m)
+                self._deleg_maquina.setdefault(m, deleg)
                 if tiene_telemetria(f):
                     auditables.add(m)
-        self.foto["pdvs"] = {"activos": len(pdvs), "maquinas": len(maquinas)}
+        self.foto["pdvs"] = {"activos": len(pdvs), "maquinas": len(maquinas),
+                             "por_delegacion": {k: {"activos": len(a), "maquinas": len(b)}
+                                                for k, (a, b) in sorted(por.items()) if a or b}}
         self._auditables = auditables
 
     def pon_telemetria(self, cruce, propias, ficheros, fuera=None):
@@ -581,6 +677,27 @@ class Operativo:
 
     # ------------------------------------------------------------- salida
     def cuadrados_del_dia(self, d):
+        return self._con_averias(d.fecha, self._del_dia(d))
+
+    def _con_averias(self, fecha, out):
+        """Las averias van aparte del resto del dia: se cuentan con toda la
+        ventana leida, asi que en un relleno historico se ponen al final."""
+        out = dict(out)
+        cerradas, a_tiempo, sin_tarea, por = self._averias(fecha)
+        pct = porcentaje(a_tiempo, cerradas)
+        out["averias"] = ({"cerradas": cerradas, "a_tiempo": a_tiempo, "pct": pct,
+                           "color": semaforo(pct), "horas": HORAS_A_TIEMPO,
+                           "sin_tarea": sin_tarea}
+                          if cerradas else
+                          {"sin_dato": "Ese día no se cerró ninguna avería.",
+                           "cerradas": 0, "sin_tarea": sin_tarea})
+        out["por_delegacion"] = dict(out.get("por_delegacion") or {},
+                                     averias=dict(sorted(por.items())))
+        return out
+
+    def _del_dia(self, d):
+        """Los cuadrados de un dia menos las averias, cada uno con su reparto
+        por delegacion en `por_delegacion` (el filtro de area y delegacion)."""
         out = {}
         if d.plan is None:
             out["rutas"] = {"sin_dato": SIN_PLAN, "visitas": d.visitas}
@@ -594,17 +711,11 @@ class Operativo:
                             "color": semaforo(pct), "visitas": d.visitas,
                             "fuera_de_plan": len(d.visitados - d.plan)}
 
-        cerradas, a_tiempo, sin_tarea = self.averias_del_dia(d.fecha)
-        pct = porcentaje(a_tiempo, cerradas)
-        out["averias"] = ({"cerradas": cerradas, "a_tiempo": a_tiempo, "pct": pct,
-                           "color": semaforo(pct), "horas": HORAS_A_TIEMPO,
-                           "sin_tarea": sin_tarea}
-                          if cerradas else
-                          {"sin_dato": "Ese día no se cerró ninguna avería.",
-                           "cerradas": 0, "sin_tarea": sin_tarea})
-
+        # La lista de matriculas va con la cifra: para varios dias, las
+        # furgonetas son las distintas del rango, no la suma de cada dia.
         out["furgonetas"] = {"activas": len(d.vehiculos), "visitas": d.visitas,
-                             "visitas_sin_vehiculo": d.visitas_sin_vehiculo}
+                             "visitas_sin_vehiculo": d.visitas_sin_vehiculo,
+                             "vehiculos": sorted(d.vehiculos)}
 
         out["ventas"] = (dict(d.venta) if d.venta and (d.venta["unidades"] or d.venta["fuente"])
                          else {"sin_dato": "Ese día no llegó venta ni por telemetría ni del parte."})
@@ -621,6 +732,66 @@ class Operativo:
         out["telemetria"] = self.telemetria_vencloud(d)
         if self.externa is not None and "sin_dato" not in out["telemetria"]:
             out["telemetria"]["diferencias"] = self.diferencias()
+        # Siempre, aunque vaya vacio: un dia sin `por_delegacion` es de antes de
+        # que existiera el reparto, y la pagina lo dice en vez de sumar cero.
+        out["por_delegacion"] = self.por_delegacion(d)
+        return out
+
+    def por_delegacion(self, d):
+        """Las cifras de un dia por delegacion, cuadrado a cuadrado.
+
+        Solo lo que se puede sumar y recalcular: previstas y hechas, cerradas y
+        a tiempo, importe, unidades, auditables y con lectura. Un cuadrado que
+        esta va aunque no tenga ninguna delegacion: es un cero de verdad; uno
+        que falta es que ese dia no se pudo repartir. La pagina suma
+        las delegaciones elegidas y saca el porcentaje del total, no la media de
+        porcentajes. Las furgonetas llevan su lista: una que paso por dos
+        delegaciones cuenta en las dos, y una sola vez en las dos juntas.
+        El ambito ya esta aplicado: solo salen las delegaciones de este fichero.
+        """
+        out = {}
+        if d.plan:
+            rutas = {}
+            for pdv in d.plan:
+                dl = (d.plan_de.get(pdv) or {}).get("d", SIN_DELEGACION)
+                x = rutas.setdefault(dl, {"previstas": 0, "hechas": 0, "fuera": 0, "visitas": 0})
+                x["previstas"] += 1
+                x["hechas"] += pdv in d.visitados
+            for pdv in d.visitados - d.plan:
+                dl = (d.visita_de.get(pdv) or {}).get("d", SIN_DELEGACION)
+                rutas.setdefault(dl, {"previstas": 0, "hechas": 0, "fuera": 0, "visitas": 0})["fuera"] += 1
+            for dl, n in d.visitas_deleg.items():
+                rutas.setdefault(dl, {"previstas": 0, "hechas": 0, "fuera": 0, "visitas": 0})["visitas"] = n
+            out["rutas"] = dict(sorted(rutas.items()))
+
+        furgos = {}
+        for dl in set(d.vehiculos_deleg) | set(d.visitas_deleg) | set(d.sin_vehiculo_deleg):
+            furgos[dl] = {"vehiculos": sorted(d.vehiculos_deleg.get(dl, ())),
+                          "visitas": d.visitas_deleg.get(dl, 0),
+                          "visitas_sin_vehiculo": d.sin_vehiculo_deleg.get(dl, 0)}
+        out["furgonetas"] = dict(sorted(furgos.items()))
+
+        if d.venta_deleg is not None:
+            out["ventas"] = {dl: {"importe": round(x["importe"], 2), "unidades": round(x["unidades"], 2),
+                                  "maquinas": x["maquinas"]}
+                             for dl, x in sorted(d.venta_deleg.items())}
+
+        repo = {}
+        for dl in set(d.repo_deleg) | set(d.consumibles_deleg):
+            clases = d.repo_deleg.get(dl, {})
+            repo[dl] = {"unidades": round(sum(clases.values()), 2),
+                        "consumibles": round(d.consumibles_deleg.get(dl, 0.0), 2),
+                        "por_clase": {k: round(u, 2) for k, u in sorted(clases.items(), key=lambda x: -x[1])}}
+        out["reposiciones"] = dict(sorted(repo.items()))
+
+        auditables = getattr(self, "_auditables", None)
+        if auditables:
+            tel = {}
+            for m in auditables:
+                x = tel.setdefault(self._deleg_maquina.get(m, SIN_DELEGACION), {"auditables": 0, "con_dex": 0})
+                x["auditables"] += 1
+                x["con_dex"] += m in d.dex
+            out["telemetria"] = dict(sorted(tel.items()))
         return out
 
     def telemetria_vencloud(self, d):
@@ -632,6 +803,8 @@ class Operativo:
             pct = porcentaje(con, len(auditables))
             return {"auditables": len(auditables), "con_dex": con, "pct": pct,
                     "color": semaforo(pct)}
+        if self.historico:
+            return {"sin_dato": SIN_CENSO_HISTORICO}
         return {"sin_dato": "Ninguna máquina de este ámbito lleva telemetría."
                 if auditables is not None else "No se ha podido leer el censo."}
 
@@ -890,23 +1063,56 @@ class Operativo:
         """El fichero del perfil: los dias de esta noche sobre los que ya habia.
 
         Un dia recalculado sustituye al que hubiera; los demas se quedan, hasta
-        DIAS_GUARDADOS. Asi la historia se acumula sin releerla, como la serie.
+        DIAS_HISTORIA. Asi la historia se acumula sin releerla, como la serie.
+        Un relleno historico escribe sus dias y deja la foto de la ultima noche.
         """
-        dias = dict((anterior or {}).get("dias") or {})
+        # Aqui y no arriba: incidencias importa este modulo.
+        import incidencias as IN
+        anterior = anterior or {}
+        dias = dict(anterior.get("dias") or {})
         for f, d in self.dias.items():
             if d is not None:
                 dias[f] = self.cuadrados_del_dia(d)
-        dias = dict(sorted(dias.items())[-DIAS_GUARDADOS:])
+        for f, x in self.cerrados.items():
+            x = self._con_averias(f, x)
+            # Un dia que ya escribio la noche sabe mas que el relleno: la
+            # telemetria con el censo de entonces y las averias con el estado de
+            # M13 (docs/56). Esas dos se quedan como estaban.
+            antes = dias.get(f) or {}
+            for c in NO_PISA_EL_RELLENO:
+                if antes.get(c):
+                    x[c] = antes[c]
+                    por = dict(x.get("por_delegacion") or {})
+                    por.pop(c, None)
+                    if (antes.get("por_delegacion") or {}).get(c):
+                        por[c] = antes["por_delegacion"][c]
+                    x["por_delegacion"] = por
+            dias[f] = x
+        dias = dict(sorted(dias.items())[-DIAS_HISTORIA:])
+        delegaciones = set()
+        for x in dias.values():
+            for por in (x.get("por_delegacion") or {}).values():
+                delegaciones.update(por)
+        delegaciones.update((self.foto.get("pdvs") or {}).get("por_delegacion") or {})
+        delegaciones.discard(SIN_DELEGACION)
+        historico = self.historico and anterior
         return {
-            "generado": datetime.datetime.utcnow().isoformat() + "Z",
+            "generado": (anterior.get("generado") if historico else None)
+            or datetime.datetime.utcnow().isoformat() + "Z",
             "perfil": perfil_id,
             "ultimo_dia": max(dias) if dias else None,
+            "primer_dia": min(dias) if dias else None,
             "umbrales": {"verde": VERDE, "amarillo": AMARILLO},
             "dias": dias,
-            "foto": self.foto,
+            # El area de cada delegacion, para el filtro (Gabriele, 19-oct). Las
+            # cinco del Power BI, las mismas que incidencias y devoluciones.
+            "zonas": {dl: IN.zona_de(dl) for dl in sorted(delegaciones)},
+            "foto": (anterior.get("foto") or {}) if historico else self.foto,
             "_nota": ("Un día por fecha, con la cifra de ese día tal cual. Lo que no tiene dato "
                       "lleva sin_dato y el motivo. Puntos de venta, telemetría auditable y "
-                      "almacenes son la foto de la noche en que se escribió."),
+                      "almacenes son la foto de la noche en que se escribió. por_delegacion "
+                      "reparte cada cuadrado por delegación con cifras que se suman (la clave "
+                      "vacía es lo que no tiene delegación); zonas da el área de cada una."),
         }
 
 

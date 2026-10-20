@@ -1273,6 +1273,41 @@ def lee_telemetria_externa():
     return filas, {"ficheros": meta, "faltan": [t for t in TE.TIPOS if t not in filas]}
 
 
+def delegacion_de(mapa):
+    """De que delegacion es una fila, para el filtro del informe general: la
+    que traiga ella y, si no trae (las lineas de reposicion, la SAT), la del
+    centro de su maquina segun el mapa."""
+    def de(fila):
+        d = str(R.v(fila, "delegacion", "") or "").strip()
+        if d:
+            return d
+        return str((mapa.fichas.get(mapa.clave_centro(fila)) or {}).get("delegacion", "")).strip()
+    return de
+
+
+def deleg_del_centro(mapa):
+    """La delegacion de un centro por la clave con que la serie lo parte."""
+    return lambda clave: str((mapa.fichas.get(clave) or {}).get("delegacion", "")).strip()
+
+
+def previos_averias(primero):
+    """Los dias de SAT que un relleno lee antes de su primer dia, sin pasar
+    del primero que hay (serie.PRIMER_DIA)."""
+    inicio = max(primero - datetime.timedelta(days=OP.DIAS_PREVIOS_AVERIAS),
+                 datetime.date.fromisoformat(S.PRIMER_DIA))
+    return [inicio + datetime.timedelta(days=i) for i in range((primero - inicio).days)]
+
+
+def escribe_operativo(perfil_id, op):
+    """El fichero del informe general de un perfil, comprimido: con toda la
+    historia son megas (docs/66). La primera vez se arranca del de antes, sin
+    comprimir, para no perder los dias que ya tenia."""
+    clave = f"cabina/{perfil_id}/operativo.json.gz"
+    anterior = _json_de(clave) or _json_de(f"cabina/{perfil_id}/operativo.json")
+    fichero = op.fichero(perfil_id, anterior)
+    escribe_comprimido(clave, fichero)
+    return fichero
+
 def historia_de_jornadas(operativos, hoy, context=None):
     """Las jornadas de cada dia desde OP.KM_DESDE hasta ayer, para los km
     acumulados de la pagina de furgonetas (docs/58).
@@ -1534,16 +1569,17 @@ def lambda_handler(event, context):
         print(f"AVISO: el perfil {pid} de la consola no tiene ambito y no se calcula. "
               f"Ponle sus clientes o centros en la consola.")
     acumuladores = [Acumulador(p, hoy) for p in perfiles]
-    # El informe general operativo (docs/51): los ultimos dias, con su cifra tal
-    # cual. En un relleno historico no se escribe: el plan y el censo de hoy no
-    # describen un dia de enero de 2025.
-    publicar = [] if historico else dias[:OP.DIAS_NOCHE]
-    operativos = {acu.perfil["id"]: OP.Operativo(publicar) for acu in acumuladores}
-    # La pagina de incidencias (docs/56): las tareas de la SAT de toda la ventana.
-    incidencias = {acu.perfil["id"]: IN.Incidencias() for acu in acumuladores}
-
     leidas = defaultdict(int)
     mapa = MapaCentros()
+    # El informe general operativo (docs/51): los ultimos dias, con su cifra tal
+    # cual. En un relleno historico escribe todos los dias del tramo, sin foto:
+    # el censo de hoy no describe un dia de enero de 2025 (docs/66).
+    publicar = dias if historico else dias[:OP.DIAS_NOCHE]
+    deleg_de = delegacion_de(mapa)
+    operativos = {acu.perfil["id"]: OP.Operativo(publicar, historico, deleg_de)
+                  for acu in acumuladores}
+    # La pagina de incidencias (docs/56): las tareas de la SAT de toda la ventana.
+    incidencias = {acu.perfil["id"]: IN.Incidencias() for acu in acumuladores}
 
     # El censo va PRIMERO, y no solo porque sea un maestro: trae cliente, centro,
     # pdv y matricula de TODO el parque, asi que el mapa arranca completo en vez
@@ -1582,6 +1618,23 @@ def lambda_handler(event, context):
     else:
         clase_de = {}
     del censo
+
+    # En un relleno historico, la SAT de antes del tramo: una averia cerrada el
+    # primer dia pudo abrirse semanas antes, y sin su apertura no se mide.
+    if historico:
+        for dia in previos_averias(dias[0]):
+            for nombre, destino, id_informe, _, _ in FUENTES:
+                if nombre not in ("sat", "sat_eventos"):
+                    continue
+                filas = lee_dia(destino, id_informe, dia)
+                if not filas:
+                    continue
+                mapa.aprende(filas)
+                for acu in acumuladores:
+                    propias = [f for f in filas if en_ambito(f, acu.ambito, mapa)]
+                    if propias:
+                        come_operativo(operativos[acu.perfil["id"]], dia, nombre, propias, clase_de)
+                del filas
 
     # EL RECORRIDO VA POR DIAS, Y DENTRO DE CADA DIA POR INFORMES. Antes era al
     # contrario. Se cambio para poder cerrar la fila de la serie de un dia en
@@ -1641,8 +1694,9 @@ def lambda_handler(event, context):
                     op.come_jornadas(dia, filas)
                 propias = [f for f in filas if en_ambito(f, acu.ambito, mapa)]
                 acu.filas_en_ambito += len(propias)
-                if propias and not historico:
+                if propias:
                     come_operativo(op, dia, nombre, propias, clase_de)
+                if propias and not historico:
                     if nombre == "sat":
                         incidencias[acu.perfil["id"]].come_tareas(propias)
                     elif nombre == "sat_eventos":
@@ -1671,16 +1725,23 @@ def lambda_handler(event, context):
                         [f for f in sat_v if en_ambito(f, acu.ambito, mapa)])
             del sat_v
         leidos.append(dia)
+        # El plan del dia, una vez para todos los perfiles: antes del 13-oct-2026
+        # no existe, y en un relleno seria una lectura perdida por perfil y dia.
+        plan = (_json_de(f"{PLAN_VISITAS[0]}/anio={dia.year}/mes={dia.month:02d}/"
+                         f"dia={dia.day:02d}/{PLAN_VISITAS[1]}.json.gz")
+                if dia.isoformat() in next(iter(operativos.values()), OP.Operativo([])).dias
+                else None)
         for pid, op in operativos.items():
             od = op.dia(dia)
             if od is not None:
-                od.pon_venta(del_dia[pid])
-                # El plan del dia: con su ambito, que el plan si trae centro.
-                plan = _json_de(f"{PLAN_VISITAS[0]}/anio={dia.year}/mes={dia.month:02d}/"
-                                f"dia={dia.day:02d}/{PLAN_VISITAS[1]}.json.gz")
+                od.pon_venta(del_dia[pid], deleg_del_centro(mapa))
                 if plan is not None:
+                    # Con su ambito, que el plan si trae centro.
                     acu = next(a for a in acumuladores if a.perfil["id"] == pid)
                     od.come_plan([f for f in _filas(plan) if en_ambito(f, acu.ambito, mapa)])
+                if historico:
+                    op.cierra(dia)
+        del plan
         for pid, d in del_dia.items():
             # Un dia sin una sola fila no se escribe: ocuparia sitio y no dice
             # nada que no diga su ausencia.
@@ -1757,9 +1818,7 @@ def lambda_handler(event, context):
                        if R.v(f, "matricula", "") and R.v(f, "ubicacion", "")}
         for acu in acumuladores:
             op = operativos[acu.perfil["id"]]
-            clave = f"cabina/{acu.perfil['id']}/operativo.json"
-            fichero = op.fichero(acu.perfil["id"], _json_de(clave))
-            escribe(clave, fichero)
+            fichero = escribe_operativo(acu.perfil["id"], op)
             # La pagina de telemetria (docs/53), solo si hay ficheros subidos.
             clave_t = f"cabina/{acu.perfil['id']}/telemetria.json"
             detalle = op.detalle_telemetria(acu.perfil["id"], _json_de(clave_t))
@@ -1786,6 +1845,14 @@ def lambda_handler(event, context):
                             acu.panel(hoy, dict(periodo, dias=DIAS),
                                       nuevos.get(acu.perfil["id"], {})))
                     for acu in acumuladores]
+    if historico:
+        # El informe general con los dias del tramo (docs/66), sobre lo que ya
+        # habia: la foto y los dias de fuera del tramo se quedan como estaban.
+        for acu in acumuladores:
+            fichero = escribe_operativo(acu.perfil["id"], operativos[acu.perfil["id"]])
+            resumen_operativo[acu.perfil["id"]] = {
+                "dias": len(operativos[acu.perfil["id"]].cerrados),
+                "primer_dia": fichero["primer_dia"], "ultimo_dia": fichero["ultimo_dia"]}
     for acu in acumuladores:
         if acu.cuadro:
             cuadros[acu.perfil["id"]] = escribe_cuadro(acu, periodo, dias_leidos)

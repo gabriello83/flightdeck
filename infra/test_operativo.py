@@ -304,7 +304,9 @@ comprueba("los dias: desde el primero leido hasta el ultimo publicado",
           (fu["dias"][0], fu["dias"][-1], fu["desde"], fu["ultimo_dia"]), ("2026-10-01", DIA, "2026-10-01", DIA))
 comprueba("el cuadrado no cambia: furgonetas distintas con visita, sin las de relleno",
           op.fichero("interno")["dias"][DIA]["furgonetas"],
-          {"activas": 3, "visitas": 4, "visitas_sin_vehiculo": 1})
+          {"activas": 3, "visitas": 4, "visitas_sin_vehiculo": 1,
+           # Y la lista, para contar las distintas de varios dias (docs/66).
+           "vehiculos": ["1111AAA", "2222BBB", "4444DDD"]})
 
 op_sev = OP.Operativo([DIA])
 op_sev.dia(DIA)
@@ -432,6 +434,55 @@ comprueba("cada delegacion con ciudad tiene sus dos locales",
 comprueba("cada comunidad, 12 dias con los 8 nacionales de entre semana o sabado",
           {c: len(set(v) | {f for f in REAL["nacional"] if datetime.date.fromisoformat(f).weekday() < 6})
            for c, v in REAL["autonomicos"].items()}, {c: 12 for c in REAL["autonomicos"]})
+
+print("\nPor delegacion (docs/66): cifras que se suman, para el filtro de area y delegacion")
+op = OP.Operativo([DIA])
+op.come_censo([
+    {"cod_pdv": "P1", "estado_pdv": 1, "matricula": "M1", "telemetria": 40, "delegacion": "Madrid"},
+    {"cod_pdv": "P2", "estado_pdv": 1, "matricula": "M2", "telemetria": 40, "delegacion": "Sur - Sevilla"},
+])
+op.come_sat([{"id": 1, "matricula": "M1", "cod_operacion": "A01", "tipo_tarea": "A", "delegacion": "Madrid"}])
+op.come_sat_eventos([{"averia_id": 1, "estado": 0, "fecha": f"{DIA} 08:00:00"},
+                     {"averia_id": 1, "estado": 99, "fecha": f"{DIA} 09:00:00"}])
+d = op.dia(DIA)
+d.come_partes([dict(visita("P1", "1111AAA", "M1"), delegacion="Madrid"),
+               dict(visita("P2", "1111AAA", "M2"), delegacion="Sur - Sevilla"),
+               dict(visita("P2", "2222BBB", "M2"), delegacion="Sur - Sevilla"),
+               sistema("M2")])
+d.come_plan([{"cod_pdv": "P1", "delegacion": "Madrid"}, {"cod_pdv": "P3", "delegacion": "Madrid"},
+             {"cod_pdv": "P2", "delegacion": "Sur - Sevilla"}])
+d.come_lineas([{"tipo_linea": "CM", "cantidad": 4, "etiq_canal": "11", "matricula": "M1",
+                "delegacion": "Madrid"}], {"M1": 9})
+c = op.cuadrados_del_dia(d)
+por = c["por_delegacion"]
+comprueba("rutas de Madrid: 1 de 2", (por["rutas"]["Madrid"]["previstas"], por["rutas"]["Madrid"]["hechas"]), (2, 1))
+comprueba("la furgoneta que paso por dos delegaciones sale en las dos",
+          (por["furgonetas"]["Madrid"]["vehiculos"], por["furgonetas"]["Sur - Sevilla"]["vehiculos"]),
+          (["1111AAA"], ["1111AAA", "2222BBB"]))
+comprueba("y en el total, una vez", c["furgonetas"]["vehiculos"], ["1111AAA", "2222BBB"])
+comprueba("la averia, en su delegacion", por["averias"], {"Madrid": {"cerradas": 1, "a_tiempo": 1}})
+comprueba("telemetria: la de Sevilla mando su lectura",
+          por["telemetria"], {"Madrid": {"auditables": 1, "con_dex": 0},
+                              "Sur - Sevilla": {"auditables": 1, "con_dex": 1}})
+comprueba("reposicion de Madrid", por["reposiciones"]["Madrid"]["unidades"], 4.0)
+comprueba("puntos de venta por delegacion en la foto",
+          op.foto["pdvs"]["por_delegacion"]["Madrid"], {"activos": 1, "maquinas": 1})
+f = op.fichero("interno")
+comprueba("el fichero lleva el area de cada delegacion", f["zonas"], {"Madrid": "Centro", "Sur - Sevilla": "Otra zona"})
+
+print("\nEl relleno historico cierra cada dia y no pisa lo que sabe mejor la noche")
+op = OP.Operativo([DIA], historico=True)
+op.dia(DIA).come_partes([visita("P1")])
+op.cierra(DIA)
+comprueba("el dia cerrado ya no se abre", op.dia(DIA), None)
+f = op.fichero("interno", {"generado": "antes", "foto": {"pdvs": {"activos": 7}},
+                           "dias": {DIA: {"telemetria": {"pct": 50.0}}, "2025-01-02": {"x": 1}}})
+comprueba("la telemetria de la noche se queda", f["dias"][DIA]["telemetria"], {"pct": 50.0})
+comprueba("la foto de la noche se queda", f["foto"], {"pdvs": {"activos": 7}})
+comprueba("los dias de fuera del tramo, tambien", (f["primer_dia"], f["dias"]["2025-01-02"]), ("2025-01-02", {"x": 1}))
+comprueba("sin censo, la telemetria dice por que",
+          OP.Operativo([DIA], historico=True).telemetria_vencloud(OP.DiaOperativo(DIA))["sin_dato"],
+          OP.SIN_CENSO_HISTORICO)
 
 print()
 if fallos:
