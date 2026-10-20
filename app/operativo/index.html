@@ -320,12 +320,19 @@ function contenidoDe(id, x){
           + (df ? ` · ${num(n)} diferencias con Nayax, Prodelfi y Nebula` : "")};
     }
     case "devoluciones": {
-      /* El mes de ayer hasta ayer, contra los mismos dias del mes anterior. */
+      /* El dinero devuelto en el mes de ayer hasta ayer, contra los mismos
+         dias del mes anterior (Gabriele, 20-oct-2026). Un fichero de antes
+         del importe sigue diciendo cuantas. */
       const dia = Number(String(x.hasta).slice(8,10));
-      return {vl:num(x.total),
+      if(x.importe == null) return {vl:num(x.total),
         sub:`en ${mesLargo(x.mes)}, hasta el día ${num(dia)} · ${num(x.mes_anterior)} el mes anterior a estas alturas`
           + (x.sin_cerrar ? ` · ${num(x.sin_cerrar)} sin cerrar` : "")
           + (x.especiales!=null ? ` · ${num(x.especiales)} de solicitudes especiales` : "")};
+      return {vl:eur(x.importe),
+        sub:`devueltos en ${mesLargo(x.mes)} hasta el día ${num(dia)}, de ${num(x.total)} ${x.total===1?"devolución":"devoluciones"}`
+          + ` · ${eur(x.importe_anterior)} el mes anterior a estas alturas`
+          + (x.sin_resolver ? ` · ${num(x.sin_resolver)} sin resolver` : "")
+          + (x.rechazadas ? ` · ${num(x.rechazadas)} rechazadas` : "")};
     }
     case "almacenes": return {vl:eur(x.valor),
       sub:`Cierre de ${mesLargo(x.periodo)} · ${num((x.por_almacen||[]).length)} almacenes`

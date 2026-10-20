@@ -99,6 +99,10 @@ CLAVE_CENSO_ANTERIOR = "cabina/_censo/anterior.json"
 # tenga el informe, la pagina de incidencias sale sin el estado y lo dice.
 CLAVE_SAT_INCIDENCIAS = os.environ.get("SAT_INCIDENCIAS",
                                        "maestros/sat_incidencias/m_sat_incidencias.json.gz")
+# Las devoluciones (M16, informe 198, docs/57): la Gestion de Devoluciones de
+# VenCloud, con su importe y su estado.
+CLAVE_DEVOLUCIONES = os.environ.get("DEVOLUCIONES",
+                                    "maestros/devoluciones/m_devoluciones.json.gz")
 # El maestro de rutas: lo unico que dice de que delegacion es cada almacen
 # (informe general operativo, docs/51).
 CLAVE_RUTAS = os.environ.get("RUTAS", "maestros/rutas/m_rutas.json.gz")
@@ -1430,17 +1434,20 @@ def escribe_incidencias(acumuladores, operativos, incidencias, mapa, hoy):
     los tres primeros dias de cada tarea, que son los que vuelve a bajar la
     extraccion. Va antes de escribir el operativo.
 
-    De la misma foto salen las devoluciones (docs/57): su cuadrado y su pagina.
+    Aqui van tambien las devoluciones (docs/57), de su propia foto (M16): su
+    cuadrado y su pagina.
     """
     foto = _filas(_json_de(CLAVE_SAT_INCIDENCIAS))
+    devoluciones = _filas(_json_de(CLAVE_DEVOLUCIONES))
     for acu in acumuladores:
         inc = incidencias[acu.perfil["id"]]
         dev = DV.Devoluciones()
         op = operativos[acu.perfil["id"]]
+        if devoluciones:
+            dev.come_foto([f for f in devoluciones if en_ambito(f, acu.ambito, mapa)])
         if foto:
             propias = [f for f in foto if en_ambito(f, acu.ambito, mapa)]
             inc.come_foto(propias)
-            dev.come_foto(propias)
             op.come_sat(propias)
             op.come_sat_eventos(inc.eventos_de_la_foto())
         escribe_comprimido(f"cabina/{acu.perfil['id']}/incidencias.json.gz",

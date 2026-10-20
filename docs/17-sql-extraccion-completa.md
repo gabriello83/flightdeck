@@ -2335,6 +2335,61 @@ order by t.fecha
 Al manifiesto entra con `"id": "m_sat_incidencias"`, `"clave_fecha": "ninguna"` y
 `"destino": "maestros/sat_incidencias"`; ese destino es el que lee la Lambda de agregados.
 
+## M16 · EXT_DEVOLUCIONES  *(sin parámetros)*  ·  **informe 198**
+
+La pantalla «Gestión de Devoluciones» de VenCloud: `vending.reclamaciones` (docs/57). Cada devolución
+con su importe en un campo, su estado (`estado_devolucion`: 1 en estudio, 2 pendiente, 3 abonada, 4
+rechazada) y su tipo (Transferencia, Sin devolución, En mano, Monyx, Tarjeta prepago…). El
+20-oct-2026: 21.204 filas desde el 15-sep-2025. `tareas_sat` sale vacía: las devoluciones no llevan
+el ticket de la tarea. Sin datos del cliente (nombre, teléfono, email, NIF, cuenta, firma,
+observaciones).
+
+```sql
+select
+  r.id                  as id,
+  r.numero              as numero,
+  cast(r.fecha as text) as fecha,
+  r.tipo                as tipo,
+  r.estado              as estado,
+  r.estadodevolucion    as estado_devolucion,
+  r.tipodevolucion      as tipo_devolucion,
+  td.nombre             as tipo_devolucion_nombre,
+  r.impdevolucion       as importe,
+  r.transaccionfallida  as transaccion_fallida,
+  mot.nombre            as motivo,
+  res.nombre            as resolucion,
+  r.origen              as origen,
+  r.registradopor       as registrado_por,
+  r.resueltopor         as resuelto_por,
+  m.codigo              as matricula,
+  pdv.codigo            as cod_pdv,
+  cen.numcentro         as num_centro,
+  cen.denomina          as centro,
+  cli.codigo            as cod_cliente,
+  cli.nombre            as cliente,
+  del.nombre            as delegacion,
+  tk.numero             as ticket,
+  (select string_agg(t.serie || '-' || cast(t.numero as text), ' ' order by t.fecha)
+     from sat.tareatecnica t
+    where r.ticketid is not null
+      and t.ticketid = r.ticketid) as tareas_sat
+from vending.reclamaciones r
+left join configuracion.conftiposdevol td          on td.codigo = r.tipodevolucion
+left join configuracion.reclamacionesmotivos mot   on mot.id    = r.reclamacionmotivoid
+left join configuracion.reclamaciontresolucion res on res.id    = r.tiporesolucionid
+left join recursos.maquinas m                      on m.id      = r.maquinaid
+left join vending.pdvs pdv                         on pdv.id    = r.pdvid
+left join comercial.clientescentros cen            on cen.id    = r.clientecentroid
+left join comercial.clientes cli                   on cli.id    = cen.clienteid
+left join general.delegaciones del                 on del.id    = r.delegacionid
+left join general.tickets tk                       on tk.id     = r.ticketid
+where r.fecha >= current_date - 400
+order by r.fecha
+```
+
+Al manifiesto entra con `"id": "m_devoluciones"`, `"clave_fecha": "ninguna"` y
+`"destino": "maestros/devoluciones"`.
+
 ---
 
 # El manifiesto para la Lambda
