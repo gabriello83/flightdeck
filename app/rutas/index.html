@@ -90,7 +90,8 @@ button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);colo
 .kpi.e-fuera{border-top:4px solid var(--fuera)}
 .kpi.e-vacio{border-top:4px solid var(--vacio)}
 .kpi.e-ruta{border-top:4px solid var(--s1)}
-.dos{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);gap:14px}
+/* Las rutas llevan quién las hizo: van a lo ancho, y el donut debajo. */
+.dos{display:grid;grid-template-columns:minmax(0,1fr);gap:0 14px}
 .dos > section.caja{margin-top:14px}
 [hidden]{display:none!important}
 /* Con una de las dos quitada al usuario (docs/61), la otra ocupa la fila. */
@@ -145,6 +146,35 @@ tr.elegida td{background:color-mix(in srgb, var(--s1) 10%, transparent)}
 .vacio{color:var(--tinta-3);font-size:13.5px;padding:8px 0}
 footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
 #cargando{padding:40px 0;color:var(--tinta-2)}
+/* La portada: un cuadrante por área, como en furgonetas. */
+.areas{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:14px}
+button.area{all:unset;box-sizing:border-box;display:block;cursor:pointer;background:var(--tarjeta);
+  border:1px solid var(--borde);border-left:5px solid var(--tinta-3);border-radius:12px;padding:14px 16px;box-shadow:var(--sombra)}
+button.area:hover{border-color:var(--tinta-3)}
+button.area:focus-visible{outline:2px solid var(--s1);outline-offset:1px}
+button.area.verde{border-left-color:var(--verde)}
+button.area.amarillo{border-left-color:var(--amarillo)}
+button.area.rojo{border-left-color:var(--rojo)}
+.area .nom{font-size:15px;font-weight:650}
+.area .pc{font-size:34px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:4px}
+.area.verde .pc{color:var(--texto-verde)} .area.amarillo .pc{color:var(--amarillo)} .area.rojo .pc{color:var(--texto-rojo)}
+.area .nt{font-size:12.5px;color:var(--tinta-2);margin-top:2px}
+.area .mq{font-size:12.5px;color:var(--tinta-2);margin-top:8px;padding-top:8px;border-top:1px solid var(--borde)}
+.volver{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+.volver h2{font-size:18px;margin:0}
+/* Las tres cifras de máquinas de un área abren su lista: son botones. */
+.mqs{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px}
+button.kpi{all:unset;box-sizing:border-box;display:flex;flex-direction:column;cursor:pointer;
+  background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:11px 13px;box-shadow:var(--sombra)}
+button.kpi:hover{border-color:var(--tinta-3)}
+button.kpi:focus-visible{outline:2px solid var(--s1);outline-offset:1px}
+button.kpi[aria-pressed="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1px var(--s1)}
+.kpi .ver{font-size:12px;color:var(--s1);margin-top:4px}
+.kpi.e-llamada{border-top:4px solid var(--fuera)}
+.kpi.e-recaudar{border-top:4px solid var(--verde)}
+.kpi.e-reponer{border-top:4px solid var(--pendiente)}
+.quien{font-size:12.5px;color:var(--tinta-2)}
+.fechas{font-size:12px;color:var(--tinta-3)}
 @media (max-width:700px){
   .tabla table,.tabla tbody,.tabla tr,.tabla td{display:block;width:100%}
   .tabla thead{display:none}
@@ -179,38 +209,68 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 
   <div id="todo" hidden>
     <div class="barra">
+      <label>Periodo <select id="periodo">
+        <option value="dia">Un día</option>
+        <option value="semana">Los 7 días hasta</option>
+        <option value="mes">El mes hasta</option>
+      </select></label>
       <label>Día <select id="dia"></select></label>
-      <label>Delegación <select id="deleg"></select></label>
-      <label>Ruta <select id="ruta"></select></label>
+      <label class="enArea">Delegación <select id="deleg"></select></label>
+      <label class="enArea">Ruta <select id="ruta"></select></label>
     </div>
     <div class="nota" id="festivoDia" hidden></div>
+
+    <div class="volver enArea" id="cabArea"><button class="btn" id="bAreas" type="button">← Todas las áreas</button><h2 id="tArea"></h2></div>
     <div class="kpis" id="kpis"></div>
 
-    <div class="dos">
-      <section class="caja" data-tabla="rutas">
-        <div class="cabsec" data-estrella="rutas"><h2 id="hRutas">Visitas por ruta</h2><span class="tenue" id="cRutas"></span></div>
-        <p class="sub">Puntos de venta de cada ruta por estado. Uno que está en dos rutas cuenta en las dos; las visitas fuera de ruta van a la ruta con la que se hizo el parte. Pulsa una ruta para filtrar.</p>
-        <div class="tabla" id="tRutas"></div>
+    <!-- La portada: lo nacional y un cuadrante por área. -->
+    <div id="portada" hidden>
+      <p class="sub tenue" id="sAreas" style="margin:14px 0 0"></p>
+      <div class="areas" id="areas"></div>
+    </div>
+
+    <!-- Un área: sus máquinas, sus rutas y sus visitas. -->
+    <div id="vistaArea" hidden>
+      <div class="mqs" id="mqs"></div>
+      <section class="caja" id="cajaLista" hidden>
+        <div class="cabsec" data-estrella="*"><h2 id="hLista"></h2><span class="tenue" id="cLista"></span></div>
+        <div class="pestanas" id="pestanasM" role="tablist"></div>
+        <div class="barra" style="margin-top:0">
+          <label class="busca">Buscar <input id="buscaM" type="search" placeholder="Matrícula, centro, ruta, reponedor…"></label>
+          <button class="btn" id="bCsvM" type="button">Descargar CSV</button>
+        </div>
+        <p class="sub" id="sLista"></p>
+        <div class="tabla" id="tLista"></div>
       </section>
-      <section class="caja" data-tabla="estado">
-        <div class="cabsec" data-estrella="estado"><h2>Estado de las visitas</h2></div>
-        <div id="dona"></div>
+      <!-- Para la vista suelta de preferidos: cada lista es su tabla. -->
+      <span data-tabla="llamadas" hidden></span><span data-tabla="recaudar" hidden></span><span data-tabla="reponer" hidden></span>
+
+      <div class="dos">
+        <section class="caja" data-tabla="rutas">
+          <div class="cabsec" data-estrella="rutas"><h2 id="hRutas">Visitas por ruta</h2><span class="tenue" id="cRutas"></span></div>
+          <p class="sub" id="sRutas">De cada ruta, quién la hizo, cuántas máquinas tenía en ruta, cuántas de esas no se hicieron, cuántas se hicieron fuera de ruta y cuántas fueron pasaje vacío. Pulsa una ruta para filtrar.</p>
+          <div class="tabla" id="tRutas"></div>
+        </section>
+        <section class="caja" data-tabla="estado">
+          <div class="cabsec" data-estrella="estado"><h2>Estado de las visitas</h2></div>
+          <div id="dona"></div>
+        </section>
+      </div>
+
+      <section class="caja" data-tabla="maquinas">
+        <div class="cabsec" data-estrella="maquinas"><h2 id="hPdv">Máquinas no visitadas</h2><span class="tenue" id="cPdv"></span></div>
+        <div class="pestanas" id="pestanas" role="tablist"></div>
+        <div class="barra" style="margin-top:0">
+          <label class="busca">Buscar <input id="busca" type="search" placeholder="Matrícula, centro, ruta, reponedor…"></label>
+          <button class="btn" id="bCsv" type="button">Descargar CSV</button>
+        </div>
+        <p class="sub" id="sPdv"></p>
+        <div class="tabla" id="tPdv"></div>
       </section>
     </div>
 
-    <section class="caja" data-tabla="maquinas">
-      <div class="cabsec" data-estrella="maquinas"><h2 id="hPdv">Máquinas no visitadas</h2><span class="tenue" id="cPdv"></span></div>
-      <div class="pestanas" id="pestanas" role="tablist"></div>
-      <div class="barra" style="margin-top:0">
-        <label class="busca">Buscar <input id="busca" type="search" placeholder="Matrícula, centro, ruta, reponedor…"></label>
-        <button class="btn" id="bCsv" type="button">Descargar CSV</button>
-      </div>
-      <p class="sub" id="sPdv"></p>
-      <div class="tabla" id="tPdv"></div>
-    </section>
-
     <section class="caja" id="sDeleg" data-tabla="delegaciones">
-      <div class="cabsec" data-estrella="delegaciones"><h2>Por delegación</h2><span class="tenue">Pulsa una para ver sus rutas y sus máquinas</span></div>
+      <div class="cabsec" data-estrella="delegaciones"><h2>Por delegación</h2><span class="tenue" id="cDeleg">Pulsa una para ver sus rutas y sus máquinas</span></div>
       <p class="sub">Cumplimiento de ruta de cada delegación. Los cuadritos son los últimos siete días; el recuadrado es festivo.</p>
       <div class="tabla" id="tDeleg"></div>
     </section>
@@ -227,27 +287,34 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 
 <script>
 /* ===================================================================
-   Rutas · digivend.es  (docs/55)
+   Rutas · digivend.es  (docs/55 y docs/67)
 
-   Lo que abre el cuadrado de Rutas del informe general: el plan de visitas
-   del día (D12, informe 184 de VenCloud) contra las visitas reales, por
-   delegación, por ruta y punto de venta a punto de venta; y el control de
-   festivos que pidió Gabriele el 13 de octubre: que un festivo de cada
-   ciudad tenga muchas menos visitas que un día normal de su delegación.
+   Lo que abre el cuadrado de Rutas del informe general. Gabriele, 19-oct:
+   al entrar, lo nacional y un cuadrante por área con su porcentaje; dentro
+   de un área, filtrar por delegación y ver sus rutas (quién la hizo, cuántas
+   máquinas tenía en ruta, cuántas no hizo, cuántas fuera de ruta y cuántos
+   pasajes vacíos), las llamadas de máquina vacía y de qué máquina son, las
+   máquinas que faltan por recaudar en el mes y las que llevan más de 12 días
+   laborables sin reponer, con el dinero que se puede esperar de cada una.
+
+   Debajo sigue lo de antes: el plan de visitas (D12, informe 184) contra
+   las visitas reales, punto de venta a punto de venta, y el control de
+   festivos por delegación (13-oct).
 
    El fichero ya llega con el ámbito del perfil aplicado: lo escribió la noche
    para este perfil, y la API no deja pedir otro. Esta página no decide qué
-   ve nadie: filtra y dibuja.
+   ve nadie: filtra, suma y dibuja.
    =================================================================== */
 const CLAVE_TEMA = "digivend.tema";
 const num = n => new Intl.NumberFormat("es-ES").format(Math.round(n||0));
+const eur = n => n==null ? "—" : new Intl.NumberFormat("es-ES",{style:"currency", currency:"EUR", maximumFractionDigits:0}).format(n);
 const fpct = p => p==null ? "—" : new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(p) + " %";
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const $ = s => document.querySelector(s);
 /* Las listas de puntos de venta pasan de 400 filas un dia normal: se ensenan
    las primeras y el resto con un boton, o entero en el CSV. */
 const PRIMERAS = 50, MAX_FILAS = 1000;
-let TODAS_PDV = false;
+let TODAS_PDV = false, TODAS_M = false;
 const TODAS = "";
 
 function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
@@ -270,7 +337,10 @@ $("#bSalir").addEventListener("click", async ()=>{
   location.href = "/";
 });
 
-let D=null;
+/* D: el fichero. AREA: "" es la portada; "*" son todas las áreas juntas (un
+   perfil de una sola área, o la vista suelta de preferidos). VER: la lista de
+   máquinas abierta dentro del área. */
+let D=null, AREA="", VER="", QUITADAS=new Set(), VARIAS_AREAS=false;
 
 function fechaLarga(s){
   const d = new Date(String(s)+"T00:00:00");
@@ -278,15 +348,38 @@ function fechaLarga(s){
     : d.toLocaleDateString("es-ES",{weekday:"long", day:"numeric", month:"long", year:"numeric"});
 }
 function fechaCorta(s){
-  const d = new Date(String(s)+"T00:00:00");
+  const d = new Date(String(s).slice(0,10)+"T00:00:00");
   return Number.isNaN(d.getTime()) ? String(s)
     : d.toLocaleDateString("es-ES",{weekday:"short", day:"numeric", month:"short"});
+}
+function nombreMes(m){
+  const d = new Date(String(m)+"-01T00:00:00");
+  return Number.isNaN(d.getTime()) ? String(m) : d.toLocaleDateString("es-ES",{month:"long"});
 }
 function isoLocal(d){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 function avisa(t, mal){ const a=$("#aviso"); a.textContent=t; a.hidden=!t; a.classList.toggle("mal", !!mal); }
 const pill = (p, color) => `<span class="pct ${esc(color||"")}">${fpct(p)}</span>`;
+
+/* El semáforo del informe general, con los umbrales que trae el fichero. */
+function semaforo(p){
+  const u = D.umbrales || {verde:95, amarillo:75};
+  return p==null ? "" : p > u.verde ? "verde" : p >= u.amarillo ? "amarillo" : "rojo";
+}
+const porc = (a, b) => b ? Math.round(1000*a/b)/10 : null;
+
+/* El área de cada delegación la trae el fichero; uno de antes no la trae y se
+   saca del nombre, con la misma regla de la noche (las cinco del Power BI). */
+const ZONAS = [["MADRID","Centro"],["ANDALUCIA","Sur"],["CATALUNA","Cataluña"],["LEVANTE","Levante"],["NORTE","Norte"]];
+const ORDEN_AREAS = ["Centro", "Sur", "Cataluña", "Levante", "Norte", "Otra zona"];
+function zona(dl){
+  const z = (D.zonas||{})[dl];
+  if(z) return z;
+  const d = String(dl||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase();
+  const x = ZONAS.find(([p])=>d.startsWith(p));
+  return x ? x[1] : "Otra zona";
+}
 
 /* El festivo de una delegación ese día, según el calendario que trae el fichero. */
 function festivo(f, dl){
@@ -299,76 +392,264 @@ function festivo(f, dl){
   if(d && (d.local||[]).includes(f)) return "local";
   return null;
 }
-const dia = () => D.dias[$("#dia").value] || {};
+
+const diaSel = () => $("#dia").value;
+const dia = () => D.dias[diaSel()] || {};
 const deleg = () => $("#deleg").value;
-const deLaDeleg = x => deleg()===TODAS || x===deleg();
+/* Lo que entra en lo elegido: el área (o todas) y la delegación. */
+const enArea = dl => AREA === "" || AREA === "*" || zona(dl) === AREA;
+const deLaDeleg = dl => enArea(dl) && (deleg()===TODAS || dl===deleg());
 /* La ruta elegida va como «delegación␁ruta»: dos delegaciones pueden tener
    una ruta con el mismo nombre. */
 const SEP = "\u0001";
 const rutaSel = () => { const v = $("#ruta").value; return v ? v.split(SEP) : null; };
 const nombreRuta = r => r || "Sin ruta";
 
-/* Los estados, con los colores del Power BI de visitas pendientes. */
-const HECHA = "HECHA", PENDIENTE = "PENDIENTE", FUERA = "FUERA DE RUTA";
-const NOMBRE_ESTADO = { [HECHA]: "Hecha", [PENDIENTE]: "Pendiente", [FUERA]: "Fuera de ruta" };
-const CLASE_ESTADO = { [HECHA]: "HECHA", [PENDIENTE]: "PENDIENTE", [FUERA]: "FUERA" };
-
-/* La lista máquina a máquina del día. Los ficheros escritos antes del 16 de
-   octubre de 2026 traían dos listas (no_visitados y fuera) sin matrícula ni
-   hechas: se leen igual, y lo que no traen sale vacío. */
-function visitasDia(d){
-  if(Array.isArray(d.visitas)) return d.visitas;
-  if(!Array.isArray(d.no_visitados)) return null;
-  return [
-    ...d.no_visitados.map(x=>[PENDIENTE, x[0], "", x[1], x[2], x[3], x[4], "", "", "", null]),
-    ...(d.fuera||[]).map(x=>[FUERA, x[0], "", x[1], x[2], x[4], x[5], "", "", x[3], null]),
-  ];
+/* Los días del periodo: el elegido, los siete hasta él o el mes hasta él. */
+function diasPeriodo(){
+  const f = diaSel(), p = $("#periodo").value;
+  const todos = Object.keys(D.dias).filter(x=>x<=f).sort();
+  if(p === "mes") return todos.filter(x=>x.slice(0,7)===f.slice(0,7));
+  if(p === "semana"){
+    const d = new Date(f+"T00:00:00"); d.setDate(d.getDate()-6);
+    const desde = isoLocal(d);
+    return todos.filter(x=>x>=desde);
+  }
+  return D.dias[f] ? [f] : [];
 }
-function enFiltro(x){
-  if(!deLaDeleg(x[3])) return false;
-  const rs = rutaSel();
-  return !rs || (x[3]===rs[0] && String(x[4]||"").split(" / ").map(nombreRuta).includes(rs[1]));
+const unDia = () => $("#periodo").value === "dia";
+function textoPeriodo(){
+  const ds = diasPeriodo();
+  if(unDia() || ds.length < 2) return `el ${fechaLarga(diaSel())}`;
+  return `del ${fechaCorta(ds[0])} al ${fechaCorta(ds[ds.length-1])} (${num(ds.length)} días)`;
 }
 
-/* La fila con las cifras de lo elegido: el total, una delegación o una ruta. */
-function filaElegida(d){
-  const rs = rutaSel(), dl = deleg();
-  if(rs) return (d.rutas||[]).find(x=>x.delegacion===rs[0] && x.ruta===rs[1]);
-  return dl===TODAS ? d.total : (d.delegaciones||[]).find(x=>x.delegacion===dl);
+/* Suma filas con previstas, hechas, fuera y pasaje vacío. Un vacío sin dato
+   en cualquiera de ellas deja la suma sin dato: no se enseña un cero que no
+   es un cero. */
+function suma(filas){
+  const t = {previstas:0, hechas:0, fuera:0, vacio:0, visitas:0, n:0};
+  filas.forEach(x=>{
+    t.n++; t.previstas += x.previstas||0; t.hechas += x.hechas||0; t.fuera += x.fuera||0; t.visitas += x.visitas||0;
+    if(x.vacio==null || t.vacio==null) t.vacio = null; else t.vacio += x.vacio;
+  });
+  t.pct = porc(t.hechas, t.previstas); t.color = semaforo(t.pct);
+  return t;
+}
+
+/* Las cifras de lo elegido en el periodo: de un área, una delegación o una
+   ruta. `sin` cuenta los días sin plan. */
+function cifras(area){
+  const rs = rutaSel(), filas = []; let sin = 0, sinDato = null;
+  const dentro = dl => area!==undefined ? (area==="" || area==="*" || zona(dl)===area) : deLaDeleg(dl);
+  diasPeriodo().forEach(f=>{
+    const d = D.dias[f];
+    if(d.sin_dato){ sin++; sinDato = d.sin_dato; return; }
+    if(rs && area===undefined) filas.push(...(d.rutas||[]).filter(x=>x.delegacion===rs[0] && x.ruta===rs[1]));
+    else filas.push(...(d.delegaciones||[]).filter(x=>dentro(x.delegacion)));
+  });
+  const t = suma(filas);
+  t.sin = sin; t.sinDato = sinDato; t.dias = diasPeriodo().length;
+  return t;
 }
 
 function kpi(clase, et, vl, nt){
   return `<div class="kpi ${clase}"><div class="et">${esc(et)}</div><div class="vl">${vl}</div><div class="nt">${nt}</div></div>`;
 }
 function pintaKpis(){
-  const d = dia(), dl = deleg();
-  if(d.sin_dato){
-    $("#kpis").innerHTML = kpi("", "Visitas en ruta", "Sin dato", esc(d.sin_dato))
-      + kpi("", "Visitas", num(dl===TODAS ? (d.total||{}).visitas : (d.visitas_deleg||{})[dl]), "partes de reponedor ese día");
-    return;
-  }
-  const f = filaElegida(d);
-  if(!f){
-    $("#kpis").innerHTML = kpi("", "Visitas en ruta", "Sin dato", "No hay plan ni visitas de lo elegido ese día.");
+  const f = cifras();
+  if(!f.n){
+    const motivo = f.sinDato || "No hay plan ni visitas de lo elegido en el periodo.";
+    $("#kpis").innerHTML = kpi("", "Visitas en ruta", "Sin dato", esc(motivo));
     return;
   }
   const pend = f.previstas - f.hechas;
+  const sinVacio = dia().sin_vacio || "Algún día del periodo no trae el pasaje vacío.";
   const vacio = f.vacio==null
-    ? kpi("e-vacio", "Pasaje vacío", "Sin dato", esc(d.sin_vacio || "Este día no trae el pasaje vacío."))
+    ? kpi("e-vacio", "Pasaje vacío", "Sin dato", esc(sinVacio))
     : kpi("e-vacio", "Pasaje vacío", num(f.vacio), "visitas sin ninguna línea de reposición");
+  const nota = f.sin ? ` · ${num(f.sin)} ${f.sin===1?"día":"días"} sin plan` : "";
   $("#kpis").innerHTML =
-      kpi("e-pendiente", "Visitas pendientes", num(pend), "del plan, sin parte ese día")
-    + kpi(esc(f.color||""), "Cumplimiento de ruta", fpct(f.pct), `${num(f.hechas)} de ${num(f.previstas)} en ruta`)
+      kpi("e-pendiente", "Visitas pendientes", num(pend), "del plan, sin parte")
+    + kpi(esc(f.color||""), "Cumplimiento de ruta", fpct(f.pct), `${num(f.hechas)} de ${num(f.previstas)} en ruta${nota}`)
     + kpi("e-ruta", "Visitas en ruta", num(f.previstas), "las del plan: hechas y pendientes")
-    + kpi("e-hecha", "Visitas efectuadas", num(f.hechas), "del plan, con parte ese día")
+    + kpi("e-hecha", "Visitas efectuadas", num(f.hechas), "del plan, con parte")
     + kpi("e-fuera", "Visitas no planificadas", num(f.fuera), "con parte y fuera de ruta")
     + vacio;
 }
 
+/* ---------------------------------------------------------- las máquinas */
+/* Las llamadas, las por recaudar y las sin reponer de lo elegido. La ruta,
+   cuando hay una elegida, es la de la última visita de la máquina. */
+const enRuta = x => { const rs = rutaSel(); return !rs || (x.d===rs[0] && nombreRuta(x.r)===rs[1]); };
+function llamadas(area){
+  const ds = diasPeriodo(), desde = ds[0] || diaSel(), hasta = diaSel();
+  return (D.llamadas||[]).filter(x=>{
+    const f = String(x.f).slice(0,10);
+    return f>=desde && f<=hasta && (area!==undefined ? (area==="*" || area==="" || zona(x.d)===area) : deLaDeleg(x.d));
+  });
+}
+function maquinasDe(lista, area){
+  return (D[lista]||[]).filter(x=> area!==undefined ? (area==="*" || area==="" || zona(x.d)===area) : (deLaDeleg(x.d) && enRuta(x)));
+}
+const CM = () => D.control_maquinas || {};
+const sumaPm = l => l.reduce((s,x)=>s+(x.pm||0), 0);
+
+function pintaMqs(){
+  const cm = CM(), ll = llamadas(), pr = maquinasDe("por_recaudar"), sr = maquinasDe("sin_reponer");
+  const nMaq = new Set(ll.map(x=>x.m||x.p)).size;
+  const tarjetas = [];
+  if(!QUITADAS.has("llamadas")) tarjetas.push(["llamadas", "e-llamada", "Llamadas de máquina vacía",
+    D.llamadas ? num(ll.length) : "Sin dato",
+    D.llamadas ? `de ${num(nMaq)} ${nMaq===1?"máquina":"máquinas"} · ${esc(textoPeriodo())}` : "Este fichero no trae las llamadas."]);
+  if(!QUITADAS.has("recaudar")) tarjetas.push(["recaudar", "e-recaudar", `Por recaudar en ${nombreMes(cm.mes)}`,
+    D.por_recaudar ? num(pr.length) : "Sin dato",
+    D.por_recaudar ? (cm.sin_oficial ? "sin recaudación oficial para estimar el dinero" : `unos ${eur(sumaPm(pr))} al mes según los meses anteriores`)
+      : "Este fichero no trae las máquinas."]);
+  if(!QUITADAS.has("reponer")) tarjetas.push(["reponer", "e-reponer", `Sin reponer más de ${num(cm.laborables||12)} días laborables`,
+    D.sin_reponer ? (cm.sin_lineas ? "Sin dato" : num(sr.length)) : "Sin dato",
+    D.sin_reponer ? (cm.sin_lineas ? esc(cm.sin_lineas) : `y ${num(maquinasDe("nunca_repuestas").length)} sin ninguna carga desde el ${esc(fechaCorta(cm.desde))}`)
+      : "Este fichero no trae las máquinas."]);
+  $("#mqs").innerHTML = tarjetas.map(([id, cl, et, vl, nt])=>
+    `<button class="kpi ${cl}" type="button" data-ver="${id}" aria-pressed="${VER===id}"><span class="et">${esc(et)}</span>
+      <span class="vl">${vl}</span><span class="nt">${nt}</span><span class="ver">${VER===id ? "Ocultar el listado" : "Ver el listado"}</span></button>`).join("");
+  $("#mqs").querySelectorAll("button.kpi").forEach(b=>b.addEventListener("click", ()=>{
+    VER = VER===b.dataset.ver ? "" : b.dataset.ver; PEST_M = ""; TODAS_M = false; $("#buscaM").value = "";
+    pintaMqs(); pintaLista();
+    if(VER) $("#cajaLista").scrollIntoView({block:"nearest"});
+  }));
+}
+
+/* Las listas: columnas [título, html, texto para el CSV]. */
+const L_MAQ = ["Máquina", x=>`<span class="mat">${esc(x.m||"—")}</span><br><span class="tenue">PDV ${esc(x.p)}</span>`, x=>x.m];
+const L_PDV = ["Punto de venta", x=>"", x=>x.p];
+const L_CEN = ["Centro", x=>`${esc(x.c)}${x.n?` <span class="tenue">nº ${esc(x.n)}</span>`:""}${x.u?`<br><span class="tenue">${esc(x.u)}</span>`:""}`, x=>`${x.n} ${x.c}`];
+const L_UBI = ["Ubicación", x=>"", x=>x.u];
+const L_DEL = ["Delegación", x=>esc(x.d), x=>x.d];
+const L_RUT = ["Ruta", x=>`${esc(x.r||"—")}${x.e?`<br><span class="tenue">${esc(x.e)}</span>`:""}`, x=>x.r];
+const L_REP = ["Reponedor", x=>"", x=>x.e];
+const L_CLA = ["Tipo", x=>esc(x.k), x=>x.k];
+const L_VIS = ["Última visita", x=>x.v?esc(fechaCorta(x.v)):'<span class="tenue">ninguna</span>', x=>x.v||""];
+const L_REC = ["Última recaudación", x=>x.rc?esc(fechaCorta(x.rc)):"—", x=>x.rc||""];
+const L_MR = ["Meses recaudada", x=>`${num(x.mr)} de ${num((CM().meses_promedio||[]).length||3)}`, x=>x.mr];
+const L_PM = ["Al mes (media)", x=>x.pm==null?'<span class="tenue">sin dato</span>':eur(x.pm), x=>x.pm==null?"":String(x.pm).replace(".",",")];
+const L_RP = ["Última carga", x=>x.rp?esc(fechaCorta(x.rp)):'<span class="tenue">ninguna</span>', x=>x.rp||""];
+const L_LAB = ["Laborables sin reponer", x=>x.lab==null?"—":`<b>${num(x.lab)}</b>`, x=>x.lab==null?"":x.lab];
+
+let PEST_M = "";
+const LISTAS = {
+  llamadas: {
+    t: "Llamadas de máquina vacía",
+    sub: () => `Tareas de la SAT de «Reponer distribuidor automático» (S010) o «Selecciones vacías» (C016) abiertas ${textoPeriodo()}, juntas por máquina. Fuente: ${D.llamadas_fuente||"SAT"}.`,
+    filas: () => {
+      const por = {};
+      llamadas().forEach(x=>{
+        const k = x.m || x.p || x.x;
+        const g = por[k] = por[k] || {m:x.m, p:x.p, d:x.d, n:x.n, c:x.c, ll:[], ab:0, ops:new Set()};
+        g.ll.push(x); if(x.a===1) g.ab++; g.ops.add(x.o);
+      });
+      return Object.values(por).sort((a,b)=>b.ll.length-a.ll.length || String(b.ll[0].f).localeCompare(String(a.ll[0].f)));
+    },
+    cols: [L_MAQ, L_CEN, L_DEL,
+      ["Llamadas", x=>`<b>${num(x.ll.length)}</b>`, x=>x.ll.length],
+      ["Cuándo", x=>`<span class="fechas">${x.ll.map(l=>esc(fechaCorta(l.f)) + (l.a===1?" (abierta)":"")).join(" · ")}</span>`,
+        x=>x.ll.map(l=>`${l.f} ${l.x}${l.a===1?" abierta":l.a===0?" cerrada":""}`).join(" | ")],
+      ["Operación", x=>esc([...x.ops].join(" · ")), x=>[...x.ops].join(" · ")]],
+    buscar: x => [x.m, x.p, x.c, x.n, x.d, ...x.ll.map(l=>l.x)].join(" "),
+  },
+  recaudar: {
+    t: () => `Máquinas por recaudar en ${nombreMes(CM().mes)}`,
+    sub: () => {
+      const cm = CM(), ms = (cm.meses_promedio||[]).map(nombreMes).join(", ");
+      return `Se recaudaron en alguno de los meses anteriores (${ms}) y en ${nombreMes(cm.mes)} todavía no: ningún parte con recaudación ni acto de recaudar en la oficial. `
+        + `«Al mes» es el efectivo oficial de esos tres meses dividido entre tres; un mes sin recaudar cuenta como cero. `
+        + (cm.sin_oficial ? cm.sin_oficial : "")
+        + ` De las ${num(cm.recaudan)} máquinas que recaudan, ${num(cm.recaudadas_mes)} ya se han recaudado este mes.`;
+    },
+    filas: () => maquinasDe("por_recaudar"),
+    cols: [L_MAQ, L_CEN, L_DEL, L_RUT, L_REC, L_MR, L_PM],
+    csv: [L_MAQ, L_PDV, L_CEN, L_UBI, L_DEL, L_RUT, L_REP, L_CLA, L_VIS, L_REC, L_MR, L_PM],
+    total: l => `Total al mes: ${eur(sumaPm(l))}`,
+  },
+  reponer: {
+    t: () => PEST_M==="nunca" ? "Máquinas sin ninguna carga" : `Máquinas sin reponer más de ${num(CM().laborables||12)} días laborables`,
+    sub: () => PEST_M==="nunca"
+      ? `Activas en el censo y sin una sola línea de carga desde el ${fechaLarga(CM().desde)}. Muchas no se reponen (fuentes de agua, café de oficina), pero una de snack o de bebida aquí es una máquina olvidada.`
+      : `Su última línea de carga fue hace más de ${num(CM().laborables||12)} días laborables (de lunes a viernes, sin los festivos de su delegación), contados hasta ayer. «Al mes» es lo que recauda de media, por si hay dinero esperando.`,
+    pest: [["", "Más de 12 laborables", "sin_reponer"], ["nunca", "Sin ninguna carga", "nunca_repuestas"]],
+    filas: () => maquinasDe(PEST_M==="nunca" ? "nunca_repuestas" : "sin_reponer"),
+    cols: [L_MAQ, L_CEN, L_CLA, L_DEL, L_RUT, L_RP, L_LAB, L_VIS, L_PM],
+    csv: [L_MAQ, L_PDV, L_CEN, L_UBI, L_CLA, L_DEL, L_RUT, L_REP, L_RP, L_LAB, L_VIS, L_PM],
+    total: l => `Recaudan unos ${eur(sumaPm(l))} al mes`,
+  },
+};
+const titulo = v => typeof v === "function" ? v() : v;
+function filasLista(){
+  const L = LISTAS[VER], q = $("#buscaM").value.trim().toLowerCase();
+  const busca = L.buscar || (x => [x.m, x.p, x.c, x.n, x.u, x.d, x.r, x.e, x.k].join(" "));
+  return L.filas().filter(x=>!q || busca(x).toLowerCase().includes(q));
+}
+function pintaLista(){
+  const caja = $("#cajaLista");
+  caja.hidden = !VER || QUITADAS.has(VER);
+  if(caja.hidden) return;
+  const L = LISTAS[VER];
+  $("#hLista").textContent = titulo(L.t);
+  $("#pestanasM").innerHTML = (L.pest||[]).map(([id, t, lista])=>
+    `<button class="btn" type="button" role="tab" data-p="${id}" aria-pressed="${id===PEST_M}">${esc(t)} · ${num(maquinasDe(lista).length)}</button>`).join("");
+  $("#pestanasM").hidden = !L.pest;
+  $("#pestanasM").querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{ PEST_M = b.dataset.p; TODAS_M = false; pintaLista(); }));
+  $("#sLista").textContent = titulo(L.sub);
+  const cm = CM();
+  const falta = VER==="llamadas" ? (D.llamadas ? null : "Este fichero no trae las llamadas: se calculan desde la noche del 20 de octubre de 2026.")
+    : VER==="recaudar" ? (D.por_recaudar ? cm.sin_partes : "Este fichero no trae las máquinas: se calculan desde la noche del 20 de octubre de 2026.")
+    : (D.sin_reponer ? cm.sin_lineas : "Este fichero no trae las máquinas: se calculan desde la noche del 20 de octubre de 2026.");
+  $("#bCsvM").disabled = !!falta;
+  if(falta){ $("#tLista").innerHTML = `<p class="vacio">${esc(falta)}</p>`; $("#cLista").textContent = ""; return; }
+  const filas = filasLista();
+  $("#cLista").textContent = `${num(filas.length)} ${filas.length===1?"máquina":"máquinas"}${L.total && filas.length ? " · " + L.total(filas) : ""}`;
+  if(!filas.length){ $("#tLista").innerHTML = `<p class="vacio">Ninguna.</p>`; return; }
+  const vis = filas.slice(0, TODAS_M ? MAX_FILAS : PRIMERAS), resto = filas.length - vis.length;
+  $("#tLista").innerHTML = `<table><thead><tr>${L.cols.map(c=>`<th${c===L_PM||c===L_LAB?' class="n"':""}>${esc(c[0])}</th>`).join("")}</tr></thead><tbody>
+    ${vis.map(f=>`<tr>${L.cols.map(c=>`<td data-et="${esc(c[0])}"${c===L_PM||c===L_LAB?' class="n"':""}>${c[1](f)}</td>`).join("")}</tr>`).join("")}</tbody></table>`
+    + (resto > 0 ? `<p class="vacio">Y ${num(resto)} más. ${TODAS_M ? "Están todas en el CSV."
+        : `<button class="btn" id="bMasM" type="button">Ver ${resto + vis.length > MAX_FILAS ? "las " + num(MAX_FILAS) + " primeras" : "todas"}</button> o bájalas en CSV.`}</p>` : "");
+  const mas = $("#bMasM");
+  if(mas) mas.addEventListener("click", ()=>{ TODAS_M = true; pintaLista(); });
+}
+function csvLista(){
+  const L = LISTAS[VER], cols = L.csv || L.cols, filas = filasLista();
+  const nombre = `rutas_${VER}${PEST_M?"_"+PEST_M:""}_${diaSel()}${AREA && AREA!=="*" ? "_" + AREA : ""}${deleg() ? "_" + deleg() : ""}`;
+  bajaCsv(cols.map(c=>c[0]), filas.map(f=>cols.map(c=>c[2](f))), nombre);
+}
+
+/* ------------------------------------------------------------- portada */
+function pintaPortada(){
+  const areas = [...new Set(Object.values(D.dias).flatMap(v=>[...(v.delegaciones||[]).map(x=>x.delegacion),
+    ...Object.keys(v.visitas_deleg||{})]).filter(Boolean).map(zona))]
+    .sort((a,b)=>ORDEN_AREAS.indexOf(a)-ORDEN_AREAS.indexOf(b) || a.localeCompare(b,"es"));
+  $("#sAreas").textContent = `El porcentaje es el cumplimiento de ruta de cada área ${textoPeriodo()}: visitas del plan con parte de reponedor. Pulsa un área para ver sus delegaciones, sus rutas y sus máquinas.`;
+  $("#areas").innerHTML = areas.map(a=>{
+    const c = cifras(a), ll = llamadas(a).length, pr = maquinasDe("por_recaudar", a), sr = maquinasDe("sin_reponer", a).length;
+    const mq = [];
+    if(D.llamadas && !QUITADAS.has("llamadas")) mq.push(`${num(ll)} ${ll===1?"llamada":"llamadas"} de máquina vacía`);
+    if(D.por_recaudar && !QUITADAS.has("recaudar")) mq.push(`${num(pr.length)} por recaudar en ${esc(nombreMes(CM().mes))}${CM().sin_oficial?"":` (unos ${eur(sumaPm(pr))} al mes)`}`);
+    if(D.sin_reponer && !QUITADAS.has("reponer") && !CM().sin_lineas) mq.push(`${num(sr)} sin reponer más de ${num(CM().laborables||12)} laborables`);
+    return `<button class="area ${c.color}" type="button" data-area="${esc(a)}">
+      <div class="nom">${esc(a)}</div>
+      <div class="pc">${c.n ? fpct(c.pct) : "—"}</div>
+      <div class="nt">${c.n ? `${num(c.hechas)} de ${num(c.previstas)} visitas en ruta` : "sin plan en el periodo"}</div>
+      <div class="nt">${num(c.previstas - c.hechas)} pendientes · ${num(c.fuera)} fuera de ruta · ${c.vacio==null?"pasaje vacío sin dato":num(c.vacio)+" pasajes vacíos"}</div>
+      ${mq.length ? `<div class="mq">${mq.join("<br>")}</div>` : ""}
+    </button>`;
+  }).join("");
+  $("#areas").querySelectorAll("button.area").forEach(b=>b.addEventListener("click", ()=>abreArea(b.dataset.area)));
+}
+
+/* ------------------------------------------------------------- un área */
 function pintaDona(){
-  const d = dia();
-  const f = d.sin_dato ? null : filaElegida(d);
-  if(!f){ $("#dona").innerHTML = `<p class="vacio">${esc(d.sin_dato || "Sin dato de lo elegido ese día.")}</p>`; return; }
+  const f = cifras();
+  if(!f.n){ $("#dona").innerHTML = `<p class="vacio">${esc(f.sinDato || "Sin dato de lo elegido en el periodo.")}</p>`; return; }
   const partes = [[HECHA, f.hechas, "--hecha"], [PENDIENTE, f.previstas - f.hechas, "--pendiente"], [FUERA, f.fuera, "--fuera"]];
   const total = partes.reduce((s,p)=>s+p[1], 0);
   if(!total){ $("#dona").innerHTML = `<p class="vacio">Ninguna visita ni ninguna prevista.</p>`; return; }
@@ -381,70 +662,64 @@ function pintaDona(){
   }).join("");
   $("#dona").innerHTML = `<div class="dona"><svg viewBox="0 0 190 190" role="img" aria-label="Estado de las visitas">${arcos}
       <text x="95" y="96" text-anchor="middle" class="centro">${num(total)}</text>
-      <text x="95" y="114" text-anchor="middle" class="centro2">puntos de venta</text></svg>
+      <text x="95" y="114" text-anchor="middle" class="centro2">${unDia() ? "puntos de venta" : "visitas"}</text></svg>
     <div class="leyenda">${partes.map(p=>`<div><i style="background:var(${p[2]})"></i>${esc(NOMBRE_ESTADO[p[0]])}
       <b>${num(p[1])}</b><span class="tenue">${fpct(100*p[1]/total)}</span></div>`).join("")}</div></div>`;
 }
 
-function semana(dl){
-  const fechas = Object.keys(D.dias).filter(f=>f<=$("#dia").value).sort().slice(-7);
-  return `<span class="semana">${fechas.map(f=>{
-    const v = D.dias[f], x = (v.delegaciones||[]).find(y=>y.delegacion===dl);
-    const fe = festivo(f, dl);
-    const t = `${fechaCorta(f)}: ${x && x.pct!=null ? fpct(x.pct) : "sin dato"}${fe ? " · festivo "+fe : ""}`;
-    return `<i class="${esc((x&&x.color)||"")}${fe?" fest":""}" title="${esc(t)}"></i>`;
-  }).join("")}</span>`;
+/* Las rutas del periodo, sumadas día a día, con quién las hizo. */
+function rutasPeriodo(){
+  const por = {}; let sin = 0;
+  diasPeriodo().forEach(f=>{
+    const d = D.dias[f];
+    if(d.sin_dato){ sin++; return; }
+    (d.rutas||[]).filter(x=>deLaDeleg(x.delegacion)).forEach(x=>{
+      const k = x.delegacion + SEP + x.ruta;
+      const g = por[k] = por[k] || {delegacion:x.delegacion, ruta:x.ruta, filas:[], quien:new Set()};
+      g.filas.push(x);
+    });
+    Object.entries((D.quien||{})[f]||{}).forEach(([k, es])=>{ if(por[k]) es.forEach(e=>por[k].quien.add(e)); });
+  });
+  const filas = Object.values(por).map(g=>Object.assign(suma(g.filas), {delegacion:g.delegacion, ruta:g.ruta,
+    quien:[...g.quien].sort((a,b)=>a.localeCompare(b,"es"))}));
+  filas.sort((a,b)=>a.delegacion.localeCompare(b.delegacion,"es") || (a.pct==null)-(b.pct==null) || (a.pct||0)-(b.pct||0) || a.ruta.localeCompare(b.ruta,"es"));
+  return {filas, sin};
 }
 
-function pintaDeleg(){
-  const d = dia();
-  if(d.sin_dato){ $("#tDeleg").innerHTML = `<p class="vacio">${esc(d.sin_dato)}</p>`; return; }
-  const filas = d.delegaciones||[];
-  $("#tDeleg").innerHTML = `<table><thead><tr><th>Delegación</th><th class="n">En ruta</th><th class="n">Efectuadas</th>
-    <th class="n">Cumplimiento</th><th class="n">Fuera de ruta</th><th class="n">Pasaje vacío</th><th class="n">Visitas</th><th>Últimos 7 días</th></tr></thead><tbody>
-    ${filas.map(x=>{
-      const fe = festivo($("#dia").value, x.delegacion);
-      return `<tr class="elige${x.delegacion===deleg()?" elegida":""}" data-d="${esc(x.delegacion)}">
-      <td data-et="Delegación">${esc(x.delegacion||"Sin delegación")}${fe?` <span class="etq">festivo ${esc(fe)}</span>`:""}</td>
-      <td class="n" data-et="En ruta">${num(x.previstas)}</td><td class="n" data-et="Efectuadas">${num(x.hechas)}</td>
-      <td class="n" data-et="Cumplimiento">${pill(x.pct, x.color)}</td><td class="n" data-et="Fuera de ruta">${num(x.fuera)}</td>
-      <td class="n" data-et="Pasaje vacío">${x.vacio==null?"—":num(x.vacio)}</td>
-      <td class="n" data-et="Visitas">${num(x.visitas)}</td><td data-et="Últimos 7 días">${semana(x.delegacion)}</td></tr>`;
-    }).join("")}</tbody></table>`;
-  $("#tDeleg").querySelectorAll("tr.elige").forEach(tr=>tr.addEventListener("click", ()=>{
-    $("#deleg").value = tr.dataset.d===deleg() ? TODAS : tr.dataset.d; pintaOpcionesRuta(); pintaTodo();
-  }));
-}
-
-/* La matriz del Power BI: cada ruta, sus visitas por estado. */
+/* La matriz del Power BI, con lo que pidió Gabriele el 19-oct: de cada ruta
+   quién la hizo, las máquinas en ruta, las no hechas, las fuera de ruta y los
+   pasajes vacíos. */
 function pintaRutas(){
-  const d = dia(), dl = deleg(), rs = rutaSel();
+  const dl = deleg(), rs = rutaSel();
   $("#hRutas").textContent = dl===TODAS ? "Visitas por ruta" : `Visitas por ruta · ${dl}`;
-  if(d.sin_dato){ $("#tRutas").innerHTML = `<p class="vacio">${esc(d.sin_dato)}</p>`; $("#cRutas").textContent=""; return; }
-  const filas = (d.rutas||[]).filter(x=>deLaDeleg(x.delegacion) && (!rs || (x.delegacion===rs[0] && x.ruta===rs[1])));
+  const {filas: todas, sin} = rutasPeriodo();
+  if(!todas.length && sin){ $("#tRutas").innerHTML = `<p class="vacio">${esc(dia().sin_dato || "Sin plan en el periodo.")}</p>`; $("#cRutas").textContent=""; return; }
+  const filas = todas.filter(x=>!rs || (x.delegacion===rs[0] && x.ruta===rs[1]));
   $("#cRutas").textContent = `${num(filas.length)} ${filas.length===1?"ruta":"rutas"}`;
-  if(!filas.length){ $("#tRutas").innerHTML = `<p class="vacio">Ninguna ruta ese día.</p>`; return; }
+  if(!filas.length){ $("#tRutas").innerHTML = `<p class="vacio">Ninguna ruta en el periodo.</p>`; return; }
   const conDeleg = dl===TODAS;
-  const sinVacio = filas.some(x=>x.vacio==null);
-  const suma = k => filas.reduce((s,x)=>s+(x[k]||0), 0);
-  const tH = suma("hechas"), tP = suma("previstas") - tH, tF = suma("fuera");
+  const t = suma(filas);
   const vac = x => x.vacio==null ? "—" : num(x.vacio);
-  $("#tRutas").innerHTML = `<table><thead><tr>${conDeleg?"<th>Delegación</th>":""}<th>Ruta</th>
-    <th class="n">Hecha</th><th class="n">Pendiente</th><th class="n">Fuera de ruta</th><th class="n">Total</th>
+  const hayQuien = !!D.quien;
+  $("#tRutas").innerHTML = `<table><thead><tr>${conDeleg?"<th>Delegación</th>":""}<th>Ruta</th>${hayQuien?"<th>Quién la hizo</th>":""}
+    <th class="n">En ruta</th><th class="n">Hechas</th><th class="n">No hechas</th><th class="n">Fuera de ruta</th><th class="n">Total</th>
     <th class="n">Cumplimiento</th><th class="n">Pasaje vacío</th></tr></thead><tbody>
     ${filas.map(x=>`<tr class="elige${rs && x.delegacion===rs[0] && x.ruta===rs[1] ? " elegida" : ""}" data-r="${esc(x.delegacion + SEP + x.ruta)}">
       ${conDeleg?`<td data-et="Delegación">${esc(x.delegacion)}</td>`:""}
       <td data-et="Ruta">${esc(x.ruta)}</td>
-      <td class="n c-hecha" data-et="Hecha">${num(x.hechas)}</td>
-      <td class="n c-pendiente" data-et="Pendiente">${num(x.previstas - x.hechas)}</td>
+      ${hayQuien?`<td data-et="Quién la hizo" class="quien">${x.quien.length ? x.quien.map(esc).join("<br>") : '<span class="tenue">nadie</span>'}</td>`:""}
+      <td class="n" data-et="En ruta">${num(x.previstas)}</td>
+      <td class="n c-hecha" data-et="Hechas">${num(x.hechas)}</td>
+      <td class="n c-pendiente" data-et="No hechas">${num(x.previstas - x.hechas)}</td>
       <td class="n c-fuera" data-et="Fuera de ruta">${num(x.fuera)}</td>
       <td class="n" data-et="Total">${num(x.previstas + x.fuera)}</td>
       <td class="n" data-et="Cumplimiento">${x.previstas ? pill(x.pct, x.color) : '<span class="tenue">sin plan</span>'}</td>
       <td class="n" data-et="Pasaje vacío">${vac(x)}</td></tr>`).join("")}</tbody>
-    ${filas.length>1 ? `<tfoot><tr>${conDeleg?"<td></td>":""}<td data-et="">Total</td>
-      <td class="n c-hecha" data-et="Hecha">${num(tH)}</td><td class="n c-pendiente" data-et="Pendiente">${num(tP)}</td>
-      <td class="n c-fuera" data-et="Fuera de ruta">${num(tF)}</td><td class="n" data-et="Total">${num(tH+tP+tF)}</td>
-      <td class="n" data-et="Cumplimiento"></td><td class="n" data-et="Pasaje vacío">${sinVacio ? "—" : num(suma("vacio"))}</td></tr></tfoot>` : ""}
+    ${filas.length>1 ? `<tfoot><tr>${conDeleg?"<td></td>":""}<td data-et="">Total</td>${hayQuien?"<td></td>":""}
+      <td class="n" data-et="En ruta">${num(t.previstas)}</td>
+      <td class="n c-hecha" data-et="Hechas">${num(t.hechas)}</td><td class="n c-pendiente" data-et="No hechas">${num(t.previstas - t.hechas)}</td>
+      <td class="n c-fuera" data-et="Fuera de ruta">${num(t.fuera)}</td><td class="n" data-et="Total">${num(t.previstas + t.fuera)}</td>
+      <td class="n" data-et="Cumplimiento">${pill(t.pct, t.color)}</td><td class="n" data-et="Pasaje vacío">${vac(t)}</td></tr></tfoot>` : ""}
     </table>`;
   $("#tRutas").querySelectorAll("tr.elige").forEach(tr=>tr.addEventListener("click", ()=>{
     const [dlx] = tr.dataset.r.split(SEP);
@@ -454,8 +729,39 @@ function pintaRutas(){
   }));
 }
 
+/* Los estados, con los colores del Power BI de visitas pendientes. */
+const HECHA = "HECHA", PENDIENTE = "PENDIENTE", FUERA = "FUERA DE RUTA";
+const NOMBRE_ESTADO = { [HECHA]: "Hecha", [PENDIENTE]: "Pendiente", [FUERA]: "Fuera de ruta" };
+const CLASE_ESTADO = { [HECHA]: "HECHA", [PENDIENTE]: "PENDIENTE", [FUERA]: "FUERA" };
+
+/* La lista máquina a máquina de un día. Los ficheros escritos antes del 16 de
+   octubre de 2026 traían dos listas (no_visitados y fuera) sin matrícula ni
+   hechas: se leen igual, y lo que no traen sale vacío. Cada fila lleva su
+   día al final, para cuando el periodo es de varios. */
+function visitasDia(d, f){
+  let v = null;
+  if(Array.isArray(d.visitas)) v = d.visitas;
+  else if(Array.isArray(d.no_visitados)) v = [
+    ...d.no_visitados.map(x=>[PENDIENTE, x[0], "", x[1], x[2], x[3], x[4], "", "", "", null]),
+    ...(d.fuera||[]).map(x=>[FUERA, x[0], "", x[1], x[2], x[4], x[5], "", "", x[3], null]),
+  ];
+  return v && v.map(x=>x.slice(0, 11).concat([f]));
+}
+/* Las del periodo: los días que la guardan (la última semana). */
+function visitasPeriodo(){
+  const ds = diasPeriodo(), out = []; let con = 0;
+  ds.forEach(f=>{ const v = visitasDia(D.dias[f], f); if(v){ con++; out.push(...v); } });
+  return {v: con ? out : null, con, de: ds.length};
+}
+function enFiltro(x){
+  if(!deLaDeleg(x[3])) return false;
+  const rs = rutaSel();
+  return !rs || (x[3]===rs[0] && String(x[4]||"").split(" / ").map(nombreRuta).includes(rs[1]));
+}
+
 /* Máquina a máquina: [estado, pdv, matrícula, delegación, ruta(s), nº centro,
-   centro, ubicación, hora, reponedor, pasaje vacío]. */
+   centro, ubicación, hora, reponedor, pasaje vacío, día]. */
+const C_DIA = ["Día", x=>esc(fechaCorta(x[11])), x=>x[11]];
 const C_RUTA = ["Ruta", x=>esc(x[4]), x=>x[4]];
 const C_CENTRO = ["Centro cliente", x=>`${esc(x[6])}${x[5]?`<br><span class="tenue">nº ${esc(x[5])}</span>`:""}`, x=>`${x[5]} ${x[6]}`];
 const C_MAT = ["Matrícula", x=>`<span class="mat">${esc(x[2]||"—")}</span><br><span class="tenue">PDV ${esc(x[1])}</span>`, x=>x[2]];
@@ -487,31 +793,31 @@ const PESTANAS = {
 let PESTANA = "pendientes";
 function filasPdv(){
   const q = $("#busca").value.trim().toLowerCase();
-  const v = visitasDia(dia()) || [];
+  const v = visitasPeriodo().v || [];
   return v.filter(x=>enFiltro(x) && PESTANAS[PESTANA].f(x) && (!q || x.join(" ").toLowerCase().includes(q)));
 }
 function pintaPdv(){
-  const d = dia(), v = visitasDia(d), P = PESTANAS[PESTANA];
+  const d = dia(), {v, con, de} = visitasPeriodo(), P = PESTANAS[PESTANA];
   $("#hPdv").textContent = P.t;
   const cuenta = k => (v||[]).filter(x=>enFiltro(x) && PESTANAS[k].f(x)).length;
   $("#pestanas").innerHTML = Object.entries(PESTANAS).map(([id,p])=>
     `<button class="btn" type="button" role="tab" data-p="${id}" aria-pressed="${id===PESTANA}">${esc(p.corto)}${v?" · "+num(cuenta(id)):""}</button>`).join("");
   $("#pestanas").querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{ PESTANA=b.dataset.p; TODAS_PDV=false; pintaPdv(); }));
-  $("#sPdv").textContent = P.sub;
+  $("#sPdv").textContent = P.sub + (de > 1 ? ` ${con < de ? `Solo se guardan las listas de la última semana: van ${num(con)} de los ${num(de)} días del periodo.` : `Los ${num(de)} días del periodo, uno detrás de otro.`}` : "");
   $("#bCsv").disabled = !v;
-  if(d.sin_dato){ $("#tPdv").innerHTML = `<p class="vacio">${esc(d.sin_dato)}</p>`; $("#cPdv").textContent=""; return; }
+  if(unDia() && d.sin_dato){ $("#tPdv").innerHTML = `<p class="vacio">${esc(d.sin_dato)}</p>`; $("#cPdv").textContent=""; return; }
   if(!v){
-    $("#tPdv").innerHTML = `<p class="vacio">La lista máquina a máquina se guarda solo de la última semana; de este día quedan las cifras de arriba.</p>`;
+    $("#tPdv").innerHTML = `<p class="vacio">La lista máquina a máquina se guarda solo de la última semana; de este periodo quedan las cifras de arriba.</p>`;
     $("#cPdv").textContent = ""; return;
   }
-  if(!Array.isArray(d.visitas) && PESTANA!=="pendientes" && PESTANA!=="fuera"){
+  if(unDia() && !Array.isArray(d.visitas) && PESTANA!=="pendientes" && PESTANA!=="fuera"){
     $("#tPdv").innerHTML = `<p class="vacio">Este día se calculó antes de que la lista trajera las visitas hechas y el pasaje vacío.</p>`;
     $("#cPdv").textContent = ""; return;
   }
-  if(PESTANA==="vacio" && d.sin_vacio){
+  if(unDia() && PESTANA==="vacio" && d.sin_vacio){
     $("#tPdv").innerHTML = `<p class="vacio">${esc(d.sin_vacio)}</p>`; $("#cPdv").textContent = ""; return;
   }
-  const filas = filasPdv(), cols = P.cols;
+  const filas = filasPdv(), cols = (de > 1 ? [C_DIA] : []).concat(P.cols);
   $("#cPdv").textContent = `${num(filas.length)} ${filas.length===1?"máquina":"máquinas"}`;
   if(!filas.length){ $("#tPdv").innerHTML = `<p class="vacio">Ninguna.</p>`; return; }
   const vis = filas.slice(0, TODAS_PDV ? MAX_FILAS : PRIMERAS);
@@ -522,6 +828,46 @@ function pintaPdv(){
         : `<button class="btn" id="bMas" type="button">Ver ${resto + vis.length > MAX_FILAS ? "las " + num(MAX_FILAS) + " primeras" : "todas"}</button> o bájalas en CSV.`}</p>` : "");
   const mas = $("#bMas");
   if(mas) mas.addEventListener("click", ()=>{ TODAS_PDV = true; pintaPdv(); });
+}
+
+/* ------------------------------------------------- delegaciones y festivos */
+function semana(dl){
+  const fechas = Object.keys(D.dias).filter(f=>f<=diaSel()).sort().slice(-7);
+  return `<span class="semana">${fechas.map(f=>{
+    const v = D.dias[f], x = (v.delegaciones||[]).find(y=>y.delegacion===dl);
+    const fe = festivo(f, dl);
+    const t = `${fechaCorta(f)}: ${x && x.pct!=null ? fpct(x.pct) : "sin dato"}${fe ? " · festivo "+fe : ""}`;
+    return `<i class="${esc((x&&x.color)||"")}${fe?" fest":""}" title="${esc(t)}"></i>`;
+  }).join("")}</span>`;
+}
+
+function pintaDeleg(){
+  const por = {}; let sin = 0;
+  diasPeriodo().forEach(f=>{
+    const d = D.dias[f];
+    if(d.sin_dato){ sin++; return; }
+    (d.delegaciones||[]).filter(x=>enArea(x.delegacion)).forEach(x=>{ (por[x.delegacion] = por[x.delegacion] || []).push(x); });
+  });
+  const filas = Object.entries(por).map(([dl, l])=>Object.assign(suma(l), {delegacion: dl}))
+    .sort((a,b)=>(a.pct==null)-(b.pct==null) || (a.pct||0)-(b.pct||0) || a.delegacion.localeCompare(b.delegacion,"es"));
+  if(!filas.length){ $("#tDeleg").innerHTML = `<p class="vacio">${esc(sin ? (dia().sin_dato || "Sin plan en el periodo.") : "Ninguna delegación en el periodo.")}</p>`; return; }
+  $("#tDeleg").innerHTML = `<table><thead><tr><th>Delegación</th>${AREA===""?"<th>Área</th>":""}<th class="n">En ruta</th><th class="n">Efectuadas</th>
+    <th class="n">Cumplimiento</th><th class="n">Fuera de ruta</th><th class="n">Pasaje vacío</th><th class="n">Visitas</th><th>Últimos 7 días</th></tr></thead><tbody>
+    ${filas.map(x=>{
+      const fe = unDia() ? festivo(diaSel(), x.delegacion) : null;
+      return `<tr class="elige${x.delegacion===deleg()?" elegida":""}" data-d="${esc(x.delegacion)}">
+      <td data-et="Delegación">${esc(x.delegacion||"Sin delegación")}${fe?` <span class="etq">festivo ${esc(fe)}</span>`:""}</td>
+      ${AREA===""?`<td data-et="Área">${esc(zona(x.delegacion))}</td>`:""}
+      <td class="n" data-et="En ruta">${num(x.previstas)}</td><td class="n" data-et="Efectuadas">${num(x.hechas)}</td>
+      <td class="n" data-et="Cumplimiento">${pill(x.pct, x.color)}</td><td class="n" data-et="Fuera de ruta">${num(x.fuera)}</td>
+      <td class="n" data-et="Pasaje vacío">${x.vacio==null?"—":num(x.vacio)}</td>
+      <td class="n" data-et="Visitas">${num(x.visitas)}</td><td data-et="Últimos 7 días">${semana(x.delegacion)}</td></tr>`;
+    }).join("")}</tbody></table>`;
+  $("#tDeleg").querySelectorAll("tr.elige").forEach(tr=>tr.addEventListener("click", ()=>{
+    const dl = tr.dataset.d;
+    if(AREA===""){ abreArea(VARIAS_AREAS ? zona(dl) : "*", dl); return; }
+    $("#deleg").value = dl===deleg() ? TODAS : dl; pintaOpcionesRuta(); pintaTodo();
+  }));
 }
 
 const ESTADO = {
@@ -537,7 +883,7 @@ function pintaFest(){
     ? `Calendario: ${num((c.nacional||[]).length)} festivos nacionales; autonómicos y locales apuntados en ${locales.length ? locales.length + " " + (locales.length===1?"delegación":"delegaciones") : "ninguna delegación todavía"}. `
     : "No hay calendario de festivos cargado: solo se pueden ver los laborables con muy pocas visitas. ")
     + `Un día normal es la mediana de visitas de los laborables de la delegación sin festivo; «muchas menos» es menos del ${fpct(100*(u.festivo_bajo||.5))} de eso.`;
-  const filas = (D.control_festivos||[]).filter(x=>deLaDeleg(x.delegacion) && x.fecha<=$("#dia").value).slice().reverse();
+  const filas = (D.control_festivos||[]).filter(x=>deLaDeleg(x.delegacion) && x.fecha<=diaSel()).slice().reverse();
   $("#cFest").textContent = `${num(filas.length)} ${filas.length===1?"día":"días"}`;
   if(!filas.length){ $("#tFest").innerHTML = `<p class="vacio">Ningún festivo ni ningún laborable flojo en los días guardados.</p>`; return; }
   $("#tFest").innerHTML = `<table><thead><tr><th>Día</th><th>Delegación</th><th>Festivo</th><th class="n">Visitas</th>
@@ -556,41 +902,72 @@ function pintaFest(){
 }
 
 function pintaFestivoDia(){
-  const f = $("#dia").value, dl = deleg();
-  const fe = dl===TODAS ? ((D.festivos && (D.festivos.nacional||[]).includes(f)) ? "nacional" : null) : festivo(f, dl);
+  const f = diaSel(), dl = deleg();
+  const fe = !unDia() ? null : dl===TODAS ? ((D.festivos && (D.festivos.nacional||[]).includes(f)) ? "nacional" : null) : festivo(f, dl);
   const n = $("#festivoDia");
   n.hidden = !fe;
   if(fe) n.textContent = `El ${fechaLarga(f)} es festivo ${fe}. El plan de VenCloud no descuenta los festivos: el porcentaje sale bajo porque se visita menos, como debe ser. El control está abajo, en Festivos por delegación.`;
 }
 
 function pintaTodo(){
-  TODAS_PDV = false;
-  pintaFestivoDia(); pintaKpis(); pintaRutas(); pintaDona(); pintaPdv(); pintaDeleg(); pintaFest();
+  TODAS_PDV = false; TODAS_M = false;
+  const portada = AREA === "";
+  $("#portada").hidden = !portada;
+  $("#vistaArea").hidden = portada;
+  document.querySelectorAll(".enArea").forEach(el=>{ el.hidden = portada; });
+  $("#bAreas").hidden = !VARIAS_AREAS || !!Preferidos.solo;
+  $("#tArea").textContent = AREA === "*" ? "" : AREA;
+  $("#cabArea").hidden = portada || (!VARIAS_AREAS && AREA === "*");
+  $("#cDeleg").textContent = portada ? "Pulsa una para entrar en su área" : "Pulsa una para ver sus rutas y sus máquinas";
+  pintaFestivoDia(); pintaKpis();
+  if(portada) pintaPortada();
+  else { pintaMqs(); pintaLista(); pintaRutas(); pintaDona(); pintaPdv(); }
+  pintaDeleg(); pintaFest();
 }
 
-function csv(){
-  const P = PESTANAS[PESTANA], filas = filasPdv();
-  const cols = [C_EST, C_HORA, C_DEL, C_RUTA, C_CENTRO, C_MAT, C_PDV, C_UBI, C_REP, C_VAC];
+function abreArea(a, dl){
+  AREA = a; VER = ""; PEST_M = ""; $("#busca").value = ""; $("#buscaM").value = "";
+  pintaDelegaciones();
+  $("#deleg").value = dl || TODAS;
+  pintaOpcionesRuta();
+  $("#ruta").value = "";
+  const q = new URLSearchParams(location.search);
+  if(a && a !== "*") q.set("area", a); else q.delete("area");
+  try{ history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "")); }catch(e){}
+  pintaTodo();
+  window.scrollTo(0, 0);
+}
+
+function bajaCsv(cab, lineas, nombre){
   const q = v => { const s = String(v==null?"":v); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
-  const texto = "﻿" + [cols.map(c=>q(c[0])).join(";"), ...filas.map(f=>cols.map(c=>q(c[2](f))).join(";"))].join("\r\n");
+  const texto = "﻿" + [cab, ...lineas].map(l=>l.map(q).join(";")).join("\r\n");
   const url = URL.createObjectURL(new Blob([texto], {type:"text/csv;charset=utf-8"}));
   const a = document.createElement("a");
-  const rs = rutaSel();
-  a.href = url; a.download = `rutas_${PESTANA}_${$("#dia").value}${deleg() ? "_" + deleg().replace(/[^\w]+/g,"_") : ""}${rs ? "_" + rs[1].replace(/[^\w]+/g,"_") : ""}.csv`;
+  a.href = url; a.download = nombre.replace(/[^\w\-]+/g, "_").replace(/_+/g, "_") + ".csv";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
-
-/* Las rutas del día de la delegación elegida, para el desplegable. */
-function pintaOpcionesRuta(){
-  const antes = $("#ruta").value;
-  const rutas = (dia().rutas||[]).filter(x=>deLaDeleg(x.delegacion))
-    .sort((a,b)=>a.ruta.localeCompare(b.ruta,"es") || a.delegacion.localeCompare(b.delegacion,"es"));
-  $("#ruta").innerHTML = `<option value="">Todas</option>` + rutas.map(x=>
-    `<option value="${esc(x.delegacion + SEP + x.ruta)}">${esc(x.ruta)}${deleg()===TODAS?" · "+esc(x.delegacion):""}</option>`).join("");
-  $("#ruta").value = rutas.some(x=>x.delegacion + SEP + x.ruta===antes) ? antes : "";
+function csv(){
+  const cols = [C_DIA, C_EST, C_HORA, C_DEL, C_RUTA, C_CENTRO, C_MAT, C_PDV, C_UBI, C_REP, C_VAC];
+  const rs = rutaSel();
+  bajaCsv(cols.map(c=>c[0]), filasPdv().map(f=>cols.map(c=>c[2](f))),
+    `rutas_${PESTANA}_${diaSel()}${unDia() ? "" : "_" + $("#periodo").value}${deleg() ? "_" + deleg() : ""}${rs ? "_" + rs[1] : ""}`);
 }
 
+/* Las rutas del periodo de la delegación elegida, para el desplegable. */
+function pintaOpcionesRuta(){
+  const antes = $("#ruta").value, vistas = new Set(), rutas = [];
+  diasPeriodo().forEach(f=>(D.dias[f].rutas||[]).filter(x=>deLaDeleg(x.delegacion)).forEach(x=>{
+    const k = x.delegacion + SEP + x.ruta;
+    if(!vistas.has(k)){ vistas.add(k); rutas.push(x); }
+  }));
+  rutas.sort((a,b)=>a.ruta.localeCompare(b.ruta,"es") || a.delegacion.localeCompare(b.delegacion,"es"));
+  $("#ruta").innerHTML = `<option value="">Todas</option>` + rutas.map(x=>
+    `<option value="${esc(x.delegacion + SEP + x.ruta)}">${esc(x.ruta)}${deleg()===TODAS?" · "+esc(x.delegacion):""}</option>`).join("");
+  $("#ruta").value = vistas.has(antes) ? antes : "";
+}
+
+/* Las delegaciones del área, para el desplegable. */
 function pintaDelegaciones(){
   const nombres = new Set();
   Object.values(D.dias).forEach(v=>{
@@ -598,9 +975,9 @@ function pintaDelegaciones(){
     Object.keys(v.visitas_deleg||{}).forEach(x=>nombres.add(x));
   });
   const antes = $("#deleg").value;
-  $("#deleg").innerHTML = `<option value="">Todas</option>` +
-    [...nombres].filter(Boolean).sort((a,b)=>a.localeCompare(b,"es")).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");
-  if(antes) $("#deleg").value = antes;
+  const l = [...nombres].filter(n=>n && enArea(n)).sort((a,b)=>a.localeCompare(b,"es"));
+  $("#deleg").innerHTML = `<option value="">Todas</option>` + l.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");
+  $("#deleg").value = l.includes(antes) ? antes : "";
 }
 
 (async function arranca(){
@@ -613,7 +990,7 @@ function pintaDelegaciones(){
   if(yo.tipo === "cliente"){ location.replace("/cuadro/"); return; }
   /* Lo que el administrador le quitó a este usuario dentro de esta página
      (docs/61): no se dibuja, y lo que sólo usa esa tabla ya no llega. */
-  const QUITADAS = new Set((yo.tablas_ocultas||{})["rutas"] || []);
+  QUITADAS = new Set((yo.tablas_ocultas||{})["rutas"] || []);
   document.querySelectorAll("[data-tabla]").forEach(el=>{ if(QUITADAS.has(el.dataset.tabla)) el.hidden = true; });
 
   $("#quien").textContent = (yo.perfil ? yo.perfil + " · " : "") + (yo.nombre || yo.correo);
@@ -640,25 +1017,42 @@ function pintaDelegaciones(){
   $("#dia").value = dias.includes(pedido) ? pedido : dias.includes(ayer) ? ayer : dias[0];
   if(!dias.includes(pedido) && !dias.includes(ayer))
     avisa(`Todavía no hay datos de ayer: lo último calculado es del ${fechaLarga(dias[0])}.`, true);
+  if(["semana", "mes"].includes(q.get("periodo"))) $("#periodo").value = q.get("periodo");
+  /* Las áreas del perfil. Con una sola no hay portada: se entra en ella. En
+     la vista suelta de preferidos, tampoco: todas juntas, y la lista que se
+     pidió abierta. */
+  const areas = new Set(Object.values(D.dias).flatMap(v=>[...(v.delegaciones||[]).map(x=>x.delegacion),
+    ...Object.keys(v.visitas_deleg||{})]).filter(Boolean).map(zona));
+  VARIAS_AREAS = areas.size > 1;
+  const pedida = q.get("area"), solo = Preferidos.solo;
+  AREA = !VARIAS_AREAS || solo ? "*" : areas.has(pedida) ? pedida : (q.get("delegacion") ? zona(q.get("delegacion")) : "");
+  if(["llamadas", "recaudar", "reponer"].includes(solo)) VER = solo;
+  else if(["llamadas", "recaudar", "reponer"].includes(q.get("ver")) && AREA) VER = q.get("ver");
   pintaDelegaciones();
-  if(q.get("delegacion")) $("#deleg").value = q.get("delegacion");
+  if(q.get("delegacion") && AREA) $("#deleg").value = q.get("delegacion");
   pintaOpcionesRuta();
-  ["#dia","#deleg"].forEach(s=>$(s).addEventListener("change", ()=>{ pintaOpcionesRuta(); pintaTodo(); }));
+  ["#dia","#periodo"].forEach(s=>$(s).addEventListener("change", ()=>{ pintaOpcionesRuta(); pintaTodo(); }));
+  $("#deleg").addEventListener("change", ()=>{ pintaOpcionesRuta(); pintaTodo(); });
   $("#ruta").addEventListener("change", pintaTodo);
   $("#busca").addEventListener("input", pintaPdv);
+  $("#buscaM").addEventListener("input", ()=>{ TODAS_M = false; pintaLista(); });
   $("#bCsv").addEventListener("click", csv);
+  $("#bCsvM").addEventListener("click", csvLista);
+  $("#bAreas").addEventListener("click", ()=>abreArea(""));
   $("#todo").hidden = false;
   pintaTodo();
   const gen = D.generado ? new Date(D.generado) : null;
   $("#pie").innerHTML = "Visitas en ruta = el plan del día, informe D12 de VenCloud (184). "
     + "Efectuada = el punto de venta del plan tiene ese día un parte de reponedor (no cuentan las lecturas automáticas); "
     + "pendiente = no lo tiene; no planificada = parte sin estar en el plan. Pasaje vacío = parte sin ninguna línea de reposición. "
-    + "Se cuenta por punto de venta: uno planificado en dos rutas, o visitado dos veces, cuenta una vez. "
+    + "Se cuenta por punto de venta: uno planificado en dos rutas, o visitado dos veces, cuenta una vez cada día; en un periodo de varios días se suman los días. "
+    + "Quién hizo la ruta = los reponedores con parte en esa ruta. Llamada de máquina vacía = tarea de la SAT S010 o C016. "
+    + "Recaudada = parte con recaudación (informe 105) o acto de recaudar en la oficial (132); sin reponer = sin línea de carga (A2). "
     + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
     + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;
   /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
-  Preferidos.monta("rutas", {ocultar: ["#kpis"]});
+  Preferidos.monta("rutas", {ocultar: ["#kpis", "#mqs", "#cabArea"], actual: () => VER || null});
 })();
 </script>
 </body>

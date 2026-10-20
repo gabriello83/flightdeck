@@ -415,6 +415,9 @@ TABLAS = {
         "rutas": "Visitas por ruta",
         "estado": "Estado de las visitas",
         "maquinas": "Máquinas no visitadas",
+        "llamadas": "Llamadas de máquina vacía",
+        "recaudar": "Máquinas por recaudar en el mes",
+        "reponer": "Máquinas sin reponer",
         "delegaciones": "Por delegación",
         "festivos": "Festivos por delegación",
     },
@@ -542,6 +545,9 @@ def tablas_visibles(perfil, cuadrado):
 _SOLO_DE_UNA = {
     "rutas": (
         ("maquinas", "dias", ("visitas",)),
+        ("llamadas", "raiz", ("llamadas",)),
+        ("recaudar", "raiz", ("por_recaudar",)),
+        ("reponer", "raiz", ("sin_reponer", "nunca_repuestas")),
         ("festivos", "raiz", ("control_festivos",)),
     ),
     "averias": (
