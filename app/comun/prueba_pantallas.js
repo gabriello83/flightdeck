@@ -1086,6 +1086,48 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
+  console.log('\nLa bienvenida del informe operativo (docs/68)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno',
+      sesiones: ['resumen', 'venta_consumo', 'disponibilidad', 'instalaciones'] };
+    let x = await abre('/operativo/');
+    await x.pagina.waitForSelector('#cuadros .cuadro');
+    comprueba('sin la marca de la entrada, no sale', await x.pagina.$('.bv-capa'), null);
+    // La pantalla de acceso deja la marca; la pagina la borra nada mas leerla.
+    await x.pagina.evaluate(() => sessionStorage.setItem('digivend.bienvenida', '1'));
+    await x.pagina.reload();
+    comprueba_que('al entrar, sale', !!(await x.pagina.$('.bv-capa')));
+    comprueba('y la marca ya no esta', await x.pagina.evaluate(() => sessionStorage.getItem('digivend.bienvenida')), null);
+    await x.pagina.waitForTimeout(1500);
+    comprueba('mientras gira, los cuadrados estan tapados',
+      await x.pagina.$$eval('#cuadros .cuadro', c => c.every(e => getComputedStyle(e).opacity === '0')), true);
+    await x.pagina.waitForFunction(() => !document.querySelector('.bv-capa'), null, { timeout: 8000 });
+    comprueba('al acabar, todos los cuadrados a la vista',
+      await x.pagina.$$eval('#cuadros .cuadro', c => c.every(e => getComputedStyle(e).opacity === '1')), true);
+    await x.pagina.reload();
+    await x.pagina.waitForSelector('#cuadros .cuadro');
+    comprueba('volver al informe no la repite', await x.pagina.$('.bv-capa'), null);
+    comprueba('ni una peticion fuera del dominio', x.fuera, []);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+
+    x = await abre('/operativo/?bienvenida');
+    await x.pagina.waitForTimeout(600);
+    await x.pagina.mouse.click(300, 300);
+    await x.pagina.waitForFunction(() => !document.querySelector('.bv-capa'), null, { timeout: 2000 });
+    comprueba('un clic la salta y deja los cuadrados',
+      await x.pagina.$$eval('#cuadros .cuadro', c => c.length > 0 && c.every(e => getComputedStyle(e).opacity === '1')), true);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+
+    const tranquilo = await navegador.newPage({ reducedMotion: 'reduce' });
+    await tranquilo.goto(base + '/operativo/?bienvenida');
+    await tranquilo.waitForSelector('#cuadros .cuadro');
+    comprueba('con reducir movimiento no sale', await tranquilo.$('.bv-capa'), null);
+    await tranquilo.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
   console.log('\nLa telemetria cruzada con los ficheros (docs/53)');
   {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno',
