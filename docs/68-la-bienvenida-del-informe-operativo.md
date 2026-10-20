@@ -59,18 +59,11 @@ El mismo día Gabriele pidió el paso siguiente:
 > otros cuadrantes se cierran y el cuadrante seleccionado se hace grande hasta que se ve su página.
 
 Al pulsar un cuadrado, los demás se encogen y se apagan, primero los que tiene más cerca, y la
-cabecera y los filtros se van. Las cifras del pulsado se apagan y queda su color. Ese color crece
-desde su sitio hasta llenar la pantalla y, mientras crece, se convierte en la página de la sección:
-es la misma pieza, sin corte entre las dos (Gabriele lo pidió así tras ver una primera versión que
-acababa en el fondo liso).
-
-Lo hace el navegador con una transición entre páginas (View Transitions): `app/comun/transicion.js`
-va en el `<head>` del informe y de cada sección; el cuadrado que se va y la página entera que llega
-llevan el mismo nombre, y el navegador lleva uno al otro. Solo cuando se llega pulsando un cuadrado:
-el informe deja una marca con la hora en `sessionStorage` y la sección la borra al leerla; cualquier
-otra navegación sigue como siempre. Chrome y Edge lo hacen, y Safari desde la 18.2. En Firefox el
-cuadrado crece hasta la pantalla con una animación propia y se abre la sección.
+cabecera y los filtros se van. El pulsado crece desde su sitio hasta llenar la pantalla, con sus
+cifras apagándose mientras crece. Al llenarla, toma el fondo de la página y se abre su sección. Son
+unos ocho décimos de segundo.
 
 Solo pasa con el clic normal: con Ctrl, Cmd, Mayúsculas o la rueda, el cuadrado se abre como
 siempre en otra pestaña. Con «reducir movimiento» se abre sin animar. Al volver atrás, el informe
-está como se dejó, sin restos de la animación. El clic está al final de `app/operativo/index.html` (`abreConAnimacion`).
+está como se dejó, sin restos de la animación. Está al final de `app/operativo/index.html`
+(`abreConAnimacion`), con la API de animaciones del navegador.
