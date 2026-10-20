@@ -50,20 +50,3 @@ ninguna petición a otro dominio.
 La prueba de pantallas (`app/comun/prueba_pantallas.js`) comprueba que sale con la marca y no sin
 ella, que tapa los cuadrados mientras gira y los deja todos a la vista al acabar, que un clic la
 salta, que no se repite y que con «reducir movimiento» no sale.
-
-## Al pulsar un cuadrado
-
-El mismo día Gabriele pidió el paso siguiente:
-
-> Una vez abiertos los cuadrantes, cuando el usuario selecciona el cuadrante, una animación: los
-> otros cuadrantes se cierran y el cuadrante seleccionado se hace grande hasta que se ve su página.
-
-Al pulsar un cuadrado, los demás se encogen y se apagan, primero los que tiene más cerca, y la
-cabecera y los filtros se van. El pulsado crece desde su sitio hasta llenar la pantalla, con sus
-cifras apagándose mientras crece. Al llenarla, toma el fondo de la página y se abre su sección. Son
-unos ocho décimos de segundo.
-
-Solo pasa con el clic normal: con Ctrl, Cmd, Mayúsculas o la rueda, el cuadrado se abre como
-siempre en otra pestaña. Con «reducir movimiento» se abre sin animar. Al volver atrás, el informe
-está como se dejó, sin restos de la animación. Está al final de `app/operativo/index.html`
-(`abreConAnimacion`), con la API de animaciones del navegador.
