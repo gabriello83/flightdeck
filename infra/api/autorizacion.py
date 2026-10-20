@@ -433,10 +433,8 @@ TABLAS = {
         "pendientes": "Devoluciones sin cerrar",
     },
     "furgonetas": {
-        "vehiculos": "Furgonetas con visitas",
-        "sin_vehiculo": "Visitas sin vehículo",
-        "delegaciones": "Por delegación",
-        "dias": "Furgonetas activas, día a día",
+        "vehiculos": "Furgonetas activas",
+        "dias": "Furgonetas con visitas, día a día",
     },
     # Las paginas de una sola tabla: en la consola van con su cuadrado, pero la
     # tabla tiene su estrella de preferidos como las demas.
@@ -549,8 +547,9 @@ _SOLO_DE_UNA = {
         ("abiertas", "filas:incidencias", ("tx", "u", "p")),
     ),
     "furgonetas": (
-        ("vehiculos", "dias", ("vehiculos",)),
-        ("sin_vehiculo", "dias", ("sin_vehiculo",)),
+        # Los km solo salen en la lista; la flota y las visitas las usa
+        # tambien el dia a dia.
+        ("vehiculos", "raiz", ("km",)),
     ),
     "revision": (
         ("planograma", "raiz", ("sin_planograma",)),
