@@ -62,10 +62,10 @@ pon("crudo/visita_cabecera", "visita_cabecera", AYER,
       "matricula": "A1", "minutos": 0, "fecha_ini": str(AYER)}] * 200
     + [{"empleadoid": 7, "empleado": "Ana", "tipo_parte": 0, "centro": "AIRBUS GETAFE", "num_centro": "1001",
         "cliente": "AIRBUS OPERATIONS SL", "cod_cliente": "C7",
-        "matricula": "A1", "minutos": 7, "fecha_ini": str(AYER)}] * 100
+        "matricula": "A1", "minutos": 7, "fecha_ini": str(AYER), "vehiculo": "1111AAA"}] * 100
     + [{"empleadoid": 7, "empleado": "Ana", "tipo_parte": 0, "centro": "CONSUM MURCIA", "num_centro": "2002",
         "cliente": "CONSUM S COOP V", "cod_cliente": "C9",
-        "matricula": "C1", "minutos": 400, "fecha_ini": str(AYER)}] * 10)
+        "matricula": "C1", "minutos": 400, "fecha_ini": str(AYER), "vehiculo": "2222BBB"}] * 10)
 
 # OJO: los informes de aqui abajo van SIN columna `centro`, porque el de verdad
 # no la trae. La primera version de esta prueba se la inventaba, y por eso no
@@ -117,8 +117,20 @@ pon("crudo/sat_eventos", "sat_eventos", AYER,
 # el panel interno. Tampoco hace falta: el bloque de jornadas no llega a un
 # perfil de cliente (autorizacion.SESIONES lo pide a partir de «operaciones»).
 pon("crudo/jornadas", "jornadas", AYER,
-    [{"temperaturaini": 2.0, "kminiciales": 100, "kmfinales": 150, "maplatitudini": 37.4}] * 9
+    [{"temperaturaini": 2.0, "kminiciales": 100, "kmfinales": 150, "maplatitudini": 37.4,
+      "vehiculoid": 1, "fechafin": f"{AYER}T14:00:00"}] * 9
     + [{"temperaturaini": 26.0, "kminiciales": 100, "kmfinales": 160, "maplatitudini": 0}])
+# Las visitas de la SAT traen la furgoneta del tecnico y la maquina, no el centro.
+pon("crudo/sat_visitas", "sat_visitas", AYER,
+    [{"averia_id": 1, "matricula": "A1", "inicio": f"{AYER} 10:00:00", "vehiculo": "3333CCC"}])
+# De quien es cada furgoneta lo dice el maestro de vehiculos (M12, docs/58).
+ALMACEN["maestros/vehiculos/m_vehiculos.json.gz"] = gzip.compress(json.dumps([
+    {"id": 1, "cod_vehiculo": 1, "denominacion": "CRAFTER", "matricula": "1111AAA",
+     "activo": True, "obsoleto": False, "delegacion": "Madrid"},
+    {"id": 2, "cod_vehiculo": 2, "denominacion": "CADDY", "matricula": "2222BBB",
+     "activo": True, "obsoleto": False, "delegacion": "Levante - Murcia"},
+    {"id": 3, "cod_vehiculo": 3, "denominacion": "JUMPER", "matricula": "3333CCC",
+     "activo": True, "obsoleto": False, "delegacion": "Madrid"}]).encode())
 
 # DOS cierres mensuales dentro de la ventana: el de agosto y el de septiembre.
 # Es lo normal con 120 dias, y sumarlos multiplicaria las existencias.
@@ -314,11 +326,23 @@ comprueba("sin calendario de festivos subido, se dice (null)", _ri["festivos"], 
 print("\nLa pagina de furgonetas (docs/58): un fichero por perfil, con su ambito")
 _fi = json.loads(gzip.decompress(ALMACEN["cabina/interno/furgonetas.json.gz"]))
 _fa = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/furgonetas.json.gz"]))
-comprueba("las mismas furgonetas que el cuadrado, en cada perfil",
-          (_fi["dias"][_ayer]["activas"], _fa["dias"][_ayer]["activas"]),
-          (op_int["dias"][_ayer]["furgonetas"]["activas"], op_air["dias"][_ayer]["furgonetas"]["activas"]))
-comprueba("AIRBUS no ve visitas de fuera de su ambito",
-          _fa["dias"][_ayer]["visitas"] <= _fi["dias"][_ayer]["visitas"], True)
+comprueba("el interno: toda la flota activa del maestro, con o sin visitas",
+          [x["m"] for x in _fi["flota"]], ["2222BBB", "1111AAA", "3333CCC"])
+comprueba("AIRBUS: solo las que visitaron su ambito, tambien la del tecnico",
+          [x["m"] for x in _fa["flota"]], ["1111AAA", "3333CCC"])
+comprueba("los dias con visita, cada perfil los suyos",
+          (_fi["visitas"], _fa["visitas"]),
+          ({"1111AAA": [_ayer], "2222BBB": [_ayer], "3333CCC": [_ayer]},
+           {"1111AAA": [_ayer], "3333CCC": [_ayer]}))
+comprueba("los km del dia, de la jornada sin centro, con el maestro (las nueve repetidas cuentan una)",
+          (_fi["km"][_ayer], _fa["km"][_ayer]), ({"1111AAA": [50, 9, ""]}, {"1111AAA": [50, 9, ""]}))
+_hk = json.loads(gzip.decompress(ALMACEN["cabina/_furgonetas/jornadas.json.gz"]))
+comprueba("la historia de jornadas, desde el 1-ene-2025 hasta ayer, tambien los dias vacios",
+          (min(_hk), max(_hk), len(_hk[_ayer]["1"])), ("2025-01-01", _ayer, 9))
+comprueba("los km acumulados y la persona, en la flota",
+          {x["m"]: (x["km"], x["z"]) for x in _fi["flota"]},
+          {"1111AAA": (50, "Centro"), "2222BBB": (0, "Levante"), "3333CCC": (0, "Centro")})
+comprueba("desde el primer dia que leyo la noche", _fi["desde"], min(_fi["dias"]))
 
 print("\nLos almacenes por dentro (docs/54)")
 _al = json.loads(gzip.decompress(ALMACEN["cabina/interno/almacenes.json.gz"]))

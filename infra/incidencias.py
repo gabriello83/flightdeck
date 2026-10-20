@@ -29,7 +29,6 @@ Sin dependencias: se prueba con `python3 infra/test_incidencias.py`.
 """
 
 import datetime
-import unicodedata
 
 import operativo as OP
 import reglas as R
@@ -83,28 +82,12 @@ BLOQUEANTES = (
 DEVOLUCIONES = frozenset(c for c, motivo in R.OPERACIONES_NO_TECNICAS.items()
                          if motivo == "devolucion")
 
-# La zona de cada delegacion: el nombre de VenCloud empieza por ella
-# («Levante - Murcia»). Las mismas cinco del Power BI.
-ZONAS = (("MADRID", "Centro"), ("ANDALUCIA", "Sur"), ("CATALUNA", "Cataluña"),
-         ("LEVANTE", "Levante"), ("NORTE", "Norte"))
-OTRA_ZONA = "Otra zona"
+# Las zonas viven en operativo: las usa tambien la pagina de furgonetas.
+ZONAS, OTRA_ZONA, sin_acentos, zona_de = OP.ZONAS, OP.OTRA_ZONA, OP.sin_acentos, OP.zona_de
 
 SIN_M13 = ("Falta el informe M13 · EXT_SAT_INCIDENCIAS de VenCloud (docs/17). Sin él, una "
            "incidencia cerrada después de su tercer día sigue abierta en los datos, así que "
            "no se pueden dar las abiertas, la tasa de resolución, el tiempo medio ni el SLA.")
-
-
-def sin_acentos(texto):
-    t = unicodedata.normalize("NFD", str(texto or ""))
-    return "".join(c for c in t if unicodedata.category(c) != "Mn").upper()
-
-
-def zona_de(delegacion):
-    d = sin_acentos(delegacion).replace("Ñ", "N")
-    for prefijo, zona in ZONAS:
-        if d.startswith(prefijo):
-            return zona
-    return OTRA_ZONA
 
 
 def marcas(tarea, texto):
