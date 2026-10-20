@@ -154,6 +154,8 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 }
 @media (max-width:360px){ .cuadros{grid-template-columns:1fr} }
 </style>
+<!-- El paso a cada seccion: el cuadrado crece hasta ser su pagina (docs/68). -->
+<script src="/comun/transicion.js"></script>
 </head>
 <body>
 <!-- La bienvenida animada, solo al entrar (comun/bienvenida.js). Va antes que
@@ -877,7 +879,20 @@ function avisa(texto, mal){
     document.querySelectorAll("header.top, #barra, #aviso, footer").forEach(o =>
       o.animate([{opacity: 1}, {opacity: 0}], {duration: 220, fill: "forwards"}));
 
-    // El pulsado: una copia fija en su sitio, que crece hasta la pantalla entera.
+    /* Donde el navegador sabe pasar de una pagina a otra (comun/transicion.js),
+       el cuadrado se convierte en la pagina nueva: cuando los demas se han
+       cerrado, se navega y el navegador lo hace crecer hasta ser ella. */
+    const tr = window.digivendTransicion;
+    if(tr && tr.soporta && tr.marca()){
+      el.style.viewTransitionName = "cuadro";
+      el.style.transform = "none";
+      // Sus cifras se apagan antes: lo que crece es el color, y en el se ve la pagina.
+      [...el.children].forEach(h => h.animate([{opacity: 1}, {opacity: 0}], {duration: 200, delay: 60, fill: "forwards"}));
+      setTimeout(() => { location.href = href; }, 300);
+      return;
+    }
+
+    // Si no: una copia fija en su sitio, que crece hasta la pantalla entera.
     const copia = el.cloneNode(true);
     copia.removeAttribute("href");
     Object.assign(copia.style, {
@@ -911,7 +926,7 @@ function avisa(texto, mal){
     document.querySelectorAll("body > .cuadro").forEach(c => c.remove());
     document.querySelectorAll("#cuadros .cuadro, header.top, #barra, #aviso, footer").forEach(o => {
       o.getAnimations().forEach(a => a.cancel());
-      o.style.visibility = "";
+      o.style.visibility = ""; o.style.viewTransitionName = ""; o.style.transform = "";
     });
   });
 })();
