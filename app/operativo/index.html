@@ -840,6 +840,81 @@ function avisa(texto, mal){
     + "último cierre mensual de inventario. Donde no hay dato, se dice en vez de estimarse.";
   $("#pie").hidden = false;
 })();
+
+/* ===================================================================
+   Al pulsar un cuadrado (Gabriele, 20-oct-2026, docs/68): los demas se
+   cierran y el pulsado crece hasta llenar la pantalla; al llenarla toma el
+   fondo de la pagina y se abre su seccion.
+
+   Solo el clic normal: con Ctrl, Cmd, Mayusculas o la rueda se abre como
+   siempre, en otra pestaña o ventana. Con «reducir movimiento», sin animar.
+   =================================================================== */
+(function abreConAnimacion(){
+  const calma = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let enCurso = false;
+  $("#cuadros").addEventListener("click", e => {
+    const el = e.target.closest("a.cuadro");
+    if(!el || enCurso || calma() || !el.animate) return;
+    if(e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    enCurso = true;
+    const href = el.href;
+    const r = el.getBoundingClientRect();
+    const VW = innerWidth, VH = innerHeight;
+    const cs = getComputedStyle(el);
+    const fondo = getComputedStyle(document.body).backgroundColor;
+
+    // Los otros se cierran: se encogen y se apagan, primero los que estan cerca.
+    const cx = r.left + r.width/2, cy = r.top + r.height/2;
+    document.querySelectorAll("#cuadros .cuadro").forEach(o => {
+      if(o === el) return;
+      const q = o.getBoundingClientRect();
+      const d = Math.hypot(q.left + q.width/2 - cx, q.top + q.height/2 - cy);
+      o.animate([{transform: "scale(1)", opacity: 1}, {transform: "scale(.82)", opacity: 0}],
+        {duration: 260, delay: Math.min(140, d*0.12), easing: "cubic-bezier(.4,0,1,1)", fill: "forwards"});
+    });
+    // La cabecera y los filtros tambien se van.
+    document.querySelectorAll("header.top, #barra, #aviso, footer").forEach(o =>
+      o.animate([{opacity: 1}, {opacity: 0}], {duration: 220, fill: "forwards"}));
+
+    // El pulsado: una copia fija en su sitio, que crece hasta la pantalla entera.
+    const copia = el.cloneNode(true);
+    copia.removeAttribute("href");
+    Object.assign(copia.style, {
+      position: "fixed", left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px",
+      margin: "0", zIndex: "1000", maxHeight: "none", aspectRatio: "auto", transition: "none",
+      background: cs.backgroundColor, color: cs.color, boxShadow: "0 18px 50px rgba(0,0,0,.28)",
+    });
+    document.body.appendChild(copia);
+    el.style.visibility = "hidden";
+    // Lo de dentro se queda quieto mientras crece y se va despacio.
+    [...copia.children].forEach(h => h.animate([{opacity: 1}, {opacity: 0}],
+      {duration: 280, delay: 120, easing: "ease-in", fill: "forwards"}));
+    const crece = copia.animate([
+      {left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px", borderRadius: cs.borderRadius},
+      {left: "0px", top: "0px", width: VW + "px", height: VH + "px", borderRadius: "0px"},
+    ], {duration: 480, delay: 90, easing: "cubic-bezier(.65,0,.25,1)", fill: "forwards"});
+    // Al llenar la pantalla toma el fondo de la pagina que viene.
+    const funde = copia.animate([{backgroundColor: cs.backgroundColor, boxShadow: "none"}, {backgroundColor: fondo, boxShadow: "none"}],
+      {duration: 200, delay: 520, easing: "ease-out", fill: "forwards"});
+    let ido = false;
+    const ve = () => { if(!ido){ ido = true; location.href = href; } };
+    funde.finished.then(ve, ve);
+    setTimeout(ve, 1200);   // por si la pestaña estaba en segundo plano y no anima
+  });
+
+  // Al volver atras el navegador puede traer la pagina tal como se quedo:
+  // se deja como estaba antes del clic.
+  addEventListener("pageshow", e => {
+    if(!e.persisted && !enCurso) return;
+    enCurso = false;
+    document.querySelectorAll("body > .cuadro").forEach(c => c.remove());
+    document.querySelectorAll("#cuadros .cuadro, header.top, #barra, #aviso, footer").forEach(o => {
+      o.getAnimations().forEach(a => a.cancel());
+      o.style.visibility = "";
+    });
+  });
+})();
 </script>
 </body>
 </html>
