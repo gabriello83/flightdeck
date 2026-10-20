@@ -8,32 +8,42 @@ escriben allí. Tienen su propio cuadrado en el informe general y su propia pág
 
 ## El cuadrado
 
-**Devoluciones**, entre Incidencias y Almacenes. La cifra es el número de devoluciones del mes de
-ayer, del día 1 hasta ayer. Debajo van los mismos días del mes anterior y las que siguen sin
-cerrar. No lleva semáforo, porque nadie ha fijado un objetivo; lleva su color propio. El día 1 enseña
+**Devoluciones**, entre Incidencias y Almacenes. Desde el 20-oct-2026 la cifra es el dinero
+devuelto en el mes de ayer, del día 1 hasta ayer (ver «El importe, como campo»). Debajo van cuántas
+son, el dinero de los mismos días del mes anterior, las que no tienen importe que sumar y las que
+siguen sin cerrar. No lleva semáforo, porque nadie ha fijado un objetivo; lleva su color propio. El día 1 enseña
 el mes anterior entero. El 31 de marzo se compara con febrero entero.
 
 Lo ve quien ve el bloque SAT, los mismos perfiles que ven Incidencias (`autorizacion.CUADRADOS`).
 
-## La página, /devoluciones/
+## La página, /devoluciones/ (por áreas desde el 20-oct-2026)
 
-Tiene dos hojas y los filtros de periodo, canal, zona, delegación y centro. Arranca en el mes
-corriente, que es la cifra del cuadrado.
+> Gabriele, 20-oct-2026: «en el cuadrante tiene que salir el total de dinero que se ha devuelto. Una
+> vez abierto lo mismo separado por área. Cuando entras en un área poner las devoluciones que se han
+> registrado, el top 5 de las máquinas que han registrado más devoluciones, si le das a la flecha
+> salen todas, el top 5 de las devoluciones con más importe, si le das a la flecha salen todas, una
+> tabla con los 10. Devolución mes y canal de acuerdo. Los top 5 clientes por cada área con más
+> devoluciones».
 
-- **Panel de control.**
-  - Cuatro cifras contra el periodo anterior: devoluciones, sin cerrar (y cuántas hay hoy en
-    total), la mediana hasta cerrar (y la media) y las máquinas con alguna devolución (y cuántas
-    tienen tres o más).
-  - Un gráfico de columnas por mes, de los trece meses que trae el fichero, apiladas por canal,
-    con su vista de tabla.
-  - Barras por canal y por zona y delegación.
-  - Los 15 centros con más devoluciones, con una columna por canal.
-  - Las 15 máquinas con más devoluciones.
-  - Una tabla por técnico, con las que tiene sin cerrar y lo que tarda.
-- **Sin cerrar.** Todas las que siguen abiertas, sean de cuando sean, de la más vieja a la más
-  nueva, con los días que llevan esperando. La lista se baja en CSV.
+Sigue el patrón de /rutas/ (docs/67) y /furgonetas/ (docs/58). Un filtro de periodo (arranca en el
+mes corriente, que es la cifra del cuadrado) y, dentro de un área, otro de delegación.
 
-Pulsar un canal, una delegación o un centro filtra la página por él.
+- **Portada.** El dinero devuelto en todo el ámbito, contra el periodo anterior, y un cuadrante por
+  área (Centro, Sur, Cataluña, Levante, Norte) con su dinero, cuántas son, cuántas siguen sin cerrar
+  y cuántas no tienen importe que sumar. El área sale de la delegación (`operativo.zona_de`). Un
+  perfil de una sola área entra directamente en ella.
+- **Dentro de un área.**
+  - Cuatro cifras: dinero devuelto, devoluciones, sin cerrar y sin importe. Las tres últimas
+    filtran la lista de registradas.
+  - **Devoluciones registradas**: las 10 últimas («una tabla con los 10»); la flecha abre todas.
+    Se baja en CSV.
+  - **Máquinas con más devoluciones** y **Devoluciones con más importe**: 5 y la flecha.
+  - **Devoluciones por mes y canal**, el gráfico de antes («de acuerdo»), ahora con el dinero de
+    cada mes en la punta y en la vista de tabla.
+  - **Clientes con más devoluciones**: 5 y la flecha.
+
+Las tablas de antes por canal, por zona, por técnico y la hoja «Sin cerrar» se van: lo de sin
+cerrar queda en la cifra que filtra la lista.
 
 ## Dos orígenes
 
@@ -66,10 +76,23 @@ sin cerrar, y hoy hay 497 sin cerrar en total.
 
 ## Lo que no hay
 
-**El importe.** VenCloud no guarda en ningún campo cuánto se devolvió. Solo está en el título que
-escribe el técnico, de muchas formas: «0,80€», «DEV. 1,50», «Devolución = 60 centimos». Sacarlo de
-ahí sería adivinar, así que se cuentan devoluciones y no euros. Si algún día hace falta el importe,
-lo correcto es un campo en VenCloud o un informe que lo traiga.
+**El importe, como campo.** VenCloud no guarda en ningún campo cuánto se devolvió. Pero el
+formulario de reclamaciones escribe el título siempre igual: «Devolución = 1,40 € PRODUCTO NO
+ENTREGADO DEVOLUCIÓN EN SITU TICKET: …», donde lo que va entre el «=» y el «€» es lo que tecleó el
+usuario; los técnicos, a mano, «DEV. 0,50». Desde el 20-oct-2026 la noche lee esa cifra
+(`devoluciones.importe_de`) y solo la cifra viaja (`i`); el título no.
+
+- Se aceptan coma, punto o apóstrofo para los decimales, «€», «EUR», «euros» y los céntimos
+  («50 cnt», «90centimos», «75 cèntims» son 0,50, 0,90 y 0,75).
+- Lo que no es una cifra limpia no se adivina: «OTRO», «Cinco euros», «5+5 (17/11)», «2 cafés»,
+  «1, 70», «O,40». Se cuenta como «sin importe».
+- Por encima de 50 € (`IMPORTE_MAX`) tampoco se suma: «85 €» o «90 €» en una máquina de vending son
+  casi siempre céntimos, pero no se puede saber. Viaja aparte (`g`) y se enseña como «escritos · no
+  suma».
+
+Con el M13 del 20-oct-2026: de 16.807 devoluciones en trece meses, 14.415 tienen importe (29.925 €)
+y 76 lo tienen por encima de 50 €. Octubre hasta el 19: 1.121,10 € en 654 devoluciones, 87 sin
+importe que sumar; septiembre a estas alturas, 1.179,33 €.
 
 **El título y las notas.** En las devoluciones por transferencia el usuario escribe ahí su IBAN,
 su nombre o su teléfono. No viajan al fichero, ni siquiera en las abiertas.

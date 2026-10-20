@@ -11,10 +11,17 @@ operacion de devolucion (D01, D03, D04, C24, DEV01...). Sin M13 no hay nada que
 contar con garantias y se dice: D7 solo trae la ventana de tres dias.
 
 LO QUE NO VIAJA. Ni el titulo ni las notas: en las devoluciones por
-transferencia el cliente escribe ahi su IBAN, su nombre o su telefono. Tampoco
-el importe: VenCloud no tiene un campo para el, solo lo que el tecnico escribe
-en el titulo («0,80€», «DEV. 1,50», «Devolución = 60 centimos»), y sacarlo de ahi
-seria adivinar. Se cuentan devoluciones, no euros.
+transferencia el cliente escribe ahi su IBAN, su nombre o su telefono.
+
+EL IMPORTE (Gabriele, 20-oct-2026: «en el cuadrante tiene que salir el total de
+dinero que se ha devuelto»). VenCloud no tiene un campo para el, pero el
+formulario de reclamaciones escribe el titulo siempre igual: «Devolución = 1,40 €
+PRODUCTO NO ENTREGADO ... TICKET: ...», y los tecnicos a mano «DEV. 0,50». De ahi
+se lee la cifra y nada mas (`importe_de`); el titulo sigue sin viajar. Lo que no
+es una cifra limpia («OTRO», «Cinco euros», «5+5», «O,40») se queda sin importe y
+se dice cuantas son: no se adivina. Lo escrito por encima de IMPORTE_MAX tampoco
+se suma: «85 €» o «90 €» en una maquina de vending son casi siempre centimos,
+pero eso no se puede saber, asi que viaja aparte (`g`) para que se vea.
 
 DOS ORIGENES. Gabriele (16-oct-2026): «las devoluciones en VenCloud las puedes
 encontrar en solicitudes especiales». Estan en la serie E (categoria
@@ -33,6 +40,7 @@ Sin dependencias: se prueba con `python3 infra/test_devoluciones.py`.
 """
 
 import datetime
+import re
 
 import incidencias as IN
 import reglas as R
@@ -59,6 +67,44 @@ MESES = 13
 SIN_M13 = ("Falta el informe M13 · EXT_SAT_INCIDENCIAS de VenCloud (docs/17). Sin él no se "
            "pueden contar las devoluciones del mes: la carga diaria solo trae los tres "
            "últimos días de cada tarea.")
+
+
+# Lo que se suma, en euros. Por encima, la cifra se ensena pero no se suma.
+IMPORTE_MAX = 50.0
+
+# «Devolución = 1,40 € ...» (el formulario) y «DEV. 0,50» (a mano). Delante
+# puede ir una fecha («23.09 Devolución = ...»).
+_CABEZA = re.compile(r"^\s*(?:[\d.]+\s+)?(?:(DEVOLUCI\w*N\s*=)|DEV[.,]?(?=\s*[\d.,'’]))\s*", re.I)
+# La cifra, con coma, punto o apostrofo para los decimales, y su unidad.
+_CIFRA = (r"(\d{0,4}(?:[.,'’]\d{1,2})?)\s*"
+          r"(€|EUROS?|UEROS?|EUR|E|C(?:[EÉÈ]?NT[A-ZÀ-ÿ]*|TS?|TM|M))?\.?")
+# En el formulario lo que escribe el usuario va entre el «=» y el «€» que pone
+# el formulario: si hay algo mas («5+5 (17/11)», «2 cafes»), no es una cifra
+# limpia. A mano, detras va un espacio o el final.
+_FORMULARIO = re.compile(_CIFRA + r"[.,]?\s*€", re.I)
+_A_MANO = re.compile(_CIFRA + r"\s*(?:€|\s|$)", re.I)
+
+
+def importe_de(titulo):
+    """Los euros que dice el titulo de una devolucion, o None si no lo dice
+    con una cifra limpia. «50 cnt» son 0,50; «3€ €», 3."""
+    texto = str(titulo or "")
+    m = _CABEZA.match(texto)
+    if not m:
+        return None
+    c = (_FORMULARIO if m.group(1) else _A_MANO).match(texto[m.end():])
+    if not c or not re.search(r"\d", c.group(1)):
+        return None
+    try:
+        v = float(c.group(1).replace(",", ".").replace("'", ".").replace("’", "."))
+    except ValueError:
+        return None
+    unidad = (c.group(2) or "").upper()
+    if unidad.startswith("C"):
+        if not c.group(1).isdigit():
+            return None
+        v = v / 100
+    return round(v, 2)
 
 
 def canal_de(operacion):
@@ -115,6 +161,11 @@ class Devoluciones:
             }
             if R.es_solicitud_especial(t):
                 fila["e"] = 1
+            imp = importe_de(R.v(t, "titulo", ""))
+            if imp is not None and imp > IMPORTE_MAX:
+                fila["g"] = imp
+            elif imp is not None:
+                fila["i"] = imp
             if cerrada:
                 cierre = IN._fecha_hora(R.v(t, "cierre", "")) or \
                     (IN._fecha_hora(R.v(t, "fecha_fin", "")) or "")[:10] or None
@@ -140,6 +191,7 @@ class Devoluciones:
         filas = self._filas(hoy)[0]
         del_mes = [f for f in filas if ini.isoformat() <= f["a"][:10] <= ayer.isoformat()]
         antes = [f for f in filas if ini_ant.isoformat() <= f["a"][:10] <= fin_ant.isoformat()]
+        euros = lambda fs: round(sum(f.get("i", 0) for f in fs), 2)
         por_canal = {}
         for f in del_mes:
             k = ORDEN_CANALES[f["k"]]
@@ -149,6 +201,10 @@ class Devoluciones:
             "hasta": ayer.isoformat(),
             "total": len(del_mes),
             "mes_anterior": len(antes),
+            # El dinero devuelto, de las que lo dicen en el titulo (importe_de).
+            "importe": euros(del_mes),
+            "importe_anterior": euros(antes),
+            "sin_importe": sum(1 for f in del_mes if "i" not in f),
             "sin_cerrar": sum(1 for f in del_mes if "x" not in f),
             "especiales": sum(1 for f in del_mes if f.get("e")),
             "por_canal": [[k, por_canal[k]] for k in ORDEN_CANALES if k in por_canal],
@@ -179,6 +235,8 @@ class Devoluciones:
             "_nota": ("Una fila por devolución de dinero de la SAT, sin la matrícula ficticia. "
                       "a = apertura; x = cierre (sin x, sin cerrar; x vacía: cerrada sin fecha); "
                       "h = horas hasta el cierre; k = canal; e = 1 si es solicitud especial (serie E); c, d, t = posición en centros, "
-                      "delegaciones y técnicos. Ni título ni notas: traen datos del cliente. "
-                      "Sin importe: VenCloud no lo guarda en ningún campo."),
+                      "delegaciones y técnicos. i = euros devueltos, leídos de la cifra del título; g = la cifra "
+                      f"escrita cuando pasa de {IMPORTE_MAX:g} € (no se suma); sin i ni g, el título no dice una cifra "
+                      "limpia. Ni título ni notas: traen datos del cliente."),
+            "importe_max": IMPORTE_MAX,
         }

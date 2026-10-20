@@ -5,6 +5,7 @@ Las devoluciones de dinero: el cuadrado y las filas de su pagina (docs/57).
 """
 
 import datetime
+import json
 import sys
 
 AQUI = __file__.rsplit("/", 1)[0]
@@ -91,6 +92,50 @@ d2.come_foto([tarea(1, alta="2026-02-28 10:00:00"), tarea(2, alta="2026-03-01 10
               tarea(3, alta="2026-03-31 10:00:00")])
 c2 = d2.cuadrado(datetime.date(2026, 4, 1))
 comprueba("el 31 de marzo se compara con febrero entero", (c2["total"], c2["mes_anterior"]), (2, 1))
+
+print("\nEl importe, leido de la cifra del titulo y de nada mas")
+for titulo, euros in (
+        ("Devolución = 1,40 € PRODUCTO NO ENTREGADO DEVOLUCIÓN EN SITU TICKET: 123456", 1.4),
+        ("Devolución = 0.65 € PRODUCTO NO ENTREGADO TRASFERENCIA BANCARIA TICKET: 1", 0.65),
+        ("Devolución = 1'22 € PRODUCTO NO ENTREGADO", 1.22),
+        ("Devolución = 0’70 € PRODUCTO NO ENTREGADO", 0.7),
+        ("Devolución = 3€ € NO DEVUELVE CAMBIO", 3.0),
+        ("Devolución = 5 EUR € NO DEVUELVE CAMBIO", 5.0),
+        ("Devolución = 4 euros € PRODUCTO NO ENTREGADO", 4.0),
+        ("Devolución = 50 cnt € PRODUCTO NO ENTREGADO", 0.5),
+        ("Devolución = 90centimos € PRODUCTO NO ENTREGADO", 0.9),
+        ("Devolución = 75 cèntims € PRODUCTO NO ENTREGADO", 0.75),
+        ("Devolución = ,50 € PRODUCTO NO ENTREGADO", 0.5),
+        ("23.09 Devolución = 1.30 EUR € PRODUCTO NO ENTREGADO", 1.3),
+        ("DEV. 0,50 ", 0.5),
+        ("DEV, 1€", 1.0),
+        # Lo que no es una cifra limpia se queda sin importe: no se adivina.
+        ("OTRO TICKET: 123456", None),
+        ("Devolución = Cinco euros € PRODUCTO NO ENTREGADO", None),
+        ("Devolución = 5+5 (17/11 Y 19/11) € PRODUCTO NO ENTREGADO", None),
+        ("Devolución = 2 cafés € PRODUCTO NO ENTREGADO", None),
+        ("Devolución = 1, 70 EUROS € PRODUCTO NO ENTREGADO", None),
+        ("Devolución = O,40 € PRODUCTO NO ENTREGADO", None),
+        ("Devolución = 0,5 cnt € PRODUCTO NO ENTREGADO", None),
+        ("ES00 1234 5678 · Ana", None),
+):
+    comprueba(f"{titulo[:40]!r}", DV.importe_de(titulo), euros)
+
+di = DV.Devoluciones()
+di.come_foto([
+    tarea(1, titulo="Devolución = 1,40 € PRODUCTO NO ENTREGADO TRASFERENCIA BANCARIA TICKET: ES00 1234"),
+    tarea(2, titulo="Devolución = 85 € PRODUCTO NO ENTREGADO DEVOLUCIÓN EN SITU TICKET: 1"),
+    tarea(3, titulo="OTRO TICKET: 1"),
+    tarea(4, titulo="Devolución = 2 € PRODUCTO NO ENTREGADO", alta="2026-09-10 08:00:00"),
+])
+fi = {x["n"]: x for x in di.fichero("interno", HOY)["devoluciones"]}
+comprueba("la cifra viaja en i, el titulo no",
+          (fi["A-80001"].get("i"), "ES00" in json.dumps(fi)), (1.4, False))
+comprueba(f"por encima de {DV.IMPORTE_MAX:g} € va aparte, en g", (fi["A-80002"].get("i"), fi["A-80002"].get("g")), (None, 85.0))
+comprueba("sin cifra, ni i ni g", ("i" in fi["A-80003"], "g" in fi["A-80003"]), (False, False))
+ci = di.cuadrado(HOY)
+comprueba("el cuadrado suma solo lo que se lee y dice cuantas no",
+          (ci["importe"], ci["sin_importe"], ci["importe_anterior"]), (1.4, 2, 2.0))
 
 print("\nSin la foto, se dice")
 vacio = DV.Devoluciones()

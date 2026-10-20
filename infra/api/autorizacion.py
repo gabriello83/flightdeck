@@ -426,14 +426,13 @@ TABLAS = {
         "tecnicas": "Los 10 centros con más averías técnicas",
         "abiertas": "Lista de incidencias y su ficha",
     },
+    # Por areas desde el 20-oct-2026 (docs/57): lo que se ve al entrar en una.
     "devoluciones": {
+        "registradas": "Devoluciones registradas",
+        "maquinas": "Máquinas con más devoluciones",
+        "importes": "Devoluciones con más importe",
         "meses": "Devoluciones por mes y canal",
-        "canal": "Por canal y por origen",
-        "zonas": "Por zona y delegación",
-        "centros": "Los 15 centros con más devoluciones",
-        "maquinas": "Las 15 máquinas con más devoluciones",
-        "tecnicos": "Por técnico",
-        "pendientes": "Devoluciones sin cerrar",
+        "clientes": "Clientes con más devoluciones",
     },
     "furgonetas": {
         "vehiculos": "Furgonetas activas",
