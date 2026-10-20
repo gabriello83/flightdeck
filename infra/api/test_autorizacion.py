@@ -210,6 +210,11 @@ _fg = {"dias": ["d1"], "flota": [["1234ABC", "CRAFTER", "Madrid"]], "visitas": {
 _f = A.recorta_tablas("furgonetas", _fg, A.con_usuario(_ope, {"tablas_ocultas": {"furgonetas": ["vehiculos"]}}))
 comprueba("furgonetas: sin la lista no llegan los km, y el dia a dia sigue",
           sorted(_f), ["dias", "flota", "tablas_ocultas", "visitas"])
+_rt = {"dias": {}, "llamadas": [{"m": "M1"}], "por_recaudar": [{"p": "A"}],
+       "sin_reponer": [{"p": "B"}], "nunca_repuestas": [{"p": "C"}], "control_maquinas": {"mes": "2026-10"}}
+_r = A.recorta_tablas("rutas", _rt, A.con_usuario(_ope, {"tablas_ocultas": {"rutas": ["reponer", "llamadas"]}}))
+comprueba("rutas: sin reponer se lleva sus dos listas; por recaudar sigue",
+          sorted(_r), ["control_maquinas", "dias", "por_recaudar", "tablas_ocultas"])
 _d = {"devoluciones": [{"n": "A-1"}]}
 comprueba("devoluciones: sus tablas salen de las mismas filas, no se quita nada",
           A.hay_recorte("devoluciones", A.con_usuario(_ope, {"tablas_ocultas": {"devoluciones": ["tecnicos"]}})),

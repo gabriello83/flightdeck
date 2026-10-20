@@ -78,6 +78,7 @@ import telemetria as TE
 import almacenes as AL
 import incidencias as IN
 import devoluciones as DV
+import rutas as RT
 from cuadro import Cuadro
 
 s3 = boto3.client("s3")
@@ -1580,6 +1581,9 @@ def lambda_handler(event, context):
                   for acu in acumuladores}
     # La pagina de incidencias (docs/56): las tareas de la SAT de toda la ventana.
     incidencias = {acu.perfil["id"]: IN.Incidencias() for acu in acumuladores}
+    # La pagina de rutas por areas (docs/67): por maquina, la ultima carga, la
+    # ultima recaudacion y lo que recaudo cada mes, en toda la ventana.
+    maquinas = {acu.perfil["id"]: RT.Maquinas() for acu in acumuladores}
 
     # El censo va PRIMERO, y no solo porque sea un maestro: trae cliente, centro,
     # pdv y matricula de TODO el parque, asi que el mapa arranca completo en vez
@@ -1701,6 +1705,8 @@ def lambda_handler(event, context):
                         incidencias[acu.perfil["id"]].come_tareas(propias)
                     elif nombre == "sat_eventos":
                         incidencias[acu.perfil["id"]].come_eventos(propias)
+                    elif nombre in ("partes", "lineas", "recaudacion"):
+                        maquinas[acu.perfil["id"]].come(nombre, propias, dia)
                 if propias and metodo and not historico:
                     getattr(acu, metodo)(propias)
                 if propias:
@@ -1826,8 +1832,11 @@ def lambda_handler(event, context):
                 escribe(clave_t, detalle)
             # La pagina de rutas (docs/55): delegaciones, rutas y puntos de venta.
             clave_r = f"cabina/{acu.perfil['id']}/rutas.json.gz"
-            escribe_comprimido(clave_r, op.detalle_rutas(acu.perfil["id"], _json_de(clave_r),
-                                                         festivos, ubicaciones))
+            fichero_r = op.detalle_rutas(acu.perfil["id"], _json_de(clave_r), festivos, ubicaciones)
+            fichero_r.update(maquinas[acu.perfil["id"]].bloque(
+                [f for f in censo if en_ambito(f, acu.ambito, mapa)],
+                incidencias[acu.perfil["id"]], festivos, hoy))
+            escribe_comprimido(clave_r, fichero_r)
             # La pagina de furgonetas (docs/58): vehiculo a vehiculo, cada dia.
             clave_f = f"cabina/{acu.perfil['id']}/furgonetas.json.gz"
             op.desde = dias_leidos and min(dias_leidos)

@@ -341,6 +341,14 @@ comprueba("AIRBUS, solo el suyo, y en su lista no sale Consum",
 comprueba("cada maquina de la lista, con su ubicacion del censo",
           {x[2]: x[7] for x in _ra["dias"][_ayer]["visitas"]}.get("A1"), "Hall")
 comprueba("sin calendario de festivos subido, se dice (null)", _ri["festivos"], None)
+comprueba("lleva las listas de maquinas y quien hizo cada ruta (docs/67)",
+          all(k in _ri for k in ("por_recaudar", "sin_reponer", "nunca_repuestas", "llamadas",
+                                 "control_maquinas", "quien", "zonas")), True)
+comprueba("y AIRBUS no ve maquinas de fuera de su ambito",
+          {x["p"] for x in _ra["sin_reponer"] + _ra["nunca_repuestas"] + _ra["por_recaudar"]}
+          <= {x["p"] for x in _ri["sin_reponer"] + _ri["nunca_repuestas"] + _ri["por_recaudar"]}
+          and all("CONSUM" not in x["c"].upper() for x in _ra["nunca_repuestas"]) and bool(_ri["nunca_repuestas"]),
+          True)
 
 print("\nLa pagina de furgonetas (docs/58): un fichero por perfil, con su ambito")
 _fi = json.loads(gzip.decompress(ALMACEN["cabina/interno/furgonetas.json.gz"]))
