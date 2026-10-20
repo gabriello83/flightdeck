@@ -190,12 +190,19 @@ def encamina(evento, metodo, ruta):
     if ruta == "/api/operativo" and metodo == "GET":
         if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
             raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
-        try:
-            datos = json.loads(_crudo(f"cabina/{_cabina(perfil)}/operativo.json"))
-        except Exception:
+        # Con toda la historia va comprimido (docs/66); el de antes, sin
+        # comprimir, vale mientras la noche no haya escrito el nuevo.
+        datos = None
+        for clave in ("operativo.json.gz", "operativo.json"):
+            try:
+                datos = json.loads(_crudo(f"cabina/{_cabina(perfil)}/{clave}"))
+                break
+            except Exception:
+                continue
+        if datos is None:
             return r(503, {"error": "El informe operativo todavia no se ha calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
-        return r(200, A.recorta_operativo(datos, perfil))
+        return _json_grande(A.recorta_operativo(datos, perfil))
 
     # Tarifas contra venta real (docs/52): el resumen del perfil, o un centro.
     # El centro no abre la puerta a otro perfil: el fichero se busca DENTRO del

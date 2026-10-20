@@ -290,8 +290,8 @@ print("\nSe escriben los dos paneles")
 comprueba("dos ficheros", len(res["ficheros"]), 2)
 
 print("\nEl informe general operativo: un fichero por perfil, con su ambito")
-op_int = json.loads(ALMACEN["cabina/interno/operativo.json"])
-op_air = json.loads(ALMACEN["cabina/cli-airbus/operativo.json"])
+op_int = json.loads(gzip.decompress(ALMACEN["cabina/interno/operativo.json.gz"]))
+op_air = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/operativo.json.gz"]))
 _ayer = AYER.isoformat()
 comprueba("arranca en ayer", op_air["ultimo_dia"], _ayer)
 comprueba("el interno tiene en el plan los dos puntos de venta",
@@ -310,6 +310,25 @@ comprueba("la reposicion de AIRBUS no lleva la de Consum",
           < op_int["dias"][_ayer]["reposiciones"]["unidades"], True)
 comprueba("el resumen dice que cuadrados se quedaron sin dato",
           "almacenes" not in res["operativo"]["interno"]["sin_dato"], True)
+
+print("\nEl informe general por delegacion (docs/66): el filtro de area y delegacion")
+_por = op_int["dias"][_ayer].get("por_delegacion") or {}
+comprueba("las previstas de cada delegacion suman las del dia",
+          sum(x["previstas"] for x in _por.get("rutas", {}).values()),
+          op_int["dias"][_ayer]["rutas"]["previstas"])
+comprueba("la reposicion por delegacion suma la del dia",
+          round(sum(x["unidades"] for x in _por.get("reposiciones", {}).values()), 2),
+          op_int["dias"][_ayer]["reposiciones"]["unidades"])
+comprueba("auditables por delegacion suman las del dia",
+          sum(x["auditables"] for x in _por.get("telemetria", {}).values()),
+          op_int["dias"][_ayer]["telemetria"]["auditables"])
+comprueba("AIRBUS no tiene la delegacion de Consum",
+          "Levante - Murcia" in (op_air["dias"][_ayer].get("por_delegacion") or {}).get("telemetria", {}),
+          False)
+comprueba("cada delegacion lleva su area", op_int["zonas"].get("Levante - Murcia"), "Levante")
+comprueba("las furgonetas del dia llevan su lista, para contar distintas en varios dias",
+          len(op_int["dias"][_ayer]["furgonetas"]["vehiculos"]),
+          op_int["dias"][_ayer]["furgonetas"]["activas"])
 
 print("\nLa pagina de rutas (docs/55): un fichero por perfil, con su ambito")
 _ri = json.loads(gzip.decompress(ALMACEN["cabina/interno/rutas.json.gz"]))
@@ -623,7 +642,7 @@ comprueba("y su maquina", _inst2["nuevos"]["maquinas"], ["A9"])
 comprueba("y nada mas", _inst2["nuevos"]["clientes"], [])
 
 print("\nTarifas (docs/52): sin maestro se dice; con maestro, resumen y un fichero por centro")
-_op = json.loads(ALMACEN["cabina/interno/operativo.json"])
+_op = json.loads(gzip.decompress(ALMACEN["cabina/interno/operativo.json.gz"]))
 comprueba("sin el maestro, el cuadrado dice por que", "M10 · EXT_MAESTRO_TARIFAS" in _op["foto"]["tarifas"]["sin_dato"], True)
 comprueba("y no se escribe ningun resumen que parezca bueno",
           [k for k in ALMACEN if "/tarifas/" in k and k.startswith("cabina/interno")], [])
@@ -660,7 +679,7 @@ comprueba("el resumen: 0 de 1, y uno sin tarifa",
 comprueba("la maquina de Consum no es de AIRBUS",
           [k for k in ALMACEN if k.startswith("cabina/cli-airbus/tarifas/centros/")],
           ["cabina/cli-airbus/tarifas/centros/1001.json.gz"])
-_op = json.loads(ALMACEN["cabina/cli-airbus/operativo.json"])
+_op = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/operativo.json.gz"]))
 comprueba("el cuadrado del informe operativo: 0 %, rojo",
           (_op["foto"]["tarifas"]["pct"], _op["foto"]["tarifas"]["color"]), (0.0, "rojo"))
 del ALMACEN["maestros/tarifas/m_tarifas.json.gz"]
@@ -701,7 +720,7 @@ comprueba("AIRBUS solo la suya", [x["n"] for x in _inc_air["incidencias"]], ["A-
 comprueba("cerrada a las 241 horas", [x.get("h") for x in _inc_air["incidencias"]], [241.0])
 comprueba("la abierta de Consum lleva su texto en el interno",
           [x.get("tx") for x in _inc["incidencias"] if x["n"] == "A-9002"], ["pantalla negra"])
-_op = json.loads(ALMACEN["cabina/cli-airbus/operativo.json"])
+_op = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/operativo.json.gz"]))
 comprueba("y el cuadrado de AIRBUS ve el cierre del decimo dia, fuera de 24 h",
           (_op["dias"][AYER.isoformat()]["averias"]["cerradas"],
            _op["dias"][AYER.isoformat()]["averias"]["a_tiempo"]), (1, 0))
@@ -882,6 +901,23 @@ print(f"        60.000 filas ocupan {crudo_en_memoria/1e6:.1f} MB; "
 comprueba("suma las 20.000 visitas", acu.visitas, 20000)
 comprueba("y ocupa menos de la vigesima parte de las filas",
           acumulado < crudo_en_memoria / 20, True)
+
+print("\nEl relleno historico escribe el informe general (docs/66) sin tocar la foto")
+_antes = json.loads(gzip.decompress(ALMACEN["cabina/interno/operativo.json.gz"]))
+_desde = (AYER - datetime.timedelta(days=2)).isoformat()
+_rh = L.lambda_handler({"desde": _desde, "hasta": AYER.isoformat()}, None)
+_desp = json.loads(gzip.decompress(ALMACEN["cabina/interno/operativo.json.gz"]))
+comprueba("escribe los tres dias del tramo", _rh["operativo"]["interno"]["dias"], 3)
+comprueba("la foto de la noche se queda", _desp["foto"].get("pdvs"), _antes["foto"].get("pdvs"))
+comprueba("y la telemetria que ya tenia el dia, tambien",
+          _desp["dias"][AYER.isoformat()]["telemetria"], _antes["dias"][AYER.isoformat()]["telemetria"])
+comprueba("la reposicion del dia sale igual que de noche",
+          _desp["dias"][AYER.isoformat()]["reposiciones"], _antes["dias"][AYER.isoformat()]["reposiciones"])
+comprueba("y las averias que ya tenia el dia (con M13), tambien",
+          _desp["dias"][AYER.isoformat()]["averias"], _antes["dias"][AYER.isoformat()]["averias"])
+comprueba("la SAT de antes del tramo se lee, sin pasar del primer dia",
+          (len(L.previos_averias(datetime.date(2026, 3, 1))),
+           len(L.previos_averias(datetime.date(2025, 1, 10)))), (120, 9))
 
 print("\nUtilizo (docs/60): los dias de M15 que se leen")
 _h = datetime.date(2026, 10, 19)
