@@ -244,6 +244,7 @@ const API = {
         { n: 'A-2', a: d(4), x: d(3, '15:00'), h: 30, m: 'M1', c: 0, d: 0, o: 3, t: 0, f: 1 },
         { n: 'A-3', a: d(2), m: 'M1', c: 0, d: 0, o: 3, t: 0, f: 1, tx: 'no sale café · vuelve a fallar', u: 'Comedor', p: 'C01502' },
         { n: 'A-4', a: d(1), x: d(1, '11:00'), h: 2, m: 'A1', c: 1, d: 1, o: 3, t: 1, f: 1 },
+        { n: 'A-8', a: d(0, '08:00'), x: d(0, '10:30'), h: 2.5, m: 'A1', c: 1, d: 1, o: 2, t: 1, f: 4 },
         { n: 'E-5', a: d(0), m: 'C1', c: 2, d: 2, o: 2, t: 1, f: 68, tx: 'máquina vacía', u: 'Hall', p: 'C09' }]
     };
   })(),
@@ -1037,9 +1038,12 @@ const servidor = http.createServer((pet, res) => {
     comprueba('el cuadrado de averias se llama Incidencias',
       await pagina.textContent('.cuadro[data-id="averias"] .et'), 'Incidencias');
     await Promise.all([pagina.waitForURL('**/incidencias/**'), pagina.click('.cuadro[data-id="averias"]')]);
+    await pagina.waitForSelector('#areas .area');
+    comprueba_que('y al pulsarlo abre su pagina, en las areas', pagina.url().includes('/incidencias/'), pagina.url());
+    comprueba('las 24 horas del dia del cuadrado', await pagina.inputValue('#dia24'), iso(AYER));
+    await pagina.click('#areas .area');
     await pagina.waitForSelector('#kpis .kpi');
-    comprueba_que('y al pulsarlo abre su pagina', pagina.url().includes('/incidencias/'), pagina.url());
-    comprueba('en el dia del cuadrado, por la fecha de cierre', await pagina.inputValue('#periodo'), 'dia');
+    comprueba('y dentro, en el dia del cuadrado, por la fecha de cierre', await pagina.inputValue('#periodo'), 'dia');
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
@@ -1327,16 +1331,48 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nLas incidencias, como el Power BI (docs/56)');
+  console.log('\nLas incidencias, como el Power BI (docs/56), por areas y en 24 horas');
   {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
+    const FOTOS = process.env.FOTOS_AVERIAS;
     const { pagina, errores, fuera } = await abre('/incidencias/');
+    await pagina.waitForSelector('#areas .area');
+    comprueba('la portada: un cuadrante por area, con su parte de las llamadas de 24 h',
+      await pagina.$$eval('#areas .area', x => x.map(e => [e.dataset.area, e.querySelector('.pc').textContent.trim()])),
+      [['Centro', '50 %'], ['Levante', '50 %']]);
+    comprueba('lo nacional: 2 llamadas ayer, 1 sigue abierta, ninguna tecnica cerrada',
+      await pagina.$$eval('#kpis24 .kpi .vl', x => x.map(e => e.textContent.trim())), ['2', '1', '—', '3']);
+    comprueba_que('y dice que son las 24 horas de ayer', (await pagina.textContent('#r24')).includes('de 0:00 a 24:00'));
+    comprueba('en la portada no esta el detalle', await pagina.isVisible('#detalle'), false);
+    comprueba('por area y delegacion, en su orden', await pagina.$$eval('#tDeleg24 tbody tr', x => x.map(t => t.dataset.d)),
+      ['Madrid - Leganes', 'Levante - Murcia', 'Levante - Valencia']);
+    comprueba('las llamadas de esas 24 horas, de la ultima a la primera',
+      await pagina.$$eval('#tLista24 tbody tr .mat', x => x.filter((_, i) => i % 2 === 0).map(e => e.textContent)), ['E-5', 'A-8']);
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'averias-portada.png'), fullPage: true });
+    await pagina.click('#areas .area[data-area="Levante"]');
     await pagina.waitForSelector('#kpis .kpi');
+    comprueba('dentro del area: su nombre, su llamada y sus delegaciones',
+      [(await pagina.textContent('#tArea')).trim(), (await pagina.textContent('#kpis24 .kpi .vl')).trim(),
+       await pagina.$$eval('#deleg option', o => o.map(x => x.value)), await pagina.isVisible('#lZona')],
+      ['Levante', '1', ['', 'Levante - Murcia', 'Levante - Valencia'], false]);
+    comprueba_que('con su parte de todas las areas', (await pagina.textContent('#kpis24 .kpi .nt')).includes('50 % de las 2'));
+    comprueba('y todo el detalle, solo del area', await pagina.$eval('#kpis .kpi:nth-child(1) .vl', e => e.textContent), '5');
+    await pagina.click('#tDeleg24 tbody tr[data-d="Levante - Valencia"]');
+    comprueba('pulsar una delegacion de las 24 h filtra todo', [await pagina.inputValue('#deleg'),
+      await pagina.$eval('#kpis .kpi:nth-child(1) .vl', e => e.textContent), (await pagina.textContent('#kpis24 .kpi .vl')).trim()],
+      ['Levante - Valencia', '3', '0']);
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'averias-area.png'), fullPage: true });
+    await pagina.click('#bAreas');
+    comprueba('volver a todas las areas', [await pagina.isVisible('#areas'), await pagina.isVisible('#detalle')], [true, false]);
+    await pagina.click('#bNacional');
+    await pagina.waitForSelector('#kpis .kpi');
+    comprueba('todas juntas, con el filtro de zona', [(await pagina.textContent('#tArea')).trim(), await pagina.isVisible('#lZona')],
+      ['Todas las áreas', true]);
     comprueba('arranca en los ultimos 3 meses: el ano no esta entero', await pagina.inputValue('#periodo'), 'tres');
     const kpi = async i => pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent);
-    comprueba('siete incidencias, sin el preventivo que la noche ya quito', await kpi(1), '7');
-    comprueba('tasa de resolucion: 4 de 7', await kpi(2), '57,1 %');
-    comprueba('SLA: 3 de las 4 cerradas en menos de 24 h', await kpi(4), '75 %');
+    comprueba('ocho incidencias, sin el preventivo que la noche ya quito', await kpi(1), '8');
+    comprueba('tasa de resolucion: 5 de 8', await kpi(2), '62,5 %');
+    comprueba('SLA: 4 de las 5 cerradas en menos de 24 h', await kpi(4), '80 %');
     comprueba('y en amarillo, como el cuadrado', await pagina.$eval('#kpis .kpi:nth-child(4)', e => e.className), 'kpi amarillo');
     comprueba('el centro con mas averias tecnicas va primero',
       await pagina.$eval('#gTecnicas .fb .nom', e => e.textContent), 'INDUSTRIA DEL CURTIDO');
@@ -1368,7 +1404,21 @@ const servidor = http.createServer((pet, res) => {
     // cerradas ese dia, lo mismo que cuenta el cuadrado.
     {
       const dia = n => iso(new Date(AYER.getTime() - n * 86400000));
-      const c = await abre(`/incidencias/?dia=${dia(1)}`);
+      const p = await abre(`/incidencias/?dia=${dia(1)}`);
+      await p.pagina.waitForSelector('#areas .area');
+      comprueba('con ?dia= la portada cuenta las 24 horas de ese dia, con el semaforo del cuadrado',
+        [await p.pagina.inputValue('#dia24'),
+         await p.pagina.$$eval('#areas .area', x => x.map(e => [e.dataset.area, e.querySelector('.pc').textContent.trim(), e.className.split(' ')[1]]))],
+        [dia(1), [['Centro', '100 %', 'verde'], ['Levante', '0 %', '']]]);
+      comprueba('sin un solo error en la consola del navegador', p.errores, []);
+      if (FOTOS) {
+        await p.pagina.emulateMedia({ colorScheme: 'dark' });
+        await p.pagina.screenshot({ path: path.join(FOTOS, 'averias-oscuro.png'), fullPage: true });
+        await p.pagina.setViewportSize({ width: 390, height: 844 });
+        await p.pagina.screenshot({ path: path.join(FOTOS, 'averias-movil.png'), fullPage: true });
+      }
+      await p.pagina.close();
+      const c = await abre(`/incidencias/?dia=${dia(1)}&area=todas`);
       await c.pagina.waitForSelector('#kpis .kpi');
       const k = async i => c.pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent);
       comprueba('con ?dia= abre en ese dia, por cierre', [await c.pagina.inputValue('#periodo'), await c.pagina.inputValue('#dia')], ['dia', dia(1)]);
@@ -1393,7 +1443,7 @@ const servidor = http.createServer((pet, res) => {
       ['—', '—', '—', '—', '—', '1']);
     await b.pagina.click('.hojas button[data-h="panel"]');
     comprueba('el total si, la tasa no', [await b.pagina.$eval('#kpis .kpi:nth-child(1) .vl', e => e.textContent),
-      await b.pagina.$eval('#kpis .kpi:nth-child(2) .vl', e => e.textContent)], ['7', '—']);
+      await b.pagina.$eval('#kpis .kpi:nth-child(2) .vl', e => e.textContent)], ['8', '—']);
     comprueba('sin un solo error en la consola del navegador', b.errores, []);
     await b.pagina.close();
     API['/api/incidencias'] = antes;
@@ -1893,7 +1943,7 @@ const servidor = http.createServer((pet, res) => {
     if (FOTOS) await x.pagina.screenshot({ path: path.join(FOTOS, 'rutas-sin-maquinas.png'), fullPage: true });
     comprueba('sin un solo error en la consola del navegador', x.errores, []);
     await x.pagina.close();
-    x = await conQuitadas('/incidencias/', { averias: ['abiertas'] }, '#todo:not([hidden])');
+    x = await conQuitadas('/incidencias/?area=todas', { averias: ['abiertas'] }, '#todo:not([hidden])');
     comprueba('incidencias: sin la lista no hay hojas, y queda el panel',
       [await x.pagina.isVisible('.hojas'), await x.pagina.isVisible('#hPanel'), await x.pagina.isVisible('#hAbiertas')],
       [false, true, false]);

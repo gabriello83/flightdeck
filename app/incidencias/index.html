@@ -141,6 +141,30 @@ tr.elegida td{background:color-mix(in srgb, var(--s1) 12%, transparent)}
 .vacio{color:var(--tinta-3);font-size:13.5px;padding:8px 0}
 footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
 #cargando{padding:40px 0;color:var(--tinta-2)}
+/* La portada: un cuadrante por área, como en rutas y furgonetas. El número
+   grande es la parte de las llamadas de las 24 horas; el borde, el semáforo
+   del cuadrado (las técnicas cerradas ese día en menos de 24 horas). */
+.areas{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:14px}
+button.area{all:unset;box-sizing:border-box;display:block;cursor:pointer;background:var(--tarjeta);
+  border:1px solid var(--borde);border-left:5px solid var(--tinta-3);border-radius:12px;padding:14px 16px;box-shadow:var(--sombra)}
+button.area:hover{border-color:var(--tinta-3)}
+button.area:focus-visible{outline:2px solid var(--s1);outline-offset:1px}
+button.area.verde{border-left-color:var(--verde)}
+button.area.amarillo{border-left-color:var(--amarillo)}
+button.area.rojo{border-left-color:var(--rojo)}
+.area .nom{font-size:15px;font-weight:650}
+.area .pc{font-size:34px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:4px}
+.area .nt{font-size:12.5px;color:var(--tinta-2);margin-top:2px}
+.area .mq{font-size:12.5px;color:var(--tinta-2);margin-top:8px;padding-top:8px;border-top:1px solid var(--borde)}
+.area .mq b.verde{color:var(--texto-verde)} .area .mq b.rojo{color:var(--texto-rojo)}
+.area .pista{height:6px;border-radius:3px;background:var(--pista);margin-top:8px;overflow:hidden}
+.area .pista i{display:block;height:100%;background:var(--barra);border-radius:3px}
+.volver{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+.volver h2{font-size:18px;margin:0}
+.sub24{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;margin-top:14px}
+.sub24 p{margin:0}
+.c-verde{color:var(--texto-verde);font-weight:600} .c-rojo{color:var(--texto-rojo);font-weight:600}
+.c-amarillo{font-weight:600}
 @media (max-width:900px){
   .dos,.ficha-y-tabla{grid-template-columns:1fr}
   .ficha{position:static}
@@ -182,6 +206,34 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   <div class="nota" id="aviso" hidden></div>
 
   <div id="todo" hidden>
+    <div class="volver" id="cabArea" hidden><button class="btn" id="bAreas" type="button">← Todas las áreas</button><h2 id="tArea"></h2></div>
+
+    <!-- Las últimas 24 horas: en la portada, lo nacional y un cuadrante por
+         área; dentro de un área, lo de esa área y sus delegaciones. -->
+    <div id="b24">
+      <div class="sub24">
+        <p class="tenue" id="r24"></p>
+        <div class="barra" style="margin:0"><label>Las 24 horas del <select id="dia24"></select></label></div>
+      </div>
+      <div class="kpis" id="kpis24"></div>
+      <div id="portada" hidden>
+        <div class="areas" id="areas"></div>
+        <p style="margin:12px 0 0"><button class="btn" id="bNacional" type="button">Ver el detalle de todas las áreas juntas</button></p>
+      </div>
+      <section class="caja">
+        <div class="cabsec"><h2 id="hDeleg24">Llamadas por delegación</h2><span class="tenue" id="cDeleg24"></span></div>
+        <p class="sub" id="sDeleg24"></p>
+        <div class="tabla" id="tDeleg24"></div>
+      </section>
+      <section class="caja">
+        <div class="cabsec"><h2>Las llamadas de esas 24 horas</h2><span class="tenue" id="cLista24"></span></div>
+        <p class="sub">De la última a la primera. Abierta o cerrada es el estado de esta noche.</p>
+        <div class="tabla" id="tLista24"></div>
+      </section>
+    </div>
+
+    <div id="detalle">
+    <h2 style="font-size:16px;margin:22px 0 0" id="hDetalle">Todo el detalle</h2>
     <div class="hojas" role="tablist">
       <button class="btn" type="button" role="tab" data-h="panel">Panel de control</button>
       <button class="btn" type="button" role="tab" data-h="abiertas">Incidencias abiertas</button>
@@ -202,7 +254,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
       <label class="solo-panel">Estado <select id="estado">
         <option value="">Todas</option><option value="abierta">Abierta</option><option value="cerrada">Cerrada</option>
       </select></label>
-      <label>Zona <select id="zona"></select></label>
+      <label id="lZona">Zona <select id="zona"></select></label>
       <label>Delegación <select id="deleg"></select></label>
       <label>Centro <select id="centro"></select></label>
       <button class="btn" id="bLimpiar" type="button">Limpiar filtros</button>
@@ -240,6 +292,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
         </section>
         <section class="caja ficha" id="ficha" aria-live="polite"></section>
       </div>
+    </div>
     </div>
   </div>
 
@@ -291,6 +344,11 @@ $("#bSalir").addEventListener("click", async ()=>{
 });
 
 let D = null, M = {}, INC = [], HOJA = "panel", TARJETA = "tecnicas", ELEGIDA = null, TODAS_FILAS = false;
+/* AREA: "" es la portada; "*" son todas las áreas juntas (un perfil de una
+   sola área, la vista suelta de preferidos o «todas juntas»). */
+let AREA = "", VARIAS_AREAS = false, TODAS_24 = false;
+const ORDEN_AREAS = ["Centro", "Sur", "Cataluña", "Levante", "Norte", "Otra zona"];
+const ordenAreas = (a, b) => (ORDEN_AREAS.indexOf(a)+1 || 99) - (ORDEN_AREAS.indexOf(b)+1 || 99) || a.localeCompare(b, "es");
 /* Las tablas que el administrador le quitó a este usuario (docs/61). */
 let QUITADAS = new Set();
 
@@ -307,6 +365,10 @@ const mismoDia = (s, menos) => { const d = deIso(s), f = new Date(d.getFullYear(
 function fechaCorta(s){
   const d = deIso(s);
   return Number.isNaN(d.getTime()) ? String(s) : d.toLocaleDateString("es-ES",{day:"numeric", month:"short", year:"numeric"});
+}
+function fechaLarga(s){
+  const d = deIso(s);
+  return Number.isNaN(d.getTime()) ? String(s) : d.toLocaleDateString("es-ES",{weekday:"long", day:"numeric", month:"long"});
 }
 function fechaHora(s){
   if(!s) return "—";
@@ -348,8 +410,10 @@ function prepara(){
 }
 const tiene = (r, m) => (r.f & (M[m]||0)) !== 0;
 const tecnica = r => tiene(r,"tecnica") && !tiene(r,"especial");
+/* La zona la fija el área en la que se ha entrado; con todas juntas, el filtro. */
+const zonaElegida = () => AREA && AREA !== "*" ? AREA : $("#zona").value;
 function enLugar(r){
-  const z = $("#zona").value, dl = $("#deleg").value, c = $("#centro").value, x = fila(r);
+  const z = zonaElegida(), dl = $("#deleg").value, c = $("#centro").value, x = fila(r);
   return (!z || x.zona===z) && (!dl || x.deleg===dl) && (!c || x.num_centro===c);
 }
 function enEstado(r){
@@ -369,7 +433,7 @@ function opciones(sel, valores, todas, etiqueta){
 function pintaFiltros(){
   const zonas = [...new Set(INC.map(r=>fila(r).zona))].sort((a,b)=>a.localeCompare(b,"es"));
   opciones($("#zona"), zonas.map(z=>[z,z]), "Todas");
-  const z = $("#zona").value;
+  const z = zonaElegida();
   const delegs = [...new Set(INC.filter(r=>!z || fila(r).zona===z).map(r=>fila(r).deleg))].filter(Boolean)
     .sort((a,b)=>a.localeCompare(b,"es"));
   opciones($("#deleg"), delegs.map(d=>[d,d]), "Todas");
@@ -476,6 +540,7 @@ function pintaZonas(lista){
     const d = b.dataset.d;
     if($("#deleg").value === d){ $("#deleg").value = ""; }
     else { $("#zona").value = ""; pintaFiltros(); $("#deleg").value = d; }
+    pintaFiltros();
     pintaTodo();
   }));
 }
@@ -627,6 +692,136 @@ function csv(){
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
 
+/* ------------------------------------------------------- las 24 horas */
+/* Lo que pidió Gabriele el 20-oct-2026: entrar y ver las áreas, cada una con
+   su parte de las llamadas de las últimas 24 horas. Las 24 horas son un día
+   entero, de 0 a 24 h: el fichero llega hasta el final de ayer (la foto de
+   M13 es de esta noche), así que las últimas 24 horas con dato son las de
+   ayer. Una llamada es una incidencia que entró ese día, de cualquier tipo
+   (ya sin devoluciones ni preventivos); cerradas en menos de 24 horas es la
+   cuenta del cuadrado: técnicas cerradas ese día, por su fecha de cierre. */
+const dia24 = () => $("#dia24").value || D.ultimo_dia;
+const PRIMERAS_24 = 15;
+function cifras24(lista, dia){
+  const entradas = lista.filter(r=>fila(r).dia===dia);
+  const cerradas = lista.filter(r=>tecnica(r) && r.h!=null && cerradaEntre(r, dia, dia));
+  return {
+    entradas, n: entradas.length,
+    tecnicas: entradas.filter(tecnica).length,
+    siguen: D.estado_al_dia ? entradas.filter(abierta).length : null,
+    cerradas: cerradas.length,
+    sla: D.estado_al_dia && cerradas.length ? 100*cerradas.filter(r=>r.h < D.horas_sla).length/cerradas.length : null,
+    ahora: D.estado_al_dia ? lista.filter(abierta).length : null,
+  };
+}
+const pctDe = (n, total) => total ? 100*n/total : null;
+function textoSla(c){
+  if(!D.estado_al_dia) return "cerradas en menos de 24 h: sin dato (falta el informe M13)";
+  if(!c.cerradas) return "ninguna técnica cerrada ese día";
+  const col = semaforo(c.sla);
+  return `<b class="c-${col}">${fpct(c.sla)}</b> ${c.cerradas===1 ? "de la única técnica cerrada" : `de las ${num(c.cerradas)} técnicas cerradas`} ese día, en menos de ${num(D.horas_sla)} h`;
+}
+function pinta24(){
+  const portada = AREA === "", dia = dia24();
+  const todas = cifras24(INC, dia);
+  /* Dentro de un área cuenta su lugar (área, delegación y centro elegidos);
+     en la portada, todo el perfil. */
+  const lugar = portada ? INC : INC.filter(enLugar), c = portada ? todas : cifras24(lugar, dia);
+  const donde = portada ? "" : AREA === "*" ? ($("#deleg").value || zonaElegida() || "") : ($("#deleg").value || AREA);
+  $("#r24").textContent = `Las 24 horas del ${fechaLarga(dia)}, de 0:00 a 24:00`
+    + (dia === D.ultimo_dia ? ": las últimas con dato, porque VenCloud manda cada noche el día anterior." : ".")
+    + (portada ? " Pulsa un área para ver todo su detalle." : "");
+  const kpi = (et, vl, nt, color) => `<div class="kpi ${esc(color||"")}"><div class="et">${esc(et)}</div>
+    <div class="vl">${vl}</div><div class="nt">${nt}</div></div>`;
+  const sinM13 = "sin dato: falta el informe M13";
+  $("#kpis24").innerHTML =
+    kpi(portada ? "Llamadas en 24 h" : `Llamadas en 24 h${donde ? " · " + donde : ""}`, num(c.n),
+        portada ? `${num(c.tecnicas)} técnicas` : `${fpct(pctDe(c.n, todas.n))} de las ${num(todas.n)} de todas las áreas · ${num(c.tecnicas)} técnicas`)
+    + kpi("Siguen abiertas", c.siguen==null ? "—" : num(c.siguen),
+        c.siguen==null ? sinM13 : `de las ${num(c.n)} que entraron ese día`)
+    + kpi(`Cerradas en < ${D.horas_sla} h`, c.sla==null ? "—" : fpct(c.sla),
+        !D.estado_al_dia ? sinM13 : c.cerradas ? `${num(c.cerradas)} técnicas cerradas ese día · lo del cuadrado` : "ninguna técnica cerrada ese día",
+        semaforo(c.sla))
+    + kpi("Abiertas ahora", c.ahora==null ? "—" : num(c.ahora), c.ahora==null ? sinM13 : "de cualquier día, siguen sin cerrar");
+  if(portada) pintaAreas(todas);
+  pintaDeleg24(portada ? INC : INC.filter(r=>{ const z = zonaElegida(); return !z || fila(r).zona===z; }), dia, portada, todas.n);
+  pintaLista24(c.entradas);
+}
+function pintaAreas(todas){
+  const dia = dia24();
+  const areas = [...new Set(INC.map(r=>fila(r).zona))].sort(ordenAreas);
+  $("#areas").innerHTML = areas.map(a=>{
+    const c = cifras24(INC.filter(r=>fila(r).zona===a), dia), p = pctDe(c.n, todas.n);
+    return `<button class="area ${semaforo(c.sla)}" type="button" data-area="${esc(a)}">
+      <div class="nom">${esc(a)}</div>
+      <div class="pc">${p==null ? "—" : fpct(p)}</div>
+      <div class="nt">de las llamadas: ${num(c.n)} de ${num(todas.n)} en 24 h</div>
+      <div class="pista" aria-hidden="true"><i style="width:${p||0}%"></i></div>
+      <div class="nt">${num(c.tecnicas)} ${c.tecnicas===1?"técnica":"técnicas"}${c.siguen==null ? "" : ` · ${num(c.siguen)} ${c.siguen===1?"sigue abierta":"siguen abiertas"}`}</div>
+      <div class="mq">${textoSla(c)}${c.ahora==null ? "" : `<br>${num(c.ahora)} abiertas ahora en el área`}</div>
+    </button>`;
+  }).join("");
+  $("#areas").querySelectorAll("button.area").forEach(b=>b.addEventListener("click", ()=>abreArea(b.dataset.area)));
+}
+function pintaDeleg24(lista, dia, portada, total){
+  const por = new Map();
+  lista.forEach(r=>{ const x = fila(r); if(!por.has(x.deleg)) por.set(x.deleg, []); por.get(x.deleg).push(r); });
+  const filas = [...por].map(([dl, l])=>[dl, fila(l[0]).zona, cifras24(l, dia)])
+    .sort((a,b)=> (portada ? ordenAreas(a[1], b[1]) : 0) || b[2].n - a[2].n || a[0].localeCompare(b[0], "es"));
+  const base = portada ? total : filas.reduce((s,f)=>s+f[2].n, 0);
+  $("#hDeleg24").textContent = portada ? "Llamadas por área y delegación" : "Llamadas por delegación";
+  $("#sDeleg24").textContent = portada
+    ? "El porcentaje es la parte de las llamadas de esas 24 horas de todas las áreas. Pulsa una delegación para entrar en su área ya filtrada."
+    : `El porcentaje es la parte de las ${num(base)} llamadas del área. Pulsa una delegación para filtrar todo por ella.`;
+  $("#cDeleg24").textContent = `${num(base)} ${base===1?"llamada":"llamadas"}`;
+  if(!filas.length){ $("#tDeleg24").innerHTML = `<p class="vacio">Ninguna delegación con incidencias.</p>`; return; }
+  const elegida = portada ? "" : $("#deleg").value;
+  $("#tDeleg24").innerHTML = `<table><thead><tr>${portada?"<th>Área</th>":""}<th>Delegación</th><th class="n">Llamadas</th><th class="n">%</th>
+    <th class="n">Técnicas</th><th class="n">Siguen abiertas</th><th>Cerradas en &lt; ${num(D.horas_sla)} h</th></tr></thead><tbody>
+    ${filas.map(([dl, z, c])=>`<tr class="elige${dl===elegida?" elegida":""}" data-d="${esc(dl)}">
+      ${portada?`<td data-et="Área">${esc(z)}</td>`:""}<td data-et="Delegación">${esc(dl || "Sin delegación")}</td>
+      <td class="n" data-et="Llamadas">${num(c.n)}</td><td class="n" data-et="%">${fpct(pctDe(c.n, base))}</td>
+      <td class="n" data-et="Técnicas">${num(c.tecnicas)}</td><td class="n" data-et="Siguen abiertas">${c.siguen==null?"—":num(c.siguen)}</td>
+      <td data-et="Cerradas en < 24 h">${!D.estado_al_dia ? "—" : c.cerradas ? `<span class="c-${semaforo(c.sla)}">${fpct(c.sla)}</span> <span class="tenue">de ${num(c.cerradas)}</span>` : `<span class="tenue">ninguna cerrada</span>`}</td>
+    </tr>`).join("")}</tbody></table>`;
+  $("#tDeleg24").querySelectorAll("tr.elige").forEach(tr=>tr.addEventListener("click", ()=>{
+    const dl = tr.dataset.d;
+    if(portada){ abreArea(VARIAS_AREAS ? fila(lista.find(r=>fila(r).deleg===dl)).zona : "*", dl); return; }
+    $("#deleg").value = $("#deleg").value === dl ? "" : dl;
+    pintaFiltros(); ELEGIDA = null; pintaTodo();
+  }));
+}
+function pintaLista24(entradas){
+  const l = [...entradas].sort((a,b)=>b.a.localeCompare(a.a));
+  $("#cLista24").textContent = `${num(l.length)} ${l.length===1?"llamada":"llamadas"}`;
+  if(!l.length){ $("#tLista24").innerHTML = `<p class="vacio">Ninguna llamada ese día.</p>`; return; }
+  const vis = l.slice(0, TODAS_24 ? l.length : PRIMERAS_24), resto = l.length - vis.length;
+  const estado = r => !D.estado_al_dia ? `<span class="tenue">sin dato</span>`
+    : abierta(r) ? `<span class="etq">abierta</span>`
+    : `<span class="tenue">cerrada${r.x ? " el " + esc(fechaHora(r.x)) : ""}${r.h!=null ? ` · ${dec(r.h)} h` : ""}</span>`;
+  $("#tLista24").innerHTML = `<table><thead><tr><th>Hora</th><th>Nº</th><th>Máquina</th><th>Centro</th><th>Operación</th><th>Estado</th></tr></thead><tbody>
+    ${vis.map(r=>{ const x = fila(r);
+      return `<tr><td data-et="Hora">${esc(r.a.length > 10 ? r.a.slice(11,16) : "—")}</td><td data-et="Nº"><span class="mat">${esc(r.n)}</span></td>
+        <td data-et="Máquina"><span class="mat">${esc(r.m)}</span></td>
+        <td data-et="Centro">${esc(x.centro)}<br><span class="tenue">nº ${esc(x.num_centro)} · ${esc(x.deleg)}</span></td>
+        <td data-et="Operación">${esc(x.op)}${tecnica(r) ? "" : ` <span class="etq">${tiene(r,"especial") ? "solicitud" : "no técnica"}</span>`}</td>
+        <td data-et="Estado">${estado(r)}</td></tr>`; }).join("")}</tbody></table>`
+    + (resto > 0 ? `<p class="vacio">Y ${num(resto)} más. <button class="btn" id="bMas24" type="button">Ver todas</button></p>` : "");
+  const mas = $("#bMas24"); if(mas) mas.addEventListener("click", ()=>{ TODAS_24 = true; pintaLista24(entradas); });
+}
+function abreArea(a, dl){
+  AREA = a; ELEGIDA = null; TODAS_24 = false;
+  $("#zona").value = ""; $("#centro").value = ""; $("#deleg").value = "";
+  pintaFiltros();
+  if(dl){ $("#deleg").value = dl; pintaFiltros(); }
+  const q = new URLSearchParams(location.search);
+  if(a === "*" && VARIAS_AREAS) q.set("area", "todas"); else if(a && a !== "*") q.set("area", a); else q.delete("area");
+  q.delete("delegacion");
+  try{ history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "")); }catch(e){}
+  pintaTodo();
+  window.scrollTo(0, 0);
+}
+
 /* ------------------------------------------------------------ todo */
 function pintaHoja(){
   /* Sin la lista de incidencias sólo queda el panel, y no hay hojas que elegir. */
@@ -641,6 +836,16 @@ function pintaHoja(){
   $("#estado").disabled = !D.estado_al_dia || $("#periodo").value === "dia";
 }
 function pintaTodo(){
+  const portada = AREA === "";
+  $("#portada").hidden = !portada;
+  $("#detalle").hidden = portada;
+  $("#b24").hidden = !!Preferidos.solo;
+  $("#cabArea").hidden = portada || !VARIAS_AREAS || !!Preferidos.solo;
+  $("#tArea").textContent = AREA === "*" ? "Todas las áreas" : AREA;
+  $("#lZona").hidden = AREA !== "*";
+  $("#hDetalle").textContent = portada ? "" : `Todo el detalle${AREA === "*" ? "" : " de " + AREA}`;
+  pinta24();
+  if(portada) return;
   pintaHoja();
   if(HOJA === "panel") pintaPanel(); else pintaAbiertas();
 }
@@ -693,10 +898,26 @@ function pintaTodo(){
   $("#desde").min = $("#hasta").min = $("#dia").min = desde;
   $("#desde").max = $("#hasta").max = $("#dia").max = D.ultimo_dia;
   if(q.get("ver") === "abiertas") HOJA = "abiertas";
+  /* Las 24 horas: el día que llega del cuadrado, o el último con dato. */
+  const dias24 = [];
+  for(let f = D.ultimo_dia, i = 0; i < 31 && f >= desde; i++, f = sumaDias(f, -1)) dias24.push(f);
+  $("#dia24").innerHTML = dias24.map(f=>`<option value="${esc(f)}">${esc(fechaLarga(f))}</option>`).join("");
+  $("#dia24").value = diaPedido && dias24.includes(diaPedido) ? diaPedido : D.ultimo_dia;
+  /* Las áreas del perfil. Con una sola no hay portada: se entra en ella. En
+     la vista suelta de preferidos, tampoco: todas juntas. */
+  const areas = new Set(INC.map(r=>fila(r).zona));
+  VARIAS_AREAS = areas.size > 1;
+  const pedida = q.get("area"), dlPedida = q.get("delegacion");
+  const zonaPedida = dlPedida ? (INC.find(r=>fila(r).deleg===dlPedida) || {_:{}})._.zona : null;
+  AREA = !VARIAS_AREAS || Preferidos.solo || pedida === "todas" || q.get("ver") === "abiertas" ? "*"
+    : areas.has(pedida) ? pedida : zonaPedida || "";
   pintaFiltros();
-  if(q.get("delegacion")){ $("#deleg").value = q.get("delegacion"); pintaFiltros(); }
+  if(dlPedida){ $("#deleg").value = dlPedida; pintaFiltros(); }
   document.querySelectorAll(".hojas button").forEach(b=>b.addEventListener("click", ()=>{ HOJA = b.dataset.h; pintaTodo(); }));
   ["#periodo","#desde","#hasta","#dia","#estado"].forEach(s=>$(s).addEventListener("change", pintaTodo));
+  $("#dia24").addEventListener("change", ()=>{ TODAS_24 = false; pintaTodo(); });
+  $("#bAreas").addEventListener("click", ()=>abreArea(""));
+  $("#bNacional").addEventListener("click", ()=>abreArea("*"));
   $("#zona").addEventListener("change", ()=>{ pintaFiltros(); ELEGIDA = null; pintaTodo(); });
   $("#deleg").addEventListener("change", ()=>{ pintaFiltros(); ELEGIDA = null; pintaTodo(); });
   $("#centro").addEventListener("change", ()=>{ ELEGIDA = null; pintaTodo(); });
@@ -708,12 +929,14 @@ function pintaTodo(){
   pintaTodo();
   const gen = D.generado ? new Date(D.generado) : null;
   $("#pie").innerHTML = `Incidencias de la SAT de VenCloud (${esc(D.fuente)}), sin la matrícula ficticia del centro de pruebas ni los preventivos. `
+    + "Llamada = incidencia que entró ese día, de cualquier tipo; las 24 horas son el día entero, de 0 a 24 h. "
+    + "El área sale del nombre de la delegación. "
     + "Técnica = fallo técnico por la operación, como en el resto de la plataforma. "
     + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
     + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;
   /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
-  Preferidos.monta("averias", {ocultar: [".hojas", "#kpis"],
+  Preferidos.monta("averias", {ocultar: [".hojas", "#kpis", "#b24", "#cabArea", "#hDetalle"],
     abre: t => { HOJA = t === "abiertas" ? "abiertas" : "panel"; pintaTodo(); }});
 })();
 </script>
