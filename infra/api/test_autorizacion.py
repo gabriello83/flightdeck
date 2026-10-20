@@ -205,10 +205,11 @@ _r = A.recorta_tablas("revision", _rev, A.con_usuario(_ope, {"tablas_ocultas": {
 comprueba("revision: fuera sin tarifa y los creados, el resto sigue",
           sorted(_r), ["actividad", "generado", "precio_distinto", "sin_planograma", "tablas_ocultas"])
 comprueba("sin tocar el original", "sin_tarifa" in _rev, True)
-_fg = {"dias": {"d1": {"activas": 3, "vehiculos": [["1234ABC"]], "sin_vehiculo": [["x"]], "delegaciones": []}}}
+_fg = {"dias": ["d1"], "flota": [["1234ABC", "CRAFTER", "Madrid"]], "visitas": {"1234ABC": ["d1"]},
+       "km": {"d1": {"1234ABC": [50, 1, ""]}}}
 _f = A.recorta_tablas("furgonetas", _fg, A.con_usuario(_ope, {"tablas_ocultas": {"furgonetas": ["vehiculos"]}}))
-comprueba("furgonetas: el dia pierde los vehiculos y guarda las cifras",
-          sorted(_f["dias"]["d1"]), ["activas", "delegaciones", "sin_vehiculo"])
+comprueba("furgonetas: sin la lista no llegan los km, y el dia a dia sigue",
+          sorted(_f), ["dias", "flota", "tablas_ocultas", "visitas"])
 _rt = {"dias": {}, "llamadas": [{"m": "M1"}], "por_recaudar": [{"p": "A"}],
        "sin_reponer": [{"p": "B"}], "nunca_repuestas": [{"p": "C"}], "control_maquinas": {"mes": "2026-10"}}
 _r = A.recorta_tablas("rutas", _rt, A.con_usuario(_ope, {"tablas_ocultas": {"rutas": ["reponer", "llamadas"]}}))
