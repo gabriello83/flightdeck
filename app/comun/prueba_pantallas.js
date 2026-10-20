@@ -192,7 +192,7 @@ const API = {
     },
     foto: { pdvs: { activos: 3195, maquinas: 3165, por_delegacion: { 'Madrid - Leganes': { activos: 3000, maquinas: 2900 }, 'Levante - Murcia': { activos: 195, maquinas: 265 } } },
             devoluciones: { mes: iso(AYER).slice(0, 7), hasta: iso(AYER), total: 518, mes_anterior: 569, sin_cerrar: 76, especiales: 92,
-                            importe: 1121.1, importe_anterior: 1179.33, sin_importe: 87,
+                            importe: 1121.1, importe_anterior: 1179.33, sin_resolver: 87, rechazadas: 12,
                             por_canal: [['En el sitio', 244], ['Transferencia', 181]] },
             tarifas: { pct: 81.3, color: 'amarillo', coinciden: 13, controlados: 16, sin_tarifa: 2, sin_dato_productos: 1, desde: '2026-04-14' },
             revision: { sin_planograma: 301, creados_ayer: 4, sin_tarifa: 1894, precio_distinto: 1541 },
@@ -324,32 +324,33 @@ const API = {
   // Las devoluciones (docs/57), con la forma que escribe infra/devoluciones.py.
   '/api/devoluciones': (() => {
     const d = (n, h = '09:00') => `${iso(new Date(AYER.getTime() - n * 86400000))} ${h}`;
+    // s: 0 en estudio, 1 pendiente, 2 abonada, 3 rechazada. k: posicion en tipos.
     return {
       generado: new Date().toISOString(), perfil: 'interno', ultimo_dia: iso(AYER),
-      fuente: 'M13 · EXT_SAT_INCIDENCIAS', desde: iso(new Date(AYER.getFullYear(), AYER.getMonth() - 12, 1)),
+      fuente: 'M16 · EXT_DEVOLUCIONES', desde: iso(new Date(AYER.getFullYear(), AYER.getMonth() - 12, 1)),
       zonas: { 'Madrid - Leganes': 'Centro', 'Levante - Murcia': 'Levante', 'Madrid - Sur': 'Centro' },
       centros: [['1001', 'AIRBUS GETAFE', 'C7', 'AIRBUS'], ['2002', 'CONSUM <MURCIA>', '10002', 'SERUNION'],
                 ['1003', 'HOSPITAL SUR', 'C9', 'HOSPITAL']],
       delegaciones: ['Madrid - Leganes', 'Levante - Murcia', 'Madrid - Sur'],
       importe_max: 50,
-      canales: ['En el sitio', 'Transferencia', 'Tarjeta de crédito', 'Tarjeta de empleado', 'Otra'],
-      origenes: ['Atención al cliente', 'Solicitud especial'],
-      tecnicos: ['Javier', 'Miguel'],
+      tipos: ['Transferencia', 'En mano', 'Monyx', 'Sin devolución'],
+      motivos: ['No da producto', 'No devuelve cambio'],
+      estados: ['En estudio', 'Pendiente', 'Abonada', 'Rechazada', 'Sin estado'],
       devoluciones: [
-        { n: 'A-90', a: d(70), x: d(70, '10:00'), h: 1, m: 'M1', c: 0, d: 0, k: 0, t: 0, i: 1.2 },
-        { n: 'A-91', a: d(40), x: d(39, '09:00'), h: 24, m: 'M1', c: 0, d: 0, k: 1, t: 0, i: 2 },
-        { n: 'A-92', a: d(0, '08:00'), x: d(0, '10:00'), h: 2, m: 'M1', c: 0, d: 0, k: 0, t: 0, i: 0.6 },
-        { n: 'A-93', a: d(0, '11:00'), m: 'M1', c: 0, d: 0, k: 1, t: 1, i: 3.5 },
-        { n: 'A-98', a: d(0, '06:00'), x: d(0, '12:00'), h: 1, m: 'M2', c: 2, d: 2, k: 0, t: 1, g: 85 },
-        { n: 'A-99', a: d(0, '07:00'), x: d(0, '13:00'), h: 1, m: 'M2', c: 2, d: 2, k: 0, t: 1, i: 0.8 },
-        { n: 'A-94', a: d(0, '12:00'), x: d(0, '16:00'), h: 4, m: 'C1', c: 1, d: 1, k: 2, t: 1, i: 5 },
-        { n: 'E-97', a: d(0, '13:00'), x: d(0, '14:00'), h: 1, m: 'C1', c: 1, d: 1, k: 0, t: 1, e: 1 },
-        { n: 'A-95', a: d(400), m: 'C1', c: 1, d: 1, k: 3, t: 1, i: 1 },
+        { n: '90', a: d(70), m: 'M1', c: 0, d: 0, k: 0, o: 0, s: 2, i: 1.2 },
+        { n: '91', a: d(40), m: 'M1', c: 0, d: 0, k: 1, o: 0, s: 2, i: 2 },
+        { n: '92', a: d(0, '08:00'), m: 'M1', c: 0, d: 0, k: 0, o: 0, s: 2, i: 0.6 },
+        { n: '93', a: d(0, '11:00'), m: 'M1', c: 0, d: 0, k: 1, o: 1, s: 2, i: 3.5 },
+        { n: '98', a: d(0, '06:00'), m: 'M2', c: 2, d: 2, k: 0, o: 0, s: 2, g: 44504 },
+        { n: '99', a: d(0, '07:00'), m: 'M2', c: 2, d: 2, k: 3, o: 0, s: 0, i: 0.8 },
+        { n: '94', a: d(0, '12:00'), m: 'C1', c: 1, d: 1, k: 2, o: 0, s: 2, i: 5 },
+        { n: '97', a: d(0, '13:00'), m: 'C1', c: 1, d: 1, k: 0, o: 0, s: 3, i: 2 },
+        { n: '95', a: d(400), m: 'C1', c: 1, d: 1, k: 3, o: 0, s: 0, i: 1 },
         // De hoy: la foto ya la trae, pero las cifras llegan hasta ayer.
-        { n: 'A-96', a: d(-1), m: 'M1', c: 0, d: 0, k: 1, t: 0, i: 9 },
+        { n: '96', a: d(-1), m: 'M1', c: 0, d: 0, k: 1, o: 0, s: 2, i: 9 },
         // Ocho mas en Centro, de hace un mes, para las flechas del ultimo ano.
-        ...[1, 2, 3, 4, 5, 6, 7, 8].map(j => ({ n: `A-8${j}`, a: d(31, `0${j}:00`), x: d(31, '10:00'), h: 1,
-          m: 'M3', c: 2, d: 2, k: 1, t: 0, i: 0.5 }))]
+        ...[1, 2, 3, 4, 5, 6, 7, 8].map(j => ({ n: `8${j}`, a: d(31, `0${j}:00`),
+          m: 'M3', c: 2, d: 2, k: 2, o: 0, s: 2, i: 0.5 }))]
     };
   })(),
   '/api/estado-carga': { ultima_carga: new Date().toISOString(), dias_pedidos: [iso(AYER)], descargas_ok: 75, descargas_fallidas: 0, bytes: 12345678, filas_por_informe: { visita_cabecera: 1000 }, errores: [], retraso_dias: 0 },
@@ -966,7 +967,7 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('debajo, cuantas, el mes anterior y las que no dicen importe',
       (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('518 devoluciones')
       && (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('el mes anterior a estas alturas')
-      && (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('87 sin importe que sumar'),
+      && (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('87 sin resolver'),
       await pagina.textContent('.cuadro[data-id="devoluciones"] .sub'));
     comprueba('tarifas al 81,3 % en amarillo y lleva a su pagina',
       [await pagina.$eval('.cuadro[data-id="tarifas"]', c => c.classList.contains('amarillo')),
@@ -1631,13 +1632,13 @@ const servidor = http.createServer((pet, res) => {
     await pagina.waitForSelector('#areas .area');
     comprueba('arranca en el mes corriente, como el cuadrado', await pagina.inputValue('#periodo'), 'mes');
     const txt = async s => (await pagina.textContent(s)).replace(/\s+/g, ' ').trim();
-    comprueba_que('arriba, el dinero de toda Espana: 0,60 + 3,50 + 5 + 0,80, sin la de hoy ni la de 85 escritos',
-      (await txt('#total')).startsWith('9,90 €') && (await txt('#total')).includes('6 devoluciones · 2 sin importe que sumar'),
+    comprueba_que('arriba, el dinero abonado de toda Espana: 0,60 + 3,50 + 5, sin la de hoy, la de 44.504, la en estudio ni la rechazada',
+      (await txt('#total')).startsWith('9,10 €') && (await txt('#total')).includes('4 abonadas de 6 devoluciones · 1 sin resolver (0,80 €)'),
       await txt('#total'));
     comprueba('un cuadrante por area, en su orden, con su dinero',
       await pagina.$$eval('#areas .area', x => x.map(e => [e.dataset.area, e.querySelector('.pc').textContent.replace(/\s/g, ' ')])),
-      [['Centro', '4,90 €'], ['Levante', '5,00 €']]);
-    comprueba_que('y cuantas son', (await txt('#areas .area[data-area="Centro"]')).includes('4 devoluciones · 1 sin cerrar'));
+      [['Centro', '4,10 €'], ['Levante', '5,00 €']]);
+    comprueba_que('y cuantas son', (await txt('#areas .area[data-area="Centro"]')).includes('4 devoluciones · 3 abonadas'));
     if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'devoluciones-portada.png'), fullPage: true });
     await pagina.click('#areas .area[data-area="Centro"]');
     await pagina.waitForSelector('#kpis .kpi');
@@ -1645,32 +1646,33 @@ const servidor = http.createServer((pet, res) => {
       [await txt('#tArea'), await pagina.$$eval('#deleg option', x => x.map(o => o.value))],
       ['Centro', ['', 'Madrid - Leganes', 'Madrid - Sur']]);
     const kpi = async i => (await pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent)).replace(/\s/g, ' ').trim();
-    comprueba('las cuatro cifras: dinero, devoluciones, sin cerrar y sin importe',
-      [await kpi(1), await kpi(2), await kpi(3), await kpi(4)], ['4,90 €', '4', '1', '1']);
+    comprueba('las cuatro cifras: dinero, devoluciones, sin resolver y rechazadas',
+      [await kpi(1), await kpi(2), await kpi(3), await kpi(4)], ['4,10 €', '4', '1', '0']);
     comprueba('las registradas, la ultima primero',
-      await pagina.$$eval('#tRegistradas tbody tr td:nth-child(2) .mat', x => x.map(e => e.textContent)), ['A-93', 'A-92', 'A-99', 'A-98']);
-    comprueba_que('la de 85 escritos se ensena pero no suma',
-      (await txt('#tRegistradas tbody tr:nth-child(4)')).includes('85,00 € escritos · no suma'));
+      await pagina.$$eval('#tRegistradas tbody tr td:nth-child(2) .mat', x => x.map(e => e.textContent)), ['93', '92', '99', '98']);
+    comprueba_que('la de 44.504 se ensena pero no suma',
+      (await txt('#tRegistradas tbody tr:nth-child(4)')).includes('44.504,00 € · no suma'), await txt('#tRegistradas tbody tr:nth-child(4)'));
+    comprueba_que('y cada una con su estado', (await txt('#tRegistradas tbody tr:nth-child(3)')).includes('En estudio'));
     await pagina.click('#kpis .kpi[data-ver="abiertas"]');
-    comprueba('pulsar «sin cerrar» filtra la lista', await pagina.$$eval('#tRegistradas tbody .mat', x => x.filter((_, i) => i % 2 === 0).map(e => e.textContent)), ['A-93']);
+    comprueba('pulsar «sin resolver» filtra la lista', await pagina.$$eval('#tRegistradas tbody .mat', x => x.filter((_, i) => i % 2 === 0).map(e => e.textContent)), ['99']);
     await pagina.click('#kpis .kpi[data-ver="abiertas"]');
     comprueba('maquinas: empatadas a dos, primero la de mas dinero',
       await pagina.$$eval('#tMaquinas tbody tr', x => x.map(e => [e.querySelector('.mat').textContent, e.querySelector('td:nth-child(4)').textContent])),
       [['M1', '2'], ['M2', '2']]);
-    comprueba('importes: de mayor a menor, sin la de 85',
-      await pagina.$$eval('#tImportes tbody td:last-child', x => x.map(e => e.textContent.replace(/\s/g, ' '))), ['3,50 €', '0,80 €', '0,60 €']);
-    comprueba_que('y dice que hay una escrita por encima del tope', (await txt('#sImp')).includes('1 más tiene escrito más de 50,00 €'));
+    comprueba('importes: las abonadas de mayor a menor, sin la de 44.504 ni la en estudio',
+      await pagina.$$eval('#tImportes tbody td:last-child', x => x.map(e => e.textContent.replace(/\s/g, ' '))), ['3,50 €', '0,60 €']);
+    comprueba_que('y dice que hay una por encima del tope', (await txt('#sImp')).includes('1 más tiene un importe de más de 50,00 €'));
     comprueba('clientes: el primero, AIRBUS', await pagina.$$eval('#tClientes tbody td[data-et="Cliente"]', x => x.map(e => e.textContent)),
       ['AIRBUS', 'HOSPITAL']);
     comprueba('un mes por columna, trece', await pagina.locator('#gMeses .golpe').count(), 13);
     await pagina.hover('#gMeses .golpe[data-i="12"]');
     comprueba_que('pasar por encima dice el reparto y el dinero del mes, hasta ayer',
-      (await txt('#punta')).includes('Total4') && (await txt('#punta')).includes('Importe4,90 €'), await txt('#punta'));
+      (await txt('#punta')).includes('Total4') && (await txt('#punta')).includes('Devuelto4,10 €'), await txt('#punta'));
     await pagina.click('#bVista');
     comprueba('y la misma cifra en tabla', await pagina.locator('#tMeses tbody tr').count(), 13);
     await pagina.click('#bVista');
     await pagina.selectOption('#deleg', 'Madrid - Sur');
-    comprueba('la delegacion filtra todo', [await kpi(1), await kpi(2)], ['0,80 €', '2']);
+    comprueba('la delegacion filtra todo', [await kpi(1), await kpi(2)], ['0,00 €', '2']);
     await pagina.selectOption('#deleg', '');
     await pagina.selectOption('#periodo', 'anio');
     comprueba('en el ultimo ano, catorce en Centro: diez y la flecha',
@@ -1680,9 +1682,9 @@ const servidor = http.createServer((pet, res) => {
     await pagina.click('#tRegistradas button.flecha');
     comprueba('y las vuelve a cerrar', await pagina.locator('#tRegistradas tbody tr').count(), 10);
     comprueba('importes: cinco y la flecha', [await pagina.locator('#tImportes tbody tr').count(), await txt('#tImportes button.flecha')],
-      [5, 'Ver todas (13)']);
+      [5, 'Ver todas (12)']);
     await pagina.click('#tImportes button.flecha');
-    comprueba('la flecha de importes abre todas', await pagina.locator('#tImportes tbody tr').count(), 13);
+    comprueba('la flecha de importes abre todas', await pagina.locator('#tImportes tbody tr').count(), 12);
     const [descarga] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bCsv')]);
     comprueba_que('el CSV del area', descarga.suggestedFilename().startsWith('devoluciones_Centro_'), descarga.suggestedFilename());
     if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'devoluciones-area.png'), fullPage: true });
@@ -1703,13 +1705,13 @@ const servidor = http.createServer((pet, res) => {
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
 
-    // Sin M13 no se cuenta nada: se dice por que.
+    // Sin M16 no se cuenta nada: se dice por que.
     const antes = API['/api/devoluciones'];
     API['/api/devoluciones'] = { generado: antes.generado, perfil: 'interno', ultimo_dia: iso(AYER),
-      sin_dato: 'Falta el informe M13 · EXT_SAT_INCIDENCIAS de VenCloud (docs/17).', devoluciones: [] };
+      sin_dato: 'Falta el informe M16 · EXT_DEVOLUCIONES de VenCloud (docs/17).', devoluciones: [] };
     const b = await abre('/devoluciones/');
     await b.pagina.waitForSelector('#aviso:not([hidden])');
-    comprueba_que('sin M13 lo dice', (await b.pagina.textContent('#aviso')).includes('M13'));
+    comprueba_que('sin M16 lo dice', (await b.pagina.textContent('#aviso')).includes('M16'));
     comprueba('sin un solo error en la consola del navegador', b.errores, []);
     await b.pagina.close();
     API['/api/devoluciones'] = antes;

@@ -329,10 +329,10 @@ function contenidoDe(id, x){
           + (x.sin_cerrar ? ` · ${num(x.sin_cerrar)} sin cerrar` : "")
           + (x.especiales!=null ? ` · ${num(x.especiales)} de solicitudes especiales` : "")};
       return {vl:eur(x.importe),
-        sub:`devueltos en ${num(x.total)} ${x.total===1?"devolución":"devoluciones"} de ${mesLargo(x.mes)}, hasta el día ${num(dia)}`
+        sub:`devueltos en ${mesLargo(x.mes)} hasta el día ${num(dia)}, de ${num(x.total)} ${x.total===1?"devolución":"devoluciones"}`
           + ` · ${eur(x.importe_anterior)} el mes anterior a estas alturas`
-          + (x.sin_importe ? ` · ${num(x.sin_importe)} sin importe que sumar` : "")
-          + (x.sin_cerrar ? ` · ${num(x.sin_cerrar)} sin cerrar` : "")};
+          + (x.sin_resolver ? ` · ${num(x.sin_resolver)} sin resolver` : "")
+          + (x.rechazadas ? ` · ${num(x.rechazadas)} rechazadas` : "")};
     }
     case "almacenes": return {vl:eur(x.valor),
       sub:`Cierre de ${mesLargo(x.periodo)} · ${num((x.por_almacen||[]).length)} almacenes`

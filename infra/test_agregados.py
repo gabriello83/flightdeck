@@ -710,6 +710,18 @@ ALMACEN["maestros/sat_incidencias/m_sat_incidencias.json.gz"] = gzip.compress(js
      "matricula": "A1", "num_centro": "1001", "centro": "AIRBUS GETAFE", "cod_cliente": "C7",
      "cliente": "AIRBUS OPERATIONS SL", "delegacion": "Madrid - Leganes", "titulo": "IBAN ES00 1111"},
 ]).encode())
+# Las devoluciones, de la Gestion de Devoluciones (M16, docs/57): una de AIRBUS
+# abonada y una de Consum en estudio.
+ALMACEN["maestros/devoluciones/m_devoluciones.json.gz"] = gzip.compress(json.dumps([
+    {"id": 1, "numero": 47001, "fecha": f"{AYER} 11:00:00", "estado_devolucion": 3,
+     "tipo_devolucion_nombre": "Transferencia", "importe": 1.3, "motivo": "No da producto",
+     "matricula": "A1", "num_centro": "1001", "centro": "AIRBUS GETAFE", "cod_cliente": "C7",
+     "cliente": "AIRBUS OPERATIONS SL", "delegacion": "Madrid - Leganes"},
+    {"id": 2, "numero": 47002, "fecha": f"{AYER} 12:00:00", "estado_devolucion": 1,
+     "tipo_devolucion_nombre": "Sin devolución", "importe": 2, "motivo": "No da producto",
+     "matricula": "C1", "num_centro": "2002", "centro": "CONSUM MURCIA", "cod_cliente": "C9",
+     "cliente": "CONSUM S COOP V", "delegacion": "Levante - Murcia"},
+]).encode())
 L.lambda_handler({}, None)
 _inc = json.loads(gzip.decompress(ALMACEN["cabina/interno/incidencias.json.gz"]))
 _inc_air = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/incidencias.json.gz"]))
@@ -725,12 +737,15 @@ comprueba("y el cuadrado de AIRBUS ve el cierre del decimo dia, fuera de 24 h",
           (_op["dias"][AYER.isoformat()]["averias"]["cerradas"],
            _op["dias"][AYER.isoformat()]["averias"]["a_tiempo"]), (1, 0))
 _dev = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/devoluciones.json.gz"]))
-comprueba("la devolucion va a su fichero, sin el IBAN del titulo",
-          ([x["n"] for x in _dev["devoluciones"]], "ES00" in json.dumps(_dev)), (["A-9004"], False))
-comprueba("y el cuadrado de AIRBUS cuenta la del mes, sin cerrar",
-          (_op["foto"]["devoluciones"]["total"], _op["foto"]["devoluciones"]["sin_cerrar"]), (1, 1))
+comprueba("AIRBUS solo ve su devolucion, de M16", [x["n"] for x in _dev["devoluciones"]], ["47001"])
+comprueba("y el cuadrado de AIRBUS dice el dinero abonado",
+          (_op["foto"]["devoluciones"]["total"], _op["foto"]["devoluciones"]["importe"]), (1, 1.3))
+_op_int = json.loads(gzip.decompress(ALMACEN["cabina/interno/operativo.json.gz"]))
+comprueba("el interno ve las dos, la de Consum sin resolver",
+          (_op_int["foto"]["devoluciones"]["total"], _op_int["foto"]["devoluciones"]["sin_resolver"]), (2, 1))
 comprueba("y no entra en las incidencias", "A-9004" in [x["n"] for x in _inc_air["incidencias"]], False)
 del ALMACEN["maestros/sat_incidencias/m_sat_incidencias.json.gz"]
+del ALMACEN["maestros/devoluciones/m_devoluciones.json.gz"]
 
 print("\nEl perfiles.json de verdad coge lo que tiene que coger")
 # Con los datos como los devolvio VenCloud el 4 de octubre de 2026, y con el
