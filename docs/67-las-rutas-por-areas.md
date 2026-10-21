@@ -14,18 +14,14 @@ El 19 de octubre de 2026 Gabriele pidió rehacer la página de Rutas (docs/55):
 
 ## Cómo se recorre
 
-- **La portada** es lo nacional: los seis indicadores del Power BI de visitas pendientes y el mapa
-  de España partido en las áreas (las cinco del Power BI, como Incidencias y Furgonetas: Centro,
-  Sur, Cataluña, Levante, Norte), en relieve y cada una de su color. Cada área lleva solo su
-  cumplimiento de ruta, en blanco, amarillo o rojo con el semáforo del informe general; el resto
-  (en ruta, pendientes) sale al pasar el ratón, que levanta el área y apaga las demás. Pulsar un área entra
-  en ella. CENTRAL cae en «Otra zona», que no sale en el mapa (Gabriele, 21-oct): sus
-  delegaciones siguen en la tabla de debajo y cuentan en lo nacional. Un área que el perfil no ve se queda en gris, sin cifra y sin pulsar. Debajo, la tabla por
-  delegación (con su área) y los festivos.
-  Las comunidades de cada área: Norte = Galicia, Asturias, Cantabria, País Vasco, Navarra, La Rioja
-  y Castilla y León; Centro = Madrid, Castilla-La Mancha, Extremadura y Aragón; Cataluña; Levante =
-  Comunidad Valenciana, Murcia y Baleares; Sur = Andalucía. Los trazos van dentro de la página
-  (sin bibliotecas ni ficheros de fuera) y salen de `scripts/mapa_areas.py`.
+- **La portada** es lo nacional: los seis indicadores del Power BI de visitas pendientes y un
+  cuadrado por área (las cinco del Power BI, como Incidencias y Furgonetas: Centro, Sur, Cataluña,
+  Levante, Norte). Cada cuadrado lleva solo el nombre del área, centrado, y su cumplimiento de ruta
+  en el color del semáforo del informe general (el del texto si va bien, amarillo o rojo); el
+  detalle (pendientes, fuera de ruta, pasajes vacíos y las tres cifras de máquinas) está dentro del
+  área. CENTRAL cae en «Otra zona», que no lleva cuadrado (Gabriele, 21-oct): sus delegaciones
+  siguen en la tabla y cuentan en lo nacional. Debajo, la tabla por delegación (con su área) y los
+  festivos. (Se probó un mapa de España por áreas, PR #45, y se descartó el mismo día.)
 - **Un área**: filtros de delegación y ruta, sus seis indicadores, tres cifras que se pulsan para
   ver su listado (llamadas, por recaudar, sin reponer), las rutas, el donut y la lista máquina a
   máquina. Pulsar una delegación en la portada entra en su área ya filtrada.
