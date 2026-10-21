@@ -75,10 +75,16 @@ button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);colo
 .nota.mal{border-left-color:var(--rojo)}
 .pestanas{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:14px}
+@media (min-width:900px){ .kpis{grid-template-columns:repeat(4,1fr)} }
 .kpi{background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:11px 13px;box-shadow:var(--sombra)}
 .kpi .et{font-size:12px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
 .kpi .vl{font-size:24px;font-weight:650;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums}
 .kpi .nt{font-size:12px;color:var(--tinta-3);margin-top:2px}
+/* La estrella de preferidos de cada cuadrado, en su esquina (docs/62). */
+.kpi,.mqw{position:relative}
+.kpi>.estrella,.mqw>.estrella{position:absolute;top:5px;right:5px;margin:0}
+.kpi .et{padding-right:26px}
+.kpi.e-sanitaria{border-top:4px solid #8e44ad}
 .kpi.verde{background:var(--verde);border-color:var(--verde)}
 .kpi.amarillo{background:var(--amarillo);border-color:var(--amarillo)}
 .kpi.rojo{background:var(--rojo);border-color:var(--rojo)}
@@ -171,6 +177,7 @@ button.kpi[aria-pressed="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1p
 .kpi.e-llamada{border-top:4px solid var(--fuera)}
 .kpi.e-recaudar{border-top:4px solid var(--verde)}
 .kpi.e-reponer{border-top:4px solid var(--pendiente)}
+.mqw>button.kpi{width:100%;height:100%}
 .quien{font-size:12.5px;color:var(--tinta-2)}
 .fechas{font-size:12px;color:var(--tinta-3)}
 @media (max-width:700px){
@@ -241,7 +248,7 @@ button.kpi[aria-pressed="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1p
         <div class="tabla" id="tLista"></div>
       </section>
       <!-- Para la vista suelta de preferidos: cada lista es su tabla. -->
-      <span data-tabla="llamadas" hidden></span><span data-tabla="recaudar" hidden></span><span data-tabla="reponer" hidden></span>
+      <span data-tabla="llamadas" hidden></span><span data-tabla="recaudar" hidden></span><span data-tabla="reponer" hidden></span><span data-tabla="sanitarias" hidden></span>
 
       <div class="dos">
         <section class="caja" data-tabla="rutas">
@@ -451,38 +458,53 @@ function cifras(area){
   return t;
 }
 
-function kpi(clase, et, vl, nt){
-  return `<div class="kpi ${clase}"><div class="et">${esc(et)}</div><div class="vl">${vl}</div><div class="nt">${nt}</div></div>`;
+function kpi(clase, et, vl, nt, id){
+  return `<div class="kpi ${clase}"${id?` data-tabla="${id}" data-estrella="${id}"`:""}><div class="et">${esc(et)}</div><div class="vl">${vl}</div><div class="nt">${nt}</div></div>`;
 }
 function pintaKpis(){
   const f = cifras();
+  /* Las máquinas con llamada de reposición y con caducado o insectos: cada
+     máquina una vez en el periodo, aunque tenga varias tareas. */
+  const maqs = l => new Set(l.map(x=>x.m||x.p||x.x)).size;
+  const ll = tareasDe("llamadas"), sa = tareasDe("sanitarias");
+  const reposicion = QUITADAS.has("llamadas") ? "" : !D.llamadas
+    ? kpi("e-llamada", "Máquinas con llamada de reposición", "Sin dato", "Este fichero no trae las llamadas.", "i_reposicion")
+    : kpi("e-llamada", "Máquinas con llamada de reposición", num(maqs(ll)), `${num(ll.length)} ${ll.length===1?"llamada":"llamadas"} de máquina vacía (S010, C016)`, "i_reposicion");
+  const nCad = sa.filter(x=>String(x.k).includes("caducado")).length, nIns = sa.filter(x=>String(x.k).includes("insectos")).length;
+  const sanitarias = QUITADAS.has("sanitarias") ? "" : !D.sanitarias
+    ? kpi("e-sanitaria", "Máquinas con producto caducado o insectos", "Sin dato", "Llega con el cálculo de esta noche.", "i_sanitarias")
+    : kpi("e-sanitaria", "Máquinas con producto caducado o insectos", num(maqs(sa)), `${num(nCad)} de caducado · ${num(nIns)} de insectos`, "i_sanitarias");
+  const maquinas = reposicion + sanitarias;
   if(!f.n){
     const motivo = f.sinDato || "No hay plan ni visitas de lo elegido en el periodo.";
-    $("#kpis").innerHTML = kpi("", "Visitas en ruta", "Sin dato", esc(motivo));
+    $("#kpis").innerHTML = kpi("", "Visitas en ruta", "Sin dato", esc(motivo)) + maquinas;
     return;
   }
   const pend = f.previstas - f.hechas;
   const sinVacio = dia().sin_vacio || "Algún día del periodo no trae el pasaje vacío.";
   const vacio = f.vacio==null
-    ? kpi("e-vacio", "Pasaje vacío", "Sin dato", esc(sinVacio))
-    : kpi("e-vacio", "Pasaje vacío", num(f.vacio), "visitas sin ninguna línea de reposición");
+    ? kpi("e-vacio", "Pasaje vacío", "Sin dato", esc(sinVacio), "i_pasaje_vacio")
+    : kpi("e-vacio", "Pasaje vacío", num(f.vacio), "visitas sin ninguna línea de reposición", "i_pasaje_vacio");
   const nota = f.sin ? ` · ${num(f.sin)} ${f.sin===1?"día":"días"} sin plan` : "";
+  /* El orden que pidió Gabriele el 21-oct. */
   $("#kpis").innerHTML =
-      kpi("e-pendiente", "Visitas pendientes", num(pend), "del plan, sin parte")
-    + kpi(esc(f.color||""), "Cumplimiento de ruta", fpct(f.pct), `${num(f.hechas)} de ${num(f.previstas)} en ruta${nota}`)
-    + kpi("e-ruta", "Visitas en ruta", num(f.previstas), "las del plan: hechas y pendientes")
-    + kpi("e-hecha", "Visitas efectuadas", num(f.hechas), "del plan, con parte")
-    + kpi("e-fuera", "Visitas no planificadas", num(f.fuera), "con parte y fuera de ruta")
-    + vacio;
+      kpi(esc(f.color||""), "Cumplimiento de ruta", fpct(f.pct), `${num(f.hechas)} de ${num(f.previstas)} en ruta${nota}`, "i_cumplimiento")
+    + kpi("e-ruta", "Visitas en ruta", num(f.previstas), "las del plan: hechas y pendientes", "i_en_ruta")
+    + kpi("e-hecha", "Visitas efectuadas", num(f.hechas), "del plan, con parte", "i_efectuadas")
+    + kpi("e-fuera", "Visitas no planificadas", num(f.fuera), "con parte y fuera de ruta", "i_no_planificadas")
+    + vacio
+    + kpi("e-pendiente", "Visitas pendientes", num(pend), "del plan, sin parte", "i_pendientes")
+    + maquinas;
+  $("#kpis").querySelectorAll("[data-tabla]").forEach(el=>{ if(QUITADAS.has(el.dataset.tabla)) el.remove(); });
 }
 
 /* ---------------------------------------------------------- las máquinas */
 /* Las llamadas, las por recaudar y las sin reponer de lo elegido. La ruta,
    cuando hay una elegida, es la de la última visita de la máquina. */
 const enRuta = x => { const rs = rutaSel(); return !rs || (x.d===rs[0] && nombreRuta(x.r)===rs[1]); };
-function llamadas(area){
+function tareasDe(lista, area){
   const ds = diasPeriodo(), desde = ds[0] || diaSel(), hasta = diaSel();
-  return (D.llamadas||[]).filter(x=>{
+  return (D[lista]||[]).filter(x=>{
     const f = String(x.f).slice(0,10);
     return f>=desde && f<=hasta && (area!==undefined ? (area==="*" || area==="" || zona(x.d)===area) : deLaDeleg(x.d));
   });
@@ -494,10 +516,10 @@ const CM = () => D.control_maquinas || {};
 const sumaPm = l => l.reduce((s,x)=>s+(x.pm||0), 0);
 
 function pintaMqs(){
-  const cm = CM(), ll = llamadas(), pr = maquinasDe("por_recaudar"), sr = maquinasDe("sin_reponer");
+  const cm = CM(), ll = tareasDe("llamadas"), pr = maquinasDe("por_recaudar"), sr = maquinasDe("sin_reponer"), sa = tareasDe("sanitarias");
   const nMaq = new Set(ll.map(x=>x.m||x.p)).size;
   const tarjetas = [];
-  if(!QUITADAS.has("llamadas")) tarjetas.push(["llamadas", "e-llamada", "Llamadas de máquina vacía",
+  if(!QUITADAS.has("llamadas")) tarjetas.push(["llamadas", "e-llamada", "Llamadas de reposición",
     D.llamadas ? num(ll.length) : "Sin dato",
     D.llamadas ? `de ${num(nMaq)} ${nMaq===1?"máquina":"máquinas"} · ${esc(textoPeriodo())}` : "Este fichero no trae las llamadas."]);
   if(!QUITADAS.has("recaudar")) tarjetas.push(["recaudar", "e-recaudar", `Por recaudar en ${nombreMes(cm.mes)}`,
@@ -508,9 +530,13 @@ function pintaMqs(){
     D.sin_reponer ? (cm.sin_lineas ? "Sin dato" : num(sr.length)) : "Sin dato",
     D.sin_reponer ? (cm.sin_lineas ? esc(cm.sin_lineas) : `y ${num(maquinasDe("nunca_repuestas").length)} sin ninguna carga desde el ${esc(fechaCorta(cm.desde))}`)
       : "Este fichero no trae las máquinas."]);
+  const nSa = new Set(sa.map(x=>x.m||x.p||x.x)).size;
+  if(!QUITADAS.has("sanitarias")) tarjetas.push(["sanitarias", "e-sanitaria", "Caducado o insectos",
+    D.sanitarias ? num(sa.length) : "Sin dato",
+    D.sanitarias ? `${sa.length===1?"incidencia":"incidencias"} de ${num(nSa)} ${nSa===1?"máquina":"máquinas"} · ${esc(textoPeriodo())}` : "Llega con el cálculo de esta noche."]);
   $("#mqs").innerHTML = tarjetas.map(([id, cl, et, vl, nt])=>
-    `<button class="kpi ${cl}" type="button" data-ver="${id}" aria-pressed="${VER===id}"><span class="et">${esc(et)}</span>
-      <span class="vl">${vl}</span><span class="nt">${nt}</span><span class="ver">${VER===id ? "Ocultar el listado" : "Ver el listado"}</span></button>`).join("");
+    `<div class="mqw" data-estrella="${id}"><button class="kpi ${cl}" type="button" data-ver="${id}" aria-pressed="${VER===id}"><span class="et">${esc(et)}</span>
+      <span class="vl">${vl}</span><span class="nt">${nt}</span><span class="ver">${VER===id ? "Ocultar el listado" : "Ver el listado"}</span></button></div>`).join("");
   $("#mqs").querySelectorAll("button.kpi").forEach(b=>b.addEventListener("click", ()=>{
     VER = VER===b.dataset.ver ? "" : b.dataset.ver; PEST_M = ""; TODAS_M = false; $("#buscaM").value = "";
     pintaMqs(); pintaLista();
@@ -537,11 +563,11 @@ const L_LAB = ["Laborables sin reponer", x=>x.lab==null?"—":`<b>${num(x.lab)}<
 let PEST_M = "";
 const LISTAS = {
   llamadas: {
-    t: "Llamadas de máquina vacía",
+    t: "Llamadas de reposición",
     sub: () => `Tareas de la SAT de «Reponer distribuidor automático» (S010) o «Selecciones vacías» (C016) abiertas ${textoPeriodo()}, juntas por máquina. Fuente: ${D.llamadas_fuente||"SAT"}.`,
     filas: () => {
       const por = {};
-      llamadas().forEach(x=>{
+      tareasDe("llamadas").forEach(x=>{
         const k = x.m || x.p || x.x;
         const g = por[k] = por[k] || {m:x.m, p:x.p, d:x.d, n:x.n, c:x.c, ll:[], ab:0, ops:new Set()};
         g.ll.push(x); if(x.a===1) g.ab++; g.ops.add(x.o);
@@ -550,6 +576,26 @@ const LISTAS = {
     },
     cols: [L_MAQ, L_CEN, L_DEL,
       ["Llamadas", x=>`<b>${num(x.ll.length)}</b>`, x=>x.ll.length],
+      ["Cuándo", x=>`<span class="fechas">${x.ll.map(l=>esc(fechaCorta(l.f)) + (l.a===1?" (abierta)":"")).join(" · ")}</span>`,
+        x=>x.ll.map(l=>`${l.f} ${l.x}${l.a===1?" abierta":l.a===0?" cerrada":""}`).join(" | ")],
+      ["Operación", x=>esc([...x.ops].join(" · ")), x=>[...x.ops].join(" · ")]],
+    buscar: x => [x.m, x.p, x.c, x.n, x.d, ...x.ll.map(l=>l.x)].join(" "),
+  },
+  sanitarias: {
+    t: "Máquinas con producto caducado o insectos",
+    sub: () => `Tareas de la SAT abiertas ${textoPeriodo()} por producto caducado o por insectos, hongos o moho (la operación, o la palabra en el título o en la última nota), juntas por máquina. Son las mismas que las tarjetas «Caducados» y «Emergencia sanitaria» de Incidencias, sin devoluciones. Fuente: ${D.llamadas_fuente||"SAT"}.`,
+    filas: () => {
+      const por = {};
+      tareasDe("sanitarias").forEach(x=>{
+        const k = x.m || x.p || x.x;
+        const g = por[k] = por[k] || {m:x.m, p:x.p, d:x.d, n:x.n, c:x.c, ll:[], ab:0, ops:new Set(), ks:new Set()};
+        g.ll.push(x); if(x.a===1) g.ab++; g.ops.add(x.o); String(x.k||"").split(" y ").forEach(k=>k && g.ks.add(k));
+      });
+      return Object.values(por).sort((a,b)=>b.ll.length-a.ll.length || String(b.ll[0].f).localeCompare(String(a.ll[0].f)));
+    },
+    cols: [L_MAQ, L_CEN, L_DEL,
+      ["Qué", x=>esc([...x.ks].join(" y ")), x=>[...x.ks].join(" y ")],
+      ["Tareas", x=>`<b>${num(x.ll.length)}</b>`, x=>x.ll.length],
       ["Cuándo", x=>`<span class="fechas">${x.ll.map(l=>esc(fechaCorta(l.f)) + (l.a===1?" (abierta)":"")).join(" · ")}</span>`,
         x=>x.ll.map(l=>`${l.f} ${l.x}${l.a===1?" abierta":l.a===0?" cerrada":""}`).join(" | ")],
       ["Operación", x=>esc([...x.ops].join(" · ")), x=>[...x.ops].join(" · ")]],
@@ -1019,8 +1065,8 @@ function pintaDelegaciones(){
   VARIAS_AREAS = areas.size > 1;
   const pedida = q.get("area"), solo = Preferidos.solo;
   AREA = !VARIAS_AREAS || solo ? "*" : areas.has(pedida) ? pedida : (q.get("delegacion") ? zona(q.get("delegacion")) : "");
-  if(["llamadas", "recaudar", "reponer"].includes(solo)) VER = solo;
-  else if(["llamadas", "recaudar", "reponer"].includes(q.get("ver")) && AREA) VER = q.get("ver");
+  if(["llamadas", "recaudar", "reponer", "sanitarias"].includes(solo)) VER = solo;
+  else if(["llamadas", "recaudar", "reponer", "sanitarias"].includes(q.get("ver")) && AREA) VER = q.get("ver");
   pintaDelegaciones();
   if(q.get("delegacion") && AREA) $("#deleg").value = q.get("delegacion");
   pintaOpcionesRuta();
@@ -1045,7 +1091,10 @@ function pintaDelegaciones(){
     + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;
   /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
-  Preferidos.monta("rutas", {ocultar: ["#kpis", "#mqs", "#cabArea"], actual: () => VER || null});
+  /* Un cuadrado de arriba (i_…) se ve solo: los demás los quita su data-tabla. */
+  const indicador = String(solo||"").startsWith("i_");
+  Preferidos.monta("rutas", {ocultar: indicador ? ["#mqs", "#cabArea", "#portada", "#festivoDia"] : ["#kpis", "#mqs", "#cabArea"],
+    actual: () => VER || null});
 })();
 </script>
 </body>

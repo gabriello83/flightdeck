@@ -11,6 +11,10 @@ area, quiere ademas cuatro cosas que no salen del plan:
     puede esperar de ellas por lo que recaudaron los meses anteriores;
   · las maquinas que llevan mas de 12 dias laborables sin reponer.
 
+El 21 de octubre añadio una quinta: las maquinas con una incidencia de
+producto caducado o de insectos (lo mismo que las tarjetas «Caducados» y
+«Emergencia sanitaria» de la pagina de incidencias, docs/56).
+
 Las cuatro miran la VENTANA ENTERA de los agregados (120 dias), no los siete
 ultimos del informe general: por eso es un modulo aparte, que se alimenta en
 el mismo recorrido por dias y no guarda filas, solo la ultima fecha de cada
@@ -30,6 +34,9 @@ De donde sale cada una, y por que:
   · Repuesta = una linea de carga (A2, tipo CM) en su matricula ese dia.
   · Llamada de maquina vacia = una tarea de la SAT con la operacion S010
     «Reponer distribuidor automatico» o C016 «Selecciones vacias».
+  · Caducado o insectos = una tarea de la SAT con las marcas CADUCADO o
+    HIGIENE de incidencias.marcas (la operacion, o la palabra en el titulo o
+    en la ultima nota). Las devoluciones no cuentan, como en incidencias.
 
 EL AMBITO SE APLICA AL ESCRIBIR: las filas que llegan aqui ya vienen del
 perfil, como en todo lo demas.
@@ -277,13 +284,18 @@ class Maquinas:
         sin_reponer.sort(key=lambda x: (-x["lab"], x["d"], x["c"]))
         nunca.sort(key=lambda x: (x["d"], x["k"], x["c"]))
 
-        # Las llamadas de maquina vacia: la foto de M13 si llego, si no las
-        # tareas de la ventana.
-        llamadas = []
+        # Las llamadas de maquina vacia y las de caducado o insectos: la foto
+        # de M13 si llego, si no las tareas de la ventana.
+        llamadas, sanitarias = [], []
         if incidencias is not None:
             al_dia = incidencias.foto is not None
             for t in (incidencias.foto if al_dia else incidencias.tareas.values()):
-                if not es_llamada_vacia(t):
+                vacia = es_llamada_vacia(t)
+                texto = " · ".join(x for x in (str(R.v(t, "titulo", "") or "").strip(),
+                                               str(R.v(t, "ultima_nota", "") or "").strip()) if x)
+                marcas = IN.marcas(t, texto)
+                san = 0 if marcas & IN.DEVOLUCION else marcas & (IN.CADUCADO | IN.HIGIENE)
+                if not vacia and not san:
                     continue
                 ident = R.v(t, "id", None)
                 alta = ((IN._fecha_hora(R.v(t, "apertura", "")) if al_dia
@@ -295,19 +307,25 @@ class Maquinas:
                 if al_dia:
                     abierta = int(not (int(R.v(t, "tipo_estado", -1) or -1) == IN.TIPO_ESTADO_FINALIZADA
                                        or int(R.v(t, "estado", -1) or -1) == IN.ESTADO_FINALIZADA))
-                llamadas.append({
+                fila = {
                     "f": alta, "m": str(R.v(t, "matricula", "") or ""),
                     "p": str(R.v(t, "cod_pdv", "") or ""),
                     "d": str(R.v(t, "delegacion", "") or ""),
                     "n": str(R.v(t, "num_centro", "") or ""),
                     "c": str(R.v(t, "centro", "") or "").strip(),
                     "o": str(R.v(t, "operacion", "") or "").strip(),
-                    "x": f"{R.v(t, 'serie', '') or ''}-{R.v(t, 'numero', '')}", "a": abierta})
+                    "x": f"{R.v(t, 'serie', '') or ''}-{R.v(t, 'numero', '')}", "a": abierta}
+                if vacia:
+                    llamadas.append(fila)
+                if san:
+                    sanitarias.append(dict(fila, k=" y ".join(
+                        n for b, n in ((IN.CADUCADO, "caducado"), (IN.HIGIENE, "insectos")) if san & b)))
             llamadas.sort(key=lambda x: x["f"], reverse=True)
+            sanitarias.sort(key=lambda x: x["f"], reverse=True)
 
         quien = {f: {f"{dl}\u0001{r}": sorted(e, key=str.lower) for (dl, r), e in sorted(rs.items())}
                  for f, rs in sorted(self.quien.items()) if f >= primero}
-        delegs = {x["d"] for x in por_recaudar + sin_reponer + nunca + llamadas}
+        delegs = {x["d"] for x in por_recaudar + sin_reponer + nunca + llamadas + sanitarias}
         delegs |= {dl for rs in self.quien.values() for dl, _ in rs}
         sin_oficial = not any(m in self.meses_oficiales for m in anteriores)
         return {
@@ -330,6 +348,7 @@ class Maquinas:
             "sin_reponer": sin_reponer,
             "nunca_repuestas": nunca,
             "llamadas": llamadas,
+            "sanitarias": sanitarias,
             "llamadas_fuente": ("M13 · EXT_SAT_INCIDENCIAS" if incidencias is not None
                                 and incidencias.foto is not None else "D7 · EXT_SAT_AVERIAS"),
             "_nota_maquinas": (
@@ -338,6 +357,7 @@ class Maquinas:
                 "rc última recaudación, mr meses recaudada de los tres anteriores, pm efectivo "
                 "oficial al mes de media en esos tres meses (null sin recaudación oficial), rp "
                 "última carga y lab días laborables desde entonces. llamadas: f apertura, o "
-                "operación, x número de tarea, a abierta (null sin M13). quien: los reponedores "
+                "operación, x número de tarea, a abierta (null sin M13). sanitarias: igual, y k "
+                "caducado, insectos o los dos. quien: los reponedores "
                 "de cada «delegación␁ruta» por día, según la ruta del parte."),
         }

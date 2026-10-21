@@ -412,12 +412,22 @@ NOMBRE_CUADRADO = {
 # estrella de preferidos (docs/62). id: nombre.
 TABLAS = {
     "rutas": {
+        # Los cuadrados de arriba, uno a uno (Gabriele, 21-oct, docs/67).
+        "i_cumplimiento": "Cumplimiento de ruta",
+        "i_en_ruta": "Visitas en ruta",
+        "i_efectuadas": "Visitas efectuadas",
+        "i_no_planificadas": "Visitas no planificadas",
+        "i_pasaje_vacio": "Pasaje vacío",
+        "i_pendientes": "Visitas pendientes",
+        "i_reposicion": "Máquinas con llamada de reposición",
+        "i_sanitarias": "Máquinas con producto caducado o insectos",
         "rutas": "Visitas por ruta",
         "estado": "Estado de las visitas",
         "maquinas": "Máquinas no visitadas",
         "llamadas": "Llamadas de máquina vacía",
         "recaudar": "Máquinas por recaudar en el mes",
         "reponer": "Máquinas sin reponer",
+        "sanitarias": "Máquinas con producto caducado o insectos (listado)",
         "delegaciones": "Por delegación",
         "festivos": "Festivos por delegación",
     },
@@ -545,6 +555,7 @@ _SOLO_DE_UNA = {
         ("llamadas", "raiz", ("llamadas",)),
         ("recaudar", "raiz", ("por_recaudar",)),
         ("reponer", "raiz", ("sin_reponer", "nunca_repuestas")),
+        ("sanitarias", "raiz", ("sanitarias",)),
         ("festivos", "raiz", ("control_festivos",)),
     ),
     "averias": (

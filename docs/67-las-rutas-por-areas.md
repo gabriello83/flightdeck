@@ -22,6 +22,14 @@ El 19 de octubre de 2026 Gabriele pidió rehacer la página de Rutas (docs/55):
   área. CENTRAL cae en «Otra zona», que no lleva cuadrado (Gabriele, 21-oct): sus delegaciones
   siguen en la tabla y cuentan en lo nacional. Debajo, la tabla por delegación (con su área) y los
   festivos. (Se probó un mapa de España por áreas, PR #45, y se descartó el mismo día.)
+- **Los cuadrados de arriba** (en la portada y dentro de un área), en el orden que pidió Gabriele
+  el 21-oct: cumplimiento de ruta, visitas en ruta, efectuadas, no planificadas, pasaje vacío,
+  pendientes, máquinas con llamada de reposición (S010 o C016, cada máquina una vez en el periodo)
+  y máquinas con producto caducado o insectos (las tareas de la SAT con las marcas CADUCADO o
+  HIGIENE de `incidencias.marcas`, las de las tarjetas «Caducados» y «Emergencia sanitaria» de
+  Incidencias, sin devoluciones; lista `sanitarias` del fichero). Cada cuadrado lleva su estrella
+  de preferidos (tablas `i_…` de la consola); en /preferidos/ se ve solo, con el ámbito entero.
+  Dentro del área hay una cuarta cifra que se pulsa, «Caducado o insectos», con su listado.
 - **Un área**: filtros de delegación y ruta, sus seis indicadores, tres cifras que se pulsan para
   ver su listado (llamadas, por recaudar, sin reponer), las rutas, el donut y la lista máquina a
   máquina. Pulsar una delegación en la portada entra en su área ya filtrada.
