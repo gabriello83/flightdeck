@@ -1277,10 +1277,19 @@ const servidor = http.createServer((pet, res) => {
       [await pagina.$$eval('#kpis .kpi .vl', x => x.map(e => e.textContent.trim())),
        await pagina.$eval('#kpis .kpi:nth-child(2)', k => k.classList.contains('amarillo'))],
       [['2', '75 %', '8', '6', '2', '2'], true]);
-    comprueba('el mapa: cada area con datos lleva su porcentaje, y nada mas',
+    comprueba('el mapa: cada area con datos lleva su porcentaje con el semaforo, y nada mas',
       await pagina.$$eval('#areas .area.si', x => x.map(e => [e.dataset.area, e.querySelector('.pc').textContent.trim(),
-        e.querySelectorAll('text').length])),
-      [['Centro', '66,7 %', 2], ['Sur', '100 %', 2]]);
+        e.querySelector('.pc').getAttribute('class'), e.querySelectorAll('text').length])),
+      [['Centro', '66,7 %', 'pc rojo', 2], ['Sur', '100 %', 'pc verde', 2]]);
+    comprueba('el porcentaje en blanco si va bien y en rojo si no',
+      await pagina.$$eval('#areas .area.si .pc', x => x.map(e => getComputedStyle(e).fill)),
+      ['rgb(255, 90, 79)', 'rgb(255, 255, 255)']);
+    await pagina.hover('#areas .area[data-area="Sur"] .cara', { force: true });
+    await pagina.waitForTimeout(300);
+    comprueba('al pasar el raton el area se resalta y las demas se apagan',
+      await pagina.$$eval('#areas .area', x => x.map(e => [e.dataset.area, getComputedStyle(e).opacity])),
+      [['Norte', '0.45'], ['Centro', '0.45'], ['Cataluña', '0.45'], ['Levante', '0.45'], ['Sur', '1']]);
+    await pagina.mouse.move(0, 0);
     comprueba('las areas fuera de los datos, en gris, sin cifra y sin pulsar',
       await pagina.$$eval('#areas .area:not(.si)', x => x.map(e => [e.dataset.area, e.querySelectorAll('text').length, e.getAttribute('tabindex')])),
       [['Norte', 0, null], ['Cataluña', 0, null], ['Levante', 0, null]]);
