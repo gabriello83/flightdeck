@@ -217,7 +217,7 @@ comprueba("rutas: sin reponer se lleva sus dos listas; por recaudar sigue",
           sorted(_r), ["control_maquinas", "dias", "por_recaudar", "tablas_ocultas"])
 _d = {"devoluciones": [{"n": "A-1"}]}
 comprueba("devoluciones: sus tablas salen de las mismas filas, no se quita nada",
-          A.hay_recorte("devoluciones", A.con_usuario(_ope, {"tablas_ocultas": {"devoluciones": ["tecnicos"]}})),
+          A.hay_recorte("devoluciones", A.con_usuario(_ope, {"tablas_ocultas": {"devoluciones": ["clientes"]}})),
           False)
 comprueba("cada cuadrado con tablas es un cuadrado de verdad",
           set(A.TABLAS) <= set(A.NOMBRE_CUADRADO) == {c for c, _ in A.CUADRADOS}, True)
