@@ -342,6 +342,15 @@
       "filas_mes": 48120
     },
     {
+      "id": "m_devoluciones",
+      "nombre": "M16_EXT_DEVOLUCIONES",
+      "informe": 198,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/devoluciones",
+      "filas_mes": 21204,
+      "_nota": "Gestión de Devoluciones (vending.reclamaciones), docs/57. Sin nombre, teléfono, email, NIF ni cuenta."
+    },
+    {
       "id": "m_planograma_usuarios",
       "nombre": "M14_EXT_PLANOGRAMA_USUARIOS",
       "informe": 195,
