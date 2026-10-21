@@ -1061,11 +1061,23 @@ const servidor = http.createServer((pet, res) => {
   {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre('/tarifas/');
+    // Dos areas (docs/69): la portada es un cuadrado por area, con su % en el color del semaforo.
+    await pagina.waitForSelector('.ar-area');
+    comprueba('un cuadrado por area, con su porcentaje y su semaforo',
+      await pagina.$$eval('.ar-area', x => x.map(b => [b.dataset.area, b.querySelector('.ar-pc').textContent, b.querySelector('.ar-pc').className.split(' ')[1]])),
+      [['Centro', '85,7 %', 'amarillo'], ['Sur', '50 %', 'rojo']]);
+    comprueba_que('el total arriba, tambien en la portada', (await pagina.textContent('.cifra')).includes('81,3'));
+    await pagina.click('.ar-area[data-area="Sur"]');
+    await pagina.waitForSelector('#cuadros .cuadro');
+    comprueba('dentro del area, sus delegaciones', await pagina.$$eval('#cuadros .cuadro', x => x.map(c => c.dataset.deleg)), ['Andalucía - Cádiz']);
+    comprueba('y la miga lleva a todas las areas', await pagina.textContent('nav.miga'), 'Todas las áreas › Sur');
+    await pagina.click('nav.miga a');
+    await pagina.waitForSelector('.ar-area');
+    await pagina.click('.ar-area[data-area="Sur"]');
     await pagina.waitForSelector('#cuadros .cuadro');
     comprueba('un cuadrado por delegacion, con su semaforo',
       await pagina.$$eval('#cuadros .cuadro', x => x.map(c => [c.dataset.deleg, ['verde', 'amarillo', 'rojo'].find(k => c.classList.contains(k))])),
-      [['Andalucía - Cádiz', 'rojo'], ['Madrid - Leganés', 'amarillo']]);
-    comprueba_que('el total arriba', (await pagina.textContent('.cifra')).includes('81,3'));
+      [['Andalucía - Cádiz', 'rojo']]);
     await pagina.click('#cuadros .cuadro[data-deleg="Andalucía - Cádiz"]');
     await pagina.waitForSelector('table .pct');
     comprueba('al pulsar la delegacion, sus centros', await pagina.$$eval('tbody tr td b', x => x.map(b => b.textContent)).then(x => x[0]), 'HOSPITAL DE JEREZ');
@@ -1090,7 +1102,7 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('y el texto escapado dentro del XML', texto.includes('ÑAMING ENSALADA &lt;MIXTA&gt; &amp; CO'));
     await pagina.goBack();
     await pagina.waitForSelector('table .pct');
-    comprueba_que('volver atras vuelve a la delegacion', (await pagina.textContent('nav.miga')).includes('Andalucía - Cádiz'));
+    comprueba_que('volver atras vuelve a la delegacion, dentro de su area', (await pagina.textContent('nav.miga')).includes('Sur › Andalucía - Cádiz'));
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
@@ -1218,6 +1230,18 @@ const servidor = http.createServer((pet, res) => {
   {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre('/almacenes/');
+    // Dos areas (docs/69): la portada, con la parte de productos con compra que no esta bajo minimo.
+    await pagina.waitForSelector('.ar-area');
+    comprueba('un cuadrado por area, Sevilla y Leganés',
+      await pagina.$$eval('.ar-area', x => x.map(b => [b.dataset.area, b.querySelector('.ar-pc').textContent])),
+      [['Centro', 'Sin dato'], ['Sur', '50 %']]);
+    await pagina.click('.ar-area[data-area="Sur"]');
+    await pagina.waitForSelector('#filas tr[data-cod]');
+    comprueba('dentro del area, solo sus almacenes', await pagina.$$eval('#almacen option', o => o.map(x => x.value)), ['', 'Sevilla CECO L0K071']);
+    comprueba_que('y la direccion lleva el area', pagina.url().includes('area=Sur'), pagina.url());
+    await pagina.click('#bAreas');
+    await pagina.waitForSelector('.ar-area');
+    await pagina.goto(base + '/almacenes/?area=todas');
     await pagina.waitForSelector('#filas tr[data-cod]');
     comprueba('todos los almacenes: los tres productos, el bajo minimo primero',
       await pagina.$$eval('#filas tr[data-cod]', x => x.map(t => t.dataset.cod)), ['5322', '5961', '119162']);
@@ -1257,7 +1281,7 @@ const servidor = http.createServer((pet, res) => {
       avisos: ['Falta el maestro de artículos de VenCloud (M8 · EXT_MAESTRO_ARTICULOS): sin él no hay unidades por pack ni códigos de barras.'],
       almacenes: antes.almacenes.map(a => ({ ...a, productos: a.productos.map(p => {
         const q = { ...p, foto: false }; ['unid_pack', 'unid_caja', 'ean_unidad', 'otros_codigos', 'categoria'].forEach(k => delete q[k]); return q; }) })) };
-    const b = await abre('/almacenes/');
+    const b = await abre('/almacenes/?area=todas');
     await b.pagina.waitForSelector('#filas tr[data-cod]');
     comprueba_que('sin maestro lo dice arriba', (await b.pagina.textContent('#avisos')).includes('M8 · EXT_MAESTRO_ARTICULOS'));
     comprueba('y no hay filtro de sin codigo',

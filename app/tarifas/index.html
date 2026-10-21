@@ -150,6 +150,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 </div>
 
 <script src="/comun/xlsx.js"></script>
+<script src="/comun/areas.js"></script>
 <script>
 /* ===================================================================
    Tarifas contra venta real · digivend.es  (docs/52)
@@ -234,8 +235,9 @@ function botonPct(c, d){
 /* -------------------------------------------------------------- rutas */
 function ruta(){
   const q = new URLSearchParams(location.hash.slice(1));
-  return {d:q.get("d"), c:q.get("c")};
+  return {d:q.get("d"), c:q.get("c"), a:q.get("a")};
 }
+function irArea(a){ location.hash = new URLSearchParams({a}).toString(); }
 function ir(d, c){
   const q = new URLSearchParams();
   if(d!=null) q.set("d", d);
@@ -249,17 +251,51 @@ function miga(partes){
 }
 const DELEGACIONES = () => RES.delegaciones||[];
 const unaSola = () => DELEGACIONES().length === 1;
+/* Las areas (docs/69): con mas de una, la portada es un cuadrado por area y
+   cada area lleva a sus delegaciones. */
+const AREAS = () => Areas.de(DELEGACIONES().map(d=>d.delegacion));
+const variasAreas = () => AREAS().length > 1;
+function sumaDe(lista){
+  const s = {coincide:0, no_coincide:0, sin_tarifa:0, sin_dato:0, controlados:0};
+  lista.forEach(d=>Object.keys(s).forEach(k=>{ s[k] += d[k]||0; }));
+  s.pct = Areas.pct(s.coincide, s.controlados);
+  return s;
+}
+function migaArea(a){ return {t:a, h:"#"+new URLSearchParams({a}).toString()}; }
+const TODAS_AREAS = {t:"Todas las áreas", h:"#"};
 
 /* ------------------------------------------------------- vista total */
 function vistaTotal(){
   const t = RES.total;
-  miga([{t:"Todas las delegaciones"}]);
   const v = $("#vista");
   v.innerHTML = `<div class="cifra"><span class="gr">${t.pct==null ? "Sin dato" : pct(t.pct)}</span>`
     + `<span class="ex">${esc(lineaCuenta(t))}</span></div>`
-    + `<div class="cuadros" id="cuadros"></div>`;
+    + `<div id="areas"></div><div class="cuadros" id="cuadros"></div>`;
+  if(variasAreas()){
+    miga([{t:"Todas las áreas"}]);
+    Areas.portada($("#areas"), AREAS().map(a=>{
+      const s = sumaDe(DELEGACIONES().filter(d=>Areas.zona(d.delegacion)===a));
+      return {area:a, pct:s.pct, titulo:lineaCuenta(s)};
+    }), irArea);
+    // Lo que no cae en ningun area (CENTRAL) sigue a la vista si tiene algo que comprobar.
+    pintaDelegs(DELEGACIONES().filter(d=>Areas.zona(d.delegacion)===Areas.OTRA && d.controlados));
+    return;
+  }
+  miga([{t:"Todas las delegaciones"}]);
+  pintaDelegs(DELEGACIONES());
+}
+function vistaArea(a){
+  const lista = DELEGACIONES().filter(d=>Areas.zona(d.delegacion)===a);
+  if(!lista.length){ ir(); return; }
+  miga([TODAS_AREAS, {t:a}]);
+  const s = sumaDe(lista);
+  $("#vista").innerHTML = `<div class="cifra"><span class="gr">${s.pct==null ? "Sin dato" : pct(s.pct)}</span>`
+    + `<span class="ex">${esc(lineaCuenta(s))}</span></div><div class="cuadros" id="cuadros"></div>`;
+  pintaDelegs(lista);
+}
+function pintaDelegs(lista){
   const cont = $("#cuadros");
-  DELEGACIONES().forEach(d=>{
+  lista.forEach(d=>{
     const col = color(d.pct);
     const el = document.createElement("button");
     el.type = "button"; el.className = "cuadro" + (col ? " "+col : " sin");
@@ -279,7 +315,10 @@ function vistaTotal(){
 function vistaDelegacion(nombre){
   const d = DELEGACIONES().find(x=>x.delegacion===nombre);
   if(!d){ ir(); return; }
-  miga(unaSola() ? [{t:d.delegacion}] : [{t:"Todas las delegaciones", h:"#"}, {t:d.delegacion}]);
+  const area = Areas.zona(d.delegacion);
+  miga(unaSola() ? [{t:d.delegacion}]
+    : variasAreas() ? [TODAS_AREAS, ...(area!==Areas.OTRA ? [migaArea(area)] : []), {t:d.delegacion}]
+    : [{t:"Todas las delegaciones", h:"#"}, {t:d.delegacion}]);
   const v = $("#vista");
   v.innerHTML = `<div class="cifra"><span class="gr">${d.pct==null ? "Sin dato" : pct(d.pct)}</span>`
     + `<span class="ex">${esc(lineaCuenta(d))}</span></div>`
@@ -301,7 +340,9 @@ async function vistaCentro(nombreDeleg, numCentro){
   const d = DELEGACIONES().find(x=>x.delegacion===nombreDeleg);
   const c = d && d.centros.find(x=>String(x.num_centro)===String(numCentro));
   if(!c){ ir(); return; }
-  miga([...(unaSola() ? [] : [{t:"Todas las delegaciones", h:"#"}]),
+  const area = Areas.zona(d.delegacion);
+  miga([...(unaSola() ? [] : variasAreas() ? [TODAS_AREAS, ...(area!==Areas.OTRA ? [migaArea(area)] : [])]
+                          : [{t:"Todas las delegaciones", h:"#"}]),
         {t:d.delegacion, h:"#"+new URLSearchParams({d:d.delegacion}).toString()}, {t:c.centro}]);
   const v = $("#vista");
   v.innerHTML = `<p class="peq">Cargando los productos del centro…</p>`;
@@ -426,9 +467,10 @@ function excel(det, c){
 
 function pinta(){
   avisa("");
-  const {d, c} = ruta();
+  const {d, c, a} = ruta();
   if(d && c) return vistaCentro(d, c);
   if(d) return vistaDelegacion(d);
+  if(a) return vistaArea(a);
   if(unaSola()) return vistaDelegacion(DELEGACIONES()[0].delegacion);
   return vistaTotal();
 }

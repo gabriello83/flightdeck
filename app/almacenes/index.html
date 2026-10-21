@@ -153,7 +153,14 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   <div class="nota mal" id="aviso" hidden></div>
   <div id="avisos"></div>
 
+  <!-- La portada: un cuadrado por área (docs/69). -->
+  <div id="portada" hidden>
+    <p class="cuenta" id="sAreas"></p>
+    <div id="areas"></div>
+  </div>
+
   <div id="cuerpo" hidden>
+    <div class="ar-volver" id="cabArea" hidden><button class="btn" id="bAreas" type="button">← Todas las áreas</button><h2 id="tArea"></h2></div>
     <div class="barra">
       <label>Almacén <select id="almacen"></select></label>
       <label>Buscar <input id="buscar" type="search" placeholder="Producto, código o EAN" autocomplete="off"></label>
@@ -176,6 +183,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   <footer id="pie" hidden></footer>
 </div>
 
+<script src="/comun/areas.js"></script>
 <script>
 /* ===================================================================
    Almacenes · digivend.es  (docs/54)
@@ -215,7 +223,30 @@ $("#bSalir").addEventListener("click", async ()=>{
   location.href = "/";
 });
 
-let DATOS = null, VER = "todos", MOSTRADOS = TANDA;
+let DATOS = null, VER = "todos", MOSTRADOS = TANDA, AREA = "";
+
+/* El area de un almacen (docs/69): la de su delegacion. Muchos almacenes no
+   tienen delegacion en VenCloud (Cornellà, Bilbao, Málaga…): entonces la dice
+   la ciudad de su nombre. Los que no nombran ninguna (Caducidades, Donantes,
+   Zaragoza…) quedan en «Otra zona», sin cuadrado, y se ven en «Todas». */
+const CIUDADES = [["MADRID","Centro"],["LA PAZ","Centro"],["CORNELLA","Cataluña"],["FIGUERES","Cataluña"],["GIRONA","Cataluña"],
+  ["TARRAGONA","Cataluña"],["BARCELONA","Cataluña"],["BILBAO","Norte"],["OVIEDO","Norte"],["ASTURIAS","Norte"],
+  ["MONTENARANCO","Norte"],["CANTABRIA","Norte"],["LEON","Norte"],["SEVILLA","Sur"],["CADIZ","Sur"],["GRANADA","Sur"],
+  ["MALAGA","Sur"],["LA LINEA","Sur"],["EXTREMADURA","Sur"],["VALENCIA","Levante"],["ALICANTE","Levante"],["MURCIA","Levante"]];
+function areaDe(a){
+  const z = Areas.zona(a.delegacion);
+  if(z !== Areas.OTRA) return z;
+  const n = String(a.almacen||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();
+  const x = CIUDADES.find(([c])=>n.includes(c));
+  return x ? x[1] : Areas.OTRA;
+}
+/* El porcentaje de un area: productos con compra que no estan bajo minimo. */
+function cuentaArea(lista){
+  let con = 0, bajo = 0;
+  lista.forEach(a=>a.productos.forEach(p=>{ if(p.compra || p.bajo){ con++; if(p.bajo) bajo++; } }));
+  return {con, bajo, pct: Areas.pct(con - bajo, con)};
+}
+const almacenesDelArea = () => DATOS.almacenes.filter(a => !AREA || AREA === "*" || areaDe(a) === AREA);
 
 function fecha(s){
   const d = new Date(String(s)+"T00:00:00");
@@ -244,7 +275,7 @@ function filtros(){
 function productos(){
   const sel = $("#almacen").value;
   const out = [];
-  for(const a of DATOS.almacenes){
+  for(const a of almacenesDelArea()){
     if(sel && a.almacen !== sel) continue;
     for(const p of a.productos) out.push(Object.assign({almacen:a.almacen}, p));
   }
@@ -355,6 +386,47 @@ $("#resumen").addEventListener("click", e => {
 $("#almacen").addEventListener("change", ()=>{ MOSTRADOS = TANDA; escribir("digivend.almacen", $("#almacen").value); pinta(); });
 $("#buscar").addEventListener("input", ()=>{ MOSTRADOS = TANDA; pinta(); });
 $("#bMas").addEventListener("click", ()=>{ MOSTRADOS += TANDA; pinta(); });
+$("#bAreas").addEventListener("click", ()=>abreArea(""));
+
+let VARIAS = false;
+function llenaAlmacenes(primera){
+  const sel = $("#almacen");
+  const lista = almacenesDelArea();
+  sel.innerHTML = `<option value="">Todos (${num(lista.length)})</option>`
+    + lista.map(a => `<option value="${esc(a.almacen)}">${esc(a.almacen)}`
+      + (a.resumen.bajo_minimo ? ` · ${num(a.resumen.bajo_minimo)} bajo mínimo` : "") + `</option>`).join("");
+  const antes = primera ? leer("digivend.almacen") : "";
+  if(antes && lista.some(a => a.almacen === antes)) sel.value = antes;
+}
+/* "" = la portada; "*" = todos los almacenes; otro = un area. */
+function abreArea(a, primera){
+  AREA = a; MOSTRADOS = TANDA;
+  const q = new URLSearchParams(location.search);
+  if(a && a !== "*") q.set("area", a); else if(a === "*" && VARIAS) q.set("area", "todas"); else q.delete("area");
+  if(!primera) try{ history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "")); }catch(e){}
+  if(!a){
+    $("#cuerpo").hidden = true; $("#portada").hidden = false;
+    const todos = cuentaArea(DATOS.almacenes);
+    $("#sAreas").textContent = `El porcentaje es la parte de los productos con compra que no está bajo mínimo `
+      + `(${num(todos.con - todos.bajo)} de ${num(todos.con)} en total). Pulsa un área para ver sus almacenes.`;
+    const areas = [...new Set(DATOS.almacenes.map(areaDe))];
+    Areas.portada($("#areas"), areas.map(x=>{
+      const c = cuentaArea(DATOS.almacenes.filter(al=>areaDe(al)===x));
+      return {area:x, pct:c.pct, titulo:`${num(c.bajo)} de ${num(c.con)} productos bajo mínimo`};
+    }), x=>abreArea(x));
+    // Los almacenes sin area siguen a mano.
+    if(areas.includes(Areas.OTRA))
+      $("#areas").insertAdjacentHTML("beforeend", `<p class="cuenta"><button class="btn" type="button" id="bTodos">Ver todos los almacenes</button></p>`);
+    const bt = $("#bTodos"); if(bt) bt.addEventListener("click", ()=>abreArea("*"));
+  } else {
+    $("#portada").hidden = true; $("#cuerpo").hidden = false;
+    $("#cabArea").hidden = !VARIAS;
+    $("#tArea").textContent = a === "*" ? "Todos los almacenes" : a;
+    llenaAlmacenes(primera);
+    pinta();
+  }
+  if(!primera) window.scrollTo(0, 0);
+}
 
 function avisa(texto){
   const a = $("#aviso");
@@ -385,15 +457,11 @@ function avisa(texto){
   $("#avisos").innerHTML = (DATOS.avisos||[]).map(t => `<div class="nota falta">${esc(t)}</div>`).join("");
   if(!(DATOS.almacenes||[]).length){ avisa("Ningún almacén de este perfil tiene producto."); return; }
 
-  const sel = $("#almacen");
-  sel.innerHTML = `<option value="">Todos (${num(DATOS.almacenes.length)})</option>`
-    + DATOS.almacenes.map(a => `<option value="${esc(a.almacen)}">${esc(a.almacen)}`
-      + (a.resumen.bajo_minimo ? ` · ${num(a.resumen.bajo_minimo)} bajo mínimo` : "") + `</option>`).join("");
-  const antes = leer("digivend.almacen");
-  if(antes && DATOS.almacenes.some(a => a.almacen === antes)) sel.value = antes;
+  const todas = [...new Set(DATOS.almacenes.map(areaDe))].filter(a=>a!==Areas.OTRA);
+  VARIAS = todas.length > 1;
+  const pedida = new URLSearchParams(location.search).get("area");
   if(new URLSearchParams(location.search).get("ver") === "bajo") VER = "bajo";
-  $("#cuerpo").hidden = false;
-  pinta();
+  abreArea(!VARIAS ? "*" : todas.includes(pedida) ? pedida : pedida === "todas" ? "*" : "", true);
 
   const gen = DATOS.generado ? new Date(DATOS.generado) : null;
   $("#pie").innerHTML = "Datos de VenCloud, filtrados por las delegaciones de tu perfil y servidos desde este "
