@@ -27,6 +27,8 @@ pantalla, y los trozos van solo a los cuadrados que se ven sin bajar.
   dirección, docs/51), deja una marca en `sessionStorage`; la página la borra nada más leerla.
   Volver al informe desde Rutas o Incidencias no la repite. Los clientes van al cuadro y no la ven;
   el administrador va a la consola.
+- **Desde la consola del administrador**, el botón «Informe general» deja la misma marca: el
+  administrador la ve cada vez que pasa de la consola al informe (Gabriele, 21-oct-2026).
 - **`/operativo/?bienvenida`** la fuerza, para enseñarla.
 - **No sale** con «reducir movimiento» activado en el sistema.
 - **Se salta** con un clic, cualquier tecla, el botón «Saltar», al hacer scroll o al cambiar el

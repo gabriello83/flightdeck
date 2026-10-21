@@ -1136,6 +1136,13 @@ const servidor = http.createServer((pet, res) => {
     await tranquilo.waitForSelector('#cuadros .cuadro');
     comprueba('con reducir movimiento no sale', await tranquilo.$('.bv-capa'), null);
     await tranquilo.close();
+
+    // El administrador, desde su consola, la ve cada vez que pulsa «Informe general».
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin' };
+    x = await abre('/consola/');
+    await Promise.all([x.pagina.waitForURL('**/operativo/**'), x.pagina.click('#bOperativo')]);
+    comprueba_que('el administrador la ve al pulsar Informe general', !!(await x.pagina.waitForSelector('.bv-capa', { timeout: 3000 }).catch(() => null)));
+    await x.pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
