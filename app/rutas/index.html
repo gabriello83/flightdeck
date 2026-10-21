@@ -21,6 +21,11 @@
   /* Los estados de una visita, los del Power BI de visitas pendientes. */
   --hecha:#2e7d32; --pendiente:#c62828; --fuera:#ef6c00; --vacio:#ffeb3b; --t-vacio:#1b1b1b;
   --fila-vacio:#fff7c2;
+  /* El mapa de la portada: un color por área (cara) y su canto, más oscuro. */
+  --a-centro:#2f6fd6; --l-centro:#1c4a96; --a-sur:#d4880f; --l-sur:#8a5706;
+  --a-cataluna:#b8327a; --l-cataluna:#7a1f50; --a-levante:#13908f; --l-levante:#0a5b5a;
+  --a-norte:#3f8f3a; --l-norte:#275c24; --a-otra:#6a6aa8; --l-otra:#44447a;
+  --a-sin:#dddcd6; --l-sin:#b9b8b1; --mapa-sombra:rgba(0,0,0,.22);
 }
 @media (prefers-color-scheme: dark){
   :root:where(:not([data-theme="light"])){
@@ -31,6 +36,7 @@
     --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b; --sin:#3a3a36;
     --t-sin:#c3c2b7; --texto-verde:#4ade80; --texto-rojo:#f87171;
     --hecha:#3f9a45; --pendiente:#d9443a; --fuera:#f0802a; --vacio:#e8d43a; --fila-vacio:#3b3613;
+    --a-sin:#34342f; --l-sin:#232320; --mapa-sombra:rgba(0,0,0,.6);
   }
 }
 :root[data-theme="dark"]{
@@ -41,6 +47,7 @@
   --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b; --sin:#3a3a36;
   --t-sin:#c3c2b7; --texto-verde:#4ade80; --texto-rojo:#f87171;
   --hecha:#3f9a45; --pendiente:#d9443a; --fuera:#f0802a; --vacio:#e8d43a; --fila-vacio:#3b3613;
+    --a-sin:#34342f; --l-sin:#232320; --mapa-sombra:rgba(0,0,0,.6);
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -146,20 +153,25 @@ tr.elegida td{background:color-mix(in srgb, var(--s1) 10%, transparent)}
 .vacio{color:var(--tinta-3);font-size:13.5px;padding:8px 0}
 footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
 #cargando{padding:40px 0;color:var(--tinta-2)}
-/* La portada: un cuadrante por área, como en furgonetas. */
-.areas{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:14px}
-button.area{all:unset;box-sizing:border-box;display:block;cursor:pointer;background:var(--tarjeta);
-  border:1px solid var(--borde);border-left:5px solid var(--tinta-3);border-radius:12px;padding:14px 16px;box-shadow:var(--sombra)}
-button.area:hover{border-color:var(--tinta-3)}
-button.area:focus-visible{outline:2px solid var(--s1);outline-offset:1px}
-button.area.verde{border-left-color:var(--verde)}
-button.area.amarillo{border-left-color:var(--amarillo)}
-button.area.rojo{border-left-color:var(--rojo)}
-.area .nom{font-size:15px;font-weight:650}
-.area .pc{font-size:34px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:4px}
-.area.verde .pc{color:var(--texto-verde)} .area.amarillo .pc{color:var(--amarillo)} .area.rojo .pc{color:var(--texto-rojo)}
-.area .nt{font-size:12.5px;color:var(--tinta-2);margin-top:2px}
-.area .mq{font-size:12.5px;color:var(--tinta-2);margin-top:8px;padding-top:8px;border-top:1px solid var(--borde)}
+/* La portada: el mapa de España partido en las áreas, en relieve. Cada área
+   es un botón con su porcentaje de cumplimiento de ruta. */
+.mapa{margin:10px auto 0;max-width:860px}
+.mapa svg{display:block;width:100%;height:auto;overflow:visible}
+.mapa .area{transition:transform .18s ease}
+.mapa .area.si{cursor:pointer}
+.mapa .area.si:hover,.mapa .area.si:focus-visible{transform:translateY(-7px)}
+.mapa .area:focus{outline:none}
+.mapa .area.si:focus-visible .cara{stroke:var(--s1);stroke-width:4}
+.mapa .cara{stroke:rgba(255,255,255,.55);stroke-width:1.5;stroke-linejoin:round}
+.mapa .canto{stroke-linejoin:round}
+.mapa text{font-family:inherit;text-anchor:middle;pointer-events:none;paint-order:stroke;stroke-linejoin:round}
+.mapa .nom{font-size:25px;font-weight:650;fill:#fff;stroke-width:5}
+.mapa .pc{font-size:46px;font-weight:750;letter-spacing:-.02em;fill:#fff;stroke-width:7;font-variant-numeric:tabular-nums}
+.mapa .nt{font-size:20px;fill:#fff;stroke-width:5}
+@media (max-width:700px){
+  .mapa .nom{font-size:34px} .mapa .pc{font-size:58px} .mapa .nt{font-size:28px}
+}
+@media (prefers-reduced-motion:reduce){ .mapa .area{transition:none} }
 .volver{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
 .volver h2{font-size:18px;margin:0}
 /* Las tres cifras de máquinas de un área abren su lista: son botones. */
@@ -226,7 +238,7 @@ button.kpi[aria-pressed="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1p
     <!-- La portada: lo nacional y un cuadrante por área. -->
     <div id="portada" hidden>
       <p class="sub tenue" id="sAreas" style="margin:14px 0 0"></p>
-      <div class="areas" id="areas"></div>
+      <div class="mapa" id="areas"></div>
     </div>
 
     <!-- Un área: sus máquinas, sus rutas y sus visitas. -->
@@ -624,26 +636,61 @@ function csvLista(){
 }
 
 /* ------------------------------------------------------------- portada */
+/* El mapa de las áreas: los trazos salen de scripts/mapa_areas.py (las
+   comunidades de cada área unidas, en el mismo viewBox). «Otra zona» no tiene
+   sitio en el mapa y va en una placa aparte, en el mar. */
+const MAPA = {ancho:1000, alto:746, areas:{
+  "Norte": {x:323, y:165, d:"M-4 64L-1 65L2 59L6 59L6 55L4 58L2 55L5 51L22 48L19 43L30 36L39 42L52 39L62 32L65 37L65 32L69 31L76 38L75 33L79 29L68 27L77 25L79 22L67 26L66 21L70 18L68 15L72 16L85 6L87 7L87 2L99 -4L101 -5L101 -1L105 3L115 -6L114 -1L118 -3L121 6L125 -1L131 0L139 5L147 14L146 17L162 18L170 14L212 17L220 12L231 16L242 14L250 6L256 14L262 15L262 18L281 16L290 18L296 24L343 32L365 32L401 22L402 25L398 26L399 31L403 26L401 26L415 20L427 25L423 28L424 30L435 29L447 36L452 33L457 38L456 34L462 28L477 26L481 31L494 33L506 41L522 42L547 32L552 41L559 40L561 45L566 41L577 45L577 51L571 61L573 65L579 67L581 59L585 58L583 63L586 65L609 74L623 73L625 77L619 79L615 92L603 98L601 104L594 103L590 113L585 113L575 145L576 153L583 161L575 174L564 174L549 166L542 167L545 179L543 186L547 194L537 204L532 204L536 222L530 224L529 220L524 218L520 227L521 243L528 247L528 254L522 250L501 256L493 246L488 247L489 244L486 243L488 240L479 235L472 237L467 230L454 235L444 232L440 236L429 236L429 241L413 247L401 261L392 265L387 282L379 281L373 292L373 297L364 297L362 318L354 318L352 326L345 324L344 336L337 338L334 330L326 331L317 344L311 346L310 342L307 342L297 349L288 347L285 341L286 332L272 338L261 329L253 329L253 323L244 330L241 329L231 323L233 319L230 315L221 310L199 324L195 331L176 333L175 328L181 322L176 314L180 308L176 303L180 294L177 285L180 275L170 258L179 258L182 248L191 237L202 236L210 227L210 224L215 224L224 206L216 198L198 195L197 190L200 178L196 176L198 171L195 168L187 172L179 166L176 171L166 167L160 170L155 166L152 167L150 177L134 184L132 178L120 182L122 177L113 174L101 180L99 172L91 182L79 183L76 174L85 162L83 157L78 159L77 151L67 157L45 161L28 178L25 154L31 154L29 150L47 138L47 132L43 137L27 141L29 136L32 139L30 133L36 133L43 125L30 129L27 122L22 121L27 117L28 122L31 122L30 111L38 102L33 104L30 100L29 107L26 104L24 109L19 111L18 115L15 116L15 116L15 111L11 110L16 99L25 90L26 87L21 91L14 90L11 95L7 89L10 85L5 75L-2 80L-1 69Z"},
+  "Centro": {x:401, y:378, d:"M133 400L149 402L172 399L174 386L181 380L183 367L178 357L173 356L173 346L183 342L191 345L204 342L208 335L230 321L242 330L240 334L251 341L262 334L262 340L269 340L280 349L295 343L293 352L296 357L305 360L319 353L319 357L323 356L335 342L342 341L346 349L352 347L355 340L354 335L360 337L363 329L370 329L372 308L382 308L381 303L388 292L395 293L400 276L410 272L422 258L437 252L437 246L448 247L452 243L462 246L474 241L480 248L488 246L497 251L495 254L498 255L497 258L501 257L510 267L531 261L536 265L537 258L530 254L528 238L533 229L538 231L538 235L545 233L541 215L546 215L556 205L551 197L554 190L551 185L552 176L573 185L584 184L591 172L585 164L583 156L584 148L590 142L587 140L589 136L594 130L593 126L594 123L599 124L603 114L610 115L612 109L624 103L627 90L634 88L646 102L650 97L658 100L664 95L675 100L683 110L700 106L709 112L714 107L718 110L731 109L743 118L741 128L738 130L740 141L744 143L736 175L728 182L732 184L732 189L711 207L713 215L719 214L720 220L712 226L711 234L715 238L713 241L715 250L702 260L703 268L708 270L709 275L705 283L708 289L699 299L690 302L673 293L670 302L659 304L660 309L666 309L667 323L662 325L666 333L659 339L659 343L651 346L647 344L645 355L641 358L642 361L632 364L626 370L629 379L624 383L620 380L620 371L599 373L599 381L594 393L595 397L587 398L576 411L575 420L581 429L602 434L594 459L603 470L617 469L619 481L617 485L620 493L611 497L600 487L589 495L584 493L577 509L579 523L571 530L565 530L563 524L559 523L547 531L537 530L525 540L515 557L500 551L508 542L508 534L505 531L505 521L498 520L497 510L484 509L476 516L470 514L467 520L462 514L457 518L443 513L434 521L424 516L423 521L409 519L400 524L375 521L373 527L360 521L342 505L331 501L329 494L317 490L307 491L307 496L298 504L293 504L290 510L279 518L278 528L282 537L281 544L268 552L266 547L269 542L258 543L252 549L254 554L250 560L234 565L217 554L212 559L204 557L201 550L188 549L188 542L178 539L167 543L153 519L149 518L155 500L155 490L171 477L170 473L177 461L174 454L163 453L164 447L156 444L156 437L150 427L152 420L137 408Z"},
+  "Cataluña": {x:806, y:193, d:"M701 289L709 282L707 276L710 267L705 260L704 253L717 242L715 233L716 231L712 227L714 218L722 213L720 207L715 207L713 199L733 181L730 175L737 169L745 138L740 122L743 120L745 110L740 109L737 103L737 88L742 87L757 93L768 93L775 101L789 100L795 111L793 117L797 120L793 122L796 127L803 127L816 120L831 125L837 135L855 127L875 137L885 136L885 130L905 123L912 123L915 128L922 127L921 132L923 137L933 138L929 146L921 144L917 149L918 156L925 162L924 168L926 174L922 182L904 196L855 221L844 237L784 252L775 259L761 261L740 283L754 292L738 307L733 305L741 304L743 300L733 301L727 310L719 303L709 300L710 294Z"},
+  "Levante": {x:619, y:524, d:"M967 365L969 361L986 361L989 358L991 364L993 360L997 367L997 364L1002 367L1001 370L1006 378L1001 376L1005 379L1003 384L997 383L979 372L969 373L970 366ZM864 412L861 404L892 380L921 370L924 370L915 376L916 380L924 377L921 382L918 382L919 387L927 392L934 386L944 393L938 402L938 407L930 415L926 427L914 437L906 427L893 427L888 416L890 413L884 408L875 412L874 418L868 415L869 411ZM778 465L784 465L785 457L796 452L807 454L805 456L807 459L793 471L792 478L787 474L778 474ZM790 489L793 488L793 481L798 492L805 494L795 492L790 496ZM517 555L526 538L538 529L549 529L560 521L565 523L566 528L572 528L580 522L579 507L582 496L588 490L590 493L602 486L613 495L621 491L618 484L620 483L621 473L618 467L604 469L596 458L603 433L585 426L582 427L576 418L578 414L577 409L584 399L595 396L600 380L600 371L616 368L621 370L623 380L630 378L627 368L633 362L643 359L649 342L657 343L668 331L663 324L668 321L667 308L661 307L661 303L671 300L674 291L690 296L692 300L705 296L710 300L709 306L718 309L726 316L699 358L692 363L688 374L670 403L665 412L665 418L666 419L666 420L664 420L675 458L687 474L698 477L706 487L696 493L695 497L687 498L681 508L666 512L660 517L659 524L651 526L651 538L643 541L640 559L633 568L635 589L638 593L621 601L616 596L607 599L607 602L599 599L591 600L581 607L579 613L569 618L561 611L553 610L541 589L543 570L529 569ZM582 353L589 354L593 346L597 355L604 355L610 361L597 367L587 365Z"},
+  "Sur": {x:326, y:605, d:"M128 604L136 584L146 574L147 563L157 561L160 557L167 559L172 541L182 544L180 550L185 552L195 552L198 559L205 560L210 556L227 567L244 562L247 555L246 551L251 545L263 543L263 546L259 549L261 553L274 546L275 538L271 530L272 520L283 512L286 505L291 506L300 498L300 492L311 492L323 495L324 502L335 506L354 523L366 528L368 523L393 526L403 520L416 523L418 518L427 523L436 515L450 519L456 515L460 522L463 516L469 518L477 510L490 512L492 521L498 523L498 532L502 536L501 543L493 553L509 559L521 572L536 574L533 590L535 598L545 613L553 615L561 621L549 635L541 663L534 667L534 673L525 683L520 684L507 672L493 675L482 687L471 686L466 681L441 681L430 686L399 680L358 684L340 704L320 704L301 713L289 738L282 736L282 746L269 753L266 748L255 745L246 735L238 735L230 724L217 702L220 701L223 708L227 703L222 704L223 697L211 692L208 682L215 677L211 675L202 659L164 637L137 640L133 610Z"}
+}};
+const COLOR_AREA = {"Centro":"centro", "Sur":"sur", "Cataluña":"cataluna", "Levante":"levante", "Norte":"norte", "Otra zona":"otra"};
+const OTRA = {x:745, y:600, w:235, h:120};
+const CANTO = 14;   /* el grueso del relieve, en unidades del viewBox */
 function pintaPortada(){
   const areas = [...new Set(Object.values(D.dias).flatMap(v=>[...(v.delegaciones||[]).map(x=>x.delegacion),
     ...Object.keys(v.visitas_deleg||{})]).filter(Boolean).map(zona))]
     .sort((a,b)=>ORDEN_AREAS.indexOf(a)-ORDEN_AREAS.indexOf(b) || a.localeCompare(b,"es"));
   $("#sAreas").textContent = `El porcentaje es el cumplimiento de ruta de cada área ${textoPeriodo()}: visitas del plan con parte de reponedor. Pulsa un área para ver sus delegaciones, sus rutas y sus máquinas.`;
-  $("#areas").innerHTML = areas.map(a=>{
-    const c = cifras(a), ll = llamadas(a).length, pr = maquinasDe("por_recaudar", a), sr = maquinasDe("sin_reponer", a).length;
-    const mq = [];
-    if(D.llamadas && !QUITADAS.has("llamadas")) mq.push(`${num(ll)} ${ll===1?"llamada":"llamadas"} de máquina vacía`);
-    if(D.por_recaudar && !QUITADAS.has("recaudar")) mq.push(`${num(pr.length)} por recaudar en ${esc(nombreMes(CM().mes))}${CM().sin_oficial?"":` (unos ${eur(sumaPm(pr))} al mes)`}`);
-    if(D.sin_reponer && !QUITADAS.has("reponer") && !CM().sin_lineas) mq.push(`${num(sr)} sin reponer más de ${num(CM().laborables||12)} laborables`);
-    return `<button class="area ${c.color}" type="button" data-area="${esc(a)}">
-      <div class="nom">${esc(a)}</div>
-      <div class="pc">${c.n ? fpct(c.pct) : "—"}</div>
-      <div class="nt">${c.n ? `${num(c.hechas)} de ${num(c.previstas)} visitas en ruta` : "sin plan en el periodo"}</div>
-      <div class="nt">${num(c.previstas - c.hechas)} pendientes · ${num(c.fuera)} fuera de ruta · ${c.vacio==null?"pasaje vacío sin dato":num(c.vacio)+" pasajes vacíos"}</div>
-      ${mq.length ? `<div class="mq">${mq.join("<br>")}</div>` : ""}
-    </button>`;
-  }).join("");
-  $("#areas").querySelectorAll("button.area").forEach(b=>b.addEventListener("click", ()=>abreArea(b.dataset.area)));
+  /* Un área que no sale en los datos (otro ámbito) se pinta en gris y no se pulsa. */
+  const pieza = (a, forma, x, y) => {
+    const esta = areas.includes(a), c = esta ? cifras(a) : null, k = esta ? (COLOR_AREA[a]||"otra") : "sin";
+    const canto = Array.from({length:CANTO}, (_, i) => forma(`class="canto" style="fill:var(--l-${k});stroke:var(--l-${k})" stroke-width="2" transform="translate(0 ${CANTO-i})"`)).join("");
+    const titulo = !esta ? `${a}: sin datos en lo que ves`
+      : c.n ? `${a}: ${fpct(c.pct)} · ${num(c.hechas)} de ${num(c.previstas)} visitas en ruta` : `${a}: sin plan en el periodo`;
+    return `<g class="area${esta?" si":""}" data-area="${esc(a)}"${esta?` role="button" tabindex="0" aria-label="${esc(titulo)}"`:""}>
+      <title>${esc(titulo)}</title>${canto}
+      ${forma(`class="cara" style="fill:var(--a-${k})"`)}${forma(`fill="url(#brillo)" pointer-events="none"`)}
+      ${esta ? `<text class="nom" x="${x}" y="${y-24}" style="stroke:var(--l-${k})">${esc(a)}</text>
+        <text class="pc" x="${x}" y="${y+24}" style="stroke:var(--l-${k})">${c.n ? fpct(c.pct) : "—"}</text>
+        ${c.n ? "" : `<text class="nt" x="${x}" y="${y+52}" style="stroke:var(--l-${k})">sin plan</text>`}` : ""}
+    </g>`;
+  };
+  const piezas = Object.entries(MAPA.areas).map(([a, m]) => pieza(a, at => `<path d="${m.d}" ${at}/>`, m.x, m.y));
+  const extra = areas.filter(a => !MAPA.areas[a]);   /* «Otra zona», o un área que el mapa no conoce */
+  extra.forEach((a, i) => {
+    const y = OTRA.y - i*(OTRA.h + 30);
+    piezas.push(pieza(a, at => `<rect x="${OTRA.x}" y="${y}" width="${OTRA.w}" height="${OTRA.h}" rx="16" ${at}/>`,
+      OTRA.x + OTRA.w/2, y + OTRA.h/2 + 6));
+  });
+  $("#areas").innerHTML = `<svg viewBox="-10 -10 ${MAPA.ancho+20} ${MAPA.alto+CANTO+30}" role="group" aria-label="Mapa de las áreas">
+    <defs>
+      <linearGradient id="brillo" x1="0" y1="0" x2=".6" y2="1">
+        <stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/>
+        <stop offset="1" stop-color="#000" stop-opacity=".12"/>
+      </linearGradient>
+      <filter id="sombra" x="-10%" y="-10%" width="120%" height="130%">
+        <feDropShadow dx="0" dy="10" stdDeviation="9" style="flood-color:var(--mapa-sombra)"/>
+      </filter>
+    </defs>
+    <g filter="url(#sombra)">${piezas.join("")}</g>
+  </svg>`;
+  $("#areas").querySelectorAll(".area.si").forEach(g=>{
+    g.addEventListener("click", ()=>abreArea(g.dataset.area));
+    g.addEventListener("keydown", e=>{ if(e.key==="Enter" || e.key===" "){ e.preventDefault(); abreArea(g.dataset.area); } });
+  });
 }
 
 /* ------------------------------------------------------------- un área */

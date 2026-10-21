@@ -1267,7 +1267,7 @@ const servidor = http.createServer((pet, res) => {
     const FOTOS = process.env.FOTOS_RUTAS;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre(`/rutas/?dia=${iso(AYER)}`);
-    await pagina.waitForSelector('#areas .area');
+    await pagina.waitForSelector('#areas .area.si');
     comprueba('arranca en el dia que trae la direccion', await pagina.inputValue('#dia'), iso(AYER));
     comprueba('la portada: lo nacional, los seis indicadores del Power BI en su orden',
       await pagina.$$eval('#kpis .kpi .et', x => x.map(e => e.textContent.trim())),
@@ -1277,12 +1277,15 @@ const servidor = http.createServer((pet, res) => {
       [await pagina.$$eval('#kpis .kpi .vl', x => x.map(e => e.textContent.trim())),
        await pagina.$eval('#kpis .kpi:nth-child(2)', k => k.classList.contains('amarillo'))],
       [['2', '75 %', '8', '6', '2', '2'], true]);
-    comprueba('un cuadrante por area, con su porcentaje y su color',
-      await pagina.$$eval('#areas .area', x => x.map(e => [e.dataset.area, e.querySelector('.pc').textContent.trim(), e.className.split(' ')[1]])),
-      [['Centro', '66,7 %', 'rojo'], ['Sur', '100 %', 'verde']]);
-    comprueba_que('el area cuenta sus llamadas y sus maquinas',
-      (await pagina.textContent('#areas .area[data-area="Centro"]')).includes('2 llamadas de máquina vacía')
-      && (await pagina.textContent('#areas .area[data-area="Centro"]')).includes('1 sin reponer'));
+    comprueba('el mapa: cada area con datos lleva su porcentaje, y nada mas',
+      await pagina.$$eval('#areas .area.si', x => x.map(e => [e.dataset.area, e.querySelector('.pc').textContent.trim(),
+        e.querySelectorAll('text').length])),
+      [['Centro', '66,7 %', 2], ['Sur', '100 %', 2]]);
+    comprueba('las areas fuera de los datos, en gris, sin cifra y sin pulsar',
+      await pagina.$$eval('#areas .area:not(.si)', x => x.map(e => [e.dataset.area, e.querySelectorAll('text').length, e.getAttribute('tabindex')])),
+      [['Norte', 0, null], ['Cataluña', 0, null], ['Levante', 0, null]]);
+    comprueba_que('el porcentaje de la pieza es el de dentro del area',
+      (await pagina.getAttribute('#areas .area[data-area="Centro"]', 'aria-label')).includes('66,7 %'));
     comprueba('en la portada no hay rutas ni filtro de delegacion',
       [await pagina.isVisible('#tRutas'), await pagina.isVisible('#deleg')], [false, false]);
     comprueba('las dos delegaciones, con su area', await pagina.$$eval('#tDeleg tbody tr', x => x.map(t => t.dataset.d)),
