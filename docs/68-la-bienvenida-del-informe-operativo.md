@@ -29,6 +29,8 @@ pantalla, y los trozos van solo a los cuadrados que se ven sin bajar.
   consola y la ve la primera vez que pasa al informe en esa pestaña (22-oct: antes la marca solo se
   dejaba si el destino era el informe, y el administrador no la veía nunca). Los clientes van al
   cuadro y no llegan al informe.
+- **Desde la consola del administrador**, el botón «Informe general» deja la misma marca: el
+  administrador la ve cada vez que pasa de la consola al informe (Gabriele, 21-oct-2026).
 - **`/operativo/?bienvenida`** la fuerza, para enseñarla.
 - **No sale** con «reducir movimiento» activado en el sistema.
 - **Se salta** con un clic, cualquier tecla, el botón «Saltar», al hacer scroll o al cambiar el
