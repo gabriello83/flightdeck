@@ -1132,8 +1132,9 @@ def almacenes(balance_por_periodo, rutas, ambito):
     """El valor del producto en los almacenes, del ULTIMO cierre mensual.
 
     `balance_por_periodo`: {(anho, mes): [filas del balance]}, sin filtrar por
-    ambito —las filas de almacen no traen centro—. `rutas`: el maestro de rutas,
-    que es lo unico que dice de que delegacion es cada almacen.
+    ambito —las filas de almacen no traen centro—. `rutas`: filas {almacen,
+    delegacion}, las de almacenes.delegacion_de_almacenes (maestro de almacenes y,
+    para lo que no este, maestro de rutas).
 
     No hay un valor «de hoy»: VenCloud da un cierre al mes (C9) y sumar los
     movimientos encima no cuadra con el cierre siguiente (comprobado el

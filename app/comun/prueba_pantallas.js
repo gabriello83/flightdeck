@@ -1029,6 +1029,11 @@ const servidor = http.createServer((pet, res) => {
       await pagina.getAttribute('.cuadro[data-id="furgonetas"]', 'href'), `/furgonetas/?dia=${iso(AYER)}`);
     comprueba('incidencias lleva a su pagina, con el dia',
       await pagina.getAttribute('.cuadro[data-id="averias"]', 'href'), `/incidencias/?dia=${iso(AYER)}`);
+    comprueba('puntos de venta, ventas y reposiciones llevan a su pagina (docs/70)',
+      [await pagina.getAttribute('.cuadro[data-id="pdvs"]', 'href'),
+       await pagina.getAttribute('.cuadro[data-id="ventas"]', 'href'),
+       await pagina.getAttribute('.cuadro[data-id="reposiciones"]', 'href')],
+      ['/cifras/?que=pdvs', `/cifras/?que=ventas&dia=${iso(AYER)}`, `/cifras/?que=reposiciones&dia=${iso(AYER)}`]);
     comprueba('los que tienen pagina propia dicen Ver detalle',
       await pagina.$$eval('#cuadros .cuadro', x => x.filter(c => ['rutas', 'furgonetas', 'averias'].includes(c.dataset.id))
         .map(c => c.textContent.includes('Ver detalle'))), [true, true, true]);
@@ -1101,6 +1106,66 @@ const servidor = http.createServer((pet, res) => {
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nPuntos de venta, ventas y reposiciones por areas (docs/70)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre(`/cifras/?que=ventas&dia=${iso(AYER)}`);
+    await pagina.waitForSelector('button.ar-area');
+    comprueba('ventas: un cuadrado por area con su cifra, sin semaforo',
+      await pagina.$$eval('button.ar-area', x => x.map(b => [b.querySelector('.ar-nom').textContent,
+        b.querySelector('.ar-pc').textContent.replace(/\s/g, ' '),
+        ['verde', 'amarillo', 'rojo'].some(k => b.querySelector('.ar-pc').classList.contains(k))])),
+      [['Centro', '40.000 €', false], ['Levante', '9859 €', false]]);
+    comprueba('arriba, el total del dia', (await pagina.textContent('.cifra .gr')).replace(/\s/g, ' '), '49.859 €');
+    comprueba_que('si el reparto suma el total, no hay nota de lo que falta', await pagina.isHidden('#resto'));
+    await pagina.click('button.ar-area[data-area="Levante"]');
+    comprueba('dentro del area, sus delegaciones', await pagina.$$eval('.deleg .nom', x => x.map(n => n.textContent)), ['Levante - Murcia']);
+    comprueba('la miga', (await pagina.textContent('#miga')).trim(), 'Todas las áreas›Levante');
+    comprueba_que('el area va en la direccion', pagina.url().includes('area=Levante'), pagina.url());
+    await pagina.selectOption('#selDia', '2026-10-01');
+    comprueba_que('un dia sin venta dice el motivo, no un cero',
+      (await pagina.textContent('#vista')).includes('Ese día no llegó venta'));
+    await pagina.goBack();
+    await pagina.click('#miga a');
+    comprueba('la miga vuelve a todas las areas', await pagina.locator('button.ar-area').count(), 2);
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+
+    // Un dia con ventas de maquinas sin delegacion: se dice cuanto queda fuera de las areas.
+    const dia = API['/api/operativo'].dias[iso(AYER)];
+    const antes = dia.ventas.importe;
+    dia.ventas.importe = antes + 1000;
+    const v = await abre(`/cifras/?que=ventas&dia=${iso(AYER)}`);
+    await v.pagina.waitForSelector('button.ar-area');
+    comprueba_que('lo que no tiene delegacion se dice, no se esconde',
+      (await v.pagina.textContent('#resto')).replace(/\s/g, ' ').includes('1000 € de ventas de máquinas sin delegación'),
+      await v.pagina.textContent('#resto'));
+    dia.ventas.importe = antes;
+    await v.pagina.close();
+
+    const r = await abre('/cifras/?que=reposiciones');
+    await r.pagina.waitForSelector('button.ar-area');
+    comprueba('reposiciones: unidades por area', await r.pagina.$$eval('button.ar-area .ar-pc', x => x.map(n => n.textContent.replace(/\s/g, ' '))),
+      ['40.000 ud', '12.168 ud']);
+    await r.pagina.click('button.ar-area[data-area="Centro"]');
+    comprueba_que('y dentro, las clases de producto', (await r.pagina.textContent('.deleg .ex')).includes('Snack 25.000'));
+    comprueba('sin errores', r.errores, []);
+    await r.pagina.close();
+
+    const p = await abre('/cifras/?que=pdvs');
+    await p.pagina.waitForSelector('button.ar-area');
+    comprueba('puntos de venta: la foto de la noche, por area', await p.pagina.$$eval('button.ar-area .ar-pc', x => x.map(n => n.textContent.replace(/\s/g, ' '))),
+      ['3000', '195']);
+    comprueba_que('sin selector de dia', await p.pagina.isHidden('#lDia'));
+    comprueba('sin errores', p.errores, []);
+    await p.pagina.close();
+
+    const o = await abre('/cifras/?que=inventado');
+    comprueba_que('una seccion que no existe lo dice', (await o.pagina.textContent('#aviso')).includes('no existe'));
+    await o.pagina.close();
   }
 
   console.log('\nTarifas: delegaciones, centros, productos y el Excel del centro');

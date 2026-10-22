@@ -342,6 +342,15 @@
       "filas_mes": 48120
     },
     {
+      "id": "m_almacenes",
+      "nombre": "M3_EXT_MAESTRO_ALMACENES",
+      "informe": 199,
+      "clave_fecha": "ninguna",
+      "destino": "maestros/almacenes",
+      "filas_mes": 60,
+      "_nota": "La delegación de cada almacén, como la tabla de almacenes de VenCloud (docs/70)."
+    },
+    {
       "id": "m_devoluciones",
       "nombre": "M16_EXT_DEVOLUCIONES",
       "informe": 198,
