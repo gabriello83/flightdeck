@@ -425,5 +425,33 @@ ${tabla.outerHTML}</body></html>`);
     return {abre};
   }
 
+  /* Las secciones (rutas, incidencias…) no montan nada a mano: cargan este
+     fichero con data-pagina y Vendi sale solo si la sesion tiene el
+     asistente (docs/71). El panel y el informe general lo montan ellos, con
+     su boton «Preguntar» y sus sugerencias. */
+  const SECCION = {
+    rutas: ["las rutas", ["¿Qué delegación cumplió peor las rutas ayer?", "¿Qué máquinas llevan más días sin reponer?"]],
+    incidencias: ["las incidencias", ["¿Cuántas averías se cerraron en menos de 24 h esta semana?", "¿Qué área tiene más incidencias abiertas?"]],
+    devoluciones: ["las devoluciones", ["¿Cuánto se ha devuelto este mes y por qué motivo?", "¿Qué centros acumulan más devoluciones?"]],
+    furgonetas: ["las furgonetas", ["¿Qué furgonetas no tuvieron visitas ayer?", "¿Cuántos km se hicieron ayer por área?"]],
+    almacenes: ["los almacenes", ["¿Qué almacenes tienen más artículos bajo mínimo?", "¿Cuándo fue el último pedido de cada almacén?"]],
+    telemetria: ["la telemetría", ["¿Cuántas máquinas tienen telemetría por sistema?", "¿Dónde hay más diferencias con VenCloud?"]],
+    tarifas: ["las tarifas", ["¿Qué centros cobran precios distintos a su tarifa?", "¿Cuántos productos venden sin tarifa?"]],
+    revision: ["la revisión de clientes", ["¿Cuántas máquinas no tienen planograma?", "¿Qué delegación tiene más precios distintos?"]],
+    utilizo: ["el uso de VenCloud", ["¿Quién usó más VenCloud este mes?", "¿Quién lleva más días sin entrar?"]],
+    preferidos: ["tus preferidos", ["Resúmeme mis preferidos de ayer."]],
+  };
+  const yo = document.currentScript && document.currentScript.dataset.pagina;
+  if(yo){
+    const sola = async () => {
+      let d = null;
+      try{ const r = await fetch("/api/yo", {credentials:"same-origin"}); if(r.ok) d = await r.json(); }catch(e){}
+      if(!d || !d.asistente || !d.asistente.habilitado) return;
+      const [de, sug] = SECCION[yo] || ["esta página", []];
+      monta({pagina: yo, hola: `¡Hola! Pregúntame por ${de} o por cualquier sección que veas.`, sugerencias: () => sug});
+    };
+    if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", sola); else sola();
+  }
+
   window.Asistente = {monta, vendi, formatea};
 })();

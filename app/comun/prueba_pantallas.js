@@ -1257,6 +1257,46 @@ const servidor = http.createServer((pet, res) => {
     await x.pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: false, motivo: '' } };
 
+    // Y en cada seccion, solo con cargar el fichero (docs/71).
+    console.log('  · Vendi en todas las secciones');
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: true, motivo: '' } };
+    for (const s of ['rutas', 'incidencias', 'devoluciones', 'furgonetas', 'almacenes', 'telemetria', 'tarifas', 'revision', 'utilizo', 'preferidos']) {
+      const y = await abre(`/${s}/`);
+      await y.pagina.waitForSelector('#bVendi .muneco', { timeout: 5000 }).catch(() => {});
+      comprueba_que(`en /${s}/ sale Vendi`, await y.pagina.isVisible('#bVendi'));
+      if (process.env.FOTOS_VENDI) {
+        await y.pagina.setViewportSize({ width: 390, height: 844 });
+        await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, `seccion-${s}-movil.png`) });
+        await y.pagina.emulateMedia({ colorScheme: 'dark' });
+        await y.pagina.setViewportSize({ width: 1280, height: 720 });
+        await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, `seccion-${s}-oscuro.png`) });
+        await y.pagina.emulateMedia({ colorScheme: 'light' });
+      }
+      if (s === 'rutas') {
+        await y.pagina.click('#bVendi');
+        await y.pagina.waitForSelector('#chat.vis');
+        comprueba('con sugerencias de rutas', (await y.pagina.$$('#sugerencias button')).length, 2);
+        const pide = [];
+        await y.pagina.route('**/api/pregunta', async ruta => {
+          pide.push(JSON.parse(ruta.request().postData() || '{}'));
+          await ruta.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ respuesta: 'Bien.', quedan_hoy: 38 }) });
+        });
+        await y.pagina.click('#sugerencias button');
+        await y.pagina.waitForSelector('.turno.el');
+        comprueba('y pregunta diciendo desde que pagina', pide[0] && pide[0].pagina, 'rutas');
+      }
+      comprueba(`en /${s}/, ni una peticion fuera del dominio`, y.fuera, []);
+      comprueba(`en /${s}/, sin errores en la consola`, y.errores, []);
+      await y.pagina.close();
+    }
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: false, motivo: '' } };
+    {
+      const y = await abre('/rutas/');
+      await y.pagina.waitForSelector('table, .area, #cuadros, main', { timeout: 5000 }).catch(() => {});
+      comprueba('sin asistente, en las secciones no sale', await y.pagina.$('#bVendi'), null);
+      await y.pagina.close();
+    }
+
     const tranquilo = await navegador.newPage({ reducedMotion: 'reduce' });
     await tranquilo.goto(base + '/operativo/?bienvenida');
     await tranquilo.waitForSelector('#cuadros .cuadro');

@@ -74,3 +74,19 @@ a medias (2 h) y el contador de uso.
 Ya no va el panel entero en cada pregunta: va el recetario (en caché) y solo lo que consulta. Una
 pregunta de una consulta cuesta menos que antes; una que cruza tres secciones, algo más. El pie del
 chat lo dice: «Ve lo mismo que tú en la web, nada más. No ejecuta acciones».
+
+## En todas las secciones
+
+Gabriele: «tiene que salir siempre cuando está activo, también en rutas, incidencias…». Vendi sale
+ahora en rutas, incidencias, devoluciones, furgonetas, almacenes, telemetría, tarifas, revisión,
+utilizo y preferidos. Cada una solo carga el fichero:
+
+```html
+<script src="/comun/asistente.js" data-pagina="rutas"></script>
+```
+
+El fichero pide `/api/yo` y, si la sesión tiene el asistente, monta a Vendi con un saludo y dos
+sugerencias de esa sección; si no, no pinta nada. `pagina` le dice al modelo por qué sección
+empezar a mirar, pero puede consultar cualquier otra que vea el usuario. Una página nueva lleva
+Vendi con esa misma línea. El panel y el informe general lo siguen montando ellos, con su botón
+«Preguntar». La consola y los avisos, que son de configuración, y el cuadro del cliente no lo llevan.
