@@ -738,7 +738,37 @@ const servidor = http.createServer((pet, res) => {
       JSON.stringify(sinDos));
     comprueba('y los demas siguen', sinDos, conTodos.filter(i => i !== 'centros' && i !== 'sat'));
     delete API['/api/yo'].paneles_ocultos;
-    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente' };
+
+    // Vendi, el muñeco del asistente: solo sale a quien tiene el asistente,
+    // saluda al entrar y al abrir el cajon.
+    console.log('  · Vendi, el muñeco del asistente');
+    {
+      const x = await abre('/panel/');
+      await x.pagina.waitForSelector('#rejilla .panel');
+      comprueba_que('sin asistente no sale el muñeco', !(await x.pagina.isVisible('#bVendi')));
+      await x.pagina.close();
+    }
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: true, motivo: '' } };
+    {
+      const { pagina, errores, fuera } = await abre('/panel/');
+      await pagina.waitForSelector('#bVendi .muneco');
+      comprueba_que('con asistente sale el muñeco', await pagina.isVisible('#bVendi'));
+      await pagina.waitForSelector('#bVendi .muneco.saluda', { timeout: 3000 });
+      comprueba_que('y saluda al entrar', true);
+      comprueba_que('con su bocadillo', await pagina.$eval('#bocadillo', b => b.classList.contains('vis')));
+      await pagina.click('#bVendi');
+      await pagina.waitForSelector('#chat.vis');
+      comprueba_que('al pulsarlo se abre el cajon', true);
+      comprueba_que('y saluda en la cabecera', await pagina.$eval('#vendiChat .muneco', m => m.classList.contains('saluda')));
+      comprueba_que('el muñeco flotante se aparta', !(await pagina.isVisible('#bVendi')));
+      await pagina.click('#chatCerrar');
+      await pagina.waitForFunction(() => !document.querySelector('#bVendi').hidden);
+      comprueba_que('y vuelve al cerrar', true);
+      comprueba('sin errores en la consola', errores, []);
+      comprueba('ni peticiones fuera del dominio', fuera, []);
+      await pagina.close();
+    }
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', asistente: { habilitado: false, motivo: '' } };
   }
 
   // ------------------------------------------------------------- la consola
