@@ -43,7 +43,7 @@ cambiar la pila, la respuesta va por pasos:
    2 h) y devuelve `{sigue: id, estado: "Mirando rutas e incidencias…"}`.
 3. La página vuelve a llamar con `{sigue: id}` (hasta 12 veces) y enseña el `estado` en la burbuja
    de espera. El `id` solo vale para el mismo usuario: otro recibe 404.
-4. Como mucho 8 vueltas del modelo; la última va sin herramientas, para que conteste con lo que tiene.
+4. Como mucho 12 vueltas del modelo. La última va sin herramientas y con un aviso de que ya no quedan consultas, para que conteste con lo que tiene y diga qué falta.
 
 Cuenta como **una** pregunta del límite diario, y el coste es la suma de todas las vueltas.
 

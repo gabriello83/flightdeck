@@ -310,6 +310,15 @@ r_ = cuerpo(pregunta("da vueltas", COOKIE))
 comprueba("contesta", r_.get("respuesta"), TEXTO)
 comprueba("con VUELTAS_MAX llamadas", len(LLAMADAS), L.VUELTAS_MAX)
 comprueba("la ultima sin herramientas", LLAMADAS[-1]["tool_choice"], {"type": "none"})
+ultimo = LLAMADAS[-1]["messages"][-1]["content"]
+comprueba("y se le dice que ya no quedan consultas",
+          any(c.get("type") == "text" and "no quedan consultas" in c.get("text", "") for c in ultimo), True)
+comprueba("en las anteriores, no",
+          any(c.get("type") == "text" for c in LLAMADAS[-2]["messages"][-1]["content"]), False)
+
+print("\nUn objeto con muchas claves ensena las primeras y las ultimas")
+dias = {f"2026-10-{d:02d}": {"x": "y" * 400} for d in range(1, 22)}
+comprueba("las ultimas fechas se ven", "2026-10-01" in L._corto(dias) and "2026-10-21" in L._corto(dias), True)
 
 print("\nEl historial se pasa, recortado a tres idas y venidas")
 LLAMADAS.clear()

@@ -55,7 +55,7 @@ ESFUERZO = os.environ.get("ESFUERZO", "medium")
 # llega por el dominio publico, como cualquier otro cliente.
 URL_API = os.environ.get("URL_API", "https://dashboard.digivend.es")
 
-VUELTAS_MAX = 8            # consultas del modelo por pregunta; en la ultima, a contestar
+VUELTAS_MAX = 12           # vueltas del modelo por pregunta; en la ultima, a contestar
 SEGUNDOS_VUELTA = 8        # si queda tiempo tras una consulta, otra vuelta en la misma peticion
 MAX_RESULTADO = 12000      # caracteres de cada consulta que le llegan al modelo
 HORAS_CONVERSACION = 2     # lo que dura guardada una pregunta a medias
@@ -99,7 +99,9 @@ tamano; con `camino` bajas a una clave o a una posicion de una lista. En las lis
 usa `filtro` (campo y texto que contiene), `orden` y `max` para traer solo lo que \
 necesitas. Lo que llega recortado lo dice: si te falta algo, vuelve a pedirlo mas \
 concreto.
-- Pocas consultas: dos o tres bastan casi siempre. Cuantas mas, mas espera el usuario.
+- Ve directo: cuando ya sepas la forma, baja de una vez con un `camino` largo (por \
+ejemplo ["dias", "2026-10-21", "delegaciones"]). Si necesitas dos secciones, pidelas \
+las dos en la misma vuelta, no una detras de otra. Cada vuelta hace esperar al usuario.
 
 COMO RESPONDES
 - Usa SOLO los numeros que te devuelvan las consultas. No estimes, no extrapoles, no \
@@ -243,7 +245,10 @@ def _baja(url, token):
 def _corto(v, n=160):
     """Una linea que dice que hay en un valor grande, sin traerlo."""
     if isinstance(v, dict):
-        return f"<objeto de {len(v)} claves: {', '.join(list(map(str, v))[:8])}{'…' if len(v) > 8 else ''}>"
+        claves = list(map(str, v))
+        # Las primeras y las ultimas: en las fechas, lo ultimo es lo que se pregunta.
+        vistas = ", ".join(claves) if len(claves) <= 8 else ", ".join(claves[:4]) + ", …, " + ", ".join(claves[-4:])
+        return f"<objeto de {len(v)} claves: {vistas}>"
     if isinstance(v, list):
         return f"<lista de {len(v)}>"
     if isinstance(v, str) and len(v) > n:
@@ -462,7 +467,7 @@ def avanza(estado, token, empezo):
         usos = [b for b in res.content if getattr(b, "type", "") == "tool_use"]
         if not usos:
             texto = "\n".join(b.text for b in res.content if getattr(b, "type", "") == "text").strip()
-            return texto or "No he encontrado ese dato.", "", gasto
+            return texto or "No he llegado a reunir el dato. Prueba a preguntarlo más concreto.", "", gasto
 
         estado["mensajes"].append({"role": "assistant", "content": _bloques(res.content)})
         resultados = []
@@ -474,6 +479,13 @@ def avanza(estado, token, empezo):
                 salida = {"error": "La seccion no ha respondido."}
             resultados.append({"type": "tool_result", "tool_use_id": u.id,
                                "content": json.dumps(salida, ensure_ascii=False, separators=(",", ":"))})
+        print(json.dumps({"usuario": estado["correo"], "consultas":
+                          [{k: v for k, v in dict(u.input or {}).items() if k in ("seccion", "camino", "filtro")}
+                           for u in usos]}, ensure_ascii=False))
+        if estado["vueltas"] >= VUELTAS_MAX - 1:
+            # La siguiente va sin herramientas: que lo sepa, o contesta en blanco.
+            resultados.append({"type": "text", "text": "Ya no quedan consultas. Contesta ahora con lo "
+                               "que has visto; si te falta algo, di exactamente qué falta."})
         estado["mensajes"].append({"role": "user", "content": resultados})
         que = _que_hace([dict(u.input or {}) for u in usos])
         # Otra vuelta en esta misma peticion solo si da tiempo de sobra: si no,
