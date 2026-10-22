@@ -810,7 +810,7 @@ function avisa(texto, mal){
   }
   DATOS = await ro.json();
   /* El asistente contesta con este mismo informe, recortado igual en el
-     servidor (docs/69). Las sugerencias, de los cuadrados que ve. */
+     servidor (docs/70). Las sugerencias, de los cuadrados que ve. */
   if(YO.asistente && YO.asistente.habilitado){
     const ve = new Set(DATOS.cuadrados || []);
     Asistente.monta({pagina:"operativo", boton:$("#bPreguntar"),

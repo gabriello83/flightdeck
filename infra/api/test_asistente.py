@@ -186,7 +186,7 @@ falsos.pon_fila("PERFIL#cli-airbus", {
 falsos.pon_fila("USUARIO#ana@airbus.com", {"nombre": "Ana", "perfil_id": "cli-airbus",
                                            "estado": "activo", "asistente": True})
 
-print("\nDesde el informe general, contesta con el informe general (docs/69)")
+print("\nDesde el informe general, contesta con el informe general (docs/70)")
 import gzip  # noqa: E402
 OPERATIVO = {
     "generado": "2026-10-22T04:45:00Z", "ultimo_dia": "2026-10-21", "primer_dia": "2026-10-20",
