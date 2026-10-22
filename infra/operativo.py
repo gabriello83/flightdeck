@@ -57,6 +57,18 @@ DIAS_PREVIOS_AVERIAS = 120
 # delegacion, y la pagina la ensena como «Sin delegación».
 SIN_DELEGACION = ""
 
+# Lo mismo por centro (David, 22-oct-2026: filtro de cliente y centro). Un
+# punto de venta o una maquina sin centro va con esta clave: cuenta en el
+# total y en ningun centro.
+SIN_CENTRO = ""
+
+
+def centro_de_la_fila(fila):
+    """El centro que trae la propia fila, por su numero. La Lambda de agregados
+    pasa una que, si la fila no lo trae, lo saca del centro de su maquina."""
+    return str(R.v(fila, "num_centro", "") or "").strip()
+
+
 # Lo que un relleno historico no sobrescribe de un dia que ya escribio la noche.
 NO_PISA_EL_RELLENO = ("telemetria", "averias")
 
@@ -293,10 +305,12 @@ def tiene_telemetria(fila):
 class DiaOperativo:
     """Lo que un perfil acumula de UN dia para los cuadrados. Nada guarda filas."""
 
-    def __init__(self, fecha, deleg_de=None):
+    def __init__(self, fecha, deleg_de=None, centro_de=None):
         self.fecha = fecha.isoformat() if hasattr(fecha, "isoformat") else str(fecha)[:10]
         # De que delegacion es una fila, para el filtro de area y delegacion.
         self.deleg_de = deleg_de or delegacion_de_la_fila
+        # Y de que centro, para el de cliente y centro.
+        self.centro_de = centro_de or centro_de_la_fila
         self.plan = None             # None = no hay informe del plan ese dia
         self.visitados = set()       # puntos de venta con visita real
         self.visitas = 0
@@ -315,6 +329,14 @@ class DiaOperativo:
         self.venta_deleg = None      # delegacion -> {"importe","unidades","maquinas"}
         self.vehiculos_deleg = {}    # delegacion -> {matriculas con visita}
         self.sin_vehiculo_deleg = {} # delegacion -> visitas sin vehiculo informado
+        # Lo mismo, por centro (la clave del mapa de centros: el numero).
+        self.repo_centro = {}
+        self.consumibles_centro = {}
+        self.venta_centro = None
+        self.vehiculos_centro = {}
+        self.sin_vehiculo_centro = {}
+        self.visitas_centro = {}
+        self.centro_pdv = {}         # pdv -> centro, del plan y de las visitas
         # Para la pagina de rutas (docs/55): de que delegacion, ruta y centro es
         # cada punto de venta del plan y cada uno visitado, y cuantas visitas
         # hizo cada delegacion. Un punto de venta, una entrada: no guarda filas.
@@ -335,7 +357,10 @@ class DiaOperativo:
                 pdv = str(R.v(p, "cod_pdv", "") or "")
                 deleg = str(R.v(p, "delegacion", "") or "")
                 self.visitas_deleg[deleg] = self.visitas_deleg.get(deleg, 0) + 1
+                centro = self.centro_de(p) or SIN_CENTRO
+                self.visitas_centro[centro] = self.visitas_centro.get(centro, 0) + 1
                 if pdv:
+                    self.centro_pdv.setdefault(pdv, centro)
                     self.visitados.add(pdv)
                     pid = R.v(p, "parte_id", None)
                     if pid not in (None, ""):
@@ -354,9 +379,11 @@ class DiaOperativo:
                 if vehiculo_real(v):
                     self.vehiculos.add(str(v).strip())
                     self.vehiculos_deleg.setdefault(deleg, set()).add(str(v).strip())
+                    self.vehiculos_centro.setdefault(centro, set()).add(str(v).strip())
                 else:
                     self.visitas_sin_vehiculo += 1
                     self.sin_vehiculo_deleg[deleg] = self.sin_vehiculo_deleg.get(deleg, 0) + 1
+                    self.sin_vehiculo_centro[centro] = self.sin_vehiculo_centro.get(centro, 0) + 1
             elif es_lectura_remota(p):
                 m = R.v(p, "matricula", "")
                 if m:
@@ -381,6 +408,8 @@ class DiaOperativo:
             pdv = str(R.v(f, "cod_pdv", "") or "")
             if pdv:
                 self.plan.add(pdv)
+                # El centro del plan manda sobre el de la visita: es el del dia.
+                self.centro_pdv[pdv] = self.centro_de(f) or self.centro_pdv.get(pdv, SIN_CENTRO)
                 ruta = str(R.v(f, "ruta", "") or "").strip()
                 x = self.plan_de.setdefault(pdv, {
                     "d": str(R.v(f, "delegacion", "") or ""), "r": [],
@@ -408,13 +437,17 @@ class DiaOperativo:
                 continue
             u = float(R.v(l, "cantidad", 0) or 0)
             deleg = self.deleg_de(l)
+            centro = self.centro_de(l) or SIN_CENTRO
             if R.es_consumible_de_cafe(l):
                 self.repo_consumibles += u
                 self.consumibles_deleg[deleg] = self.consumibles_deleg.get(deleg, 0.0) + u
+                self.consumibles_centro[centro] = self.consumibles_centro.get(centro, 0.0) + u
                 continue
             clase = nombre_clase(clase_de.get(R.v(l, "matricula", "")))
             self.repo[clase] = self.repo.get(clase, 0.0) + u
             por = self.repo_deleg.setdefault(deleg, {})
+            por[clase] = por.get(clase, 0.0) + u
+            por = self.repo_centro.setdefault(centro, {})
             por[clase] = por.get(clase, 0.0) + u
 
     def pon_venta(self, dia_serie, deleg_del_centro=None):
@@ -432,17 +465,22 @@ class DiaOperativo:
             "imposibles": dia_serie.venta_imposibles,
         }
         por_centro = getattr(dia_serie, "por_centro", None)
-        if por_centro is None or deleg_del_centro is None:
+        if por_centro is None:
+            return
+        # Por centro, tal cual lo parte la serie: es la misma clave.
+        self.venta_centro = {}
+        for clave, c in por_centro.c.items():
+            if c.venta_unidades or c.venta_importe:
+                self.venta_centro[str(clave)] = {"importe": c.venta_importe, "unidades": c.venta_unidades,
+                                                 "maquinas": len(c.venta_maquinas)}
+        if deleg_del_centro is None:
             return
         self.venta_deleg = {}
-        for clave, c in por_centro.c.items():
-            if not (c.venta_unidades or c.venta_importe):
-                continue
+        for clave, c in self.venta_centro.items():
             x = self.venta_deleg.setdefault(deleg_del_centro(clave) or SIN_DELEGACION,
                                             {"importe": 0.0, "unidades": 0.0, "maquinas": 0})
-            x["importe"] += c.venta_importe
-            x["unidades"] += c.venta_unidades
-            x["maquinas"] += len(c.venta_maquinas)
+            for k in x:
+                x[k] += c[k]
 
 
 # ----------------------------------------------------------------------
@@ -457,16 +495,23 @@ class Operativo:
     y se cuentan al final.
     """
 
-    def __init__(self, publicar, historico=False, deleg_de=None):
+    def __init__(self, publicar, historico=False, deleg_de=None, centro_de=None):
         self.dias = {d.isoformat() if hasattr(d, "isoformat") else str(d): None for d in publicar}
         # En un relleno historico no se escribe foto (el censo de hoy no es el
         # de enero de 2025) y cada dia se cierra en cuanto se ha leido, para no
         # tener meses de partes en memoria: queda solo su cifra (`cerrados`).
         self.historico = historico
         self.cerrados = {}
+        self.cerrados_centro = {}
         self.deleg_de = deleg_de or delegacion_de_la_fila
+        self.centro_de = centro_de or centro_de_la_fila
         self.deleg_tarea = {}    # id de tarea -> delegacion
+        self.centro_tarea = {}   # id de tarea -> centro
         self._deleg_maquina = {} # matricula -> delegacion, del censo
+        self._centro_maquina = {} # matricula -> centro, del censo
+        # La ficha de cada centro (nombre, cliente, delegacion), para el filtro
+        # de cliente y centro. La pone la Lambda de agregados con su mapa.
+        self.ficha_de = lambda clave: None
         self.fallo = {}          # id de tarea -> es un fallo tecnico
         self.apertura = {}
         self.cierre = {}
@@ -494,7 +539,7 @@ class Operativo:
         if self.dias[f] is None:
             if f in self.cerrados:
                 return None
-            self.dias[f] = DiaOperativo(f, self.deleg_de)
+            self.dias[f] = DiaOperativo(f, self.deleg_de, self.centro_de)
         return self.dias[f]
 
     def cierra(self, fecha):
@@ -504,6 +549,7 @@ class Operativo:
         d = self.dias.get(f)
         if d is not None:
             self.cerrados[f] = self._del_dia(d)
+            self.cerrados_centro[f] = self.por_centro(d)
             self.dias[f] = None
 
     # ------------------------------------------------------------- furgonetas
@@ -549,6 +595,7 @@ class Operativo:
             self.fallo[ident] = R.es_fallo_tecnico(t) and not R.es_solicitud_especial(t)
             if self.fallo[ident]:
                 self.deleg_tarea[ident] = self.deleg_de(t)
+                self.centro_tarea[ident] = self.centro_de(t) or SIN_CENTRO
 
     def come_sat_eventos(self, filas):
         for e in filas:
@@ -571,13 +618,13 @@ class Operativo:
         Un cierre de una tarea abierta antes no se puede medir: no se cuenta, y
         se dice cuantos son (`sin_tarea`).
         """
-        cerradas, a_tiempo, sin_tarea, _ = self._averias(fecha)
+        cerradas, a_tiempo, sin_tarea, _, _ = self._averias(fecha)
         return cerradas, a_tiempo, sin_tarea
 
     def _averias(self, fecha):
-        """averias_del_dia, y ademas las mismas cuentas por delegacion."""
+        """averias_del_dia, y ademas las mismas cuentas por delegacion y por centro."""
         cerradas = a_tiempo = sin_tarea = 0
-        por = {}
+        por, por_c = {}, {}
         for ident, cierre in self.cierre.items():
             if cierre[:10] != fecha:
                 continue
@@ -590,19 +637,23 @@ class Operativo:
                      - datetime.datetime.fromisoformat(self.apertura[ident])).total_seconds() / 3600
             x = por.setdefault(self.deleg_tarea.get(ident, SIN_DELEGACION),
                                {"cerradas": 0, "a_tiempo": 0})
+            y = por_c.setdefault(self.centro_tarea.get(ident, SIN_CENTRO),
+                                 {"cerradas": 0, "a_tiempo": 0})
             cerradas += 1
             x["cerradas"] += 1
+            y["cerradas"] += 1
             if horas < HORAS_A_TIEMPO:
                 a_tiempo += 1
                 x["a_tiempo"] += 1
-        return cerradas, a_tiempo, sin_tarea, por
+                y["a_tiempo"] += 1
+        return cerradas, a_tiempo, sin_tarea, por, por_c
 
     # ------------------------------------------------------------- la foto
     def come_censo(self, filas):
         """Lo que es foto de hoy: puntos de venta activos y maquinas que se
         pueden auditar en remoto. Las filas ya vienen del ambito del perfil."""
         pdvs, maquinas, auditables = set(), set(), set()
-        por = {}
+        por, por_c = {}, {}
         for f in filas:
             if (R.es_centinela(f) or not R.cliente_vivo(f) or not R.centro_vivo(f)
                     or not R.pdv_vivo(f)):
@@ -612,20 +663,28 @@ class Operativo:
             # El estado 0 son sitios sin maquina puesta: 2.012 en el parque de
             # octubre de 2026, que no son puntos de venta que atender.
             deleg = delegacion_de_la_fila(f)
+            centro = self.centro_de(f) or SIN_CENTRO
             x = por.setdefault(deleg, [set(), set()])
+            y = por_c.setdefault(centro, [set(), set()])
             if pdv and str(R.v(f, "estado_pdv", "")) == str(PDV_ACTIVO):
                 pdvs.add(pdv)
                 x[0].add(pdv)
+                y[0].add(pdv)
             m = R.v(f, "matricula", "")
             if m:
                 maquinas.add(m)
                 x[1].add(m)
+                y[1].add(m)
                 self._deleg_maquina.setdefault(m, deleg)
+                self._centro_maquina.setdefault(m, centro)
                 if tiene_telemetria(f):
                     auditables.add(m)
         self.foto["pdvs"] = {"activos": len(pdvs), "maquinas": len(maquinas),
                              "por_delegacion": {k: {"activos": len(a), "maquinas": len(b)}
-                                                for k, (a, b) in sorted(por.items()) if a or b}}
+                                                for k, (a, b) in sorted(por.items()) if a or b},
+                             # Por centro, en listas [activos, maquinas]: son miles.
+                             "por_centro": {k: [len(a), len(b)]
+                                            for k, (a, b) in sorted(por_c.items()) if a or b}}
         self._auditables = auditables
 
     def pon_telemetria(self, cruce, propias, ficheros, fuera=None):
@@ -684,7 +743,7 @@ class Operativo:
         """Las averias van aparte del resto del dia: se cuentan con toda la
         ventana leida, asi que en un relleno historico se ponen al final."""
         out = dict(out)
-        cerradas, a_tiempo, sin_tarea, por = self._averias(fecha)
+        cerradas, a_tiempo, sin_tarea, por, _ = self._averias(fecha)
         pct = porcentaje(a_tiempo, cerradas)
         out["averias"] = ({"cerradas": cerradas, "a_tiempo": a_tiempo, "pct": pct,
                            "color": semaforo(pct), "horas": HORAS_A_TIEMPO,
@@ -794,6 +853,122 @@ class Operativo:
                 x["con_dex"] += m in d.dex
             out["telemetria"] = dict(sorted(tel.items()))
         return out
+
+    def por_centro(self, d):
+        """Las cifras de un dia por centro, para el filtro de cliente y centro
+        (David, 22-oct-2026). Las mismas que `por_delegacion`, pero en listas,
+        porque son miles de centros al dia y van a un fichero por mes:
+
+          rutas        [previstas, hechas, fuera del plan, visitas]
+          furgonetas   [visitas, visitas sin vehiculo, [matriculas]]
+          ventas       [importe, unidades, maquinas]
+          reposiciones [unidades, carriles de cafe, {clase: unidades}]
+          telemetria   [auditables, con lectura]
+
+        Las averias se ponen al escribir, con toda la ventana (centros_del_dia).
+        Un centro sin nada ese dia no sale.
+        """
+        out = {}
+        if d.plan:
+            rutas = {}
+            vacio = lambda: [0, 0, 0, 0]
+            for pdv in d.plan:
+                x = rutas.setdefault(d.centro_pdv.get(pdv, SIN_CENTRO), vacio())
+                x[0] += 1
+                x[1] += pdv in d.visitados
+            for pdv in d.visitados - d.plan:
+                rutas.setdefault(d.centro_pdv.get(pdv, SIN_CENTRO), vacio())[2] += 1
+            for c, n in d.visitas_centro.items():
+                rutas.setdefault(c, vacio())[3] = n
+            out["rutas"] = dict(sorted(rutas.items()))
+
+        out["furgonetas"] = {c: [d.visitas_centro.get(c, 0), d.sin_vehiculo_centro.get(c, 0),
+                                 sorted(d.vehiculos_centro.get(c, ()))]
+                             for c in sorted(set(d.vehiculos_centro) | set(d.visitas_centro)
+                                             | set(d.sin_vehiculo_centro))}
+
+        if d.venta_centro is not None:
+            out["ventas"] = {c: [round(x["importe"], 2), round(x["unidades"], 2), x["maquinas"]]
+                             for c, x in sorted(d.venta_centro.items())}
+
+        repo = {}
+        for c in set(d.repo_centro) | set(d.consumibles_centro):
+            clases = d.repo_centro.get(c, {})
+            repo[c] = [round(sum(clases.values()), 2), round(d.consumibles_centro.get(c, 0.0), 2),
+                       {k: round(u, 2) for k, u in sorted(clases.items(), key=lambda x: -x[1])}]
+        out["reposiciones"] = dict(sorted(repo.items()))
+
+        auditables = getattr(self, "_auditables", None)
+        if auditables:
+            tel = {}
+            for m in auditables:
+                x = tel.setdefault(self._centro_maquina.get(m, SIN_CENTRO), [0, 0])
+                x[0] += 1
+                x[1] += m in d.dex
+            out["telemetria"] = dict(sorted(tel.items()))
+        return out
+
+    def centros_del_dia(self, fecha, por):
+        """El reparto por centro de un dia, con sus averias: van aparte porque
+        se cuentan con toda la ventana leida."""
+        por = dict(por)
+        por["averias"] = {c: [x["cerradas"], x["a_tiempo"]]
+                          for c, x in sorted(self._averias(fecha)[4].items())}
+        return por
+
+    def centros_por_mes(self, anteriores):
+        """Los ficheros del reparto por centro, uno por mes: {"2026-10": {...}}.
+
+        `anteriores(mes)` da el fichero de ese mes que ya habia, o None. Los
+        dias de esta noche (o del relleno) sustituyen a los que hubiera; los
+        demas se quedan. Como en el informe, un relleno no pisa la telemetria
+        ni las averias de un dia que ya escribio la noche.
+        """
+        nuevos = {}
+        for f, d in self.dias.items():
+            if d is not None:
+                nuevos[f] = self.centros_del_dia(f, self.por_centro(d))
+        for f, x in self.cerrados_centro.items():
+            nuevos[f] = self.centros_del_dia(f, x)
+        meses = {}
+        for f in sorted(nuevos):
+            mes = f[:7]
+            if mes not in meses:
+                antes = anteriores(mes) or {}
+                meses[mes] = {"mes": mes, "dias": dict(antes.get("dias") or {})}
+            dias = meses[mes]["dias"]
+            x = nuevos[f]
+            if f in self.cerrados_centro:
+                antes = dias.get(f) or {}
+                for c in NO_PISA_EL_RELLENO:
+                    if antes.get(c):
+                        x[c] = antes[c]
+            dias[f] = x
+        for m in meses.values():
+            m["dias"] = dict(sorted(m["dias"].items()))
+        return meses
+
+    def fichas_de_centros(self, meses, anterior=None):
+        """Nombre, cliente y delegacion de cada centro que sale en el reparto o
+        en la foto: lo que la pagina necesita para listar clientes y centros.
+        Las fichas de antes se quedan: un centro que ya no aparece sigue en los
+        dias viejos."""
+        fichas = dict((anterior or {}).get("centros") or {})
+        claves = set()
+        for m in meses.values():
+            for x in m["dias"].values():
+                for por in x.values():
+                    claves.update(por)
+        claves.update((self.foto.get("pdvs") or {}).get("por_centro") or {})
+        claves.discard(SIN_CENTRO)
+        for c in claves:
+            f = self.ficha_de(c)
+            if f:
+                fichas[c] = {"n": f.get("nombre") or c, "c": f.get("cliente") or "",
+                             "d": f.get("delegacion") or ""}
+            elif c not in fichas:
+                fichas[c] = {"n": c, "c": "", "d": ""}
+        return dict(sorted(fichas.items()))
 
     def telemetria_vencloud(self, d):
         """Sin ficheros de los sistemas: lo que VenCloud dice que lleva telemetria
@@ -1068,12 +1243,15 @@ class Operativo:
             out["sin_dato"] = sin_dato
         return out
 
-    def fichero(self, perfil_id, anterior=None):
+    def fichero(self, perfil_id, anterior=None, meses=None):
         """El fichero del perfil: los dias de esta noche sobre los que ya habia.
 
         Un dia recalculado sustituye al que hubiera; los demas se quedan, hasta
         DIAS_HISTORIA. Asi la historia se acumula sin releerla, como la serie.
         Un relleno historico escribe sus dias y deja la foto de la ultima noche.
+        `meses` son los ficheros por centro que se escriben con este
+        (centros_por_mes): el fichero dice que meses hay y lleva la ficha de
+        cada centro.
         """
         # Aqui y no arriba: incidencias importa este modulo.
         import incidencias as IN
@@ -1117,11 +1295,18 @@ class Operativo:
             # cinco del Power BI, las mismas que incidencias y devoluciones.
             "zonas": {dl: IN.zona_de(dl) for dl in sorted(delegaciones)},
             "foto": (anterior.get("foto") or {}) if historico else self.foto,
+            # El filtro de cliente y centro (docs/72): la ficha de cada centro y
+            # los meses que tienen su reparto, en operativo/centros-AAAA-MM.
+            "centros": (self.fichas_de_centros(meses, anterior) if meses is not None
+                        else anterior.get("centros") or {}),
+            "meses_centros": sorted(set(anterior.get("meses_centros") or []) | set(meses or {})),
             "_nota": ("Un día por fecha, con la cifra de ese día tal cual. Lo que no tiene dato "
                       "lleva sin_dato y el motivo. Puntos de venta, telemetría auditable y "
                       "almacenes son la foto de la noche en que se escribió. por_delegacion "
                       "reparte cada cuadrado por delegación con cifras que se suman (la clave "
-                      "vacía es lo que no tiene delegación); zonas da el área de cada una."),
+                      "vacía es lo que no tiene delegación); zonas da el área de cada una. "
+                      "centros da nombre (n), cliente (c) y delegación (d) de cada centro; el "
+                      "reparto por centro de cada día está en un fichero por mes (meses_centros)."),
         }
 
 

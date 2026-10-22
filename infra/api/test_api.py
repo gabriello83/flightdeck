@@ -550,6 +550,26 @@ comprueba("por delegacion, solo los cuadrados que ve",
           sorted(o["dias"]["2026-10-12"]["por_delegacion"]), ["rutas"])
 del falsos.OBJETOS["cabina/ope-sur/operativo.json.gz"]
 
+print("\nEl reparto por centro (docs/72): un mes, con la misma tijera, y solo el de su carpeta")
+falsos.OBJETOS["cabina/ope-sur/operativo/centros-2026-10.json.gz"] = gzip.compress(json.dumps({
+    "mes": "2026-10", "dias": {"2026-10-12": {"rutas": {"500092": [10, 9, 0, 9]},
+                                              "telemetria": {"500092": [3, 1]}}}}).encode())
+falsos.OBJETOS["cabina/interno/operativo/centros-2026-10.json.gz"] = gzip.compress(json.dumps({
+    "mes": "2026-10", "dias": {"2026-10-11": {}}}).encode())
+o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA, query={"centros": "2026-10"}))
+comprueba("el mes por centro, solo los cuadrados que ve", o["dias"], {"2026-10-12": {"rutas": {"500092": [10, 9, 0, 9]}}})
+comprueba("el de su perfil, aunque pida otro",
+          sorted(cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA,
+                                 query={"centros": "2026-10", "perfil": "interno"}))["dias"]), ["2026-10-12"])
+comprueba("un mes que no es AAAA-MM no se busca",
+          llama("GET", "/api/operativo", cookie=COOKIE_OLGA, query={"centros": "../interno/x"})["statusCode"], 400)
+comprueba("un mes sin reparto, 404",
+          llama("GET", "/api/operativo", cookie=COOKIE_OLGA, query={"centros": "2025-01"})["statusCode"], 404)
+comprueba("un cliente tampoco lo tiene",
+          llama("GET", "/api/operativo", cookie=COOKIE_ANA, query={"centros": "2026-10"})["statusCode"], 403)
+del falsos.OBJETOS["cabina/ope-sur/operativo/centros-2026-10.json.gz"]
+del falsos.OBJETOS["cabina/interno/operativo/centros-2026-10.json.gz"]
+
 print("\nTarifas (docs/52): el resumen del perfil, y un centro solo si es suyo")
 import gzip as _gz  # noqa: E402
 _res = {"total": {"pct": 80.0}, "delegaciones": [{"delegacion": "Sevilla", "centros": [

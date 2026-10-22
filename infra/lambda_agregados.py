@@ -1310,10 +1310,17 @@ def previos_averias(primero):
 def escribe_operativo(perfil_id, op):
     """El fichero del informe general de un perfil, comprimido: con toda la
     historia son megas (docs/66). La primera vez se arranca del de antes, sin
-    comprimir, para no perder los dias que ya tenia."""
+    comprimir, para no perder los dias que ya tenia.
+
+    Al lado, el reparto por centro de cada dia, un fichero por mes, para el
+    filtro de cliente y centro (docs/72): con todos los centros no cabe en el
+    fichero del informe, y la pagina solo lo pide cuando se filtra."""
     clave = f"cabina/{perfil_id}/operativo.json.gz"
     anterior = _json_de(clave) or _json_de(f"cabina/{perfil_id}/operativo.json")
-    fichero = op.fichero(perfil_id, anterior)
+    meses = op.centros_por_mes(lambda mes: _json_de(f"cabina/{perfil_id}/operativo/centros-{mes}.json.gz"))
+    for mes, datos in meses.items():
+        escribe_comprimido(f"cabina/{perfil_id}/operativo/centros-{mes}.json.gz", datos)
+    fichero = op.fichero(perfil_id, anterior, meses)
     escribe_comprimido(clave, fichero)
     return fichero
 
@@ -1588,8 +1595,11 @@ def lambda_handler(event, context):
     # el censo de hoy no describe un dia de enero de 2025 (docs/66).
     publicar = dias if historico else dias[:OP.DIAS_NOCHE]
     deleg_de = delegacion_de(mapa)
-    operativos = {acu.perfil["id"]: OP.Operativo(publicar, historico, deleg_de)
+    operativos = {acu.perfil["id"]: OP.Operativo(publicar, historico, deleg_de, mapa.clave_centro)
                   for acu in acumuladores}
+    for op in operativos.values():
+        # El nombre, cliente y delegacion de cada centro, para su filtro.
+        op.ficha_de = mapa.fichas.get
     # La pagina de incidencias (docs/56): las tareas de la SAT de toda la ventana.
     incidencias = {acu.perfil["id"]: IN.Incidencias() for acu in acumuladores}
     # La pagina de rutas por areas (docs/67): por maquina, la ultima carga, la

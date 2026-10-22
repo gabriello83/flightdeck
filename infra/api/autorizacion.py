@@ -617,7 +617,8 @@ def recorta_operativo(datos, perfil):
     Lo que no ve no sale de aqui: ni en el dia, ni en la foto.
     """
     ve = cuadrados_de(perfil)
-    out = {k: datos.get(k) for k in ("generado", "ultimo_dia", "primer_dia", "umbrales", "zonas", "_nota")}
+    out = {k: datos.get(k) for k in ("generado", "ultimo_dia", "primer_dia", "umbrales", "zonas",
+                                     "centros", "meses_centros", "_nota")}
     out["cuadrados"] = ve
     dias = {}
     for f, d in (datos.get("dias") or {}).items():
@@ -629,6 +630,15 @@ def recorta_operativo(datos, perfil):
     out["dias"] = dias
     out["foto"] = {c: v for c, v in (datos.get("foto") or {}).items() if c in ve}
     return out
+
+
+def recorta_operativo_centros(datos, perfil):
+    """Un mes del reparto por centro (docs/72), con la misma tijera: solo los
+    cuadrados que el perfil ve."""
+    ve = set(cuadrados_de(perfil))
+    return {"mes": datos.get("mes"),
+            "dias": {f: {c: v for c, v in (d or {}).items() if c in ve}
+                     for f, d in (datos.get("dias") or {}).items()}}
 
 
 # ----------------------------------------------------------------------

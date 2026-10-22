@@ -484,6 +484,69 @@ comprueba("sin censo, la telemetria dice por que",
           OP.Operativo([DIA], historico=True).telemetria_vencloud(OP.DiaOperativo(DIA))["sin_dato"],
           OP.SIN_CENSO_HISTORICO)
 
+print("\nPor centro (docs/72): el filtro de cliente y centro, un fichero por mes")
+op = OP.Operativo([DIA])
+op.ficha_de = {"100": {"nombre": "Getafe", "cliente": "AIRBUS", "delegacion": "Madrid"}}.get
+op.come_censo([
+    {"cod_pdv": "P1", "estado_pdv": 1, "matricula": "M1", "telemetria": 40, "num_centro": "100"},
+    {"cod_pdv": "P2", "estado_pdv": 1, "matricula": "M2", "telemetria": 40, "num_centro": "200"},
+])
+op.come_sat([{"id": 1, "matricula": "M1", "cod_operacion": "A01", "tipo_tarea": "A", "num_centro": "100"}])
+op.come_sat_eventos([{"averia_id": 1, "estado": 0, "fecha": f"{DIA} 08:00:00"},
+                     {"averia_id": 1, "estado": 99, "fecha": f"{DIA} 09:00:00"}])
+d = op.dia(DIA)
+d.come_partes([dict(visita("P1", "1111AAA", "M1"), num_centro="100"),
+               dict(visita("P2", "1111AAA", "M2"), num_centro="200"),
+               dict(visita("P9", "xxxx-xxx", "M2"), num_centro="200"),
+               sistema("M2")])
+d.come_plan([{"cod_pdv": "P1", "num_centro": "100"}, {"cod_pdv": "P3", "num_centro": "100"}])
+d.come_lineas([{"tipo_linea": "CM", "cantidad": 4, "etiq_canal": "11", "matricula": "M1",
+                "num_centro": "100"}], {"M1": 9})
+
+
+class _Serie:  # lo que pon_venta lee de un dia de la serie partido por centro
+    venta_importe, venta_unidades, venta_maquinas, venta_fuente, venta_imposibles = 30.0, 20.0, {"M1", "M2"}, "telemetria", 0
+
+    class por_centro:
+        c = {"100": type("C", (), {"venta_importe": 10.0, "venta_unidades": 8.0, "venta_maquinas": {"M1"}})(),
+             "200": type("C", (), {"venta_importe": 20.0, "venta_unidades": 12.0, "venta_maquinas": {"M2"}})()}
+
+
+d.pon_venta(_Serie)
+pc = op.centros_del_dia(DIA, op.por_centro(d))
+comprueba("rutas por centro: previstas, hechas, fuera, visitas",
+          pc["rutas"], {"100": [2, 1, 0, 1], "200": [0, 0, 2, 2]})
+comprueba("furgonetas por centro, con sus matriculas", pc["furgonetas"]["200"], [2, 1, ["1111AAA"]])
+comprueba("venta por centro: importe, unidades, maquinas", pc["ventas"], {"100": [10.0, 8.0, 1], "200": [20.0, 12.0, 1]})
+comprueba("sin la funcion de delegacion, la venta por centro sale igual", d.venta_deleg, None)
+comprueba("reposicion por centro", pc["reposiciones"], {"100": [4.0, 0.0, {"Snack": 4.0}]})
+comprueba("telemetria por centro: auditables y con lectura", pc["telemetria"], {"100": [1, 0], "200": [1, 1]})
+comprueba("la averia, en su centro", pc["averias"], {"100": [1, 1]})
+comprueba("puntos de venta por centro en la foto", op.foto["pdvs"]["por_centro"], {"100": [1, 1], "200": [1, 1]})
+_suma = lambda k, i: sum(x[i] for x in pc[k].values())
+comprueba("los centros suman lo mismo que el dia",
+          (_suma("rutas", 0), _suma("rutas", 1), _suma("ventas", 0), _suma("telemetria", 1)),
+          (2, 1, 30.0, 1))
+meses = op.centros_por_mes(lambda mes: {"mes": mes, "dias": {"2026-10-01": {"rutas": {"100": [1, 1, 0, 1]}}}})
+comprueba("un fichero por mes, con los dias de antes", (list(meses), sorted(meses["2026-10"]["dias"])),
+          (["2026-10"], ["2026-10-01", DIA]))
+f = op.fichero("interno", None, meses)
+comprueba("el informe dice que meses tienen reparto", f["meses_centros"], ["2026-10"])
+comprueba("y la ficha de cada centro; el que no esta en el mapa, por su numero",
+          f["centros"], {"100": {"n": "Getafe", "c": "AIRBUS", "d": "Madrid"}, "200": {"n": "200", "c": "", "d": ""}})
+comprueba("sin meses, se queda con las fichas y los meses de antes",
+          (lambda x: (x["centros"], x["meses_centros"]))(
+              op.fichero("interno", {"centros": {"9": {"n": "X"}}, "meses_centros": ["2026-09"]})),
+          ({"9": {"n": "X"}}, ["2026-09"]))
+
+op = OP.Operativo([DIA], historico=True)
+op.dia(DIA).come_partes([dict(visita("P1"), num_centro="100")])
+op.cierra(DIA)
+meses = op.centros_por_mes(lambda mes: {"dias": {DIA: {"telemetria": {"100": [3, 3]}}}})
+comprueba("el relleno no pisa la telemetria por centro de la noche",
+          (meses["2026-10"]["dias"][DIA]["telemetria"], meses["2026-10"]["dias"][DIA]["furgonetas"]["100"][0]),
+          ({"100": [3, 3]}, 1))
+
 # Las areas del navegador (app/comun/areas.js, docs/70) son las mismas que zona_de.
 import json as _json, os, re
 _txt = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "comun", "areas.js"), encoding="utf-8").read()
