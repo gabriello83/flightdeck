@@ -113,8 +113,27 @@ Y el cuadrado lleva a la página. Sin ningún fichero subido, ni diferencias ni 
 | No están en VenCloud | lo que trae un sistema y no se ha podido cruzar con ninguna máquina instalada, con el motivo |
 
 Cada pestaña filtra (con alguna diferencia, sin telemetría en VenCloud, sin venta, sin DEX, ni una
-ni otra, todas), busca, y se descarga en CSV. Para cada máquina sale el último día de la semana en
+ni otra, todas), busca, y se descarga en Excel. Para cada máquina sale el último día de la semana en
 que sí mandó; más atrás no se guarda y se dice («antes del …»).
+
+### Por áreas, y centro, modelo y ubicación (19-oct-2026)
+
+Gabriele: *«si entro con un usuario a nivel nacional que salgan las zonas divididas por área;
+cuando entro en el área, el listado como el actual, pero que me salga primero el centro, luego el
+modelo y luego la ubicación. La posibilidad de sacar un Excel»*.
+
+- Quien ve más de un área (el nacional) abre cada pestaña con **un cuadrado por área**: las
+  máquinas que pasan el filtro, de cuántas, en cuántas delegaciones. Pulsando, el listado de esa
+  área (queda en la dirección, `?a=Centro`). Quien sólo ve un área va directo al listado. Las áreas
+  son las cinco del Power BI (`incidencias.zona_de`), las mismas que la revisión de clientes; la
+  noche las escribe en `zonas` del fichero.
+- El listado va por **centro, modelo y ubicación**, en ese orden de columnas y de filas.
+- El **modelo** sale de `recursos.maquinasmodelos`, que el censo (informe 173, `EXT_INSTALACIONES`)
+  no traía: se añade `mod.modelo as modelo` con su join (docs/17). Hasta que el informe de VenCloud
+  lo lleve, la columna dice «Sin dato».
+- El **Excel** (comun/xlsx.js, sin nada de fuera) es lo que se ve: la pestaña con su filtro, su
+  búsqueda y su área; desde la vista por áreas, todas, con el área en la primera columna. Los «No»
+  de telemetría, venta y DEX van en rojo.
 
 **Ojo con leer «sin venta» como «no transmite»**: un día sin venta puede ser un día sin ventas
 (domingo, centro cerrado). El DEX no depende de que se venda. Por eso la página deja elegir el día

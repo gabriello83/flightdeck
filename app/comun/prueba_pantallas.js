@@ -387,9 +387,13 @@ const API = {
       { matricula: '20SE0001', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P1', ubicacion: 'Hall', vencloud: true, nayax: { id: '20SE0001', ultima: `${iso(HOY)}T10:00:00` } },
       { matricula: '20SE0002', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P2', ubicacion: 'Planta 1', vencloud: true, nayax: { id: '20SE0002', ultima: `${iso(HOY)}T09:00:00` } },
       { matricula: '20SE0003', sistema: 'nayax', tambien: [], delegacion: 'Cataluña', cliente: 'FUNDACIO PUIGVERT', num_centro: 100, centro: 'HOSPITAL', cod_pdv: 'P3', ubicacion: 'Urgencias', vencloud: false, nayax: { id: '20SE0003', ultima: '2026-10-01T09:00:00' } },
+      // Dos del mismo centro de Madrid: salen por centro, luego modelo, luego ubicacion.
+      { matricula: '21SE0010', sistema: 'nayax', tambien: [], delegacion: 'Madrid - Leganés', cliente: 'IBERIA', num_centro: 500, centro: 'BARAJAS T4', cod_pdv: 'P6', ubicacion: 'Zona A', modelo: 'OPERA ONE 2C', vencloud: true, nayax: { id: '21SE0010', ultima: '2026-10-01T09:00:00' } },
+      { matricula: '21SE0011', sistema: 'nayax', tambien: [], delegacion: 'Madrid - Leganés', cliente: 'IBERIA', num_centro: 500, centro: 'BARAJAS T4', cod_pdv: 'P7', ubicacion: 'Zona B', modelo: 'ARIA L EVO', vencloud: true, nayax: { id: '21SE0011', ultima: '2026-10-01T09:00:00' } },
       { matricula: '18CE4507', sistema: 'prodelfi', tambien: ['nayax'], delegacion: 'Madrid', cliente: 'RTVE', num_centro: 200, centro: 'TORRESPAÑA', cod_pdv: 'P4', ubicacion: 'Planta 2', vencloud: true, prodelfi: { codigo: 4, grupo: 138, descripcion: 'CE4507 Torrespaña', como: 'tipo y número CE4507' }, nayax: { id: '18CE4507', ultima: '2026-10-01T09:00:00' } },
       { matricula: '24SE0777', sistema: 'solo_vencloud', tambien: [], vencloud: true, delegacion: 'Andalucía', cliente: 'AIRBUS', num_centro: 300, centro: 'SAN PABLO SUR', cod_pdv: 'P5', ubicacion: 'Comedor' }
     ],
+    zonas: { 'Cataluña': 'Cataluña', 'Madrid': 'Centro', 'Madrid - Leganés': 'Centro', 'Andalucía': 'Sur' },
     fuera: [{ sistema: 'nayax', id: '99XX9999', nombre: 'FANTASMA', detalle: 'Serunion / Sur', ultima: `${iso(HOY)}T10:00:00`, motivo: 'La matrícula 99XX9999 no está instalada en VenCloud.' }]
   }
 };
@@ -1244,11 +1248,32 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('y dice Ver detalle, no Ver seccion: es su pagina',
       (await pagina.textContent('.cuadro[data-id="telemetria"]')).includes('Ver detalle'));
     await Promise.all([pagina.waitForURL('**/telemetria/**'), pagina.click('.cuadro[data-id="telemetria"]')]);
-    await pagina.waitForSelector('#tabla table');
+    await pagina.waitForSelector('#tabla .area');
     comprueba('pestañas: Nayax, Prodelfi, solo en VenCloud y las que no estan en VenCloud',
       await pagina.$$eval('#pestanas button', x => x.map(b => b.dataset.p)), ['nayax', 'prodelfi', 'solo_vencloud', 'fuera']);
-    comprueba('Nayax: las que tienen alguna diferencia ayer',
+    comprueba('quien ve varias areas: primero un cuadrado por area, con las que tienen diferencias',
+      await pagina.$$eval('#tabla .area', x => x.map(b => [b.dataset.a, b.querySelector('.vl').textContent])),
+      [['Centro', '2'], ['Cataluña', '2']]);
+    const [dAreas] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba('el Excel de todas las areas', dAreas.suggestedFilename(), `telemetria_nayax_todas_${iso(AYER)}.xlsx`);
+    const tAreas = fs.readFileSync(await dAreas.path()).toString('utf8');
+    comprueba_que('lleva el area, el centro, el modelo y la ubicacion',
+      ['Área', 'Centro', 'Modelo', 'Ubicación', 'BARAJAS T4', 'ARIA L EVO', 'Urgencias'].every(t => tAreas.includes(t)));
+    await pagina.click('#tabla .area[data-a="Centro"]');
+    await pagina.waitForSelector('#tabla table');
+    comprueba_que('el area queda en la direccion', new URL(pagina.url()).searchParams.get('a') === 'Centro');
+    comprueba('dentro del area, por centro, modelo y ubicacion',
+      await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(t => t.textContent.trim())), ['21SE0011', '21SE0010']);
+    comprueba('las columnas: centro, luego modelo, luego ubicacion',
+      await pagina.$$eval('#tabla thead th', x => x.slice(0, 4).map(t => t.textContent)), ['Matrícula', 'Centro', 'Modelo', 'Ubicación']);
+    const [dArea] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba('el Excel del area', dArea.suggestedFilename(), `telemetria_nayax_centro_${iso(AYER)}.xlsx`);
+    await pagina.click('#volverArea');
+    await pagina.click('#tabla .area[data-a="Cataluña"]');
+    await pagina.waitForSelector('#tabla table');
+    comprueba('Nayax en Cataluña: las que tienen alguna diferencia ayer',
       await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(t => t.textContent.trim())), ['20SE0002', '20SE0003']);
+    comprueba_que('sin modelo en el censo, lo dice', (await pagina.textContent('#tabla tbody tr')).includes('Sin dato'));
     comprueba_que('con el ultimo dia que si mando', (await pagina.textContent('#tabla tbody tr:nth-child(2)')).match(/\d+ \w+/));
     comprueba_que('y dice que fichero falta', (await pagina.textContent('#ficheros')).includes('Falta Nebula (Coges), Grupos de Prodelfi'));
     await pagina.selectOption('#filtro', 'sin_marca');
@@ -1262,8 +1287,8 @@ const servidor = http.createServer((pet, res) => {
     await pagina.click('#pestanas button[data-p="fuera"]');
     comprueba_que('las de Nayax que no estan en VenCloud, con el motivo',
       (await pagina.textContent('#tabla')).includes('no está instalada en VenCloud'));
-    const [descarga] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bCsv')]);
-    comprueba('el CSV de la pestaña', descarga.suggestedFilename(), `telemetria_fuera_${iso(AYER)}.csv`);
+    const [descarga] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba('el Excel de la pestaña', descarga.suggestedFilename(), `telemetria_fuera_${iso(AYER)}.xlsx`);
     await pagina.setViewportSize({ width: 380, height: 800 });
     await pagina.click('#pestanas button[data-p="nayax"]');
     comprueba('en movil no se sale de la pantalla',

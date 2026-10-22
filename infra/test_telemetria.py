@@ -25,6 +25,7 @@ sys.path.insert(0, AQUI)
 
 import telemetria as TE  # noqa: E402
 import operativo as OP  # noqa: E402
+import incidencias as IN  # noqa: E402
 
 fallos = []
 
@@ -188,7 +189,7 @@ NEBULA = csv_nebula([["", "Nombre", "Dispositivo", "Gama", "Id telemetría", "No
 def maquina(mat, centro, num, cliente, cod_cliente="C1", deleg="Cataluña", pdv=None):
     return {"cod_cliente": cod_cliente, "cliente": cliente, "num_centro": num, "centro": centro,
             "delegacion": deleg, "cod_pdv": pdv or "P" + mat, "ubicacion": "Hall", "matricula": mat,
-            "estado_pdv": 1, "telemetria": 0}
+            "estado_pdv": 1, "telemetria": 0, "modelo": "ARIA L EVO" if mat.startswith("20") else ""}
 
 
 PUIG = ("HOSPITAL FUNDACIO PUIGVERT", 100, "FUNDACIO PUIGVERT")
@@ -330,6 +331,13 @@ comprueba("si VenCloud la marca con telemetria", (f2["vencloud"],
           next(x for x in det["maquinas"] if x["matricula"] == "20SE0001")["vencloud"]), (False, True))
 comprueba("y el centro del censo", (f2["centro"], f2["delegacion"]), ("HOSPITAL FUNDACIO PUIGVERT", "Cataluña"))
 comprueba("y la ultima comunicacion de Nayax", f2["nayax"]["ultima"][:10], HACE_3.isoformat())
+comprueba("y el modelo de VenCloud, vacio si el censo no lo trae",
+          (f2["modelo"], next(x for x in det["maquinas"] if x["matricula"] == "24SE0777")["modelo"]),
+          ("ARIA L EVO", ""))
+comprueba("y el area de cada delegacion, para abrir por areas", det["zonas"],
+          {d: IN.zona_de(d) for d in {x["delegacion"] for x in det["maquinas"]}})
+comprueba("Cataluña y Madrid caen en sus areas del Power BI",
+          (det["zonas"]["Cataluña"], det["zonas"]["Madrid"]), ("Cataluña", "Centro"))
 viejo = {"dias": {"2020-01-01": {"venta": ["X"], "dex": []}}}
 comprueba("acumula los dias anteriores, y guarda una semana",
           "2020-01-01" in op.detalle_telemetria("interno", viejo)["dias"], True)

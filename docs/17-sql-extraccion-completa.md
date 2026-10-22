@@ -1482,6 +1482,7 @@ select
   cast(pdv.fechabaja as text)    as baja_pdv,
   pdv.tarifavendingid            as tarifa_vending_pdv,
   m.codigo                       as matricula,
+  mod.modelo                     as modelo,
   m.estado                       as estado_maquina,
   m.tipoconectividad             as conectividad,
   m.tipotelemetria               as telemetria,
@@ -1493,6 +1494,7 @@ from comercial.clientes cli
 left join comercial.clientescentros cen on cen.clienteid = cli.id
 left join vending.pdvs pdv              on pdv.clientecentroid = cen.id
 left join recursos.maquinas m           on m.id = pdv.maquinaid
+left join recursos.maquinasmodelos mod  on mod.id = m.maquinamodeloid
 left join general.delegaciones del      on del.id = pdv.delegacionid
 left join (
   select c.maquinaid as maquinaid, count(*) as canales
@@ -1511,6 +1513,7 @@ order by cli.codigo, cen.numcentro, pdv.codigo
 | `sin_planograma`, `canales_con_articulo` | sin planograma no se puede distinguir «no había demanda» de «estaba vacío» |
 | `telemetria`, `dispositivo_telemetria` | una máquina con telemetría y **sin dispositivo** no manda su venta: el dato electrónico no existe |
 | `activo`, `baja_*`, `estado_pdv` | para no dar por incidencia lo que está de baja a propósito |
+| `modelo` | el modelo de la máquina (`recursos.maquinasmodelos`, el mismo join que el informe 4). Lo enseña la página de telemetría (19-oct-2026) |
 | `alta_cliente`, `alta_centro`, `alta_pdv` | las altas de verdad, con su fecha, sin tener que adivinarlas comparando censos |
 
 `telemetria` es el sistema: **40 es NAYAX**, 0 sin telemetría. `conectividad`: 0 sin conectividad,
