@@ -49,16 +49,35 @@ página lo carga de su propio dominio.
   sale en ningún cuadrado y la portada ofrece «Ver todos los almacenes».
   (22-oct-2026: el 21 se probó a sacar el área de la ciudad del nombre; Gabriele pidió la tabla.)
 
+## Puntos de venta activos, Ventas y Reposiciones
+
+Hasta el 22-oct-2026 sus cuadrados llevaban al panel antiguo. Gabriele pidió para ellos los mismos
+cuadrados por área «con la cifra de cada una». Ahora tienen una página, `/cifras/`, con
+`?que=pdvs`, `?que=ventas` o `?que=reposiciones` (más `&dia=` y `&area=`).
+
+- **Portada**: el total arriba y un cuadrado por área con su cifra en el color del texto. Aquí no
+  hay porcentaje y por tanto no hay semáforo. Ventas en euros, reposiciones en unidades y puntos
+  de venta en número de puntos activos.
+- **Dentro del área**: un cuadrado por delegación, con su cifra y debajo el detalle: unidades y
+  máquinas en ventas, las clases de producto en reposiciones, las máquinas instaladas en puntos
+  de venta.
+- **Ventas y reposiciones** son de un día: se elige en el selector, y el cuadrado del informe
+  general abre la página en su día. **Puntos de venta** es la foto de la noche.
+- **Los datos** son los del informe general (`/api/operativo`), ya recortados por el servidor a lo
+  que ve el usuario, con su reparto por delegación (docs/66). No hay fichero ni Lambda nuevos.
+- **Lo que no tiene delegación** está en el total pero en ningún área, y la página dice cuánto es
+  (el 20-oct, 2.509 € de 56.264 € de ventas). Las delegaciones de «Otra zona» (CENTRAL) salen como
+  cuadrado de delegación debajo de las áreas.
+- «Ver en el panel» sigue llevando al panel de siempre.
+
 ## Las demás secciones
 
-- Rutas (docs/67), Devoluciones, Furgonetas, Telemetría e Incidencias ya tienen sus áreas, cada una
-  en su propio cambio.
-- Puntos de venta activos, Ventas y Reposiciones no tienen página propia: sus cuadrados llevan a
-  `/panel/`. No hay un porcentaje que poner en el semáforo; si se hacen por áreas, el cuadrado
-  enseña la cifra del área.
+Rutas (docs/67), Devoluciones, Furgonetas, Telemetría e Incidencias ya tienen sus áreas, cada una
+en su propio cambio.
 
 ## Cómo se prueba
 
 `app/comun/prueba_pantallas.js` comprueba en Tarifas los cuadrados de área con su % y su color, que
 pulsar uno enseña sus delegaciones y la miga; en Almacenes, la portada, el filtro por área y
-`?area=todas`.
+`?area=todas`. En `/cifras/`, las áreas con su cifra, entrar en una, la miga, el día sin
+venta con su motivo y la nota de lo que no tiene delegación.

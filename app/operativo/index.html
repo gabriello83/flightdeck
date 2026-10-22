@@ -257,9 +257,10 @@ const DESTINO = {
   almacenes:    {url:"/almacenes/"},
   // Furgonetas tiene su propia pagina: vehiculo a vehiculo y visitas sin vehiculo (docs/58).
   furgonetas:   {url:"/furgonetas/", dia:true},
-  pdvs:         {sesion:"instalaciones", panel:"censo"},
-  ventas:       {sesion:"venta_consumo", panel:"recaudacion"},
-  reposiciones: {sesion:"venta_consumo", panel:"carga"},
+  // Puntos de venta, ventas y reposiciones: por areas y delegaciones (docs/70).
+  pdvs:         {url:"/cifras/?que=pdvs"},
+  ventas:       {url:"/cifras/?que=ventas", dia:true},
+  reposiciones: {url:"/cifras/?que=reposiciones", dia:true},
   telemetria:   {sesion:"instalaciones", panel:"incidencias"},
   // Tarifas tiene su propia pagina, con delegaciones, centros y productos (docs/52).
   tarifas:      {url:"/tarifas/"},
@@ -410,7 +411,7 @@ function pinta(){
        maquinas que no transmiten (docs/53). */
     const propia = id==="telemetria" && f.telemetria
       ? `/telemetria/?dia=${encodeURIComponent(fecha)}`
-      : dest && dest.url && dest.dia ? `${dest.url}?dia=${encodeURIComponent(fecha)}` : null;
+      : dest && dest.url && dest.dia ? `${dest.url}${dest.url.includes("?") ? "&" : "?"}dia=${encodeURIComponent(fecha)}` : null;
     const va = propia || (dest && (dest.url || ses.has(dest.sesion)));
     const el = document.createElement(va ? "a" : "div");
     el.className = "cuadro";

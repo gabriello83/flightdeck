@@ -51,21 +51,26 @@ button.ar-area:focus-visible{outline:2px solid var(--s1);outline-offset:1px}
 :root[data-theme="dark"] .ar-area .ar-pc.amarillo{color:#f2c94c}
 :root[data-theme="dark"] .ar-area .ar-pc.rojo{color:#f87171}
 .ar-area .ar-pc.sin{color:var(--tinta-3);font-size:22px}
+.ar-area .ar-pc.valor{font-size:28px}
 .ar-volver{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0 4px}
 .ar-volver h2{font-size:18px;margin:0}
 @media (prefers-reduced-motion:reduce){ button.ar-area{transition:none} }`;
   (document.head || document.documentElement).appendChild(estilo);
 
   /* La portada. `areas` es [{area, pct, titulo}] (pct null = sin dato) y
-     `abre(area)` se llama al pulsar una. */
+     `abre(area)` se llama al pulsar una. Donde no hay porcentaje sino una
+     cifra (ventas, puntos de venta), {area, valor, titulo}: `valor` ya va
+     escrito y sale en el color del texto, sin semaforo. */
   function portada(cont, areas, abre){
     const lista = areas.filter(a => a.area !== OTRA).sort((a, b) => orden(a.area, b.area));
     cont.innerHTML = `<div class="ar-areas">` + lista.map(a => {
-      const c = color(a.pct);
+      const cifra = a.valor != null;
+      const txt = cifra ? String(a.valor) : a.pct == null ? null : fpct(a.pct);
+      const cls = cifra ? "valor" : a.pct == null ? "sin" : color(a.pct);
       return `<button class="ar-area" type="button" data-area="${esc(a.area)}"${a.titulo ? ` title="${esc(a.titulo)}"` : ""}`
-        + ` aria-label="${esc(a.area)}: ${a.pct == null ? "sin dato" : fpct(a.pct)}">`
+        + ` aria-label="${esc(a.area)}: ${txt == null ? "sin dato" : esc(txt)}">`
         + `<span class="ar-nom">${esc(a.area)}</span>`
-        + `<span class="ar-pc ${a.pct == null ? "sin" : c}">${a.pct == null ? "Sin dato" : fpct(a.pct)}</span></button>`;
+        + `<span class="ar-pc ${cls}">${txt == null ? "Sin dato" : esc(txt)}</span></button>`;
     }).join("") + `</div>`;
     cont.querySelectorAll("button.ar-area").forEach(b => b.addEventListener("click", () => abre(b.dataset.area)));
     return lista.length;

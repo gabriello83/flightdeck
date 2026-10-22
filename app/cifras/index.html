@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cifras · digivend</title>
+<!-- Un solo origen. Esta pagina habla con /api/* del mismo dominio y con nadie
+     mas: hay redes de cliente que cortan las paginas que llaman fuera. La
+     cabecera de verdad la pone CloudFront; esta va por si se abre suelta. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M3 3h4v4H3zm6 0h4v4H9zM3 9h4v4H3zm6 0h4v4H9z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light;
+  --fondo:#f4f4f2; --tarjeta:#fcfcfb; --borde:#e2e1dc; --borde-fuerte:#cdccc5;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#78766f;
+  --s1:#2a78d6;
+  --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+  --rojo:#c62828;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+    --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+    --s1:#3987e5; --sombra:none; --rojo:#c0392b;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
+  --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
+  --s1:#3987e5; --sombra:none; --rojo:#c0392b;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0}
+body{
+  background:var(--fondo); color:var(--tinta);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.env{max-width:1240px;margin:0 auto;padding:18px 16px 72px}
+header.top{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between}
+.marca{display:flex;align-items:baseline;gap:10px;min-width:0;flex-wrap:wrap}
+.marca b{font-size:20px;letter-spacing:-.01em}
+.marca span{color:var(--tinta-2);font-size:13px}
+.acciones{display:flex;gap:8px;flex-wrap:wrap}
+button.btn,a.btn{
+  font:inherit;font-size:13px;color:var(--tinta);background:var(--tarjeta);text-decoration:none;
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:6px 11px;cursor:pointer;
+}
+button.btn:hover,a.btn:hover{border-color:var(--tinta-3)}
+.barra{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:16px 0 6px}
+.barra label{font-size:13px;color:var(--tinta-2);display:flex;align-items:center;gap:8px}
+.barra select{
+  font:inherit;font-size:14px;color:var(--tinta);background:var(--tarjeta);
+  border:1px solid var(--borde-fuerte);border-radius:8px;padding:5px 8px
+}
+.barra .cuando{font-size:13px;color:var(--tinta-2)}
+.nota{
+  margin:12px 0 4px;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
+  border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
+}
+.nota.mal{border-left-color:var(--rojo)}
+nav.miga{font-size:13px;color:var(--tinta-2);margin:14px 0 0}
+nav.miga a{color:var(--s1);text-decoration:none}
+nav.miga a:hover{text-decoration:underline}
+nav.miga .sep{margin:0 6px;color:var(--tinta-3)}
+.cifra{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-top:12px}
+.cifra .gr{font-size:34px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.cifra .ex{color:var(--tinta-2);font-size:14px}
+/* Las delegaciones de un area: como los cuadrados de area, sin pulsarse. */
+.delegs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:14px}
+.deleg{background:var(--tarjeta);border:1px solid var(--borde);border-radius:12px;box-shadow:var(--sombra);
+  padding:16px 14px;min-height:118px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.deleg .nom{font-size:14px;font-weight:650}
+.deleg .vl{font-size:26px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.25;margin-top:4px}
+.deleg .ex{font-size:12.5px;color:var(--tinta-2);margin-top:2px}
+footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
+#cargando{padding:40px 0;color:var(--tinta-2)}
+</style>
+</head>
+<body>
+<div class="env">
+  <header class="top">
+    <div class="marca">
+      <b id="titulo">Cifras</b>
+      <span id="quien"></span>
+    </div>
+    <div class="acciones">
+      <a class="btn" href="/operativo/" id="bInforme">Informe general</a>
+      <a class="btn" href="/panel/" id="bPanel" hidden>Ver en el panel</a>
+      <button class="btn" id="bTema" type="button">Modo oscuro</button>
+      <button class="btn" id="bSalir" type="button">Salir</button>
+    </div>
+  </header>
+
+  <div class="barra" id="barra" hidden>
+    <label id="lDia" hidden>Día <select id="selDia"></select></label>
+    <span class="cuando" id="cuando"></span>
+  </div>
+
+  <div id="cargando">Cargando…</div>
+  <div class="nota" id="aviso" hidden></div>
+  <nav class="miga" id="miga" hidden></nav>
+  <div id="vista"></div>
+  <div class="nota" id="resto" hidden></div>
+
+  <footer id="pie" hidden></footer>
+</div>
+
+<script src="/comun/areas.js"></script>
+<script>
+/* ===================================================================
+   Puntos de venta activos, Ventas y Reposiciones · digivend.es  (docs/70)
+
+   Los tres cuadrados del informe general que no tenian pagina propia. Como
+   las demas secciones, empiezan por un cuadrado por area con su cifra (aqui
+   no hay porcentaje, asi que no hay semaforo) y dentro del area estan sus
+   delegaciones. `?que=pdvs|ventas|reposiciones`, `&dia=` y `&area=`.
+
+   Los datos son los del informe general (/api/operativo), ya recortados en
+   el servidor a lo que el usuario ve: el reparto por delegacion de cada dia
+   y la foto de puntos de venta de la noche.
+   =================================================================== */
+const CLAVE_TEMA = "digivend.tema";
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = s => document.querySelector(s);
+const eur = n => new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n||0);
+const num = n => new Intl.NumberFormat("es-ES").format(Math.round(n||0));
+
+function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+(function tema(){
+  const t = leer(CLAVE_TEMA);
+  if(t) document.documentElement.setAttribute("data-theme", t);
+  const b = $("#bTema");
+  const oscuro = () => document.documentElement.getAttribute("data-theme")==="dark"
+    || (!document.documentElement.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  const pinta = () => { b.textContent = oscuro() ? "Modo claro" : "Modo oscuro"; };
+  pinta();
+  b.addEventListener("click", ()=>{
+    const n = oscuro() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+  });
+})();
+$("#bSalir").addEventListener("click", async ()=>{
+  try{ await fetch("/api/salir", {method:"POST", credentials:"same-origin"}); }catch(e){}
+  location.href = "/";
+});
+
+/* Cada seccion: de donde sale, como se suma y como se escribe. `de_un_dia`:
+   las cifras son de un dia (ventas, reposiciones); si no, la foto de la noche. */
+const QUE = {
+  pdvs: {
+    titulo: "Puntos de venta activos", de_un_dia: false, panel: "/panel/?ver=instalaciones#censo",
+    campos: ["activos", "maquinas"],
+    cifra: s => num(s.activos),
+    ex: s => `${num(s.maquinas)} máquinas instaladas`,
+  },
+  ventas: {
+    titulo: "Ventas", de_un_dia: true, panel: "/panel/?ver=venta_consumo#recaudacion",
+    campos: ["importe", "unidades", "maquinas"],
+    cifra: s => eur(s.importe),
+    ex: s => `${num(s.unidades)} unidades` + (s.maquinas!=null ? ` · ${num(s.maquinas)} máquinas` : ""),
+    resto: (t, r) => `${eur(r.importe)} de ventas de máquinas sin delegación en VenCloud: están en el total de arriba y en ningún área.`,
+    clave_resto: "importe",
+  },
+  reposiciones: {
+    titulo: "Reposiciones", de_un_dia: true, panel: "/panel/?ver=venta_consumo#carga",
+    campos: ["unidades", "consumibles"],
+    cifra: s => num(s.unidades) + " ud",
+    ex: s => {
+      const top = Object.entries(s.por_clase||{}).sort((a,b)=>b[1]-a[1]).slice(0,3)
+        .map(([c,u])=>`${c} ${num(u)}`).join(" · ");
+      return top || "Sin reposición de producto";
+    },
+    resto: (t, r) => `${num(r.unidades)} unidades repuestas en máquinas sin delegación en VenCloud: están en el total de arriba y en ningún área.`,
+    clave_resto: "unidades",
+  },
+};
+
+let YO = null, DATOS = null, SEC = null, ID = null;
+const SEL = {dia: "", area: ""};
+
+function avisa(t, mal){ const a=$("#aviso"); a.textContent=t||""; a.hidden=!t; a.classList.toggle("mal", !!mal); }
+
+/* El area de una delegacion: la que da el informe (zonas), y si no la trae,
+   la misma regla por el nombre. */
+const areaDe = d => (DATOS.zonas||{})[d] || Areas.zona(d);
+
+/* Suma de un reparto {delegacion: {campo: n, por_clase:{}}}. */
+function suma(filas){
+  const s = {};
+  SEC.campos.forEach(k=>{ s[k] = 0; });
+  let clases = null;
+  filas.forEach(f=>{
+    SEC.campos.forEach(k=>{ s[k] += f[k]||0; });
+    if(f.por_clase){ clases = clases || {}; Object.entries(f.por_clase).forEach(([c,u])=>{ clases[c]=(clases[c]||0)+u; }); }
+  });
+  if(clases) s.por_clase = clases;
+  return s;
+}
+/* El total de un dia tal cual lo da el informe (reposiciones trae por_clase
+   como lista). */
+function totalDe(x){
+  const s = Object.assign({}, x);
+  if(Array.isArray(x.por_clase)){ s.por_clase = {}; x.por_clase.forEach(c=>{ s.por_clase[c.clase] = c.unidades; }); }
+  return s;
+}
+
+/* Lo que se ensena: el total y el reparto por delegacion, o un motivo. */
+function datosDe(){
+  if(!SEC.de_un_dia){
+    const x = (DATOS.foto||{})[ID];
+    if(!x) return {sin: "El informe de esta noche no trae este dato."};
+    if(x.sin_dato) return {sin: x.sin_dato};
+    return {total: totalDe(x), por: x.por_delegacion || null};
+  }
+  const dia = (DATOS.dias||{})[SEL.dia] || {};
+  const x = dia[ID];
+  if(!x) return {sin: "Ese día no tiene este dato."};
+  if(x.sin_dato) return {sin: x.sin_dato};
+  return {total: totalDe(x), por: (dia.por_delegacion||{})[ID] || null};
+}
+
+function urlDe(){
+  const q = new URLSearchParams({que: ID});
+  if(SEC.de_un_dia && SEL.dia) q.set("dia", SEL.dia);
+  if(SEL.area) q.set("area", SEL.area);
+  return "?" + q.toString();
+}
+function ve(area){
+  SEL.area = area || "";
+  try{ history.pushState(null, "", urlDe()); }catch(e){}
+  pinta();
+  window.scrollTo(0, 0);
+}
+window.addEventListener("popstate", ()=>{ leeUrl(); pinta(); });
+function leeUrl(){
+  const q = new URLSearchParams(location.search);
+  SEL.area = q.get("area") || "";
+  const d = q.get("dia");
+  if(d && (DATOS.dias||{})[d]) SEL.dia = d;
+  else if(!SEL.dia) SEL.dia = DATOS.ultimo_dia || "";
+}
+
+function miga(trozos){
+  const m = $("#miga");
+  m.hidden = false;
+  m.innerHTML = trozos.map((t,i)=> i < trozos.length-1
+    ? `<a href="#" data-area="${esc(t.area)}">${esc(t.t)}</a><span class="sep">›</span>`
+    : `<span>${esc(t.t)}</span>`).join("");
+  m.querySelectorAll("a").forEach(a=>a.addEventListener("click", e=>{ e.preventDefault(); ve(a.dataset.area); }));
+}
+
+function cuadroDeleg(nombre, s){
+  return `<div class="deleg"><span class="nom">${esc(nombre)}</span>`
+    + `<span class="vl">${SEC.cifra(s)}</span><span class="ex">${esc(SEC.ex(s))}</span></div>`;
+}
+
+function pinta(){
+  const v = $("#vista");
+  $("#resto").hidden = true;
+  if(SEC.de_un_dia) $("#selDia").value = SEL.dia;
+  const r = datosDe();
+  if(r.sin){ $("#miga").hidden = true; v.innerHTML = `<div class="nota">${esc(r.sin)}</div>`; return; }
+  const {total, por} = r;
+  if(!por){
+    $("#miga").hidden = true;
+    v.innerHTML = `<div class="cifra"><span class="gr">${SEC.cifra(total)}</span><span class="ex">${esc(SEC.ex(total))}</span></div>`
+      + `<div class="nota">Este día no está repartido por delegación: es de antes de que el informe se repartiera.</div>`;
+    return;
+  }
+  const delegs = Object.keys(por).filter(d => d);
+  const porArea = {};
+  delegs.forEach(d=>{ (porArea[areaDe(d)] = porArea[areaDe(d)] || []).push(d); });
+  const areas = Object.keys(porArea).filter(a => a !== Areas.OTRA)
+    .sort((a,b)=>(Areas.ORDEN.indexOf(a)+1||99)-(Areas.ORDEN.indexOf(b)+1||99));
+
+  // Dentro de un area: sus delegaciones.
+  if(SEL.area && porArea[SEL.area]){
+    const lista = porArea[SEL.area].sort((a,b)=>a.localeCompare(b,"es"));
+    const s = suma(lista.map(d=>por[d]));
+    if(areas.length > 1) miga([{t:"Todas las áreas", area:""}, {t:SEL.area}]);
+    else $("#miga").hidden = true;
+    v.innerHTML = `<div class="cifra"><span class="gr">${SEC.cifra(s)}</span><span class="ex">${esc(SEC.ex(s))}</span></div>`
+      + `<div class="delegs">${lista.map(d=>cuadroDeleg(d, por[d])).join("")}</div>`;
+    return;
+  }
+  // Con una sola area, sus delegaciones directamente.
+  if(areas.length === 1 && !(porArea[Areas.OTRA]||[]).length){ SEL.area = areas[0]; return pinta(); }
+
+  miga([{t:"Todas las áreas"}]);
+  v.innerHTML = `<div class="cifra"><span class="gr">${SEC.cifra(total)}</span><span class="ex">${esc(SEC.ex(total))}</span></div>`
+    + `<div id="areas"></div><div class="delegs" id="otras"></div>`;
+  Areas.portada($("#areas"), areas.map(a=>{
+    const s = suma(porArea[a].map(d=>por[d]));
+    return {area:a, valor:SEC.cifra(s), titulo:SEC.ex(s)};
+  }), ve);
+  // Lo que no cae en ningun area (CENTRAL) sigue a la vista, como en Tarifas.
+  const otras = (porArea[Areas.OTRA]||[]).sort((a,b)=>a.localeCompare(b,"es"));
+  $("#otras").innerHTML = otras.map(d=>cuadroDeleg(d, por[d])).join("");
+  // Si un dato no esta, se dice: lo que no tiene delegacion no esta en ningun area.
+  if(SEC.resto){
+    const k = SEC.clave_resto;
+    const sinDeleg = (por[""]||{})[k] || 0;
+    const repartido = delegs.reduce((t,d)=>t+(por[d][k]||0), 0);
+    const falta = Math.max(sinDeleg, (total[k]||0) - repartido);
+    if(falta >= 0.5){
+      const rr = {}; rr[k] = falta;
+      $("#resto").textContent = SEC.resto(total, rr);
+      $("#resto").hidden = false;
+    }
+  }
+}
+
+function fechaLarga(f){
+  return new Date(String(f)+"T00:00:00").toLocaleDateString("es-ES",{weekday:"long", day:"numeric", month:"long", year:"numeric"});
+}
+
+(async function arranca(){
+  const q = new URLSearchParams(location.search);
+  ID = q.get("que");
+  SEC = QUE[ID];
+  if(!SEC){ $("#cargando").hidden = true; avisa("Esta página no existe. Vuelve al informe general.", true); return; }
+  $("#titulo").textContent = SEC.titulo;
+
+  let r;
+  try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(r.status === 401){ location.href = "/"; return; }
+  if(!r.ok){ $("#cargando").textContent = "No se ha podido leer la sesión."; return; }
+  YO = await r.json();
+  /* Un cliente solo tiene el cuadro de mando (docs/49). */
+  if(YO.tipo === "cliente"){ location.replace("/cuadro/"); return; }
+  $("#quien").textContent = (YO.perfil ? YO.perfil + " · " : "") + (YO.nombre || YO.correo);
+  document.title = (YO.perfil ? YO.perfil + " · " : "") + SEC.titulo + " · digivend";
+
+  let ro;
+  try{ ro = await fetch("/api/operativo", {credentials:"same-origin"}); }
+  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
+  if(ro.status === 401){ location.href = "/"; return; }
+  $("#cargando").hidden = true;
+  if(!ro.ok){
+    let d={}; try{ d = await ro.json(); }catch(e){}
+    avisa(d.error || "Los datos no están disponibles ahora mismo.", true);
+    return;
+  }
+  DATOS = await ro.json();
+  if(!(DATOS.cuadrados||[]).includes(ID)){ avisa("Este cuadrado no está entre los tuyos."); return; }
+
+  $("#bPanel").href = SEC.panel; $("#bPanel").hidden = false;
+  $("#barra").hidden = false;
+  if(SEC.de_un_dia){
+    const dias = Object.keys(DATOS.dias||{}).filter(d=>DATOS.dias[d][ID]).sort().reverse();
+    $("#selDia").innerHTML = dias.map(d=>`<option value="${esc(d)}">${esc(fechaLarga(d))}</option>`).join("");
+    $("#lDia").hidden = !dias.length;
+    $("#selDia").addEventListener("change", ()=>{
+      SEL.dia = $("#selDia").value;
+      try{ history.pushState(null, "", urlDe()); }catch(e){}
+      pinta();
+    });
+  } else {
+    $("#cuando").textContent = DATOS.generado
+      ? "Foto de la noche del " + new Date(DATOS.generado).toLocaleDateString("es-ES",{day:"numeric", month:"long", year:"numeric"})
+      : "Foto de la última noche";
+  }
+  leeUrl();
+  if(SEC.de_un_dia && !(DATOS.dias||{})[SEL.dia]){ avisa("El informe todavía no tiene ningún día calculado."); return; }
+  pinta();
+  const pie = $("#pie");
+  pie.textContent = "Las cifras son las del informe general, repartidas por la delegación de cada máquina. "
+    + "Las áreas, por el nombre de la delegación (docs/70).";
+  pie.hidden = false;
+})();
+</script>
+</body>
+</html>
