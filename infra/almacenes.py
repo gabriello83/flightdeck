@@ -222,13 +222,35 @@ def huella(datos):
 
 
 # ----------------------------------------------------------------------
+# la delegacion de cada almacen
+# ----------------------------------------------------------------------
+def delegacion_de_almacenes(maestro, rutas):
+    """Filas {almacen, delegacion}: primero el maestro de almacenes de VenCloud
+    (M3, informe 199), luego el maestro de rutas para lo que no este.
+
+    El stock llega por nombre de almacen, y en el maestro hay nombres repetidos
+    («Caducidades» en casi todas las delegaciones). Un nombre que el maestro da
+    con mas de una delegacion no lleva ninguna: no se puede saber cual es.
+    """
+    del_maestro = {}
+    for r in maestro or []:
+        a = _txt(R.v(r, "almacen", ""))
+        if a:
+            del_maestro.setdefault(a, set()).add(_txt(R.v(r, "delegacion", "")))
+    out = [{"almacen": a, "delegacion": next(iter(d))}
+           for a, d in del_maestro.items() if len(d) == 1 and next(iter(d))]
+    out += [r for r in rutas or [] if _txt(R.v(r, "almacen", "")) not in del_maestro]
+    return out
+
+
+# ----------------------------------------------------------------------
 # el fichero de un perfil
 # ----------------------------------------------------------------------
 def almacenes_del_perfil(nombres, rutas, ambito):
     """Que almacenes ve un perfil: {nombre: delegacion}, o un motivo si ninguno.
 
     La misma regla que el cuadrado (operativo.almacenes): un almacen es de una
-    delegacion, y la delegacion sale del maestro de rutas.
+    delegacion, y `rutas` son las filas de delegacion_de_almacenes.
     """
     deleg_de = {}
     for r in rutas or []:

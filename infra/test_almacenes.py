@@ -79,6 +79,24 @@ comprueba("uno de delegacion, los suyos",
 comprueba("uno de cliente, ninguno, y lo dice",
           AL.almacenes_del_perfil({"Sevilla"}, rutas, {"clientes": ["AIRBUS"]})[0], None)
 
+print("\nLa delegacion de cada almacen: el maestro de almacenes, y si no, el de rutas")
+maestro = [{"almacen": "Zaragoza - Colroma", "delegacion": "Cataluña - Cornella"},
+           {"almacen": "Caducidades", "delegacion": "Norte - Bilbao"},
+           {"almacen": "Caducidades", "delegacion": "Norte - León"},
+           {"almacen": "Cornella CECO ", "delegacion": "Cataluña - Cornella"},
+           {"almacen": "Sin nada", "delegacion": None}]
+rutas2 = [{"almacen": "Zaragoza - Colroma", "delegacion": "Madrid - Leganes"},
+          {"almacen": "Solo en rutas", "delegacion": "Levante - Murcia"},
+          {"almacen": "Caducidades", "delegacion": "Norte - Bilbao"}]
+dl = AL.almacenes_del_perfil({"Zaragoza - Colroma", "Caducidades", "Cornella CECO", "Solo en rutas", "Sin nada", "Otro"},
+                             AL.delegacion_de_almacenes(maestro, rutas2), {})[0]
+comprueba("manda el maestro de almacenes", dl["Zaragoza - Colroma"], "Cataluña - Cornella")
+comprueba("un nombre repetido en varias delegaciones no lleva ninguna", dl["Caducidades"], "")
+comprueba("el nombre se lee sin espacios de mas", dl["Cornella CECO"], "Cataluña - Cornella")
+comprueba("lo que no esta en el maestro, del de rutas", dl["Solo en rutas"], "Levante - Murcia")
+comprueba("sin delegacion en ninguno, vacio", (dl["Sin nada"], dl["Otro"]), ("", ""))
+comprueba("sin maestro de almacenes, como antes", AL.delegacion_de_almacenes(None, rutas), rutas)
+
 print()
 if fallos:
     print(f"{len(fallos)} PRUEBAS FALLIDAS: {', '.join(fallos)}")

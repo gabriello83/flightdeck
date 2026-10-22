@@ -40,10 +40,14 @@ página lo carga de su propio dominio.
   mínimo.
 - **Dentro del área**: la página de siempre, con los almacenes de esa área. `?area=Sur` abre un área;
   `?area=todas` abre todos.
-- **El área de un almacén**: la de su delegación. Muchos almacenes no tienen delegación en VenCloud;
-  para esos, el área sale de la ciudad que lleva el nombre del almacén (MADRID, CORNELLA, BILBAO,
-  SEVILLA, VALENCIA…, la lista `CIUDADES` de la página). Si el nombre no dice ninguna, el almacén es
-  de «Otra zona», no sale en ningún área, y la portada ofrece «Ver todos los almacenes».
+- **El área de un almacén**: la de su delegación en la tabla de almacenes de VenCloud, que se baja
+  cada noche con el informe **M3 · EXT_MAESTRO_ALMACENES** (informe 199, docs/17). Antes la
+  delegación salía solo del maestro de rutas, donde faltan muchos almacenes (Cornellà, Bilbao,
+  Málaga, Zaragoza…); un almacén que no esté en M3 la sigue tomando de ahí. Los nombres se repiten
+  («Caducidades» hay uno por delegación) y el stock llega por nombre: un nombre con varias
+  delegaciones no lleva ninguna. Lo que queda sin área («Caducidades», «Principal» de CENTRAL) no
+  sale en ningún cuadrado y la portada ofrece «Ver todos los almacenes».
+  (22-oct-2026: el 21 se probó a sacar el área de la ciudad del nombre; Gabriele pidió la tabla.)
 
 ## Las demás secciones
 

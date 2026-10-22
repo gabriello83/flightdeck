@@ -1921,7 +1921,11 @@ join stocks.articulos a on a.id = d.articuloid
 order by a.codigo, d.orden
 ```
 
-## M3 · EXT_MAESTRO_ALMACENES  *(sin parámetros)*
+## M3 · EXT_MAESTRO_ALMACENES  *(sin parámetros)*  ·  **informe 199**
+
+La tabla de almacenes de VenCloud con su delegación (docs/70): de ella sale el área de cada almacén.
+Creado el 22-oct-2026 con 59 almacenes. Los nombres se repiten («Caducidades» en casi todas las
+delegaciones); un nombre con más de una delegación no lleva ninguna.
 
 ```sql
 select
@@ -1930,16 +1934,10 @@ select
   al.nombre  as almacen,
   al.tipo    as tipo,
   al.activo  as activo,
-  al.codigo_sap as cod_sap,
-  al.refexterna as ref_externa,
-  al.incluirinfinventario as entra_en_inventario,
-  al.salidasalmsoloconstock as salidas_solo_con_stock,
-  del.nombre as delegacion,
-  dir.ciudad as ciudad,
-  dir.provincia as provincia
+  del.nombre as delegacion
 from recursos.almacenes al
 left join general.delegaciones del on del.id = al.delegacionid
-left join general.direcciones dir  on dir.id = al.direccionid
+order by al.codigo
 ```
 
 ## M4 · EXT_MAESTRO_VEHICULOS  *(sin parámetros)*
@@ -2449,7 +2447,7 @@ Cuando tengas los informes creados y sepas su número, esto es lo que va en la v
   "maestro_rutas_crit":{"informe":"NNN","fechas":"ninguna","ruta":"maestros/rutas_criterios"},
   "maestro_rutas_oper":{"informe":"NNN","fechas":"ninguna","ruta":"maestros/rutas_operarios"},
   "maestro_rutas_fondos":{"informe":"NNN","fechas":"ninguna","ruta":"maestros/rutas_fondos"},
-  "maestro_almacenes": {"informe":"NNN","fechas":"ninguna","ruta":"maestros/almacenes"},
+  "maestro_almacenes": {"informe":"199","fechas":"ninguna","ruta":"maestros/almacenes"},
   "maestro_vehiculos": {"informe":"NNN","fechas":"ninguna","ruta":"maestros/vehiculos"},
   "maestro_empleados": {"informe":"NNN","fechas":"ninguna","ruta":"maestros/empleados"},
   "maestro_sat_catalogo":{"informe":"NNN","fechas":"ninguna","ruta":"maestros/sat_catalogo"},

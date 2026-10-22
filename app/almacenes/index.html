@@ -225,21 +225,10 @@ $("#bSalir").addEventListener("click", async ()=>{
 
 let DATOS = null, VER = "todos", MOSTRADOS = TANDA, AREA = "";
 
-/* El area de un almacen (docs/70): la de su delegacion. Muchos almacenes no
-   tienen delegacion en VenCloud (Cornellà, Bilbao, Málaga…): entonces la dice
-   la ciudad de su nombre. Los que no nombran ninguna (Caducidades, Donantes,
-   Zaragoza…) quedan en «Otra zona», sin cuadrado, y se ven en «Todas». */
-const CIUDADES = [["MADRID","Centro"],["LA PAZ","Centro"],["CORNELLA","Cataluña"],["FIGUERES","Cataluña"],["GIRONA","Cataluña"],
-  ["TARRAGONA","Cataluña"],["BARCELONA","Cataluña"],["BILBAO","Norte"],["OVIEDO","Norte"],["ASTURIAS","Norte"],
-  ["MONTENARANCO","Norte"],["CANTABRIA","Norte"],["LEON","Norte"],["SEVILLA","Sur"],["CADIZ","Sur"],["GRANADA","Sur"],
-  ["MALAGA","Sur"],["LA LINEA","Sur"],["EXTREMADURA","Sur"],["VALENCIA","Levante"],["ALICANTE","Levante"],["MURCIA","Levante"]];
-function areaDe(a){
-  const z = Areas.zona(a.delegacion);
-  if(z !== Areas.OTRA) return z;
-  const n = String(a.almacen||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();
-  const x = CIUDADES.find(([c])=>n.includes(c));
-  return x ? x[1] : Areas.OTRA;
-}
+/* El area de un almacen (docs/70): la de su delegacion, que la noche toma del
+   maestro de almacenes de VenCloud (M3). Lo que no tiene delegacion, o la
+   tiene en «Otra zona» (CENTRAL), no lleva cuadrado y se ve en «Todos». */
+const areaDe = a => Areas.zona(a.delegacion);
 /* El porcentaje de un area: productos con compra que no estan bajo minimo. */
 function cuentaArea(lista){
   let con = 0, bajo = 0;

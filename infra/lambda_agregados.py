@@ -103,9 +103,13 @@ CLAVE_SAT_INCIDENCIAS = os.environ.get("SAT_INCIDENCIAS",
 # VenCloud, con su importe y su estado.
 CLAVE_DEVOLUCIONES = os.environ.get("DEVOLUCIONES",
                                     "maestros/devoluciones/m_devoluciones.json.gz")
-# El maestro de rutas: lo unico que dice de que delegacion es cada almacen
-# (informe general operativo, docs/51).
+# El maestro de rutas (docs/51, docs/55). Dice tambien de que delegacion es un
+# almacen que no este en el maestro de almacenes.
 CLAVE_RUTAS = os.environ.get("RUTAS", "maestros/rutas/m_rutas.json.gz")
+# El maestro de almacenes (M3, informe 199, docs/70): la delegacion de cada
+# almacen, como la tabla de almacenes de VenCloud.
+CLAVE_MAESTRO_ALMACENES = os.environ.get("MAESTRO_ALMACENES",
+                                         "maestros/almacenes/m_almacenes.json.gz")
 # El maestro de vehiculos (M12, informe 191): que furgonetas estan activas y de
 # que delegacion es cada una, para la pagina de furgonetas (docs/58).
 CLAVE_VEHICULOS = os.environ.get("VEHICULOS", "maestros/vehiculos/m_vehiculos.json.gz")
@@ -1779,6 +1783,8 @@ def lambda_handler(event, context):
     resumen_revision, resumen_utilizo = {}, None
     if not historico:
         rutas = _filas(_json_de(CLAVE_RUTAS))
+        deleg_almacenes = AL.delegacion_de_almacenes(
+            _filas(_json_de(CLAVE_MAESTRO_ALMACENES)), rutas)
         maestro_tarifas = _filas(_json_de(CLAVE_TARIFAS))
         tarifas = TA.Tarifas(maestro_tarifas) if maestro_tarifas else None
         censo = _filas(_json_de(CLAVE_CENSO))
@@ -1807,7 +1813,7 @@ def lambda_handler(event, context):
         escribe_incidencias(acumuladores, operativos, incidencias, mapa, hoy)
         for acu in acumuladores:
             op = operativos[acu.perfil["id"]]
-            op.pon_almacenes(OP.almacenes(op.balance, rutas, acu.ambito))
+            op.pon_almacenes(OP.almacenes(op.balance, deleg_almacenes, acu.ambito))
             censo_perfil = [f for f in censo if en_ambito(f, acu.ambito, mapa)]
             resumen_tarifas[acu.perfil["id"]], detalle_tarifas = escribe_tarifas(
                 acu, op, tarifas, censo_perfil, observador, hoy)
@@ -1817,7 +1823,7 @@ def lambda_handler(event, context):
             else:
                 op.foto["revision"] = {"sin_dato": "Falta el censo de instalaciones "
                                                    "(EXT_INSTALACIONES) de esta noche."}
-        resumen_almacenes = escribe_almacenes(acumuladores, operativos, existencias, rutas, hoy)
+        resumen_almacenes = escribe_almacenes(acumuladores, operativos, existencias, deleg_almacenes, hoy)
         festivos = _json_de(CLAVE_FESTIVOS)
         vehiculos = _json_de(CLAVE_VEHICULOS)
         vehiculos = _filas(vehiculos) if vehiculos is not None else None
