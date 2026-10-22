@@ -119,7 +119,7 @@ tr:last-child td{border-bottom:0}
   transform:translateX(100%);transition:transform .18s ease-out;box-shadow:-8px 0 28px rgba(0,0,0,.12)
 }
 #chat.vis{transform:none}
-#chat header{display:flex;align-items:baseline;gap:8px;padding:14px 16px;border-bottom:1px solid var(--borde)}
+#chat header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--borde)}
 #chat header b{font-size:15px;flex:1}
 #chat header span{font-size:12px;color:var(--tinta-3)}
 #chat .hilo{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
@@ -147,6 +147,33 @@ tr:last-child td{border-bottom:0}
 #chat form button[disabled]{opacity:.55;cursor:progress}
 #chat .pieChat{padding:0 16px 12px;font-size:11.5px;color:var(--tinta-3)}
 @media (max-width:520px){ #chat{width:100%} }
+/* Vendi, la cara del asistente: una maquina de snacks con ojos, guantes y
+   zapatillas. Saluda con la mano al entrar en la pagina y al abrir el cajon.
+   Va pintado en SVG dentro de la pagina: ni imagen ni nada que pedir fuera. */
+.muneco{display:block;overflow:visible}
+.muneco .mano{transform-origin:92px 70px;transform-box:view-box}
+.muneco .todo{transform-origin:60px 140px;transform-box:view-box}
+.saluda .mano{animation:saluda .42s ease-in-out 6 alternate}
+.saluda .todo{animation:bote .84s ease-in-out 3}
+@keyframes saluda{from{transform:rotate(-16deg)}to{transform:rotate(22deg)}}
+@keyframes bote{0%,100%{transform:none}50%{transform:translateY(-3px) rotate(-2deg)}}
+#bVendi{
+  position:fixed;right:18px;bottom:18px;z-index:30;width:76px;height:94px;padding:0;
+  background:transparent;border:0;cursor:pointer;filter:drop-shadow(0 4px 8px rgba(0,0,0,.18))
+}
+#bVendi .muneco{width:100%;height:100%}
+#bVendi:focus-visible{outline:2px solid var(--s1);outline-offset:4px;border-radius:12px}
+#bocadillo{
+  position:fixed;right:100px;bottom:70px;z-index:30;max-width:200px;
+  background:var(--tarjeta);color:var(--tinta);border:1px solid var(--borde-fuerte);
+  border-radius:12px 12px 3px 12px;padding:8px 12px;font-size:13px;line-height:1.4;
+  box-shadow:var(--sombra);opacity:0;transform:translateY(6px);transition:opacity .25s,transform .25s;pointer-events:none
+}
+#bocadillo.vis{opacity:1;transform:none}
+#chat header .muneco{width:30px;height:37px;align-self:center;flex:none}
+.btn .muneco{display:inline-block;width:15px;height:19px;vertical-align:-4px;margin-right:5px}
+@media (max-width:520px){ #bVendi{width:60px;height:74px;right:12px;bottom:12px} #bocadillo{right:80px;bottom:52px} }
+@media (prefers-reduced-motion:reduce){ .saluda .mano,.saluda .todo{animation:none} #bocadillo{transition:none} }
 #tt{
   position:fixed;pointer-events:none;opacity:0;transition:opacity .08s;z-index:50;
   background:var(--tinta);color:var(--fondo);font-size:12px;padding:5px 9px;border-radius:6px;
@@ -197,6 +224,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 <div id="fondo" hidden></div>
 <aside id="chat" role="dialog" aria-modal="true" aria-label="Asistente" hidden>
   <header>
+    <span id="vendiChat"></span>
     <b>Asistente</b>
     <span id="chatQuedan"></span>
     <button class="btn" type="button" id="chatCerrar" aria-label="Cerrar">Cerrar</button>
@@ -209,6 +237,8 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   </form>
   <p class="pieChat">Sólo ve los datos de este panel. No ejecuta acciones ni consulta nada más.</p>
 </aside>
+<button id="bVendi" type="button" aria-label="Preguntar al asistente" hidden></button>
+<div id="bocadillo" aria-hidden="true">¡Hola! Pregúntame por los datos de tu panel.</div>
 
 <script src="/comun/periodos.js"></script>
 <script>
@@ -998,11 +1028,52 @@ function pintaKpis(){
 const HILO = [];                 /* {de, texto} — memoria corta, la API usa los ultimos 6 */
 let enVuelo = false;
 
+/* Vendi: el muñeco del asistente. Una funcion que devuelve el dibujo, porque
+   sale en tres sitios (el boton flotante, el boton Preguntar y la cabecera del
+   cajon) y cada uno saluda por su cuenta. */
+function vendi(){
+  const t="#3a2a1e";
+  const snack=(x,y,c)=>`<rect x="${x}" y="${y}" width="9" height="10" rx="2" fill="${c}"/>`;
+  return `<svg class="muneco" viewBox="0 0 120 150" aria-hidden="true" focusable="false"><g class="todo">
+  <path d="M48 118v15M72 118v15" stroke="${t}" stroke-width="5" stroke-linecap="round"/>
+  <path d="M36 140c0-6 6-8 12-8s9 3 9 8z" fill="#fff" stroke="${t}" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M63 140c0-5 3-8 9-8s12 2 12 8z" fill="#fff" stroke="${t}" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M29 70Q15 80 18 95" fill="none" stroke="${t}" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="18" cy="99" r="7.5" fill="#fff" stroke="${t}" stroke-width="2.5"/>
+  <rect x="28" y="14" width="64" height="106" rx="12" fill="#d8262f" stroke="${t}" stroke-width="3"/>
+  <rect x="33" y="19" width="54" height="5" rx="2.5" fill="#fff" opacity=".28"/>
+  <ellipse cx="48" cy="34" rx="8.5" ry="10.5" fill="#fff" stroke="${t}" stroke-width="2"/>
+  <ellipse cx="72" cy="34" rx="8.5" ry="10.5" fill="#fff" stroke="${t}" stroke-width="2"/>
+  <circle cx="50" cy="36" r="4.2" fill="${t}"/><circle cx="70" cy="36" r="4.2" fill="${t}"/>
+  <circle cx="51.5" cy="34.4" r="1.3" fill="#fff"/><circle cx="71.5" cy="34.4" r="1.3" fill="#fff"/>
+  <path d="M50 46Q60 53 70 46" fill="none" stroke="${t}" stroke-width="3" stroke-linecap="round"/>
+  <rect x="35" y="55" width="38" height="43" rx="4" fill="#d6ecf8" stroke="${t}" stroke-width="2"/>
+  ${snack(38,58,"#f2b632")}${snack(49.5,58,"#2a78d6")}${snack(61,58,"#1baf7a")}
+  ${snack(38,72,"#eb6834")}${snack(49.5,72,"#8e5bd0")}${snack(61,72,"#f2b632")}
+  ${snack(38,85,"#1baf7a")}${snack(49.5,85,"#eb6834")}${snack(61,85,"#2a78d6")}
+  <path d="M37 69.5h34M37 83h34" stroke="${t}" stroke-width="1.4" opacity=".55"/>
+  <rect x="77" y="55" width="10" height="19" rx="2" fill="#2b2b2b"/>
+  <path d="M80 59h1M84 59h1M80 63h1M84 63h1M80 67h1M84 67h1M80 71h1M84 71h1" stroke="#9fd3ff" stroke-width="2" stroke-linecap="round"/>
+  <rect x="79" y="79" width="6" height="10" rx="1.5" fill="#f2c94c" stroke="${t}" stroke-width="1.4"/>
+  <rect x="37" y="104" width="46" height="9" rx="3" fill="#2b2b2b"/>
+  <g class="mano">
+    <path d="M91 70Q106 64 106 47" fill="none" stroke="${t}" stroke-width="5" stroke-linecap="round"/>
+    <path d="M99 44c-1-5 1-9 4-9 1-4 4-5 6-3 2-2 5-1 6 2 3 0 4 3 3 6l-2 9c-1 4-5 6-9 6s-8-3-8-7z" fill="#fff" stroke="${t}" stroke-width="2.5" stroke-linejoin="round"/>
+  </g>
+</g></svg>`;
+}
+function saluda(sitio){
+  const m = sitio && sitio.querySelector(".muneco");
+  if(!m) return;
+  m.classList.remove("saluda"); void m.getBoundingClientRect(); m.classList.add("saluda");
+}
+
 function abreChat(abierto){
   const c=$("#chat"), f=$("#fondo");
   c.hidden=false; f.hidden=false;
   requestAnimationFrame(()=>{ c.classList.toggle("vis",abierto); f.classList.toggle("vis",abierto); });
-  if(abierto){ $("#chatTexto").focus(); pintaSugerencias(); }
+  $("#bVendi").hidden = abierto || $("#bPreguntar").hidden;
+  if(abierto){ $("#chatTexto").focus(); pintaSugerencias(); saluda($("#vendiChat")); $("#bocadillo").classList.remove("vis"); }
   else $("#bPreguntar").focus();
 }
 function turno(de, texto, clase){
@@ -1070,6 +1141,8 @@ async function pregunta(texto){
 }
 
 $("#bPreguntar").addEventListener("click", ()=>abreChat(true));
+$("#bVendi").addEventListener("click", ()=>abreChat(true));
+$("#bVendi").addEventListener("mouseenter", ()=>saluda($("#bVendi")));
 $("#chatCerrar").addEventListener("click", ()=>abreChat(false));
 $("#fondo").addEventListener("click", ()=>abreChat(false));
 addEventListener("keydown", e=>{ if(e.key==="Escape" && $("#chat").classList.contains("vis")) abreChat(false); });
@@ -1229,7 +1302,19 @@ function notaDelPeriodo(T, lugar){
     if(ro.ok){ const d = await ro.json(); if(Array.isArray(d.orden)) ORDEN = d.orden; }
   }catch(e){}
 
-  if(YO.asistente && YO.asistente.habilitado) $("#bPreguntar").hidden = false;
+  if(YO.asistente && YO.asistente.habilitado){
+    $("#bPreguntar").hidden = false;
+    $("#bPreguntar").innerHTML = vendi() + "Preguntar";
+    $("#vendiChat").innerHTML = vendi();
+    $("#bVendi").innerHTML = vendi();
+    $("#bVendi").hidden = false;
+    /* Al entrar, Vendi saluda y dice hola unos segundos. */
+    setTimeout(()=>{
+      saluda($("#bVendi"));
+      $("#bocadillo").classList.add("vis");
+      setTimeout(()=>$("#bocadillo").classList.remove("vis"), 4500);
+    }, 700);
+  }
   if(YO.permisos && YO.permisos.alarmas_ver) $("#bAvisos").hidden = false;
   $("#bAvisos").addEventListener("click", ()=>{ location.href = "/avisos/"; });
   if((YO.sesiones||[]).includes("cuadro")) $("#bCuadro").hidden = false;
