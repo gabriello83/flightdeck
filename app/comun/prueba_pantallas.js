@@ -454,6 +454,9 @@ API['/api/rutas'] = {
     { f: iso(AYER) + ' 09:00', m: '19FP1530', p: 'P7', d: 'Madrid - Leganes', n: '1001', c: 'AIRBUS GETAFE', o: 'Reponer distribuidor automatico', x: 'E-1', a: 1 },
     { f: iso(AYER) + ' 12:00', m: '19FP1530', p: 'P7', d: 'Madrid - Leganes', n: '1001', c: 'AIRBUS GETAFE', o: 'SNACK/BEBIDA - SELECCIONES VACIAS', x: 'E-2', a: 0 },
     { f: HACE3 + ' 08:00', m: '10CE5680', p: 'P1', d: 'Andalucía - Málaga', n: '2001', c: 'HOSPITAL MÁLAGA', o: 'Reponer distribuidor automatico', x: 'E-3', a: 0 }],
+  sanitarias: [
+    { f: iso(AYER) + ' 10:00', m: '24CE4842', p: 'P8', d: 'Madrid - Leganes', n: '1002', c: 'AIRBUS ILLESCAS', o: 'SNACK/BEBIDA - Producto caducado', x: 'C-1', a: 1, k: 'caducado' },
+    { f: HACE3 + ' 08:00', m: '10CE5680', p: 'P1', d: 'Andalucía - Málaga', n: '2001', c: 'HOSPITAL MÁLAGA', o: 'CAFÉ - No sale producto', x: 'C-2', a: 0, k: 'insectos' }],
   llamadas_fuente: 'M13 · EXT_SAT_INCIDENCIAS',
   control_festivos: [
     { fecha: HACE3, delegacion: 'Andalucía - Málaga', festivo: 'nacional', estado: 'festivo_con_visitas', visitas: 40,
@@ -535,7 +538,12 @@ const INDICE_CUADRO = {
 // Los preferidos del usuario de la prueba (docs/62), y los nombres que manda la API.
 let PREFS = [];
 const NOMBRES_TABLAS = {
-  rutas: { nombre: 'Rutas', tablas: { rutas: 'Visitas por ruta', estado: 'Estado de las visitas',
+  rutas: { nombre: 'Rutas', tablas: { i_cumplimiento: 'Cumplimiento de ruta', i_en_ruta: 'Visitas en ruta',
+    i_efectuadas: 'Visitas efectuadas', i_no_planificadas: 'Visitas no planificadas', i_pasaje_vacio: 'Pasaje vacío',
+    i_pendientes: 'Visitas pendientes', i_reposicion: 'Máquinas con llamada de reposición',
+    i_sanitarias: 'Máquinas con producto caducado o insectos', llamadas: 'Llamadas de máquina vacía',
+    recaudar: 'Máquinas por recaudar en el mes', reponer: 'Máquinas sin reponer', sanitarias: 'Caducado o insectos',
+    rutas: 'Visitas por ruta', estado: 'Estado de las visitas',
     maquinas: 'Máquinas no visitadas', delegaciones: 'Por delegación', festivos: 'Festivos por delegación' } },
   averias: { nombre: 'Incidencias', tablas: { zonas: 'Total de incidencias por zona',
     tecnicas: 'Los 10 centros con más averías técnicas', abiertas: 'Lista de incidencias y su ficha' } },
@@ -1386,34 +1394,28 @@ const servidor = http.createServer((pet, res) => {
     const FOTOS = process.env.FOTOS_RUTAS;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre(`/rutas/?dia=${iso(AYER)}`);
-    await pagina.waitForSelector('#areas .area.si');
+    await pagina.waitForSelector('#areas .area');
     comprueba('arranca en el dia que trae la direccion', await pagina.inputValue('#dia'), iso(AYER));
-    comprueba('la portada: lo nacional, los seis indicadores del Power BI en su orden',
+    comprueba('la portada: lo nacional, los ocho cuadrados en el orden de Gabriele (21-oct)',
       await pagina.$$eval('#kpis .kpi .et', x => x.map(e => e.textContent.trim())),
-      ['Visitas pendientes', 'Cumplimiento de ruta', 'Visitas en ruta', 'Visitas efectuadas',
-       'Visitas no planificadas', 'Pasaje vacío']);
-    comprueba('las cifras nacionales: 2 pendientes, 75 % en amarillo, 8, 6, 2 y 2',
+      ['Cumplimiento de ruta', 'Visitas en ruta', 'Visitas efectuadas', 'Visitas no planificadas', 'Pasaje vacío',
+       'Visitas pendientes', 'Máquinas con llamada de reposición', 'Máquinas con producto caducado o insectos']);
+    comprueba('las cifras nacionales: 75 % en amarillo, 8, 6, 2, 2, 2 pendientes, 1 maquina con llamadas y 1 con caducado',
       [await pagina.$$eval('#kpis .kpi .vl', x => x.map(e => e.textContent.trim())),
-       await pagina.$eval('#kpis .kpi:nth-child(2)', k => k.classList.contains('amarillo'))],
-      [['2', '75 %', '8', '6', '2', '2'], true]);
-    comprueba('el mapa: cada area con datos lleva su porcentaje con el semaforo, y nada mas',
-      await pagina.$$eval('#areas .area.si', x => x.map(e => [e.dataset.area, e.querySelector('.pc').textContent.trim(),
-        e.querySelector('.pc').getAttribute('class'), e.querySelectorAll('text').length])),
+       await pagina.$eval('#kpis .kpi:nth-child(1)', k => k.classList.contains('amarillo'))],
+      [['75 %', '8', '6', '2', '2', '2', '1', '1'], true]);
+    comprueba('las llamadas son dos de la misma maquina', (await pagina.textContent('#kpis [data-tabla="i_reposicion"] .nt')).trim(),
+      '2 llamadas de máquina vacía (S010, C016)');
+    await pagina.waitForSelector('#kpis .estrella');
+    comprueba('cada cuadrado lleva su estrella de preferidos',
+      await pagina.$$eval('#kpis .kpi', x => x.map(e => !!e.querySelector(':scope > .estrella'))), Array(8).fill(true));
+    comprueba('un cuadrado por area: su nombre y su porcentaje con el semaforo, y nada mas',
+      await pagina.$$eval('#areas .area', x => x.map(e => [e.dataset.area, e.querySelector('.pc').textContent.trim(),
+        e.querySelector('.pc').className, e.children.length])),
       [['Centro', '66,7 %', 'pc rojo', 2], ['Sur', '100 %', 'pc verde', 2]]);
-    comprueba('el porcentaje en blanco si va bien y en rojo si no',
-      await pagina.$$eval('#areas .area.si .pc', x => x.map(e => getComputedStyle(e).fill)),
-      ['rgb(255, 90, 79)', 'rgb(255, 255, 255)']);
-    await pagina.hover('#areas .area[data-area="Sur"] .cara', { force: true });
-    await pagina.waitForTimeout(300);
-    comprueba('al pasar el raton el area se resalta y las demas se apagan',
-      await pagina.$$eval('#areas .area', x => x.map(e => [e.dataset.area, getComputedStyle(e).opacity])),
-      [['Norte', '0.45'], ['Centro', '0.45'], ['Cataluña', '0.45'], ['Levante', '0.45'], ['Sur', '1']]);
-    await pagina.mouse.move(0, 0);
-    comprueba('las areas fuera de los datos, en gris, sin cifra y sin pulsar',
-      await pagina.$$eval('#areas .area:not(.si)', x => x.map(e => [e.dataset.area, e.querySelectorAll('text').length, e.getAttribute('tabindex')])),
-      [['Norte', 0, null], ['Cataluña', 0, null], ['Levante', 0, null]]);
-    comprueba_que('el porcentaje de la pieza es el de dentro del area',
-      (await pagina.getAttribute('#areas .area[data-area="Centro"]', 'aria-label')).includes('66,7 %'));
+    comprueba('el porcentaje en rojo si no llega, y en el color del texto si va bien',
+      await pagina.$$eval('#areas .area .pc', x => x.map(e => getComputedStyle(e).color === getComputedStyle(document.body).color)),
+      [false, true]);
     comprueba('en la portada no hay rutas ni filtro de delegacion',
       [await pagina.isVisible('#tRutas'), await pagina.isVisible('#deleg')], [false, false]);
     comprueba('las dos delegaciones, con su area', await pagina.$$eval('#tDeleg tbody tr', x => x.map(t => t.dataset.d)),
@@ -1424,7 +1426,7 @@ const servidor = http.createServer((pet, res) => {
     await pagina.click('#areas .area[data-area="Centro"]');
     await pagina.waitForSelector('#tRutas table');
     comprueba('dentro del area: sus cifras y su delegacion',
-      [(await pagina.textContent('#tArea')).trim(), (await pagina.textContent('#kpis .kpi:nth-child(2) .vl')).trim(),
+      [(await pagina.textContent('#tArea')).trim(), (await pagina.textContent('#kpis [data-tabla="i_cumplimiento"] .vl')).trim(),
        await pagina.$$eval('#deleg option', o => o.map(x => x.value))],
       ['Centro', '66,7 %', ['', 'Madrid - Leganes']]);
     comprueba('las dos rutas del area, con el nombre escapado', await pagina.locator('#tRutas tbody tr').count(), 2);
@@ -1440,8 +1442,14 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('con matricula y ubicacion', (await pagina.textContent('#tPdv')).includes('19FP1530')
       && (await pagina.textContent('#tPdv')).includes('Planta 8'));
 
-    comprueba('las tres cifras de maquinas del area',
-      await pagina.$$eval('#mqs .kpi .vl', x => x.map(e => e.textContent.trim())), ['2', '1', '1']);
+    comprueba('las cuatro cifras de maquinas del area, con su estrella',
+      [await pagina.$$eval('#mqs .kpi .vl', x => x.map(e => e.textContent.trim())),
+       await pagina.$$eval('#mqs .mqw', x => x.map(e => !!e.querySelector(':scope > .estrella')))],
+      [['2', '1', '1', '1'], [true, true, true, true]]);
+    await pagina.click('#mqs button[data-ver="sanitarias"]');
+    comprueba('caducado o insectos: la maquina y que tiene',
+      await pagina.$$eval('#tLista tbody tr', x => x.map(t => [t.querySelector('.mat').textContent, t.querySelectorAll('td')[3].textContent.trim()])),
+      [['24CE4842', 'caducado']]);
     await pagina.click('#mqs button[data-ver="llamadas"]');
     comprueba('llamadas: juntas por maquina, la de Getafe con dos',
       await pagina.$$eval('#tLista tbody tr', x => x.map(t => [t.querySelector('.mat').textContent, t.querySelectorAll('td')[3].textContent.trim()])),
@@ -1461,7 +1469,7 @@ const servidor = http.createServer((pet, res) => {
     await pagina.click('#tRutas tbody tr[data-r$="Ruta Getafe <Airbus>"]');
     comprueba('al pulsar una ruta, todo se filtra a ella',
       [await pagina.inputValue('#deleg'), await pagina.locator('#tRutas tbody tr').count(),
-       (await pagina.textContent('#kpis .kpi:nth-child(2) .vl')).trim()],
+       (await pagina.textContent('#kpis [data-tabla="i_cumplimiento"] .vl')).trim()],
       ['Madrid - Leganes', 1, '50 %']);
     await pagina.selectOption('#ruta', '');
     await pagina.click('#pestanas button[data-p="vacio"]');
@@ -1477,7 +1485,7 @@ const servidor = http.createServer((pet, res) => {
 
     await pagina.selectOption('#periodo', 'semana');
     comprueba('la semana suma los dos dias: 6 + 260 en ruta, el festivo dentro',
-      (await pagina.textContent('#kpis .kpi:nth-child(3) .vl')).trim(), '266');
+      (await pagina.textContent('#kpis [data-tabla="i_en_ruta"] .vl')).trim(), '266');
     comprueba_que('y la lista de varios dias lleva el dia', (await pagina.textContent('#tPdv thead')).includes('Día'));
     await pagina.selectOption('#periodo', 'dia');
 
@@ -1496,7 +1504,7 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('y de un dia calculado antes, sin hechas en la lista, lo dice',
       (await pagina.textContent('#tPdv')).includes('antes de que la lista'));
     comprueba('sin pasaje vacio en ese dia, sin dato y no un cero',
-      (await pagina.textContent('#kpis .kpi:nth-child(6) .vl')).trim(), 'Sin dato');
+      (await pagina.textContent('#kpis [data-tabla="i_pasaje_vacio"] .vl')).trim(), 'Sin dato');
     await pagina.setViewportSize({ width: 380, height: 800 });
     comprueba('en movil no se sale de la pantalla',
       await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
@@ -2097,9 +2105,9 @@ const servidor = http.createServer((pet, res) => {
     };
     let x = await conQuitadas('/rutas/?area=Centro', { rutas: ['maquinas', 'estado', 'recaudar'] }, '#todo:not([hidden])');
     comprueba('rutas: sin las maquinas, la dona ni por recaudar, con lo demas',
-      await x.pagina.$$eval('[data-tabla]', s => s.filter(e => e.tagName !== 'SPAN').map(e => [e.dataset.tabla, !e.hidden])),
+      await x.pagina.$$eval('[data-tabla]', s => s.filter(e => e.tagName !== 'SPAN' && !e.classList.contains('kpi')).map(e => [e.dataset.tabla, !e.hidden])),
       [['rutas', true], ['estado', false], ['maquinas', false], ['delegaciones', true], ['festivos', true]]);
-    comprueba('y sin su cifra de maquinas', await x.pagina.$$eval('#mqs .kpi', b => b.map(e => e.dataset.ver)), ['llamadas', 'reponer']);
+    comprueba('y sin su cifra de maquinas', await x.pagina.$$eval('#mqs .kpi', b => b.map(e => e.dataset.ver)), ['llamadas', 'reponer', 'sanitarias']);
     comprueba_que('la de rutas ocupa la fila entera',
       await x.pagina.evaluate(() => getComputedStyle(document.querySelector('.dos')).gridTemplateColumns.split(' ').length === 1));
     if (FOTOS) await x.pagina.screenshot({ path: path.join(FOTOS, 'rutas-sin-maquinas.png'), fullPage: true });
@@ -2142,9 +2150,11 @@ const servidor = http.createServer((pet, res) => {
     PREFS = [];
     let x = await abre('/rutas/?area=Centro');
     await x.pagina.waitForSelector('[data-estrella="maquinas"] .estrella');
-    comprueba('rutas: una estrella junto al titulo de cada tabla, apagadas',
+    comprueba('rutas: una estrella en cada cuadrado y junto al titulo de cada tabla, apagadas',
       await x.pagina.$$eval('.estrella', b => b.map(e => [e.closest('[data-estrella]').dataset.estrella, e.getAttribute('aria-pressed')])),
-      [['rutas', 'false'], ['estado', 'false'], ['maquinas', 'false'], ['delegaciones', 'false'], ['festivos', 'false']]);
+      ['i_cumplimiento', 'i_en_ruta', 'i_efectuadas', 'i_no_planificadas', 'i_pasaje_vacio', 'i_pendientes', 'i_reposicion',
+       'i_sanitarias', 'llamadas', 'recaudar', 'reponer', 'sanitarias', 'rutas', 'estado', 'maquinas', 'delegaciones', 'festivos']
+        .map(t => [t, 'false']));
     const guardado = () => x.pagina.waitForRequest(q => q.method() === 'PUT' && q.url().endsWith('/api/preferidos'));
     let put = guardado();
     await x.pagina.click('[data-estrella="maquinas"] .estrella');
@@ -2158,6 +2168,14 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('y sigue al repintar la tabla', (await x.pagina.$$('[data-estrella="maquinas"] .estrella[aria-pressed="true"]')).length === 1);
     if (FOTOS) await x.pagina.screenshot({ path: path.join(FOTOS, 'estrella-rutas.png'), clip: { x: 0, y: 0, width: 1280, height: 700 } });
     comprueba('ni una peticion fuera del dominio', x.fuera, []);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+
+    x = await abre('/rutas/?solo=i_sanitarias');
+    await x.pagina.waitForSelector('#todo:not([hidden])');
+    comprueba('un cuadrado en la vista suelta de preferidos: solo el, con su cifra de todo el ambito',
+      await x.pagina.$$eval('.kpi, .area, section.caja', e => e.filter(k => k.offsetParent).map(k => k.dataset.tabla || k.className)),
+      ['i_sanitarias']);
     comprueba('sin un solo error en la consola del navegador', x.errores, []);
     await x.pagina.close();
 

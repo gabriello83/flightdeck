@@ -814,7 +814,7 @@ comprueba("y un cliente no tiene ninguno",
           [p["cuadrados"] for p in _pf["perfiles"] if p["_id"] == "cli-airbus"][0], [])
 comprueba("y el catalogo, con las tablas de cada pagina",
           (len(_pf["catalogo_cuadrados"]), list(_pf["catalogo_cuadrados"]["rutas"]["tablas"])[:2]),
-          (12, ["rutas", "estado"]))
+          (12, ["i_cumplimiento", "i_en_ruta"]))
 comprueba("y con que sesion sale cada cuadrado: Revision con Instalaciones y altas",
           ([s for s, v in _pf["catalogo_sesiones"].items()
             if _pf["catalogo_cuadrados"]["revision"]["bloque"] in v["bloques"]],
