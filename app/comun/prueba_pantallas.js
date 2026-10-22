@@ -1255,15 +1255,26 @@ const servidor = http.createServer((pet, res) => {
     await x.pagina.close();
 
     // El asistente tambien en el informe general (docs/69): Vendi espera a que
-    // acabe la bienvenida para saludar, y pregunta con pagina=operativo.
+    // acabe la bienvenida para saludar, y pregunta con pagina=operativo. Desde
+    // docs/71 contesta por pasos (`sigue`), pinta las tablas con su Excel y su
+    // PDF, y la conversacion sigue al cambiar de pagina.
     console.log('  · Vendi en el informe general');
     API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: true, motivo: '' } };
     x = await abre('/operativo/?bienvenida');
     const pedido = [];
+    let soltar;
+    const suelta = new Promise(ok => { soltar = ok; });
     await x.pagina.route('**/api/pregunta', async ruta => {
-      pedido.push(JSON.parse(ruta.request().postData() || '{}'));
+      const p = JSON.parse(ruta.request().postData() || '{}');
+      pedido.push(p);
+      if (!p.sigue) {
+        await ruta.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ sigue: 'abc', estado: 'Mirando rutas…' }) });
+        return;
+      }
+      await suelta;
       await ruta.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify({ respuesta: 'Ayer **81 %** de rutas.\n\n| Delegación | % |\n|---|---|\n| Sevilla | 81 % |\n\n- <script>x</script>', quedan_hoy: 39 }) });
+        body: JSON.stringify({ respuesta: 'Ayer **81 %** de rutas.\n\n| Delegación | Visitas | Importe |\n|---|---|---|\n| Sevilla | 1.234 | 2.345,60 € |\n| Málaga & Co | 98 | 12,00 € |\n\n- <script>x</script>', quedan_hoy: 39 }) });
     });
     await x.pagina.waitForSelector('#bVendi .muneco');
     comprueba('durante la bienvenida, Vendi aun no saluda',
@@ -1275,17 +1286,93 @@ const servidor = http.createServer((pet, res) => {
     await x.pagina.click('#bVendi');
     await x.pagina.waitForSelector('#chat.vis');
     comprueba_que('con sugerencias de sus cuadrados', (await x.pagina.$$('#sugerencias button')).length > 0);
+    comprueba_que('el pie dice que ve lo mismo que el usuario', (await x.pagina.textContent('#chat .pieChat')).includes('Ve lo mismo que tú'));
     await x.pagina.fill('#chatTexto', '¿como fueron las rutas?');
     await x.pagina.press('#chatTexto', 'Enter');
+    await x.pagina.waitForFunction(() => /Mirando rutas/.test((document.querySelector('.turno.espera') || {}).textContent || ''));
+    comprueba_que('mientras sigue, dice que esta mirando', true);
+    soltar();
     await x.pagina.waitForSelector('.turno.el table');
     comprueba('pregunta desde el informe general', pedido[0] && pedido[0].pagina, 'operativo');
+    comprueba('y luego sigue con el mismo id, sin repetir la pregunta', pedido[1], { sigue: 'abc' });
     comprueba('las negritas salen en negrita', await x.pagina.$eval('.turno.el p b', b => b.textContent), '81 %');
-    comprueba('la tabla, en tabla', await x.pagina.$$eval('.turno.el td', t => t.map(e => e.textContent)), ['Sevilla', '81 %']);
+    comprueba('la tabla, en tabla', await x.pagina.$$eval('.turno.el td', t => t.map(e => e.textContent)),
+      ['Sevilla', '1.234', '2.345,60 €', 'Málaga & Co', '98', '12,00 €']);
+    comprueba('las cifras, a la derecha', await x.pagina.$$eval('.turno.el tbody tr:first-child td', t => t.map(e => e.classList.contains('n'))), [false, true, true]);
     comprueba('y lo que trae etiquetas sale como texto', await x.pagina.$$eval('.turno.el script', s => s.length), 0);
+    comprueba('con su Excel y su PDF', await x.pagina.$$eval('.turno.el .tabla .bajar button', b => b.map(e => e.textContent)), ['Excel', 'PDF']);
+    const FOTOS = process.env.FOTOS_VENDI;
+    if (FOTOS) {
+      await x.pagina.screenshot({ path: path.join(FOTOS, 'vendi-claro.png') });
+      await x.pagina.emulateMedia({ colorScheme: 'dark' });
+      await x.pagina.screenshot({ path: path.join(FOTOS, 'vendi-oscuro.png') });
+      await x.pagina.emulateMedia({ colorScheme: 'light' });
+      await x.pagina.setViewportSize({ width: 390, height: 844 });
+      await x.pagina.screenshot({ path: path.join(FOTOS, 'vendi-movil.png') });
+      await x.pagina.setViewportSize({ width: 1280, height: 720 });
+    }
+    const [dv] = await Promise.all([x.pagina.waitForEvent('download'), x.pagina.click('.turno.el [data-bajar="xlsx"]')]);
+    comprueba_que('el Excel se llama vendi_fecha_hora', /^vendi_\d{4}-\d\d-\d\d_\d{4}\.xlsx$/.test(dv.suggestedFilename()), dv.suggestedFilename());
+    const tv = fs.readFileSync(await dv.path()).toString('utf8');
+    comprueba_que('con la pregunta de titulo y las cifras como numeros',
+      tv.includes('¿como fueron las rutas?') && tv.includes('<v>1234</v>') && tv.includes('<v>2345.6</v>'));
+    comprueba_que('y el texto escapado', tv.includes('Málaga &amp; Co'));
+    await x.pagina.click('.turno.el [data-bajar="pdf"]');
+    await x.pagina.waitForSelector('iframe[aria-hidden="true"]', { state: 'attached' });
+    comprueba('el PDF lleva solo la tabla', await x.pagina.$eval('iframe[aria-hidden="true"]',
+      f => f.contentDocument.querySelectorAll('table td').length), 6);
+    // La conversacion sigue en otra pagina de la misma pestana.
+    await x.pagina.goto(base + '/panel/', { waitUntil: 'networkidle' });
+    await x.pagina.waitForSelector('#bVendi .muneco');
+    await x.pagina.click('#bVendi');
+    await x.pagina.waitForSelector('#chat.vis');
+    comprueba('en el panel sigue la conversacion', await x.pagina.$$eval('#chat .turno', t => t.length), 2);
+    comprueba_que('con la tabla y sus botones', await x.pagina.isVisible('#chat .turno.el .tabla .bajar'));
+    comprueba('sin sugerencias encima', (await x.pagina.$$('#sugerencias button')).length, 0);
     comprueba('ni una peticion fuera del dominio', x.fuera, []);
     comprueba('sin un solo error en la consola del navegador', x.errores, []);
     await x.pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: false, motivo: '' } };
+
+    // Y en cada seccion, solo con cargar el fichero (docs/71).
+    console.log('  · Vendi en todas las secciones');
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: true, motivo: '' } };
+    for (const s of ['rutas', 'incidencias', 'devoluciones', 'furgonetas', 'almacenes', 'telemetria', 'tarifas', 'revision', 'utilizo', 'preferidos']) {
+      const y = await abre(`/${s}/`);
+      await y.pagina.waitForSelector('#bVendi .muneco', { timeout: 5000 }).catch(() => {});
+      comprueba_que(`en /${s}/ sale Vendi`, await y.pagina.isVisible('#bVendi'));
+      if (process.env.FOTOS_VENDI) {
+        await y.pagina.setViewportSize({ width: 390, height: 844 });
+        await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, `seccion-${s}-movil.png`) });
+        await y.pagina.emulateMedia({ colorScheme: 'dark' });
+        await y.pagina.setViewportSize({ width: 1280, height: 720 });
+        await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, `seccion-${s}-oscuro.png`) });
+        await y.pagina.emulateMedia({ colorScheme: 'light' });
+      }
+      if (s === 'rutas') {
+        await y.pagina.click('#bVendi');
+        await y.pagina.waitForSelector('#chat.vis');
+        comprueba('con sugerencias de rutas', (await y.pagina.$$('#sugerencias button')).length, 2);
+        const pide = [];
+        await y.pagina.route('**/api/pregunta', async ruta => {
+          pide.push(JSON.parse(ruta.request().postData() || '{}'));
+          await ruta.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ respuesta: 'Bien.', quedan_hoy: 38 }) });
+        });
+        await y.pagina.click('#sugerencias button');
+        await y.pagina.waitForSelector('.turno.el');
+        comprueba('y pregunta diciendo desde que pagina', pide[0] && pide[0].pagina, 'rutas');
+      }
+      comprueba(`en /${s}/, ni una peticion fuera del dominio`, y.fuera, []);
+      comprueba(`en /${s}/, sin errores en la consola`, y.errores, []);
+      await y.pagina.close();
+    }
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: false, motivo: '' } };
+    {
+      const y = await abre('/rutas/');
+      await y.pagina.waitForSelector('table, .area, #cuadros, main', { timeout: 5000 }).catch(() => {});
+      comprueba('sin asistente, en las secciones no sale', await y.pagina.$('#bVendi'), null);
+      await y.pagina.close();
+    }
 
     const tranquilo = await navegador.newPage({ reducedMotion: 'reduce' });
     await tranquilo.goto(base + '/operativo/?bienvenida');

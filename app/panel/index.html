@@ -1098,8 +1098,7 @@ function notaDelPeriodo(T, lugar){
 
   if(YO.asistente && YO.asistente.habilitado)
     Asistente.monta({pagina:"panel", boton:$("#bPreguntar"), sugerencias,
-                     hola:"¡Hola! Pregúntame por los datos de tu panel.",
-                     pie:"Sólo ve los datos de este panel. No ejecuta acciones ni consulta nada más."});
+                     hola:"¡Hola! Pregúntame por tu panel o por cualquier sección que veas."});
   if(YO.permisos && YO.permisos.alarmas_ver) $("#bAvisos").hidden = false;
   $("#bAvisos").addEventListener("click", ()=>{ location.href = "/avisos/"; });
   if((YO.sesiones||[]).includes("cuadro")) $("#bCuadro").hidden = false;

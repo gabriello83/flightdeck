@@ -18,8 +18,13 @@
      pedir fuera del dominio (CLAUDE.md).
    - Saluda con la mano al entrar (despues de la bienvenida, si la hay), al
      pasarle el raton y al abrir el cajon. Con «reducir movimiento», quieto.
-   - Las respuestas traen negritas, listas y tablas cortas: se pintan sin
-     innerHTML de lo que llega, escapando antes de dar formato.
+   - Las respuestas traen negritas, listas y tablas: se pintan escapando
+     antes de dar formato. Cada tabla se baja a Excel (comun/xlsx.js, que se
+     carga al pulsar) o a PDF (la ventana de imprimir, solo con la tabla).
+   - Una pregunta larga va por pasos (docs/71): el servidor devuelve `sigue`
+     y aqui se vuelve a llamar con ese id, ensenando que seccion esta mirando.
+   - La conversacion se guarda en sessionStorage: sigue al cambiar de pagina
+     en la misma pestana y se pierde al cerrarla. Al salir se borra.
    =================================================================== */
 (function(){
   "use strict";
@@ -40,9 +45,17 @@
 .turno{max-width:92%;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
 .turno p{margin:0 0 6px}.turno p:last-child{margin:0}
 .turno ul{margin:0 0 6px;padding-left:18px}
-.turno table{border-collapse:collapse;margin:4px 0 8px;font-size:13px;font-variant-numeric:tabular-nums}
-.turno th,.turno td{border-bottom:1px solid var(--borde);padding:3px 8px 3px 0;text-align:left}
+.turno .tabla{margin:6px 0 10px;border:1px solid var(--borde);border-radius:10px;overflow:hidden;background:var(--tarjeta)}
+.turno .tabla .rueda{overflow-x:auto}
+.turno table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+.turno th{background:color-mix(in srgb, var(--s1) 9%, var(--fondo));color:var(--tinta-2);font-weight:600;text-align:left;padding:8px 12px;white-space:nowrap}
+.turno td{padding:8px 12px;border-top:1px solid var(--borde);white-space:nowrap}
+.turno tbody tr:nth-child(even) td{background:color-mix(in srgb, var(--fondo) 55%, transparent)}
 .turno td.n,.turno th.n{text-align:right}
+.turno .bajar{display:flex;gap:6px;justify-content:flex-end;padding:6px 8px;border-top:1px solid var(--borde)}
+.turno .bajar button{font:inherit;font-size:12px;color:var(--tinta-2);background:transparent;border:1px solid var(--borde-fuerte);border-radius:999px;padding:3px 10px;cursor:pointer}
+.turno .bajar button:hover{color:var(--tinta);border-color:var(--tinta-3)}
+.turno.espera{color:var(--tinta-3);font-style:italic}
 .turno.yo{align-self:flex-end;background:var(--s1);color:#fff;padding:8px 12px;border-radius:12px 12px 3px 12px;white-space:pre-wrap}
 .turno.el{align-self:flex-start;color:var(--tinta)}
 .turno.mal{align-self:flex-start;color:var(--critico,var(--rojo,#c62828))}
@@ -152,9 +165,12 @@
         const cuerpo = filas.filter(f => !/^\|[\s:|-]+\|?$/.test(f)).map(celdas);
         if(!cuerpo.length) continue;
         const [cab, ...resto] = cuerpo;
-        out.push("<table><thead><tr>" + cab.map(c => `<th>${c}</th>`).join("") + "</tr></thead><tbody>" +
-          resto.map(f => "<tr>" + f.map(c => `<td${esNumero(c) ? ' class="n"' : ""}>${c}</td>`).join("") + "</tr>").join("") +
-          "</tbody></table>");
+        const num = cab.map((_, j) => resto.length > 0 && resto.every(f => !f[j] || esNumero(f[j])));
+        out.push('<div class="tabla"><div class="rueda"><table><thead><tr>' +
+          cab.map((c, j) => `<th${num[j] ? ' class="n"' : ""}>${c}</th>`).join("") + "</tr></thead><tbody>" +
+          resto.map(f => "<tr>" + f.map((c, j) => `<td${num[j] ? ' class="n"' : ""}>${c}</td>`).join("") + "</tr>").join("") +
+          '</tbody></table></div><div class="bajar"><button type="button" data-bajar="xlsx">Excel</button>' +
+          '<button type="button" data-bajar="pdf">PDF</button></div></div>');
         continue;
       }
       if(/^[-*•]\s+/.test(l)){
@@ -169,11 +185,82 @@
     return out.join("");
   }
 
+  /* ---------------------------------------------------- bajar una tabla */
+  const sinFormato = s => s.replace(/\s+/g, " ").trim();
+  /* «1.234,56 €» -> 1234.56; lo que no es una cifra se queda como texto. */
+  function cifra(s){
+    const t = sinFormato(s).replace(/[€%]|\b(h|min|km|uds?\.?)\b/g, "").replace(/\s/g, "").replace("−", "-");
+    if(!/^[-+]?[\d.]*\d(,\d+)?$/.test(t)) return null;
+    const n = Number(t.replace(/\./g, "").replace(",", "."));
+    return isFinite(n) ? n : null;
+  }
+  function deTabla(tabla){
+    const cab = [...tabla.querySelectorAll("thead th")].map(th => sinFormato(th.textContent));
+    const filas = [...tabla.querySelectorAll("tbody tr")].map(tr => [...tr.children].map(td => sinFormato(td.textContent)));
+    return {cab, filas};
+  }
+  function nombreFichero(ext){
+    const d = new Date(), dos = n => String(n).padStart(2, "0");
+    return `vendi_${d.getFullYear()}-${dos(d.getMonth()+1)}-${dos(d.getDate())}_${dos(d.getHours())}${dos(d.getMinutes())}.${ext}`;
+  }
+  let cargandoXlsx = null;
+  function xlsxListo(){
+    if(window.XLSX) return Promise.resolve();
+    if(!cargandoXlsx) cargandoXlsx = new Promise((ok, mal) => {
+      const s = document.createElement("script");
+      s.src = "/comun/xlsx.js"; s.onload = ok; s.onerror = mal;
+      document.head.appendChild(s);
+    });
+    return cargandoXlsx;
+  }
+  async function aExcel(tabla, pregunta){
+    const {cab, filas} = deTabla(tabla);
+    await xlsxListo();
+    const euros = cab.map((_, j) => filas.some(f => /€/.test(f[j] || "")));
+    const hoja = {
+      nombre: "Vendi",
+      titulo: [pregunta ? `Vendi · ${pregunta}` : "Vendi", `Generado el ${new Date().toLocaleString("es-ES")}`],
+      columnas: cab.map((t, j) => ({titulo: t, ancho: Math.min(40, Math.max(10, t.length + 2,
+                 ...filas.map(f => String(f[j] || "").length + 1))), euros: euros[j]})),
+      filas: filas.map(f => f.map(c => { const n = cifra(c); return n === null ? c : n; })),
+    };
+    XLSX.descarga(XLSX.libro([hoja]), nombreFichero("xlsx"));
+  }
+  /* El PDF es la ventana de imprimir del navegador, con solo la tabla: ahi
+     se elige «Guardar como PDF». Sin bibliotecas ni nada de fuera. */
+  function aPdf(tabla, pregunta){
+    const marco = document.createElement("iframe");
+    marco.setAttribute("aria-hidden", "true");
+    marco.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+    document.body.appendChild(marco);
+    const doc = marco.contentDocument;
+    doc.open();
+    doc.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(nombreFichero("pdf"))}</title><style>
+body{font:13px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:#0b0b0b;margin:24px}
+h1{font-size:15px;margin:0 0 2px}p{margin:0 0 14px;color:#52514e;font-size:12px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th{background:#eef1f7;text-align:left;padding:8px 12px;font-weight:600;color:#3a3a37}
+td{padding:8px 12px;border-top:1px solid #e2e1dc}.n{text-align:right}
+tbody tr:nth-child(even) td{background:#f8f8f6}
+@page{margin:14mm}</style></head><body>
+<h1>${esc(pregunta ? "Vendi · " + pregunta : "Vendi")}</h1><p>Generado el ${esc(new Date().toLocaleString("es-ES"))} · dashboard.digivend.es</p>
+${tabla.outerHTML}</body></html>`);
+    doc.close();
+    setTimeout(()=>{ try{ marco.contentWindow.focus(); marco.contentWindow.print(); }catch(e){}
+                     setTimeout(()=>marco.remove(), 60000); }, 50);
+  }
+
+  const GUARDA = "digivend.asistente.hilo";
+  function leeHilo(){ try{ const x = JSON.parse(sessionStorage.getItem(GUARDA) || "[]"); return Array.isArray(x) ? x.slice(-20) : []; }catch(e){ return []; } }
+  function guardaHilo(h){ try{ sessionStorage.setItem(GUARDA, JSON.stringify(h.slice(-20))); }catch(e){} }
+
   function monta(op){
     op = op || {};
     const pagina = op.pagina || "panel";
     const $ = s => document.querySelector(s);
-    const HILO = [];             /* {de, texto} — memoria corta, la API usa los ultimos 6 */
+    /* {de, texto, pregunta?}: lo que se ve en el cajon. Viene de la pagina
+       anterior si la hubo; a la API solo le llegan los ultimos 6. */
+    const HILO = leeHilo();
     let enVuelo = false;
 
     const estilo = document.createElement("style");
@@ -196,7 +283,7 @@
     <textarea id="chatTexto" rows="1" placeholder="Pregunta por tus datos…" maxlength="2000"></textarea>
     <button type="submit" id="chatEnviar">Enviar</button>
   </form>
-  <p class="pieChat">${esc(op.pie || "Sólo ve los datos de esta página. No ejecuta acciones ni consulta nada más.")}</p>
+  <p class="pieChat">${esc(op.pie || "Ve lo mismo que tú en la web, nada más. No ejecuta acciones.")}</p>
 </aside>
 <button id="bVendi" type="button" aria-label="Preguntar al asistente">${vendi()}</button>
 <div id="bocadillo" aria-hidden="true">${esc(op.hola || "¡Hola! Pregúntame por los datos de esta página.")}</div>`;
@@ -213,11 +300,18 @@
       if(abierto){ $("#chatTexto").focus(); pintaSugerencias(); saluda($("#vendiChat")); $("#bocadillo").classList.remove("vis"); }
       else (boton || $("#bVendi")).focus();
     }
-    function turno(de, texto, clase){
+    function turno(de, texto, clase, preguntaDe){
       const d = document.createElement("div");
       d.className = "turno " + (clase || (de==="yo" ? "yo" : "el"));
       if(de === "yo" || clase) d.textContent = texto;
-      else d.innerHTML = `<span class="quien">Asistente</span>` + formatea(texto);
+      else{
+        d.innerHTML = `<span class="quien">Asistente</span>` + formatea(texto);
+        d.querySelectorAll(".tabla").forEach(caja => {
+          const t = caja.querySelector("table");
+          caja.querySelector('[data-bajar="xlsx"]').addEventListener("click", ()=>aExcel(t, preguntaDe).catch(()=>{}));
+          caja.querySelector('[data-bajar="pdf"]').addEventListener("click", ()=>aPdf(t, preguntaDe));
+        });
+      }
       $("#hilo").appendChild(d);
       $("#hilo").scrollTop = $("#hilo").scrollHeight;
       return d;
@@ -241,14 +335,22 @@
       $("#sugerencias").innerHTML = "";
       turno("yo", texto);
       HILO.push({de:"usuario", texto});
-      const esperando = turno("el", "Pensando…", "el");
+      guardaHilo(HILO);
+      const esperando = turno("el", "Pensando…", "el espera");
+      const llama = cuerpo => fetch("/api/pregunta", {
+        method:"POST", credentials:"same-origin",
+        headers:{"content-type":"application/json"}, body: JSON.stringify(cuerpo),
+      });
       try{
-        const r = await fetch("/api/pregunta", {
-          method:"POST", credentials:"same-origin",
-          headers:{"content-type":"application/json"},
-          body: JSON.stringify({pregunta: texto, pagina, historial: HILO.slice(0,-1)}),
-        });
+        let r = await llama({pregunta: texto, pagina,
+                             historial: HILO.slice(0,-1).map(t => ({de:t.de, texto:t.texto}))});
         let d = {}; try{ d = await r.json(); }catch(e){}
+        /* Por pasos: mientras el servidor diga «sigue», se le vuelve a llamar. */
+        for(let i = 0; r.ok && d.sigue && i < 12; i++){
+          esperando.textContent = d.estado || "Pensando…";
+          r = await llama({sigue: d.sigue});
+          d = {}; try{ d = await r.json(); }catch(e){}
+        }
         esperando.remove();
         if(!r.ok){
           /* El motivo importa: no es lo mismo haber agotado el limite del dia
@@ -256,21 +358,31 @@
           turno("el", d.error || (r.status === 503 || r.status === 504
             ? "El asistente ha tardado demasiado. Prueba con una pregunta más concreta."
             : "El asistente no está disponible ahora mismo."), "mal");
+          HILO.pop(); guardaHilo(HILO);
           return;
         }
-        turno("el", d.respuesta || "");
-        HILO.push({de:"asistente", texto: d.respuesta || ""});
+        turno("el", d.respuesta || "", null, texto);
+        HILO.push({de:"asistente", texto: d.respuesta || "", pregunta: texto});
+        guardaHilo(HILO);
         if(d.quedan_hoy !== null && d.quedan_hoy !== undefined)
           $("#chatQuedan").textContent = `${d.quedan_hoy} preguntas hoy`;
       }catch(e){
         esperando.remove();
         turno("el", "No hay conexión con el servidor.", "mal");
+        HILO.pop(); guardaHilo(HILO);
       }finally{
         enVuelo = false;
         $("#chatEnviar").disabled = false;
         $("#chatTexto").focus();
       }
     }
+
+    /* La conversacion de la pagina anterior, tal cual se dejo. */
+    HILO.forEach(t => t.de === "usuario" ? turno("yo", t.texto) : turno("el", t.texto, null, t.pregunta));
+    /* Al salir de la sesion no se queda nada: otro usuario en esta pestana
+       no veria lo que se pregunto. */
+    const salir = document.querySelector("#bSalir");
+    if(salir) salir.addEventListener("click", ()=>{ try{ sessionStorage.removeItem(GUARDA); }catch(e){} }, true);
 
     if(boton) boton.addEventListener("click", ()=>abre(true));
     $("#bVendi").addEventListener("click", ()=>abre(true));
@@ -311,6 +423,34 @@
     }else hola();
 
     return {abre};
+  }
+
+  /* Las secciones (rutas, incidencias…) no montan nada a mano: cargan este
+     fichero con data-pagina y Vendi sale solo si la sesion tiene el
+     asistente (docs/71). El panel y el informe general lo montan ellos, con
+     su boton «Preguntar» y sus sugerencias. */
+  const SECCION = {
+    rutas: ["las rutas", ["¿Qué delegación cumplió peor las rutas ayer?", "¿Qué máquinas llevan más días sin reponer?"]],
+    incidencias: ["las incidencias", ["¿Cuántas averías se cerraron en menos de 24 h esta semana?", "¿Qué área tiene más incidencias abiertas?"]],
+    devoluciones: ["las devoluciones", ["¿Cuánto se ha devuelto este mes y por qué motivo?", "¿Qué centros acumulan más devoluciones?"]],
+    furgonetas: ["las furgonetas", ["¿Qué furgonetas no tuvieron visitas ayer?", "¿Cuántos km se hicieron ayer por área?"]],
+    almacenes: ["los almacenes", ["¿Qué almacenes tienen más artículos bajo mínimo?", "¿Cuándo fue el último pedido de cada almacén?"]],
+    telemetria: ["la telemetría", ["¿Cuántas máquinas tienen telemetría por sistema?", "¿Dónde hay más diferencias con VenCloud?"]],
+    tarifas: ["las tarifas", ["¿Qué centros cobran precios distintos a su tarifa?", "¿Cuántos productos venden sin tarifa?"]],
+    revision: ["la revisión de clientes", ["¿Cuántas máquinas no tienen planograma?", "¿Qué delegación tiene más precios distintos?"]],
+    utilizo: ["el uso de VenCloud", ["¿Quién usó más VenCloud este mes?", "¿Quién lleva más días sin entrar?"]],
+    preferidos: ["tus preferidos", ["Resúmeme mis preferidos de ayer."]],
+  };
+  const yo = document.currentScript && document.currentScript.dataset.pagina;
+  if(yo){
+    const sola = async () => {
+      let d = null;
+      try{ const r = await fetch("/api/yo", {credentials:"same-origin"}); if(r.ok) d = await r.json(); }catch(e){}
+      if(!d || !d.asistente || !d.asistente.habilitado) return;
+      const [de, sug] = SECCION[yo] || ["esta página", []];
+      monta({pagina: yo, hola: `¡Hola! Pregúntame por ${de} o por cualquier sección que veas.`, sugerencias: () => sug});
+    };
+    if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", sola); else sola();
   }
 
   window.Asistente = {monta, vendi, formatea};
