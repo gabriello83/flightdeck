@@ -19,6 +19,34 @@ octubre de 2026 se llamaba Averías. Gabriele lo pidió ese día con un Power BI
   emergencia sanitaria, fuera de servicio y máquinas críticas), la lista ordenada por prioridad y
   la ficha de la incidencia que se pulsa, con sus notas. La lista se baja en CSV.
 
+## Por áreas y en las últimas 24 horas
+
+El 20 de octubre de 2026 Gabriele pidió que Incidencias se recorra como Rutas (docs/67):
+
+> Averias lo mismo que ruta, entras y te da los cuadrantes separados por area y una vez entrado te
+> da todas las informaciones cn mas detalle, separado con area con el percentaje de las llamadas
+> pero en las ultimas 24 horas.
+
+- **La portada** son las últimas 24 horas: cuatro cifras nacionales (llamadas, cuántas siguen
+  abiertas, cerradas en menos de 24 horas y abiertas ahora) y un cuadrante por área. El número
+  grande de cada cuadrante es **la parte de las llamadas** de esas 24 horas que es suya; el borde
+  lleva el semáforo del cuadrado (técnicas cerradas ese día en menos de 24 horas). Debajo, las
+  llamadas por área y delegación con su porcentaje, y la lista de las llamadas de esas 24 horas.
+- **Un área**: lo mismo de esa área (su porcentaje sobre todas las áreas, y el de cada delegación
+  sobre el área) y, debajo, todo el detalle de antes (panel de control e incidencias abiertas) ya
+  filtrado por el área. Pulsar una delegación filtra todo por ella.
+- «Ver el detalle de todas las áreas juntas» es la página de antes, con el filtro de zona
+  (`?area=todas`). Un perfil de una sola área no tiene portada: entra directamente.
+
+**Las 24 horas son un día entero, de 0 a 24 h.** La foto de M13 se saca de noche y llega hasta el
+final de ayer: las últimas 24 horas con dato son las de ayer. Se puede elegir otro día de los
+últimos 31. Desde el cuadrado (`?dia=`) se abre en ese día. **Llamada** = incidencia que entró
+ese día, de cualquier tipo (sin devoluciones ni preventivos, como todo lo demás). No cambia el
+fichero: la página cuenta con lo que ya trae `incidencias.json.gz`.
+
+Con los datos del 19 de octubre, perfil interno: 68 llamadas; Centro 39,7 %, Cataluña 27,9 %, Sur
+17,6 %, Levante 13,2 % y Norte 1,5 %.
+
 ## Las cuentas
 
 Como en el Power BI, una incidencia es de un periodo por el día en que **entró**. Los periodos
