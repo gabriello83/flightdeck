@@ -1,32 +1,37 @@
 """
-El asistente, con la API de Claude falseada.
+El asistente, con la API de Claude falseada y la API de la plataforma de verdad.
 
-Lo que se comprueba no es la calidad de la respuesta: es que el recorte ocurre
-ANTES de la llamada. Si el coste de servicio llegara al modelo, daria igual lo
-bien escrito que estuviera el recetario, porque el dato ya habria salido del
-ambito. Eso es lo que se mide aqui.
+Lo que se comprueba no es la calidad de la respuesta: es que el dato le llega al
+modelo por la MISMA API que al navegador, con la sesion del usuario. Las
+consultas del asistente se sirven aqui con infra/api/lambda_api.py contra el AWS
+falso, asi que si el coste de servicio llegara al modelo seria porque la API se
+lo da al navegador, y eso ya lo para test_api.py.
 
     python3 infra/api/test_asistente.py
 """
 
+import gzip
 import json
 import os
 import sys
 import types
+import urllib.parse
 
 AQUI = __file__.rsplit("/", 1)[0]
 sys.path.insert(0, AQUI)
+sys.path.insert(1, AQUI.rsplit("/", 1)[0])
 
 import falsos  # noqa: E402
 
 falsos.instala()
 falsos.SECRETOS["s/clave"] = "sk-de-pega"
-os.environ.update(TABLA="t", BUCKET_DATOS="b", SECRETO_CLAVE="s/clave",
+os.environ.update(TABLA="t", BUCKET_DATOS="b", SECRETO_CLAVE="s/clave", POOL="p", CLIENTE_POOL="c",
                   MODELO="claude-opus-5-5")
 
 # ---------------------------------------------------------------- Claude falso
 LLAMADAS = []
-SIGUIENTE = {"texto": "En septiembre hubo 1.107 visitas reales.", "stop": "end_turn"}
+COLA = []          # lo que contestara el modelo, vuelta a vuelta
+TEXTO = "En septiembre hubo 1.107 visitas reales."
 
 
 class _BadRequest(Exception):
@@ -40,17 +45,32 @@ class _Uso:
     cache_creation_input_tokens = 0
 
 
+class _Bloque(types.SimpleNamespace):
+    def model_dump(self, exclude_none=True):
+        return dict(vars(self))
+
+
+def texto(t=TEXTO, stop="end_turn"):
+    return {"content": [_Bloque(type="thinking", thinking="", signature="f"),
+                        _Bloque(type="text", text=t)], "stop": stop}
+
+
+def consulta(**entrada):
+    return {"content": [_Bloque(type="tool_use", id=f"t{len(LLAMADAS)}", name="consulta", input=entrada)],
+            "stop": "tool_use"}
+
+
 class _Respuesta:
     def __init__(self):
-        self.content = [types.SimpleNamespace(type="thinking", thinking=""),
-                        types.SimpleNamespace(type="text", text=SIGUIENTE["texto"])]
-        self.stop_reason = SIGUIENTE["stop"]
+        sig = COLA.pop(0) if COLA else texto()
+        self.content = sig["content"]
+        self.stop_reason = sig["stop"]
         self.usage = _Uso()
 
 
 class _Mensajes:
     def create(self, **kw):
-        LLAMADAS.append(kw)
+        LLAMADAS.append(json.loads(json.dumps(kw, default=str)))
         return _Respuesta()
 
 
@@ -63,7 +83,28 @@ class _ClienteFalso:
 sys.modules["anthropic"] = types.SimpleNamespace(
     Anthropic=lambda **kw: _ClienteFalso(**kw), BadRequestError=_BadRequest)
 
+import lambda_api as API  # noqa: E402
 import lambda_asistente as L  # noqa: E402
+
+# Las consultas del asistente, servidas por la API de verdad con su cookie.
+PEDIDAS = []
+
+
+def _baja(url, token):
+    u = urllib.parse.urlparse(url)
+    PEDIDAS.append(url)
+    q = dict(urllib.parse.parse_qsl(u.query))
+    res = API.lambda_handler(falsos.peticion("GET", u.path, None, token, query=q), None)
+    b = res["body"]
+    if res.get("isBase64Encoded"):
+        import base64
+        b = base64.b64decode(b)
+        if b[:2] == b"\x1f\x8b":
+            b = gzip.decompress(b)
+    return res["statusCode"], json.loads(b)
+
+
+L._baja = _baja
 
 fallos = []
 
@@ -85,18 +126,26 @@ PANEL = {
     "sat": {"tareas": 150},
     "inventario": {"cumplimiento": {"pct_en_norma": 8.6}, "existencias": {"A": 500000}},
 }
-
-# De operaciones: un cliente ya no tiene panel (docs/49), y el asistente
-# contesta con el panel. El recorte del coste es el mismo, por debajo de direccion.
-falsos.pon_panel("cli-airbus", PANEL)
-falsos.pon_fila("PERFIL#cli-airbus", {
+OPERATIVO = {
+    "generado": "2026-10-22T04:45:00Z", "ultimo_dia": "2026-10-21", "primer_dia": "2026-10-20",
+    "umbrales": {"verde": 95, "amarillo": 75},
+    "dias": {"2026-10-21": {"rutas": {"previstas": 100, "hechas": 81, "pct": 81.0, "color": "amarillo"},
+                            "ventas": {"importe": 777777.0}}},
+    "foto": {"rutas": {"x": 1}, "ventas": {"y": 2}},
+}
+PERFIL = {
     "nombre": "AIRBUS", "tipo": "operaciones",
     "ambito": {"clientes": ["AIRBUS"], "centros": ["AIRBUS GETAFE"], "delegaciones": []},
     "sesiones": ["resumen", "disponibilidad"],
     "permisos": {"asistente": True},
-})
-falsos.pon_fila("USUARIO#ana@airbus.com", {"nombre": "Ana", "perfil_id": "cli-airbus",
-                                           "estado": "activo", "asistente": True})
+    "cuadrados": ["rutas"],
+}
+falsos.pon_panel("cli-airbus", PANEL)
+falsos.OBJETOS["cabina/cli-airbus/operativo.json.gz"] = gzip.compress(json.dumps(OPERATIVO).encode())
+falsos.pon_fila("PERFIL#cli-airbus", PERFIL)
+ANA = {"nombre": "Ana", "perfil_id": "cli-airbus", "estado": "activo", "asistente": True}
+falsos.pon_fila("USUARIO#ana@airbus.com", ANA)
+falsos.pon_fila("USUARIO#luis@airbus.com", dict(ANA, nombre="Luis"))
 
 
 def sesion_de(correo):
@@ -104,23 +153,40 @@ def sesion_de(correo):
     return comun.abre_sesion(correo)
 
 
-def pregunta(texto, cookie, historial=None, pagina=None):
-    d = {"pregunta": texto, "historial": historial or []}
+def pregunta(texto_, cookie, historial=None, pagina=None, sigue=None):
+    d = {"pregunta": texto_, "historial": historial or []}
     if pagina:
         d["pagina"] = pagina
+    if sigue:
+        d = {"sigue": sigue}
     ev = falsos.peticion("POST", "/api/pregunta", d, cookie)
     return L.lambda_handler(ev, None)
 
 
+def cuerpo(res):
+    return json.loads(res["body"])
+
+
+def resultado(llamada):
+    """Lo que la ultima consulta le devolvio al modelo, en esa llamada."""
+    for m in reversed(llamada["messages"]):
+        if m["role"] == "user" and isinstance(m["content"], list):
+            for b in m["content"]:
+                if b.get("type") == "tool_result":
+                    return b["content"]
+    return ""
+
+
 COOKIE = sesion_de("ana@airbus.com")
+OTRA = sesion_de("luis@airbus.com")
+L.SEGUNDOS_VUELTA = 999   # en las pruebas, todo en una peticion salvo donde se diga
 
 # ----------------------------------------------------------------------
-print("\nUna pregunta normal")
-res = pregunta("Cuantas visitas hubo?", COOKIE)
+print("\nUna pregunta que no necesita consultar")
+res = pregunta("Hola, que puedes hacer?", COOKIE)
 comprueba("200", res["statusCode"], 200)
-cuerpo = json.loads(res["body"])
-comprueba("devuelve la respuesta", cuerpo["respuesta"], SIGUIENTE["texto"])
-comprueba("y lo que ha costado", cuerpo["coste_usd"] > 0, True)
+comprueba("devuelve la respuesta", cuerpo(res)["respuesta"], TEXTO)
+comprueba("y lo que ha costado", cuerpo(res)["coste_usd"] > 0, True)
 comprueba("una sola llamada al modelo", len(LLAMADAS), 1)
 
 k = LLAMADAS[0]
@@ -129,8 +195,10 @@ comprueba("el modelo", k["model"], "claude-opus-5-5")
 comprueba("pensamiento adaptativo", k["thinking"], {"type": "adaptive"})
 comprueba("esfuerzo explicito", k["output_config"]["effort"], "medium")
 comprueba("sin budget_tokens (daria 400)", "budget_tokens" in json.dumps(k["thinking"]), False)
-comprueba("tope de salida", k["max_tokens"], 2000)
+comprueba("tope de salida", k["max_tokens"], 4000)
 comprueba("con reintento en otro modelo si declina", k.get("fallbacks"), "default")
+comprueba("con la herramienta de consulta", [t["name"] for t in k["tools"]], ["consulta"])
+comprueba("que puede usar o no", k["tool_choice"], {"type": "auto"})
 
 print("\nEl recetario va en el sistema, y en cache")
 comprueba("un solo bloque de sistema", len(k["system"]), 1)
@@ -139,100 +207,133 @@ comprueba("lleva las trampas", "00SE0000" in k["system"][0]["text"], True)
 comprueba("y la de los partes del sistema", "SYSTEM" in k["system"][0]["text"], True)
 comprueba("el recetario NO lleva nada variable",
           any(x in k["system"][0]["text"] for x in ["ana@airbus.com", "2026-10-01", "AIRBUS GETAFE"]), False)
+comprueba("las herramientas tampoco",
+          any(x in json.dumps(k["tools"]) for x in ["ana@airbus.com", "AIRBUS GETAFE"]), False)
 
-print("\nLo que el modelo recibe esta ya recortado")
-enviado = k["messages"][-1]["content"]
-comprueba("las visitas si", "1107" in enviado, True)
-comprueba("el COSTE DE SERVICIO no", "8856" in enviado, False)
-comprueba("ni la palabra coste_servicio", "coste_servicio" in enviado, False)
-comprueba("ni el valor de las existencias", "500000" in enviado, False)
-comprueba("el inventario entero fuera", "pct_en_norma" in enviado, False)
+print("\nEl mensaje lleva el contexto, no los datos")
+enviado = json.dumps(k["messages"][-1]["content"], ensure_ascii=False)
 comprueba("su ambito si", "AIRBUS GETAFE" in enviado, True)
-comprueba("y la pregunta", "Cuantas visitas" in enviado, True)
+comprueba("la fecha de hoy, para saber que es ayer", '\\"hoy\\":\\"' in enviado, True)
+comprueba("la pagina desde la que pregunta", '\\"pagina\\":\\"panel\\"' in enviado, True)
+comprueba("y la pregunta", "que puedes hacer" in enviado, True)
+comprueba("ningun dato por adelantado", "1107" in enviado, False)
+comprueba("con el corte de cache en el ultimo mensaje",
+          k["messages"][-1]["content"][-1].get("cache_control"), {"type": "ephemeral"})
+
+# ----------------------------------------------------------------------
+print("\nConsulta el panel por la API, con la sesion del usuario")
+LLAMADAS.clear(); PEDIDAS.clear()
+COLA[:] = [consulta(seccion="panel"), texto()]
+res = pregunta("Cuantas visitas hubo?", COOKIE)
+comprueba("200 con respuesta", (res["statusCode"], "respuesta" in cuerpo(res)), (200, True))
+comprueba("dos vueltas del modelo", len(LLAMADAS), 2)
+comprueba("pidio /api/panel", [urllib.parse.urlparse(u).path for u in PEDIDAS], ["/api/panel"])
+visto = resultado(LLAMADAS[1])
+comprueba("las visitas si", "1107" in visto, True)
+comprueba("el COSTE DE SERVICIO no: la API no se lo da a operaciones", "8856" in visto, False)
+comprueba("ni el valor de las existencias", "500000" in visto, False)
+comprueba("el pensamiento vuelve entero en la vuelta siguiente",
+          LLAMADAS[1]["messages"][-2]["content"][0]["type"], "tool_use")
+
+print("\nEl informe general, con los cuadrados que ve")
+LLAMADAS.clear(); PEDIDAS.clear()
+COLA[:] = [consulta(seccion="informe_general", camino=["dias", "2026-10-21"]), texto()]
+pregunta("como fueron las rutas ayer?", COOKIE, pagina="operativo")
+visto = resultado(LLAMADAS[1])
+comprueba("lleva las rutas del dia", '"hechas":81' in visto, True)
+comprueba("sin el cuadrado que su perfil no ve", "777777" in visto, False)
+
+print("\nLo que se le quito a el (docs/61) tampoco llega")
+falsos.pon_fila("USUARIO#ana@airbus.com", dict(ANA, cuadrados_ocultos=["rutas"]))
+LLAMADAS.clear()
+COLA[:] = [consulta(seccion="informe_general", camino=["dias", "2026-10-21"]), texto()]
+pregunta("y las rutas?", COOKIE, pagina="operativo")
+comprueba("sin rutas", '"hechas":81' in resultado(LLAMADAS[1]), False)
+falsos.pon_fila("USUARIO#ana@airbus.com", ANA)
+
+print("\nUna seccion que no tiene: el error de la API, no el dato")
+LLAMADAS.clear()
+COLA[:] = [consulta(seccion="almacenes"), texto()]
+pregunta("y los almacenes?", COOKIE)
+visto = json.loads(resultado(LLAMADAS[1]))
+comprueba("dice que no tiene permiso", (visto.get("codigo"), "almacenes" in visto.get("error", "")), (403, True))
+LLAMADAS.clear()
+COLA[:] = [consulta(seccion="vencloud"), texto()]
+pregunta("y vencloud?", COOKIE)
+comprueba("una seccion que no existe, error", "error" in json.loads(resultado(LLAMADAS[1])), True)
+LLAMADAS.clear(); PEDIDAS.clear()
+COLA[:] = [consulta(seccion="panel", parametros={"perfil": "interno"}), texto()]
+pregunta("y el panel del interno?", COOKIE)
+comprueba("los parametros que la seccion no admite no se mandan", PEDIDAS[0].endswith("/api/panel"), True)
+
+print("\nBajar por una seccion grande")
+grande = {"centros": [{"centro": f"C{i:03}", "delegacion": "Sevilla" if i % 2 else "Madrid",
+                       "venta": i * 10.0, "notas": "x" * 400} for i in range(300)],
+          "otra": {"a": 1}}
+cache = {L.URL_API + "/api/rutas": (200, grande)}
+top = L.consulta({"seccion": "rutas"}, "t", cache)
+comprueba("sin camino: las claves, con lo grande resumido", (top["centros"], top["otra"]), ("<lista de 300>", {"a": 1}))
+lst = L.consulta({"seccion": "rutas", "camino": ["centros"], "filtro": {"delegacion": "sevi"},
+                  "orden": "-venta", "max": 3}, "t", cache)
+comprueba("filtro, orden y max", [x["centro"] for x in lst["elementos"]], ["C299", "C297", "C295"])
+comprueba("con el total filtrado", lst["total"], 150)
+comprueba("y lo largo de cada elemento, resumido", lst["elementos"][0]["notas"].endswith("…"), True)
+comprueba("una posicion de la lista", L.consulta({"seccion": "rutas", "camino": ["centros", 5, "centro"]}, "t", cache), "C005")
+comprueba("un camino que no existe lo dice, con lo que hay",
+          L.consulta({"seccion": "rutas", "camino": ["nada"]}, "t", cache)["hay"], ["centros", "otra"])
+
+# ----------------------------------------------------------------------
+print("\nPor pasos: cada peticion, una vuelta; el navegador sigue con el id")
+L.SEGUNDOS_VUELTA = -1
+LLAMADAS.clear()
+COLA[:] = [consulta(seccion="panel"), consulta(seccion="informe_general"), texto()]
+dia, antes = L.uso_de_hoy("ana@airbus.com")
+r1 = cuerpo(pregunta("cruza el panel y el informe", COOKIE))
+comprueba("la primera devuelve sigue", "sigue" in r1 and "respuesta" not in r1, True)
+comprueba("y dice que esta mirando", r1.get("estado"), "Mirando el panel…")
+comprueba("otro usuario no puede seguirla", pregunta("", OTRA, sigue=r1["sigue"])["statusCode"], 404)
+r2 = cuerpo(pregunta("", COOKIE, sigue=r1["sigue"]))
+comprueba("la segunda sigue", r2.get("estado"), "Mirando el informe general…")
+r3 = cuerpo(pregunta("", COOKIE, sigue=r2["sigue"]))
+comprueba("la tercera contesta", r3.get("respuesta"), TEXTO)
+_, despues = L.uso_de_hoy("ana@airbus.com")
+comprueba("la pregunta se cuenta una vez", despues["preguntas"] - antes.get("preguntas", 0), 1)
+comprueba("y el gasto, de las tres vueltas", round(despues["gasto_usd"] - antes.get("gasto_usd", 0), 5),
+          round(3 * L.coste(_Uso()), 5))
+comprueba("un id inventado, 404", pregunta("", COOKIE, sigue="nada")["statusCode"], 404)
+L.SEGUNDOS_VUELTA = 999
+
+print("\nEn la ultima vuelta ya no puede consultar: contesta")
+LLAMADAS.clear()
+COLA[:] = [consulta(seccion="panel")] * (L.VUELTAS_MAX - 1) + [texto()]
+r_ = cuerpo(pregunta("da vueltas", COOKIE))
+comprueba("contesta", r_.get("respuesta"), TEXTO)
+comprueba("con VUELTAS_MAX llamadas", len(LLAMADAS), L.VUELTAS_MAX)
+comprueba("la ultima sin herramientas", LLAMADAS[-1]["tool_choice"], {"type": "none"})
 
 print("\nEl historial se pasa, recortado a tres idas y venidas")
 LLAMADAS.clear()
-hist = [{"de": "usuario", "texto": f"p{i}"} for i in range(10)]
+hist = []
+for i in range(5):
+    hist += [{"de": "usuario", "texto": f"p{i}"}, {"de": "asistente", "texto": f"r{i}"}]
 pregunta("y ahora?", COOKIE, hist)
 comprueba("seis turnos mas la pregunta", len(LLAMADAS[0]["messages"]), 7)
-comprueba("son los ultimos", LLAMADAS[0]["messages"][0]["content"], "p4")
-
-print("\nEl consumo se cuenta por usuario y dia")
-import comun  # noqa: E402
-dia, usado = L.uso_de_hoy("ana@airbus.com")
-comprueba("dos preguntas contadas", usado["preguntas"], 2)
-comprueba("y el gasto acumulado", usado["gasto_usd"] > 0, True)
+comprueba("son los ultimos", LLAMADAS[0]["messages"][0]["content"], "p2")
 
 print("\nEl limite diario corta")
-falsos.pon_fila("USUARIO#ana@airbus.com", {"nombre": "Ana", "perfil_id": "cli-airbus",
-                                           "estado": "activo", "asistente": True,
-                                           "limite_preguntas_dia": 2})
+falsos.pon_fila("USUARIO#ana@airbus.com", dict(ANA, limite_preguntas_dia=2))
 comprueba("429", pregunta("otra mas", COOKIE)["statusCode"], 429)
+falsos.pon_fila("USUARIO#ana@airbus.com", ANA)
 
 print("\nSin los tres interruptores, el asistente no contesta")
 falsos.pon_fila("CONFIG", {"asistente_global": False}, "GLOBAL")
-r = pregunta("hola", COOKIE)
-comprueba("403", r["statusCode"], 403)
-comprueba("y dice que es global", "plataforma" in json.loads(r["body"])["error"], True)
+r_ = pregunta("hola", COOKIE)
+comprueba("403", r_["statusCode"], 403)
+comprueba("y dice que es global", "plataforma" in cuerpo(r_)["error"], True)
 falsos.pon_fila("CONFIG", {"asistente_global": True}, "GLOBAL")
-
-falsos.pon_fila("PERFIL#cli-airbus", {"nombre": "AIRBUS", "tipo": "operaciones",
-                                      "sesiones": ["resumen"], "permisos": {"asistente": False}})
+falsos.pon_fila("PERFIL#cli-airbus", dict(PERFIL, permisos={"asistente": False}))
 comprueba("perfil sin asistente, 403", pregunta("hola", COOKIE)["statusCode"], 403)
-falsos.pon_fila("PERFIL#cli-airbus", {
-    "nombre": "AIRBUS", "tipo": "operaciones",
-    "ambito": {"clientes": ["AIRBUS"], "centros": ["AIRBUS GETAFE"], "delegaciones": []},
-    "sesiones": ["resumen", "disponibilidad"], "permisos": {"asistente": True}})
-falsos.pon_fila("USUARIO#ana@airbus.com", {"nombre": "Ana", "perfil_id": "cli-airbus",
-                                           "estado": "activo", "asistente": True})
-
-print("\nDesde el informe general, contesta con el informe general (docs/69)")
-import gzip  # noqa: E402
-OPERATIVO = {
-    "generado": "2026-10-22T04:45:00Z", "ultimo_dia": "2026-10-21", "primer_dia": "2026-10-20",
-    "umbrales": {"verde": 95, "amarillo": 75},
-    "dias": {"2026-10-21": {"rutas": {"previstas": 100, "hechas": 81, "pct": 81.0, "color": "amarillo"},
-                            "ventas": {"importe": 777777.0}}},
-    "foto": {"rutas": {"x": 1}, "ventas": {"y": 2}},
-}
-falsos.OBJETOS["cabina/cli-airbus/operativo.json.gz"] = gzip.compress(json.dumps(OPERATIVO).encode())
-falsos.pon_fila("PERFIL#cli-airbus", {
-    "nombre": "AIRBUS", "tipo": "operaciones",
-    "ambito": {"clientes": ["AIRBUS"], "centros": ["AIRBUS GETAFE"], "delegaciones": []},
-    "sesiones": ["resumen", "disponibilidad"], "permisos": {"asistente": True},
-    "cuadrados": ["rutas"]})
-LLAMADAS.clear()
-L.cliente().beta.messages.create = _Mensajes().create
-r = pregunta("como fueron las rutas ayer?", COOKIE, pagina="operativo")
-comprueba("200", r["statusCode"], 200)
-enviado = LLAMADAS[0]["messages"][-1]["content"]
-comprueba("lleva las rutas del dia", '"hechas":81' in enviado, True)
-comprueba("dice de que pagina es", "informe general operativo" in enviado, True)
-comprueba("y la fecha de hoy, para saber que es ayer", '"hoy":"' in enviado, True)
-comprueba("sin el cuadrado que su perfil no ve", "777777" in enviado, False)
-comprueba("y sin el panel", "1107" in enviado, False)
-LLAMADAS.clear()
-falsos.pon_fila("USUARIO#ana@airbus.com", {"nombre": "Ana", "perfil_id": "cli-airbus",
-                                           "estado": "activo", "asistente": True,
-                                           "cuadrados_ocultos": ["rutas"]})
-pregunta("y las rutas?", COOKIE, pagina="operativo")
-comprueba("ni el que le quitaron a el (docs/61)", '"hechas":81' in LLAMADAS[0]["messages"][-1]["content"], False)
-falsos.pon_fila("USUARIO#ana@airbus.com", {"nombre": "Ana", "perfil_id": "cli-airbus",
-                                           "estado": "activo", "asistente": True})
-falsos.pon_fila("PERFIL#cli-airbus", {
-    "nombre": "AIRBUS", "tipo": "cliente", "ambito": {"clientes": ["AIRBUS"]},
-    "sesiones": ["cuadro"], "permisos": {"asistente": True}})
-comprueba("un cliente no tiene informe general, 403",
-          pregunta("rutas?", COOKIE, pagina="operativo")["statusCode"], 403)
-falsos.pon_fila("PERFIL#cli-airbus", {
-    "nombre": "AIRBUS", "tipo": "operaciones",
-    "ambito": {"clientes": ["AIRBUS"], "centros": ["AIRBUS GETAFE"], "delegaciones": []},
-    "sesiones": ["resumen", "disponibilidad"], "permisos": {"asistente": True}})
-del falsos.OBJETOS["cabina/cli-airbus/operativo.json.gz"]
-comprueba("sin informe calculado, 503 que lo dice",
-          pregunta("rutas?", COOKIE, pagina="operativo")["statusCode"], 503)
-comprueba("sin pagina, sigue siendo el panel",
-          "1107" in (pregunta("visitas?", COOKIE) and LLAMADAS[-1]["messages"][-1]["content"]), True)
+falsos.pon_fila("PERFIL#cli-airbus", PERFIL)
 
 print("\nSin sesion, nada")
 comprueba("401", pregunta("hola", None)["statusCode"], 401)
@@ -242,20 +343,19 @@ comprueba("vacia, 400", pregunta("   ", COOKIE)["statusCode"], 400)
 comprueba("de 3.000 caracteres, 400", pregunta("x" * 3000, COOKIE)["statusCode"], 400)
 
 print("\nSi el modelo declina, no se devuelve un hueco")
-SIGUIENTE["stop"] = "refusal"
-r = pregunta("algo raro", COOKIE)
-comprueba("200 con mensaje util", r["statusCode"], 200)
-comprueba("y un texto, no vacio", len(json.loads(r["body"])["respuesta"]) > 20, True)
-SIGUIENTE["stop"] = "end_turn"
+COLA[:] = [texto("", stop="refusal")]
+r_ = pregunta("algo raro", COOKIE)
+comprueba("200 con mensaje util", r_["statusCode"], 200)
+comprueba("y un texto, no vacio", len(cuerpo(r_)["respuesta"]) > 20, True)
 
 print("\nSi la API falla, el usuario no ve una traza")
 def _revienta(**kw):
     raise RuntimeError("la red")
 L.cliente().beta.messages.create = _revienta
 L.cliente().messages.create = _revienta
-r = pregunta("y ahora?", COOKIE)
-comprueba("502", r["statusCode"], 502)
-comprueba("sin detalles internos", "la red" in r["body"], False)
+r_ = pregunta("y ahora?", COOKIE)
+comprueba("502", r_["statusCode"], 502)
+comprueba("sin detalles internos", "la red" in r_["body"], False)
 
 print("\nEl coste se calcula con los precios de Opus 5.5")
 class _U:
