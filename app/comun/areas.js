@@ -1,5 +1,5 @@
 /* ===================================================================
-   Las areas de las secciones (Gabriele, 21-oct-2026, docs/69).
+   Las areas de las secciones (Gabriele, 21-oct-2026, docs/70).
 
    Cada seccion empieza como la portada de Rutas: un cuadrado por area, con
    su nombre en el centro y su porcentaje en el color del semaforo (en el
