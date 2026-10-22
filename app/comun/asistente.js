@@ -1,5 +1,5 @@
 /* ===================================================================
-   El asistente y Vendi, su muñeco (docs/40 y docs/70).
+   El asistente y Vendi, su muñeco (docs/40 y docs/69).
 
    Una sola pieza para todas las paginas que lo llevan: el panel y el informe
    general operativo. La pagina la monta con

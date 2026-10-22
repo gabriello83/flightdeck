@@ -1,4 +1,4 @@
-# 70 · El asistente en el informe general, y Vendi
+# 69 · El asistente en el informe general, y Vendi
 
 Gabriele, 22-oct-2026: activar el asistente (docs/40), darle una cara —«como el muñeco de M&M's,
 pero con una máquina de snacks, y que salude con la mano al entrar», del azul del logo— y ponerlo
@@ -49,3 +49,9 @@ el recetario invalida la caché una vez.
 El modelo contesta con negritas, listas y tablas cortas. Antes salían los asteriscos y las barras
 tal cual. Ahora se pintan, escapando primero todo el texto y dejando pasar solo `<b>`, listas y
 tablas construidas aquí. Las cifras de las tablas van a la derecha.
+
+## La bienvenida del administrador
+
+Gabriele entraba con su usuario y no veía la bienvenida. Es administrador, empieza en la consola, y
+la marca solo se dejaba si el destino era el informe. Ahora la pantalla de acceso la deja siempre, y
+el informe la consume la primera vez que se abre en esa pestaña (docs/68).
