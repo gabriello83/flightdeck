@@ -739,7 +739,37 @@ const servidor = http.createServer((pet, res) => {
       JSON.stringify(sinDos));
     comprueba('y los demas siguen', sinDos, conTodos.filter(i => i !== 'centros' && i !== 'sat'));
     delete API['/api/yo'].paneles_ocultos;
-    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente' };
+
+    // Vendi, el muñeco del asistente: solo sale a quien tiene el asistente,
+    // saluda al entrar y al abrir el cajon.
+    console.log('  · Vendi, el muñeco del asistente');
+    {
+      const x = await abre('/panel/');
+      await x.pagina.waitForSelector('#rejilla .panel');
+      comprueba_que('sin asistente no sale el muñeco', !(await x.pagina.isVisible('#bVendi')));
+      await x.pagina.close();
+    }
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: true, motivo: '' } };
+    {
+      const { pagina, errores, fuera } = await abre('/panel/');
+      await pagina.waitForSelector('#bVendi .muneco');
+      comprueba_que('con asistente sale el muñeco', await pagina.isVisible('#bVendi'));
+      await pagina.waitForSelector('#bVendi .muneco.saluda', { timeout: 3000 });
+      comprueba_que('y saluda al entrar', true);
+      comprueba_que('con su bocadillo', await pagina.$eval('#bocadillo', b => b.classList.contains('vis')));
+      await pagina.click('#bVendi');
+      await pagina.waitForSelector('#chat.vis');
+      comprueba_que('al pulsarlo se abre el cajon', true);
+      comprueba_que('y saluda en la cabecera', await pagina.$eval('#vendiChat .muneco', m => m.classList.contains('saluda')));
+      comprueba_que('el muñeco flotante se aparta', !(await pagina.isVisible('#bVendi')));
+      await pagina.click('#chatCerrar');
+      await pagina.waitForFunction(() => !document.querySelector('#bVendi').hidden);
+      comprueba_que('y vuelve al cerrar', true);
+      comprueba('sin errores en la consola', errores, []);
+      comprueba('ni peticiones fuera del dominio', fuera, []);
+      await pagina.close();
+    }
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', asistente: { habilitado: false, motivo: '' } };
   }
 
   // ------------------------------------------------------------- la consola
@@ -1101,6 +1131,81 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
+  console.log('\nLa bienvenida del informe operativo (docs/68)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno',
+      sesiones: ['resumen', 'venta_consumo', 'disponibilidad', 'instalaciones'] };
+    let x = await abre('/operativo/');
+    await x.pagina.waitForSelector('#cuadros .cuadro');
+    comprueba('sin la marca de la entrada, no sale', await x.pagina.$('.bv-capa'), null);
+    // La pantalla de acceso deja la marca; la pagina la borra nada mas leerla.
+    await x.pagina.evaluate(() => sessionStorage.setItem('digivend.bienvenida', '1'));
+    await x.pagina.reload();
+    comprueba_que('al entrar, sale', !!(await x.pagina.$('.bv-capa')));
+    comprueba('y la marca ya no esta', await x.pagina.evaluate(() => sessionStorage.getItem('digivend.bienvenida')), null);
+    await x.pagina.waitForTimeout(1500);
+    comprueba('mientras gira, los cuadrados estan tapados',
+      await x.pagina.$$eval('#cuadros .cuadro', c => c.every(e => getComputedStyle(e).opacity === '0')), true);
+    await x.pagina.waitForFunction(() => !document.querySelector('.bv-capa'), null, { timeout: 8000 });
+    comprueba('al acabar, todos los cuadrados a la vista',
+      await x.pagina.$$eval('#cuadros .cuadro', c => c.every(e => getComputedStyle(e).opacity === '1')), true);
+    await x.pagina.reload();
+    await x.pagina.waitForSelector('#cuadros .cuadro');
+    comprueba('volver al informe no la repite', await x.pagina.$('.bv-capa'), null);
+    comprueba('ni una peticion fuera del dominio', x.fuera, []);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+
+    x = await abre('/operativo/?bienvenida');
+    await x.pagina.waitForTimeout(600);
+    await x.pagina.mouse.click(300, 300);
+    await x.pagina.waitForFunction(() => !document.querySelector('.bv-capa'), null, { timeout: 2000 });
+    comprueba('un clic la salta y deja los cuadrados',
+      await x.pagina.$$eval('#cuadros .cuadro', c => c.length > 0 && c.every(e => getComputedStyle(e).opacity === '1')), true);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+
+    // El asistente tambien en el informe general (docs/69): Vendi espera a que
+    // acabe la bienvenida para saludar, y pregunta con pagina=operativo.
+    console.log('  · Vendi en el informe general');
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: true, motivo: '' } };
+    x = await abre('/operativo/?bienvenida');
+    const pedido = [];
+    await x.pagina.route('**/api/pregunta', async ruta => {
+      pedido.push(JSON.parse(ruta.request().postData() || '{}'));
+      await ruta.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ respuesta: 'Ayer **81 %** de rutas.\n\n| Delegación | % |\n|---|---|\n| Sevilla | 81 % |\n\n- <script>x</script>', quedan_hoy: 39 }) });
+    });
+    await x.pagina.waitForSelector('#bVendi .muneco');
+    comprueba('durante la bienvenida, Vendi aun no saluda',
+      await x.pagina.$eval('#bVendi .muneco', m => m.classList.contains('saluda')), false);
+    await x.pagina.waitForFunction(() => !document.querySelector('.bv-capa'), null, { timeout: 9000 });
+    await x.pagina.waitForSelector('#bVendi .muneco.saluda', { timeout: 3000 });
+    comprueba_que('al acabar, saluda', true);
+    comprueba_que('y el boton Preguntar esta en la cabecera', await x.pagina.isVisible('#bPreguntar'));
+    await x.pagina.click('#bVendi');
+    await x.pagina.waitForSelector('#chat.vis');
+    comprueba_que('con sugerencias de sus cuadrados', (await x.pagina.$$('#sugerencias button')).length > 0);
+    await x.pagina.fill('#chatTexto', '¿como fueron las rutas?');
+    await x.pagina.press('#chatTexto', 'Enter');
+    await x.pagina.waitForSelector('.turno.el table');
+    comprueba('pregunta desde el informe general', pedido[0] && pedido[0].pagina, 'operativo');
+    comprueba('las negritas salen en negrita', await x.pagina.$eval('.turno.el p b', b => b.textContent), '81 %');
+    comprueba('la tabla, en tabla', await x.pagina.$$eval('.turno.el td', t => t.map(e => e.textContent)), ['Sevilla', '81 %']);
+    comprueba('y lo que trae etiquetas sale como texto', await x.pagina.$$eval('.turno.el script', s => s.length), 0);
+    comprueba('ni una peticion fuera del dominio', x.fuera, []);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: false, motivo: '' } };
+
+    const tranquilo = await navegador.newPage({ reducedMotion: 'reduce' });
+    await tranquilo.goto(base + '/operativo/?bienvenida');
+    await tranquilo.waitForSelector('#cuadros .cuadro');
+    comprueba('con reducir movimiento no sale', await tranquilo.$('.bv-capa'), null);
+    await tranquilo.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
   console.log('\nLa telemetria cruzada con los ficheros (docs/53)');
   {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno',
@@ -1229,7 +1334,7 @@ const servidor = http.createServer((pet, res) => {
     const FOTOS = process.env.FOTOS_RUTAS;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre(`/rutas/?dia=${iso(AYER)}`);
-    await pagina.waitForSelector('#areas .area');
+    await pagina.waitForSelector('#areas .area.si');
     comprueba('arranca en el dia que trae la direccion', await pagina.inputValue('#dia'), iso(AYER));
     comprueba('la portada: lo nacional, los seis indicadores del Power BI en su orden',
       await pagina.$$eval('#kpis .kpi .et', x => x.map(e => e.textContent.trim())),
@@ -1239,12 +1344,24 @@ const servidor = http.createServer((pet, res) => {
       [await pagina.$$eval('#kpis .kpi .vl', x => x.map(e => e.textContent.trim())),
        await pagina.$eval('#kpis .kpi:nth-child(2)', k => k.classList.contains('amarillo'))],
       [['2', '75 %', '8', '6', '2', '2'], true]);
-    comprueba('un cuadrante por area, con su porcentaje y su color',
-      await pagina.$$eval('#areas .area', x => x.map(e => [e.dataset.area, e.querySelector('.pc').textContent.trim(), e.className.split(' ')[1]])),
-      [['Centro', '66,7 %', 'rojo'], ['Sur', '100 %', 'verde']]);
-    comprueba_que('el area cuenta sus llamadas y sus maquinas',
-      (await pagina.textContent('#areas .area[data-area="Centro"]')).includes('2 llamadas de máquina vacía')
-      && (await pagina.textContent('#areas .area[data-area="Centro"]')).includes('1 sin reponer'));
+    comprueba('el mapa: cada area con datos lleva su porcentaje con el semaforo, y nada mas',
+      await pagina.$$eval('#areas .area.si', x => x.map(e => [e.dataset.area, e.querySelector('.pc').textContent.trim(),
+        e.querySelector('.pc').getAttribute('class'), e.querySelectorAll('text').length])),
+      [['Centro', '66,7 %', 'pc rojo', 2], ['Sur', '100 %', 'pc verde', 2]]);
+    comprueba('el porcentaje en blanco si va bien y en rojo si no',
+      await pagina.$$eval('#areas .area.si .pc', x => x.map(e => getComputedStyle(e).fill)),
+      ['rgb(255, 90, 79)', 'rgb(255, 255, 255)']);
+    await pagina.hover('#areas .area[data-area="Sur"] .cara', { force: true });
+    await pagina.waitForTimeout(300);
+    comprueba('al pasar el raton el area se resalta y las demas se apagan',
+      await pagina.$$eval('#areas .area', x => x.map(e => [e.dataset.area, getComputedStyle(e).opacity])),
+      [['Norte', '0.45'], ['Centro', '0.45'], ['Cataluña', '0.45'], ['Levante', '0.45'], ['Sur', '1']]);
+    await pagina.mouse.move(0, 0);
+    comprueba('las areas fuera de los datos, en gris, sin cifra y sin pulsar',
+      await pagina.$$eval('#areas .area:not(.si)', x => x.map(e => [e.dataset.area, e.querySelectorAll('text').length, e.getAttribute('tabindex')])),
+      [['Norte', 0, null], ['Cataluña', 0, null], ['Levante', 0, null]]);
+    comprueba_que('el porcentaje de la pieza es el de dentro del area',
+      (await pagina.getAttribute('#areas .area[data-area="Centro"]', 'aria-label')).includes('66,7 %'));
     comprueba('en la portada no hay rutas ni filtro de delegacion',
       [await pagina.isVisible('#tRutas'), await pagina.isVisible('#deleg')], [false, false]);
     comprueba('las dos delegaciones, con su area', await pagina.$$eval('#tDeleg tbody tr', x => x.map(t => t.dataset.d)),

@@ -23,6 +23,7 @@ con  pip install anthropic -t paquete/  (ver infra/README-web.md).
 """
 
 import datetime
+import gzip
 import json
 import os
 import time
@@ -30,7 +31,7 @@ import time
 import boto3
 
 import autorizacion as A
-from comun import config, escribe, lee, panel_de, quien_es, r, cuerpo
+from comun import BUCKET, config, escribe, lee, panel_de, quien_es, r, cuerpo, s3
 
 sm = boto3.client("secretsmanager")
 
@@ -123,8 +124,44 @@ que duraron siete. La media de duracion no significa nada; la mediana si.
 instalar. Hoy el cumplimiento es del 8,6 %. Una maquina «sin diferencias» puede ser \
 simplemente una maquina sin contar.
 
+EL INFORME GENERAL. Si `pagina` es el informe general operativo, `datos.dias` trae \
+un dia por fecha con la cifra de cada cuadrado ese dia, su porcentaje y su color: \
+verde por encima de `umbrales.verde`, amarillo entre los dos y rojo por debajo de \
+`umbrales.amarillo`. `por_delegacion` reparte cada cuadrado por delegacion y `zonas` \
+da el area de cada delegacion. `foto` es la foto de la noche en que se escribio, no \
+la de un dia concreto. Un cuadrado con `sin_dato` no tiene dato ese dia: dilo con su \
+motivo y nunca lo cuentes como cero. «Ayer» es el dia anterior a `hoy`; si \
+`ultimo_dia` no es ayer, di de que dia es lo ultimo que hay.
+
 Y una advertencia general: cuando una cifra te parezca redonda, enorme o imposible, \
 dilo. En este modelo, lo que parece un hallazgo espectacular suele ser una de estas diez."""
+
+
+def operativo_de(cabina):
+    """El fichero del informe general de UNA carpeta de cabina/, o None.
+
+    El mismo que lee /api/operativo: con toda la historia va comprimido
+    (docs/66); el de antes, sin comprimir, vale mientras la noche no haya
+    escrito el nuevo.
+    """
+    for clave in ("operativo.json.gz", "operativo.json"):
+        try:
+            b = s3.get_object(Bucket=BUCKET, Key=f"cabina/{cabina}/{clave}")["Body"].read()
+        except Exception:  # noqa: BLE001
+            continue
+        if b[:2] == b"\x1f\x8b":
+            b = gzip.decompress(b)
+        return json.loads(b)
+    return None
+
+
+def hoy_en_espana():
+    """La fecha de hoy en la peninsula: «ayer» se cuenta desde aqui, no desde UTC."""
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.datetime.now(ZoneInfo("Europe/Madrid")).date().isoformat()
+    except Exception:  # noqa: BLE001  sin la base de zonas, la de UTC
+        return datetime.date.today().isoformat()
 
 
 # ----------------------------------------------------------------------
@@ -194,6 +231,8 @@ def lambda_handler(evento, contexto_lambda):
     if not sesion:
         return r(401, {"error": "Sin sesion."})
     usuario, perfil = sesion["usuario"], sesion["perfil"]
+    # Lo que el administrador le quito a este usuario (docs/61), como en la API.
+    perfil = A.con_usuario(perfil, usuario)
     c = config()
 
     ok, motivo = A.asistente_habilitado(c, perfil, usuario)
@@ -213,11 +252,25 @@ def lambda_handler(evento, contexto_lambda):
     if len(pregunta) > 2000:
         return r(400, {"error": "La pregunta es demasiado larga."})
 
-    panel = panel_de(perfil.get("cabina") or perfil.get("perfil_id", ""))
-    if panel is None:
-        return r(503, {"error": "Todavia no hay datos calculados para este perfil."})
-
-    ctx = A.contexto_asistente(A.recorta(panel, perfil), perfil)
+    # Contesta con lo que ve la pagina desde la que se pregunta, recortado con
+    # la misma tijera que la API le aplica a esa sesion. La pagina solo dice
+    # CUAL es; de que perfil, lo pone la sesion.
+    cabina = perfil.get("cabina") or perfil.get("perfil_id", "")
+    if d.get("pagina") == "operativo":
+        if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
+            return r(403, {"error": "Este perfil no tiene el informe general."})
+        datos = operativo_de(cabina)
+        if datos is None:
+            return r(503, {"error": "Todavia no hay informe general calculado para este perfil."})
+        ctx = A.contexto_asistente(A.recorta_operativo(datos, perfil), perfil)
+        ctx["pagina"] = "informe general operativo"
+    else:
+        panel = panel_de(cabina)
+        if panel is None:
+            return r(503, {"error": "Todavia no hay datos calculados para este perfil."})
+        ctx = A.contexto_asistente(A.recorta(panel, perfil), perfil)
+        ctx["pagina"] = "panel"
+    ctx["hoy"] = hoy_en_espana()
     historial = d.get("historial") if isinstance(d.get("historial"), list) else []
 
     try:

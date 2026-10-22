@@ -161,6 +161,16 @@ async function aDondeVa(){
   return "/operativo/";
 }
 
+/* Al informe operativo se entra con su bienvenida animada, una vez por
+   entrada: la marca la borra la propia pagina en cuanto la lee
+   (comun/bienvenida.js). Se deja aunque el destino sea otro: el administrador
+   empieza en la consola y la ve al pasar al informe; un cliente nunca llega. */
+async function entra(){
+  const destino = await aDondeVa();
+  try{ sessionStorage.setItem("digivend.bienvenida", "1"); }catch(e){}
+  location.href = destino;
+}
+
 $("#form").addEventListener("submit", async e => {
   e.preventDefault();
   avisa("");
@@ -188,7 +198,7 @@ $("#form").addEventListener("submit", async e => {
       avisa(r.datos.error || "No se ha podido entrar.");
       return;
     }
-    location.href = await aDondeVa();
+    await entra();
   }catch(err){
     avisa("No hay conexión con el servidor. Inténtalo otra vez.");
   }finally{
@@ -201,7 +211,7 @@ $("#form").addEventListener("submit", async e => {
 (async function yaDentro(){
   try{
     const r = await fetch("/api/yo", {credentials: "same-origin"});
-    if(r.ok) location.href = await aDondeVa();
+    if(r.ok) await entra();
   }catch(e){}
 })();
 </script>
