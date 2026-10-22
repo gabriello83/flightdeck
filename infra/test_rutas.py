@@ -130,6 +130,27 @@ inc.come_tareas([dict(base, id=1, numero=1, cod_operacion="S010", operacion="Rep
 b = RT.Maquinas().bloque([], inc, FESTIVOS, HOY)
 comprueba("sin M13 no se sabe si sigue abierta", [(x["f"], x["a"]) for x in b["llamadas"]], [("2026-10-14", None)])
 
+print("\nCaducado o insectos")
+inc = IN.Incidencias()
+inc.come_foto([
+    dict(base, id=1, numero=1, cod_operacion="C16", operacion="SNACK/BEBIDA - Producto caducado",
+         apertura="2026-10-15 09:00:00"),
+    dict(base, id=2, numero=2, cod_operacion="T04", operacion="CAFÉ - No sale producto",
+         titulo="Hay hormigas en la bandeja", apertura="2026-10-16 10:00:00", matricula="MB"),
+    dict(base, id=3, numero=3, cod_operacion="T04", operacion="CAFÉ - No sale producto",
+         apertura="2026-10-16 11:00:00"),
+    dict(base, id=4, numero=4, cod_operacion="S010", operacion="Reponer distribuidor automatico",
+         ultima_nota="el sandwich estaba caducado", apertura="2026-10-17 08:00:00"),
+    dict(base, id=5, numero=5, cod_operacion="S002", operacion="Devolución de dinero",
+         titulo="producto caducado", apertura="2026-10-17 09:00:00"),
+    dict(base, id=6, numero=6, cod_operacion="C16", operacion="SNACK/BEBIDA - Producto caducado",
+         apertura="2026-10-20 08:00:00"),
+])
+b = RT.Maquinas().bloque([], inc, FESTIVOS, HOY)
+comprueba("caducado por la operacion, insectos por el titulo, hasta ayer, sin devoluciones",
+          [(x["x"], x["k"]) for x in b["sanitarias"]], [("S-4", "caducado"), ("S-2", "insectos"), ("S-1", "caducado")])
+comprueba("la llamada de reponer con nota de caducado va en las dos listas", [x["x"] for x in b["llamadas"]], ["S-4"])
+
 print("\nQuien hizo cada ruta, y las areas")
 m = RT.Maquinas()
 m.come("partes", [parte("A", empleado="ANA"), parte("B", empleado="LUIS"), parte("C", empleado="ana b", ruta=""),
