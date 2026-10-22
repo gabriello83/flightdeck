@@ -1,0 +1,317 @@
+/* ===================================================================
+   El asistente y Vendi, su muñeco (docs/40 y docs/69).
+
+   Una sola pieza para todas las paginas que lo llevan: el panel y el informe
+   general operativo. La pagina la monta con
+
+       Asistente.monta({ pagina: "operativo", sugerencias: () => [...] })
+
+   y esto pone el resto: el muñeco flotante, el bocadillo, el cajon del chat y
+   la conversacion con /api/pregunta.
+
+   Lo que lo hace seguro no esta aqui: el servidor le pasa al modelo los MISMOS
+   datos recortados que esta pagina recibe para esa sesion, y no tiene otra via
+   al dato. La pagina solo dice cual es (`pagina`); el perfil lo pone la sesion.
+
+   - Vendi es una maquina de snacks del azul del logo de Serunion Vending
+     (#0f5b84), con ojos, guantes y zapatillas, en SVG: ni imagen ni nada que
+     pedir fuera del dominio (CLAUDE.md).
+   - Saluda con la mano al entrar (despues de la bienvenida, si la hay), al
+     pasarle el raton y al abrir el cajon. Con «reducir movimiento», quieto.
+   - Las respuestas traen negritas, listas y tablas cortas: se pintan sin
+     innerHTML de lo que llega, escapando antes de dar formato.
+   =================================================================== */
+(function(){
+  "use strict";
+
+  const CSS = `
+.as-fondo{position:fixed;inset:0;background:rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .15s;z-index:40}
+.as-fondo.vis{opacity:1;pointer-events:auto}
+#chat{
+  position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);z-index:41;
+  background:var(--tarjeta);border-left:1px solid var(--borde);display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform .18s ease-out;box-shadow:-8px 0 28px rgba(0,0,0,.12)
+}
+#chat.vis{transform:none}
+#chat header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--borde)}
+#chat header b{font-size:15px;flex:1}
+#chat header span{font-size:12px;color:var(--tinta-3)}
+#chat .hilo{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.turno{max-width:92%;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.turno p{margin:0 0 6px}.turno p:last-child{margin:0}
+.turno ul{margin:0 0 6px;padding-left:18px}
+.turno table{border-collapse:collapse;margin:4px 0 8px;font-size:13px;font-variant-numeric:tabular-nums}
+.turno th,.turno td{border-bottom:1px solid var(--borde);padding:3px 8px 3px 0;text-align:left}
+.turno td.n,.turno th.n{text-align:right}
+.turno.yo{align-self:flex-end;background:var(--s1);color:#fff;padding:8px 12px;border-radius:12px 12px 3px 12px;white-space:pre-wrap}
+.turno.el{align-self:flex-start;color:var(--tinta)}
+.turno.mal{align-self:flex-start;color:var(--critico,var(--rojo,#c62828))}
+.turno.el .quien{display:block;font-size:11px;color:var(--tinta-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+.sugerencias{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 10px}
+.sugerencias button{
+  font:inherit;font-size:12.5px;color:var(--tinta-2);background:var(--fondo);text-align:left;
+  border:1px solid var(--borde);border-radius:999px;padding:5px 11px;cursor:pointer
+}
+.sugerencias button:hover{border-color:var(--tinta-3);color:var(--tinta)}
+#chat form{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--borde);align-items:flex-end}
+#chat textarea{
+  flex:1;font:inherit;font-size:14px;color:var(--tinta);background:var(--fondo);resize:none;
+  border:1px solid var(--borde-fuerte);border-radius:9px;padding:8px 10px;min-height:38px;max-height:140px
+}
+#chat textarea:focus{outline:2px solid var(--s1);outline-offset:1px;border-color:var(--s1)}
+#chat form button{
+  font:inherit;font-weight:600;font-size:13px;color:#fff;background:var(--s1);
+  border:1px solid var(--s1);border-radius:9px;padding:9px 14px;cursor:pointer
+}
+#chat form button[disabled]{opacity:.55;cursor:progress}
+#chat .pieChat{padding:0 16px 12px;font-size:11.5px;color:var(--tinta-3)}
+@media (max-width:520px){ #chat{width:100%} }
+.muneco{display:block;overflow:visible}
+.muneco .mano{transform-origin:92px 70px;transform-box:view-box}
+.muneco .todo{transform-origin:60px 140px;transform-box:view-box}
+.saluda .mano{animation:as-saluda .42s ease-in-out 6 alternate}
+.saluda .todo{animation:as-bote .84s ease-in-out 3}
+@keyframes as-saluda{from{transform:rotate(-16deg)}to{transform:rotate(22deg)}}
+@keyframes as-bote{0%,100%{transform:none}50%{transform:translateY(-3px) rotate(-2deg)}}
+#bVendi{
+  position:fixed;right:18px;bottom:18px;z-index:30;width:76px;height:94px;padding:0;
+  background:transparent;border:0;cursor:pointer;filter:drop-shadow(0 4px 8px rgba(0,0,0,.18))
+}
+#bVendi .muneco{width:100%;height:100%}
+#bVendi:focus-visible{outline:2px solid var(--s1);outline-offset:4px;border-radius:12px}
+#bocadillo{
+  position:fixed;right:100px;bottom:70px;z-index:30;max-width:200px;
+  background:var(--tarjeta);color:var(--tinta);border:1px solid var(--borde-fuerte);
+  border-radius:12px 12px 3px 12px;padding:8px 12px;font-size:13px;line-height:1.4;
+  box-shadow:var(--sombra);opacity:0;transform:translateY(6px);transition:opacity .25s,transform .25s;pointer-events:none
+}
+#bocadillo.vis{opacity:1;transform:none}
+#chat header .muneco{width:30px;height:37px;flex:none}
+.btn .muneco{display:inline-block;width:15px;height:19px;vertical-align:-4px;margin-right:5px}
+@media (max-width:520px){ #bVendi{width:60px;height:74px;right:12px;bottom:12px} #bocadillo{right:80px;bottom:52px} }
+@media (prefers-reduced-motion:reduce){ .saluda .mano,.saluda .todo{animation:none} #bocadillo{transition:none} }
+`;
+
+  /* El dibujo. Una funcion, porque sale en tres sitios (el boton flotante, el
+     boton Preguntar si la pagina lo tiene y la cabecera del cajon) y cada uno
+     saluda por su cuenta. */
+  function vendi(){
+    const t="#0b2f45";
+    const snack=(x,y,c)=>`<rect x="${x}" y="${y}" width="9" height="10" rx="2" fill="${c}"/>`;
+    return `<svg class="muneco" viewBox="0 0 120 150" aria-hidden="true" focusable="false"><g class="todo">
+  <path d="M48 118v15M72 118v15" stroke="${t}" stroke-width="5" stroke-linecap="round"/>
+  <path d="M36 140c0-6 6-8 12-8s9 3 9 8z" fill="#fff" stroke="${t}" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M63 140c0-5 3-8 9-8s12 2 12 8z" fill="#fff" stroke="${t}" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M29 70Q15 80 18 95" fill="none" stroke="${t}" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="18" cy="99" r="7.5" fill="#fff" stroke="${t}" stroke-width="2.5"/>
+  <rect x="28" y="14" width="64" height="106" rx="12" fill="#0f5b84" stroke="${t}" stroke-width="3"/>
+  <rect x="33" y="19" width="54" height="5" rx="2.5" fill="#fff" opacity=".28"/>
+  <ellipse cx="48" cy="34" rx="8.5" ry="10.5" fill="#fff" stroke="${t}" stroke-width="2"/>
+  <ellipse cx="72" cy="34" rx="8.5" ry="10.5" fill="#fff" stroke="${t}" stroke-width="2"/>
+  <circle cx="50" cy="36" r="4.2" fill="${t}"/><circle cx="70" cy="36" r="4.2" fill="${t}"/>
+  <circle cx="51.5" cy="34.4" r="1.3" fill="#fff"/><circle cx="71.5" cy="34.4" r="1.3" fill="#fff"/>
+  <path d="M50 46Q60 53 70 46" fill="none" stroke="${t}" stroke-width="3" stroke-linecap="round"/>
+  <rect x="35" y="55" width="38" height="43" rx="4" fill="#d6ecf8" stroke="${t}" stroke-width="2"/>
+  ${snack(38,58,"#f2b632")}${snack(49.5,58,"#2a78d6")}${snack(61,58,"#1baf7a")}
+  ${snack(38,72,"#eb6834")}${snack(49.5,72,"#8e5bd0")}${snack(61,72,"#f2b632")}
+  ${snack(38,85,"#1baf7a")}${snack(49.5,85,"#eb6834")}${snack(61,85,"#2a78d6")}
+  <path d="M37 69.5h34M37 83h34" stroke="${t}" stroke-width="1.4" opacity=".55"/>
+  <rect x="77" y="55" width="10" height="19" rx="2" fill="#2b2b2b"/>
+  <path d="M80 59h1M84 59h1M80 63h1M84 63h1M80 67h1M84 67h1M80 71h1M84 71h1" stroke="#9fd3ff" stroke-width="2" stroke-linecap="round"/>
+  <rect x="79" y="79" width="6" height="10" rx="1.5" fill="#f2c94c" stroke="${t}" stroke-width="1.4"/>
+  <rect x="37" y="104" width="46" height="9" rx="3" fill="#2b2b2b"/>
+  <g class="mano">
+    <path d="M91 70Q106 64 106 47" fill="none" stroke="${t}" stroke-width="5" stroke-linecap="round"/>
+    <path d="M99 44c-1-5 1-9 4-9 1-4 4-5 6-3 2-2 5-1 6 2 3 0 4 3 3 6l-2 9c-1 4-5 6-9 6s-8-3-8-7z" fill="#fff" stroke="${t}" stroke-width="2.5" stroke-linejoin="round"/>
+  </g>
+</g></svg>`;
+  }
+
+  function saluda(sitio){
+    const m = sitio && sitio.querySelector(".muneco");
+    if(!m) return;
+    m.classList.remove("saluda"); void m.getBoundingClientRect(); m.classList.add("saluda");
+  }
+
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  /* Negritas, sobre el texto ya escapado: lo unico que se deja pasar es <b>. */
+  const linea = s => esc(s).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  const esNumero = s => /^[\s−\-+]*[\d.,]+\s*(%|€|h|min|km|uds?\.?)?\s*$/.test(s.replace(/<\/?b>/g, ""));
+
+  /* La respuesta, en parrafos, listas y tablas. Todo lo que llega del modelo
+     se escapa antes de darle formato. */
+  function formatea(texto){
+    const lineas = String(texto).split("\n"), out = [];
+    for(let i = 0; i < lineas.length; ){
+      const l = lineas[i].trim();
+      if(!l){ i++; continue; }
+      if(l.startsWith("|")){
+        const filas = [];
+        while(i < lineas.length && lineas[i].trim().startsWith("|")) filas.push(lineas[i++].trim());
+        const celdas = f => f.replace(/^\||\|$/g, "").split("|").map(c => linea(c.trim()));
+        const cuerpo = filas.filter(f => !/^\|[\s:|-]+\|?$/.test(f)).map(celdas);
+        if(!cuerpo.length) continue;
+        const [cab, ...resto] = cuerpo;
+        out.push("<table><thead><tr>" + cab.map(c => `<th>${c}</th>`).join("") + "</tr></thead><tbody>" +
+          resto.map(f => "<tr>" + f.map(c => `<td${esNumero(c) ? ' class="n"' : ""}>${c}</td>`).join("") + "</tr>").join("") +
+          "</tbody></table>");
+        continue;
+      }
+      if(/^[-*•]\s+/.test(l)){
+        const items = [];
+        while(i < lineas.length && /^[-*•]\s+/.test(lineas[i].trim())) items.push(linea(lineas[i++].trim().replace(/^[-*•]\s+/, "")));
+        out.push("<ul>" + items.map(x => `<li>${x}</li>`).join("") + "</ul>");
+        continue;
+      }
+      out.push(`<p>${linea(l.replace(/^#+\s*/, ""))}</p>`);
+      i++;
+    }
+    return out.join("");
+  }
+
+  function monta(op){
+    op = op || {};
+    const pagina = op.pagina || "panel";
+    const $ = s => document.querySelector(s);
+    const HILO = [];             /* {de, texto} — memoria corta, la API usa los ultimos 6 */
+    let enVuelo = false;
+
+    const estilo = document.createElement("style");
+    estilo.textContent = CSS;
+    document.head.appendChild(estilo);
+
+    const sitio = document.createElement("div");
+    sitio.innerHTML = `
+<div class="as-fondo" id="fondo" hidden></div>
+<aside id="chat" role="dialog" aria-modal="true" aria-label="Asistente" hidden>
+  <header>
+    <span id="vendiChat">${vendi()}</span>
+    <b>Asistente</b>
+    <span id="chatQuedan"></span>
+    <button class="btn" type="button" id="chatCerrar" aria-label="Cerrar">Cerrar</button>
+  </header>
+  <div class="hilo" id="hilo" aria-live="polite"></div>
+  <div class="sugerencias" id="sugerencias"></div>
+  <form id="chatForm">
+    <textarea id="chatTexto" rows="1" placeholder="Pregunta por tus datos…" maxlength="2000"></textarea>
+    <button type="submit" id="chatEnviar">Enviar</button>
+  </form>
+  <p class="pieChat">${esc(op.pie || "Sólo ve los datos de esta página. No ejecuta acciones ni consulta nada más.")}</p>
+</aside>
+<button id="bVendi" type="button" aria-label="Preguntar al asistente">${vendi()}</button>
+<div id="bocadillo" aria-hidden="true">${esc(op.hola || "¡Hola! Pregúntame por los datos de esta página.")}</div>`;
+    while(sitio.firstChild) document.body.appendChild(sitio.firstChild);
+
+    const boton = op.boton || null;      /* el «Preguntar» de la cabecera, si la pagina lo tiene */
+    if(boton){ boton.innerHTML = vendi() + esc(boton.textContent.trim() || "Preguntar"); boton.hidden = false; }
+
+    function abre(abierto){
+      const c = $("#chat"), f = $("#fondo");
+      c.hidden = false; f.hidden = false;
+      requestAnimationFrame(()=>{ c.classList.toggle("vis", abierto); f.classList.toggle("vis", abierto); });
+      $("#bVendi").hidden = abierto;
+      if(abierto){ $("#chatTexto").focus(); pintaSugerencias(); saluda($("#vendiChat")); $("#bocadillo").classList.remove("vis"); }
+      else (boton || $("#bVendi")).focus();
+    }
+    function turno(de, texto, clase){
+      const d = document.createElement("div");
+      d.className = "turno " + (clase || (de==="yo" ? "yo" : "el"));
+      if(de === "yo" || clase) d.textContent = texto;
+      else d.innerHTML = `<span class="quien">Asistente</span>` + formatea(texto);
+      $("#hilo").appendChild(d);
+      $("#hilo").scrollTop = $("#hilo").scrollHeight;
+      return d;
+    }
+    /* Las sugerencias las da la pagina, porque salen de lo que le ha llegado:
+       a un perfil sin recaudacion no se le ofrece preguntar por la recaudacion. */
+    function pintaSugerencias(){
+      if(HILO.length){ $("#sugerencias").innerHTML = ""; return; }
+      let q = [];
+      try{ q = (op.sugerencias ? op.sugerencias() : []) || []; }catch(e){}
+      $("#sugerencias").innerHTML = q.slice(0,4).map(t => `<button type="button">${esc(t)}</button>`).join("");
+      $("#sugerencias").querySelectorAll("button").forEach(b => b.addEventListener("click", ()=>{
+        $("#chatTexto").value = b.textContent;
+        $("#chatForm").requestSubmit();
+      }));
+    }
+    async function pregunta(texto){
+      if(enVuelo || !texto) return;
+      enVuelo = true;
+      $("#chatEnviar").disabled = true;
+      $("#sugerencias").innerHTML = "";
+      turno("yo", texto);
+      HILO.push({de:"usuario", texto});
+      const esperando = turno("el", "Pensando…", "el");
+      try{
+        const r = await fetch("/api/pregunta", {
+          method:"POST", credentials:"same-origin",
+          headers:{"content-type":"application/json"},
+          body: JSON.stringify({pregunta: texto, pagina, historial: HILO.slice(0,-1)}),
+        });
+        let d = {}; try{ d = await r.json(); }catch(e){}
+        esperando.remove();
+        if(!r.ok){
+          /* El motivo importa: no es lo mismo haber agotado el limite del dia
+             que que el asistente este apagado para todo el mundo. */
+          turno("el", d.error || (r.status === 503 || r.status === 504
+            ? "El asistente ha tardado demasiado. Prueba con una pregunta más concreta."
+            : "El asistente no está disponible ahora mismo."), "mal");
+          return;
+        }
+        turno("el", d.respuesta || "");
+        HILO.push({de:"asistente", texto: d.respuesta || ""});
+        if(d.quedan_hoy !== null && d.quedan_hoy !== undefined)
+          $("#chatQuedan").textContent = `${d.quedan_hoy} preguntas hoy`;
+      }catch(e){
+        esperando.remove();
+        turno("el", "No hay conexión con el servidor.", "mal");
+      }finally{
+        enVuelo = false;
+        $("#chatEnviar").disabled = false;
+        $("#chatTexto").focus();
+      }
+    }
+
+    if(boton) boton.addEventListener("click", ()=>abre(true));
+    $("#bVendi").addEventListener("click", ()=>abre(true));
+    $("#bVendi").addEventListener("mouseenter", ()=>saluda($("#bVendi")));
+    $("#chatCerrar").addEventListener("click", ()=>abre(false));
+    $("#fondo").addEventListener("click", ()=>abre(false));
+    addEventListener("keydown", e=>{ if(e.key==="Escape" && $("#chat").classList.contains("vis")) abre(false); });
+    $("#chatForm").addEventListener("submit", e=>{
+      e.preventDefault();
+      const t = $("#chatTexto").value.trim();
+      $("#chatTexto").value = ""; $("#chatTexto").style.height = "";
+      pregunta(t);
+    });
+    $("#chatTexto").addEventListener("input", e=>{
+      e.target.style.height = "auto";
+      e.target.style.height = Math.min(140, e.target.scrollHeight) + "px";
+    });
+    $("#chatTexto").addEventListener("keydown", e=>{
+      /* Enter envia; Mayus+Enter hace parrafo. Es lo que espera quien escribe rapido. */
+      if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); $("#chatForm").requestSubmit(); }
+    });
+
+    /* Al entrar, Vendi saluda y dice hola unos segundos. Si la pagina esta con
+       su bienvenida animada, espera a que acabe: debajo no lo veria nadie. */
+    function hola(){
+      setTimeout(()=>{
+        saluda($("#bVendi"));
+        $("#bocadillo").classList.add("vis");
+        setTimeout(()=>$("#bocadillo").classList.remove("vis"), 4500);
+      }, 700);
+    }
+    const raiz = document.documentElement;
+    if(raiz.classList.contains("bienvenida")){
+      const ob = new MutationObserver(()=>{
+        if(!raiz.classList.contains("bienvenida")){ ob.disconnect(); hola(); }
+      });
+      ob.observe(raiz, {attributes:true, attributeFilter:["class"]});
+    }else hola();
+
+    return {abre};
+  }
+
+  window.Asistente = {monta, vendi, formatea};
+})();

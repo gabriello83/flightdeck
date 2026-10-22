@@ -746,7 +746,37 @@ const servidor = http.createServer((pet, res) => {
       JSON.stringify(sinDos));
     comprueba('y los demas siguen', sinDos, conTodos.filter(i => i !== 'centros' && i !== 'sat'));
     delete API['/api/yo'].paneles_ocultos;
-    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente' };
+
+    // Vendi, el muñeco del asistente: solo sale a quien tiene el asistente,
+    // saluda al entrar y al abrir el cajon.
+    console.log('  · Vendi, el muñeco del asistente');
+    {
+      const x = await abre('/panel/');
+      await x.pagina.waitForSelector('#rejilla .panel');
+      comprueba_que('sin asistente no sale el muñeco', !(await x.pagina.isVisible('#bVendi')));
+      await x.pagina.close();
+    }
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: true, motivo: '' } };
+    {
+      const { pagina, errores, fuera } = await abre('/panel/');
+      await pagina.waitForSelector('#bVendi .muneco');
+      comprueba_que('con asistente sale el muñeco', await pagina.isVisible('#bVendi'));
+      await pagina.waitForSelector('#bVendi .muneco.saluda', { timeout: 3000 });
+      comprueba_que('y saluda al entrar', true);
+      comprueba_que('con su bocadillo', await pagina.$eval('#bocadillo', b => b.classList.contains('vis')));
+      await pagina.click('#bVendi');
+      await pagina.waitForSelector('#chat.vis');
+      comprueba_que('al pulsarlo se abre el cajon', true);
+      comprueba_que('y saluda en la cabecera', await pagina.$eval('#vendiChat .muneco', m => m.classList.contains('saluda')));
+      comprueba_que('el muñeco flotante se aparta', !(await pagina.isVisible('#bVendi')));
+      await pagina.click('#chatCerrar');
+      await pagina.waitForFunction(() => !document.querySelector('#bVendi').hidden);
+      comprueba_que('y vuelve al cerrar', true);
+      comprueba('sin errores en la consola', errores, []);
+      comprueba('ni peticiones fuera del dominio', fuera, []);
+      await pagina.close();
+    }
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', asistente: { habilitado: false, motivo: '' } };
   }
 
   // ------------------------------------------------------------- la consola
@@ -1138,6 +1168,39 @@ const servidor = http.createServer((pet, res) => {
       await x.pagina.$$eval('#cuadros .cuadro', c => c.length > 0 && c.every(e => getComputedStyle(e).opacity === '1')), true);
     comprueba('sin un solo error en la consola del navegador', x.errores, []);
     await x.pagina.close();
+
+    // El asistente tambien en el informe general (docs/69): Vendi espera a que
+    // acabe la bienvenida para saludar, y pregunta con pagina=operativo.
+    console.log('  · Vendi en el informe general');
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: true, motivo: '' } };
+    x = await abre('/operativo/?bienvenida');
+    const pedido = [];
+    await x.pagina.route('**/api/pregunta', async ruta => {
+      pedido.push(JSON.parse(ruta.request().postData() || '{}'));
+      await ruta.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ respuesta: 'Ayer **81 %** de rutas.\n\n| Delegación | % |\n|---|---|\n| Sevilla | 81 % |\n\n- <script>x</script>', quedan_hoy: 39 }) });
+    });
+    await x.pagina.waitForSelector('#bVendi .muneco');
+    comprueba('durante la bienvenida, Vendi aun no saluda',
+      await x.pagina.$eval('#bVendi .muneco', m => m.classList.contains('saluda')), false);
+    await x.pagina.waitForFunction(() => !document.querySelector('.bv-capa'), null, { timeout: 9000 });
+    await x.pagina.waitForSelector('#bVendi .muneco.saluda', { timeout: 3000 });
+    comprueba_que('al acabar, saluda', true);
+    comprueba_que('y el boton Preguntar esta en la cabecera', await x.pagina.isVisible('#bPreguntar'));
+    await x.pagina.click('#bVendi');
+    await x.pagina.waitForSelector('#chat.vis');
+    comprueba_que('con sugerencias de sus cuadrados', (await x.pagina.$$('#sugerencias button')).length > 0);
+    await x.pagina.fill('#chatTexto', '¿como fueron las rutas?');
+    await x.pagina.press('#chatTexto', 'Enter');
+    await x.pagina.waitForSelector('.turno.el table');
+    comprueba('pregunta desde el informe general', pedido[0] && pedido[0].pagina, 'operativo');
+    comprueba('las negritas salen en negrita', await x.pagina.$eval('.turno.el p b', b => b.textContent), '81 %');
+    comprueba('la tabla, en tabla', await x.pagina.$$eval('.turno.el td', t => t.map(e => e.textContent)), ['Sevilla', '81 %']);
+    comprueba('y lo que trae etiquetas sale como texto', await x.pagina.$$eval('.turno.el script', s => s.length), 0);
+    comprueba('ni una peticion fuera del dominio', x.fuera, []);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: false, motivo: '' } };
 
     const tranquilo = await navegador.newPage({ reducedMotion: 'reduce' });
     await tranquilo.goto(base + '/operativo/?bienvenida');

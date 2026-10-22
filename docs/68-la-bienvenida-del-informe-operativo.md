@@ -23,10 +23,12 @@ pantalla, y los trozos van solo a los cuadrados que se ven sin bajar.
 
 ## Cuándo sale
 
-- **Al entrar**: la pantalla de acceso, cuando manda al usuario al informe operativo (operaciones y
-  dirección, docs/51), deja una marca en `sessionStorage`; la página la borra nada más leerla.
-  Volver al informe desde Rutas o Incidencias no la repite. Los clientes van al cuadro y no la ven;
-  el administrador va a la consola.
+- **Al entrar**: la pantalla de acceso deja una marca en `sessionStorage` y el informe la borra
+  nada más leerla. Volver al informe desde Rutas o Incidencias no la repite. Operaciones y
+  dirección entran directos al informe (docs/51) y la ven ahí; el administrador empieza en la
+  consola y la ve la primera vez que pasa al informe en esa pestaña (22-oct: antes la marca solo se
+  dejaba si el destino era el informe, y el administrador no la veía nunca). Los clientes van al
+  cuadro y no llegan al informe.
 - **`/operativo/?bienvenida`** la fuerza, para enseñarla.
 - **No sale** con «reducir movimiento» activado en el sistema.
 - **Se salta** con un clic, cualquier tecla, el botón «Saltar», al hacer scroll o al cambiar el
