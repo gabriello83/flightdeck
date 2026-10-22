@@ -111,6 +111,8 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 </div>
 
 <script src="/comun/areas.js"></script>
+<!-- Vendi (docs/71). Sin data-pagina: la seccion la dice ?que=, y se monta al leer la sesion. -->
+<script src="/comun/asistente.js"></script>
 <script>
 /* ===================================================================
    Puntos de venta activos, Ventas y Reposiciones · digivend.es  (docs/70)
@@ -350,6 +352,15 @@ function fechaLarga(f){
   }
   DATOS = await ro.json();
   if(!(DATOS.cuadrados||[]).includes(ID)){ avisa("Este cuadrado no está entre los tuyos."); return; }
+  if(YO.asistente && YO.asistente.habilitado && window.Asistente){
+    const SUG = {
+      pdvs: ["¿Cuántos puntos de venta activos tiene cada área?", "¿Qué delegación tiene más máquinas instaladas?"],
+      ventas: ["¿Qué área vendió más ayer?", "¿Cómo van las ventas de esta semana contra la anterior?"],
+      reposiciones: ["¿Cuántas unidades se repusieron ayer por área?", "¿Qué clase de producto se repone más?"],
+    };
+    Asistente.monta({pagina: ID, hola: `¡Hola! Pregúntame por ${SEC.titulo.toLowerCase()} o por cualquier sección que veas.`,
+      sugerencias: () => SUG[ID]});
+  }
 
   $("#bPanel").href = SEC.panel; $("#bPanel").hidden = false;
   $("#barra").hidden = false;
