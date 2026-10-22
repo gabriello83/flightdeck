@@ -115,3 +115,8 @@ Sale en unos 50 KB comprimidos para el perfil interno.
 Pruebas: `infra/test_operativo.py` (cuentas y festivos), `infra/test_agregados.py` (el ámbito),
 `infra/api/test_api.py` (quién la ve) y `app/comun/prueba_pantallas.js` (la página en Chromium,
 en claro, oscuro y móvil, sin peticiones fuera del dominio).
+
+## Desde el 19 de octubre de 2026, por áreas
+
+La página entra por áreas y suma quién hizo cada ruta, las llamadas de máquina vacía, las
+máquinas por recaudar en el mes y las que llevan más de 12 laborables sin reponer: docs/67.

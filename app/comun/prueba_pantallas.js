@@ -140,16 +140,46 @@ const API = {
   // El informe general operativo (docs/51), con la forma que escribe
   // infra/operativo.py ya recortada por la API: un dia con todo y uno sin plan.
   '/api/operativo': {
-    generado: new Date().toISOString(), ultimo_dia: iso(AYER), umbrales: { verde: 95, amarillo: 75 },
+    generado: new Date().toISOString(), ultimo_dia: iso(AYER), primer_dia: '2026-10-01', umbrales: { verde: 95, amarillo: 75 },
+    zonas: { 'Madrid - Leganes': 'Centro', 'Levante - Murcia': 'Levante', 'Levante - Valencia': 'Levante' },
     cuadrados: ['rutas', 'averias', 'devoluciones', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas', 'revision', 'utilizo'],
     dias: {
       [iso(AYER)]: {
         rutas: { previstas: 400, hechas: 350, pct: 87.5, color: 'amarillo', visitas: 1100, fuera_de_plan: 12 },
         averias: { cerradas: 43, a_tiempo: 30, pct: 69.8, color: 'rojo', horas: 24, sin_tarea: 2 },
-        furgonetas: { activas: 40, visitas: 1100, visitas_sin_vehiculo: 110 },
+        furgonetas: { activas: 3, visitas: 1100, visitas_sin_vehiculo: 110, vehiculos: ['1111AAA', '2222BBB', '3333CCC'] },
         ventas: { importe: 49859.02, unidades: 54119, maquinas: 1893, fuente: 'telemetria', imposibles: 0 },
         reposiciones: { unidades: 52168, por_clase: [{ clase: 'Snack', unidades: 30340 }, { clase: 'Bebida fría', unidades: 19448 }], consumibles: 88124, valor: 27616 },
-        telemetria: { auditables: 2253, con_dex: 2200, pct: 97.6, color: 'verde' }
+        telemetria: { auditables: 2253, con_dex: 2200, pct: 97.6, color: 'verde' },
+        // El reparto por delegacion (docs/66): cifras que se suman.
+        por_delegacion: {
+          rutas: { 'Madrid - Leganes': { previstas: 300, hechas: 290, fuera: 2, visitas: 800 },
+                   'Levante - Murcia': { previstas: 100, hechas: 60, fuera: 10, visitas: 300 } },
+          averias: { 'Madrid - Leganes': { cerradas: 40, a_tiempo: 29 }, 'Levante - Murcia': { cerradas: 3, a_tiempo: 1 } },
+          furgonetas: { 'Madrid - Leganes': { vehiculos: ['1111AAA', '2222BBB'], visitas: 800, visitas_sin_vehiculo: 100 },
+                        'Levante - Murcia': { vehiculos: ['2222BBB', '3333CCC'], visitas: 300, visitas_sin_vehiculo: 10 } },
+          ventas: { 'Madrid - Leganes': { importe: 40000, unidades: 44000, maquinas: 1500 },
+                    'Levante - Murcia': { importe: 9859.02, unidades: 10119, maquinas: 393 } },
+          reposiciones: { 'Madrid - Leganes': { unidades: 40000, consumibles: 80000, por_clase: { Snack: 25000, 'Bebida fría': 15000 } },
+                          'Levante - Murcia': { unidades: 12168, consumibles: 8124, por_clase: { Snack: 5340, 'Bebida fría': 4448 } } },
+          telemetria: { 'Madrid - Leganes': { auditables: 2000, con_dex: 1990 }, 'Levante - Murcia': { auditables: 253, con_dex: 210 } }
+        }
+      },
+      [iso(new Date(AYER.getTime() - 86400000))]: {
+        rutas: { previstas: 100, hechas: 50, pct: 50, color: 'rojo', visitas: 300, fuera_de_plan: 0 },
+        averias: { sin_dato: 'Ese día no se cerró ninguna avería.', cerradas: 0, sin_tarea: 0 },
+        furgonetas: { activas: 2, visitas: 300, visitas_sin_vehiculo: 0, vehiculos: ['3333CCC', '4444DDD'] },
+        ventas: { importe: 1000, unidades: 900, maquinas: 100, fuente: 'telemetria', imposibles: 0 },
+        reposiciones: { unidades: 1000, por_clase: [{ clase: 'Snack', unidades: 1000 }], consumibles: 0, valor: 1 },
+        telemetria: { auditables: 2253, con_dex: 53, pct: 2.4, color: 'rojo' },
+        por_delegacion: {
+          rutas: { 'Levante - Murcia': { previstas: 100, hechas: 50, fuera: 0, visitas: 300 } },
+          averias: {},
+          furgonetas: { 'Levante - Murcia': { vehiculos: ['3333CCC', '4444DDD'], visitas: 300, visitas_sin_vehiculo: 0 } },
+          ventas: { 'Levante - Murcia': { importe: 1000, unidades: 900, maquinas: 100 } },
+          reposiciones: { 'Levante - Murcia': { unidades: 1000, consumibles: 0, por_clase: { Snack: 1000 } } },
+          telemetria: { 'Madrid - Leganes': { auditables: 2000, con_dex: 0 }, 'Levante - Murcia': { auditables: 253, con_dex: 53 } }
+        }
       },
       '2026-10-01': {
         rutas: { sin_dato: 'Falta el plan de visitas.', visitas: 900 },
@@ -160,8 +190,9 @@ const API = {
         telemetria: { auditables: 2253, con_dex: 900, pct: 39.9, color: 'rojo' }
       }
     },
-    foto: { pdvs: { activos: 3195, maquinas: 3165 },
+    foto: { pdvs: { activos: 3195, maquinas: 3165, por_delegacion: { 'Madrid - Leganes': { activos: 3000, maquinas: 2900 }, 'Levante - Murcia': { activos: 195, maquinas: 265 } } },
             devoluciones: { mes: iso(AYER).slice(0, 7), hasta: iso(AYER), total: 518, mes_anterior: 569, sin_cerrar: 76, especiales: 92,
+                            importe: 1121.1, importe_anterior: 1179.33, sin_resolver: 87, rechazadas: 12,
                             por_canal: [['En el sitio', 244], ['Transferencia', 181]] },
             tarifas: { pct: 81.3, color: 'amarillo', coinciden: 13, controlados: 16, sin_tarifa: 2, sin_dato_productos: 1, desde: '2026-04-14' },
             revision: { sin_planograma: 301, creados_ayer: 4, sin_tarifa: 1894, precio_distinto: 1541 },
@@ -218,22 +249,22 @@ const API = {
     };
   })(),
   // Las furgonetas (docs/58), con la forma que escribe infra/operativo.py.
-  '/api/furgonetas': {
-    generado: new Date().toISOString(), perfil: 'interno', ultimo_dia: iso(AYER),
-    dias: {
-      [iso(new Date(AYER.getTime() - 7 * 86400000))]: {
-        activas: 3, visitas: 30, visitas_sin_vehiculo: 0,
-        vehiculos: [['1234ABC', 'Madrid - Leganes', 'Ruta Getafe', 'Ana Pérez', 12, 10, 90, '08:00', '13:00']],
-        sin_vehiculo: [], delegaciones: [['Madrid - Leganes', 3, 30, 0]] },
-      [iso(AYER)]: {
-        activas: 2, visitas: 25, visitas_sin_vehiculo: 5,
-        vehiculos: [
-          ['1234ABC', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', 'Ana Pérez', 12, 10, 95, '08:05', '13:40'],
-          ['5678DEF', 'Andalucía - Málaga · Madrid - Leganes', 'Málaga 1', 'Luis Gil', 8, 8, 60, '09:00', '12:10']],
-        sin_vehiculo: [['Andalucía - Málaga', 'Rosa Gil', 'Málaga 2', 5, 4, 'xxxx-xxx']],
-        delegaciones: [['Madrid - Leganes', 2, 15, 0], ['Andalucía - Málaga', 1, 10, 5]] }
-    }
-  },
+  '/api/furgonetas': (() => {
+    const d = n => iso(new Date(AYER.getTime() - n * 86400000));
+    return {
+      generado: new Date().toISOString(), perfil: 'interno', ultimo_dia: d(0), desde: d(7),
+      dias: [7, 6, 5, 4, 3, 2, 1, 0].map(d),
+      umbrales_km: { min: 10, max: 400 },
+      semana: 7, umbrales: { verde: 95, amarillo: 75 }, km_desde: '2025-01-01',
+      flota: [
+        { m: '1234ABC', n: 'CRAFTER - Ana', d: 'Madrid - Leganes', z: 'Centro', mod: 'Crafter', p: 'Ana Pérez', pr: 'ruta', r: 'Ruta Getafe', km: 25703, skm: 0 },
+        { m: '5678DEF', n: 'JUMPER <Luis>', d: 'Andalucía - Málaga', z: 'Sur', mod: '', p: 'Luis Gil', pr: 'jornada', r: '', km: 9100, skm: 3 },
+        { m: '9999ZZZ', n: 'CADDY', d: 'Madrid - Leganes', z: 'Centro', mod: '', p: '', pr: '', r: '', km: 0, skm: 12 }],
+      visitas: { '1234ABC': [d(7), d(0)], '5678DEF': [d(3)], '9999ZZZ': [] },
+      km: { [d(0)]: { '1234ABC': [95, 1, ''], '5678DEF': [450, 2, ''], '9999ZZZ': [null, 1, 'sin anotar'] },
+            [d(1)]: { '1234ABC': [50, 1, ''] } }
+    };
+  })(),
   // Utilizo (docs/60), con la forma que escribe infra/utilizo.py.
   '/api/utilizo': (() => {
     const d1 = iso(AYER), d2 = iso(new Date(AYER.getTime() - 86400000));
@@ -293,25 +324,33 @@ const API = {
   // Las devoluciones (docs/57), con la forma que escribe infra/devoluciones.py.
   '/api/devoluciones': (() => {
     const d = (n, h = '09:00') => `${iso(new Date(AYER.getTime() - n * 86400000))} ${h}`;
+    // s: 0 en estudio, 1 pendiente, 2 abonada, 3 rechazada. k: posicion en tipos.
     return {
       generado: new Date().toISOString(), perfil: 'interno', ultimo_dia: iso(AYER),
-      fuente: 'M13 · EXT_SAT_INCIDENCIAS', desde: iso(new Date(AYER.getFullYear(), AYER.getMonth() - 12, 1)),
-      zonas: { 'Madrid - Leganes': 'Centro', 'Levante - Murcia': 'Levante' },
-      centros: [['1001', 'AIRBUS GETAFE', 'C7', 'AIRBUS'], ['2002', 'CONSUM <MURCIA>', '10002', 'SERUNION']],
-      delegaciones: ['Madrid - Leganes', 'Levante - Murcia'],
-      canales: ['En el sitio', 'Transferencia', 'Tarjeta de crédito', 'Tarjeta de empleado', 'Otra'],
-      origenes: ['Atención al cliente', 'Solicitud especial'],
-      tecnicos: ['Javier', 'Miguel'],
+      fuente: 'M16 · EXT_DEVOLUCIONES', desde: iso(new Date(AYER.getFullYear(), AYER.getMonth() - 12, 1)),
+      zonas: { 'Madrid - Leganes': 'Centro', 'Levante - Murcia': 'Levante', 'Madrid - Sur': 'Centro' },
+      centros: [['1001', 'AIRBUS GETAFE', 'C7', 'AIRBUS'], ['2002', 'CONSUM <MURCIA>', '10002', 'SERUNION'],
+                ['1003', 'HOSPITAL SUR', 'C9', 'HOSPITAL']],
+      delegaciones: ['Madrid - Leganes', 'Levante - Murcia', 'Madrid - Sur'],
+      importe_max: 50,
+      tipos: ['Transferencia', 'En mano', 'Monyx', 'Sin devolución'],
+      motivos: ['No da producto', 'No devuelve cambio'],
+      estados: ['En estudio', 'Pendiente', 'Abonada', 'Rechazada', 'Sin estado'],
       devoluciones: [
-        { n: 'A-90', a: d(70), x: d(70, '10:00'), h: 1, m: 'M1', c: 0, d: 0, k: 0, t: 0 },
-        { n: 'A-91', a: d(40), x: d(39, '09:00'), h: 24, m: 'M1', c: 0, d: 0, k: 1, t: 0 },
-        { n: 'A-92', a: d(0, '08:00'), x: d(0, '10:00'), h: 2, m: 'M1', c: 0, d: 0, k: 0, t: 0 },
-        { n: 'A-93', a: d(0, '11:00'), m: 'M1', c: 0, d: 0, k: 1, t: 1 },
-        { n: 'A-94', a: d(0, '12:00'), x: d(0, '16:00'), h: 4, m: 'C1', c: 1, d: 1, k: 2, t: 1 },
-        { n: 'E-97', a: d(0, '13:00'), x: d(0, '14:00'), h: 1, m: 'C1', c: 1, d: 1, k: 0, t: 1, e: 1 },
-        { n: 'A-95', a: d(400), m: 'C1', c: 1, d: 1, k: 3, t: 1 },
+        { n: '90', a: d(70), m: 'M1', c: 0, d: 0, k: 0, o: 0, s: 2, i: 1.2 },
+        { n: '91', a: d(40), m: 'M1', c: 0, d: 0, k: 1, o: 0, s: 2, i: 2 },
+        { n: '92', a: d(0, '08:00'), m: 'M1', c: 0, d: 0, k: 0, o: 0, s: 2, i: 0.6 },
+        { n: '93', a: d(0, '11:00'), m: 'M1', c: 0, d: 0, k: 1, o: 1, s: 2, i: 3.5 },
+        { n: '98', a: d(0, '06:00'), m: 'M2', c: 2, d: 2, k: 0, o: 0, s: 2, g: 44504 },
+        { n: '99', a: d(0, '07:00'), m: 'M2', c: 2, d: 2, k: 3, o: 0, s: 0, i: 0.8 },
+        { n: '94', a: d(0, '12:00'), m: 'C1', c: 1, d: 1, k: 2, o: 0, s: 2, i: 5 },
+        { n: '97', a: d(0, '13:00'), m: 'C1', c: 1, d: 1, k: 0, o: 0, s: 3, i: 2 },
+        { n: '95', a: d(400), m: 'C1', c: 1, d: 1, k: 3, o: 0, s: 0, i: 1 },
         // De hoy: la foto ya la trae, pero las cifras llegan hasta ayer.
-        { n: 'A-96', a: d(-1), m: 'M1', c: 0, d: 0, k: 1, t: 0 }]
+        { n: '96', a: d(-1), m: 'M1', c: 0, d: 0, k: 1, o: 0, s: 2, i: 9 },
+        // Ocho mas en Centro, de hace un mes, para las flechas del ultimo ano.
+        ...[1, 2, 3, 4, 5, 6, 7, 8].map(j => ({ n: `8${j}`, a: d(31, `0${j}:00`),
+          m: 'M3', c: 2, d: 2, k: 2, o: 0, s: 2, i: 0.5 }))]
     };
   })(),
   '/api/estado-carga': { ultima_carga: new Date().toISOString(), dias_pedidos: [iso(AYER)], descargas_ok: 75, descargas_fallidas: 0, bytes: 12345678, filas_por_informe: { visita_cabecera: 1000 }, errores: [], retraso_dias: 0 },
@@ -319,6 +358,7 @@ const API = {
   '/api/admin/perfiles': {
     perfiles: [{ _id: 'cli-airbus', nombre: 'AIRBUS', tipo: 'cliente', ambito: { centros: ['500092'] }, sesiones: ['resumen', 'cuadro'], permisos: {}, panel: { existe: true, calculado: new Date().toISOString() } }],
     catalogo_sesiones: { resumen: { nombre: 'Resumen', minimo: 'operaciones' }, cuadro: { nombre: 'Cuadro de mando', minimo: 'cliente' } },
+    otras_pantallas: ['resumen', 'cuadro'],
     catalogo_cuadro: { indicadores: { nombre: 'Indicadores', flujos: ['ventas', 'visitas', 'incidencias'] },
                        articulos: { nombre: 'Mix de artículos', flujos: ['ventas'] },
                        listado_visitas: { nombre: 'Listado de visitas', flujos: ['visitas'] } },
@@ -397,6 +437,24 @@ API['/api/rutas'] = {
         ['FUERA DE RUTA', 'P10', '12BB0002', 'Madrid - Leganes', 'Ruta Getafe <Airbus>', '1003', 'CONSUM ALCORCÓN', '', '12:00', 'Ana Pérez', 0]]
     }
   },
+  // Lo de docs/67: el area de cada delegacion, quien hizo cada ruta y las
+  // tres listas de maquinas.
+  zonas: { 'Madrid - Leganes': 'Centro', 'Andalucía - Málaga': 'Sur' },
+  quien: { [iso(AYER)]: { 'Madrid - Leganes\u0001Ruta Getafe <Airbus>': ['Ana Pérez'], 'Andalucía - Málaga\u0001Málaga 1': ['Luis Gil'] } },
+  control_maquinas: { desde: '2026-06-21', mes: MES_HOY, meses_promedio: ['2026-07', '2026-08', '2026-09'], laborables: 12,
+    recaudan: 10, recaudadas_mes: 8, sin_partes: null, sin_lineas: null, sin_oficial: null },
+  por_recaudar: [
+    { p: 'P7', m: '19FP1530', d: 'Madrid - Leganes', n: '1001', c: 'AIRBUS GETAFE', u: 'Planta 8', k: 'Snack', r: 'Ruta Getafe <Airbus>', e: 'Ana Pérez', v: iso(AYER), rc: '2026-09-30', mr: 3, pm: 410.5 },
+    { p: 'P1', m: '10CE5680', d: 'Andalucía - Málaga', n: '2001', c: 'HOSPITAL MÁLAGA', u: 'Hall', k: 'Bebida fría', r: 'Málaga 1', e: 'Luis Gil', v: iso(AYER), rc: '2026-08-12', mr: 1, pm: null }],
+  sin_reponer: [
+    { p: 'P8', m: '24CE4842', d: 'Madrid - Leganes', n: '1002', c: 'AIRBUS ILLESCAS', u: '', k: 'Snack', r: 'Ruta Getafe <Airbus>', e: 'Ana Pérez', v: '2026-09-01', rc: null, mr: 0, pm: 55, rp: '2026-09-01', lab: 30 }],
+  nunca_repuestas: [
+    { p: 'P20', m: '30AA0001', d: 'Madrid - Leganes', n: '1003', c: 'CONSUM ALCORCÓN', u: '', k: 'Fuente de agua', r: '', e: '', v: null, rc: null, mr: 0, pm: null, rp: null, lab: null }],
+  llamadas: [
+    { f: iso(AYER) + ' 09:00', m: '19FP1530', p: 'P7', d: 'Madrid - Leganes', n: '1001', c: 'AIRBUS GETAFE', o: 'Reponer distribuidor automatico', x: 'E-1', a: 1 },
+    { f: iso(AYER) + ' 12:00', m: '19FP1530', p: 'P7', d: 'Madrid - Leganes', n: '1001', c: 'AIRBUS GETAFE', o: 'SNACK/BEBIDA - SELECCIONES VACIAS', x: 'E-2', a: 0 },
+    { f: HACE3 + ' 08:00', m: '10CE5680', p: 'P1', d: 'Andalucía - Málaga', n: '2001', c: 'HOSPITAL MÁLAGA', o: 'Reponer distribuidor automatico', x: 'E-3', a: 0 }],
+  llamadas_fuente: 'M13 · EXT_SAT_INCIDENCIAS',
   control_festivos: [
     { fecha: HACE3, delegacion: 'Andalucía - Málaga', festivo: 'nacional', estado: 'festivo_con_visitas', visitas: 40,
       normal: 39, previstas: 40, normal_previstas: 40, plan_sin_descontar: true },
@@ -481,8 +539,7 @@ const NOMBRES_TABLAS = {
     maquinas: 'Máquinas no visitadas', delegaciones: 'Por delegación', festivos: 'Festivos por delegación' } },
   averias: { nombre: 'Incidencias', tablas: { zonas: 'Total de incidencias por zona',
     tecnicas: 'Los 10 centros con más averías técnicas', abiertas: 'Lista de incidencias y su ficha' } },
-  furgonetas: { nombre: 'Furgonetas', tablas: { vehiculos: 'Furgonetas con visitas', sin_vehiculo: 'Visitas sin vehículo',
-    delegaciones: 'Por delegación', dias: 'Furgonetas activas, día a día' } },
+  furgonetas: { nombre: 'Furgonetas', tablas: { vehiculos: 'Furgonetas activas', dias: 'Furgonetas con visitas, día a día' } },
   revision: { nombre: 'Revisión clientes', tablas: { planograma: 'Sin planograma', tarifa: 'Sin tarifa',
     precio: 'Precio distinto', creados: 'Planogramas creados', usuarios: 'García y Marcos' } },
   almacenes: { nombre: 'Almacenes', tablas: { productos: 'Productos de los almacenes' } }
@@ -685,7 +742,37 @@ const servidor = http.createServer((pet, res) => {
       JSON.stringify(sinDos));
     comprueba('y los demas siguen', sinDos, conTodos.filter(i => i !== 'centros' && i !== 'sat'));
     delete API['/api/yo'].paneles_ocultos;
-    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente' };
+
+    // Vendi, el muñeco del asistente: solo sale a quien tiene el asistente,
+    // saluda al entrar y al abrir el cajon.
+    console.log('  · Vendi, el muñeco del asistente');
+    {
+      const x = await abre('/panel/');
+      await x.pagina.waitForSelector('#rejilla .panel');
+      comprueba_que('sin asistente no sale el muñeco', !(await x.pagina.isVisible('#bVendi')));
+      await x.pagina.close();
+    }
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: true, motivo: '' } };
+    {
+      const { pagina, errores, fuera } = await abre('/panel/');
+      await pagina.waitForSelector('#bVendi .muneco');
+      comprueba_que('con asistente sale el muñeco', await pagina.isVisible('#bVendi'));
+      await pagina.waitForSelector('#bVendi .muneco.saluda', { timeout: 3000 });
+      comprueba_que('y saluda al entrar', true);
+      comprueba_que('con su bocadillo', await pagina.$eval('#bocadillo', b => b.classList.contains('vis')));
+      await pagina.click('#bVendi');
+      await pagina.waitForSelector('#chat.vis');
+      comprueba_que('al pulsarlo se abre el cajon', true);
+      comprueba_que('y saluda en la cabecera', await pagina.$eval('#vendiChat .muneco', m => m.classList.contains('saluda')));
+      comprueba_que('el muñeco flotante se aparta', !(await pagina.isVisible('#bVendi')));
+      await pagina.click('#chatCerrar');
+      await pagina.waitForFunction(() => !document.querySelector('#bVendi').hidden);
+      comprueba_que('y vuelve al cerrar', true);
+      comprueba('sin errores en la consola', errores, []);
+      comprueba('ni peticiones fuera del dominio', fuera, []);
+      await pagina.close();
+    }
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', asistente: { habilitado: false, motivo: '' } };
   }
 
   // ------------------------------------------------------------- la consola
@@ -770,25 +857,19 @@ const servidor = http.createServer((pet, res) => {
     let cuerpo = await envio;
     comprueba('se guarda: el cliente con centros marcados, solo sus centros; y solo el cuadro',
       [cuerpo.ambito, cuerpo.sesiones],
-      [{ clientes: [], centros: ['500092', '500100'], delegaciones: [] }, ['cuadro']]);
+      [{ clientes: [], centros: ['500092', '500100'] }, ['cuadro']]);
 
     console.log('  · un perfil de operaciones');
     await pagina.waitForSelector('[data-ed="cli-airbus"]');
     await pagina.click('[data-ed="cli-airbus"]');
     await pagina.selectOption('#fTipo', 'operaciones');
-    comprueba('tiene delegaciones y sesiones',
-      [await pagina.isVisible('#campoDelegaciones'), await pagina.isVisible('#campoSesiones')], [true, true]);
+    comprueba('tiene sesiones, y las delegaciones ya no (se eligen en cada usuario, docs/65)',
+      [await pagina.isVisible('#campoSesiones'), await pagina.$('#fDelegaciones') === null], [true, true]);
     await pagina.click('#mClientes .elegido button');
     await pagina.click('#fClientes');
     await pagina.click('#fClientesLista li:has-text("CONSUM")');
-    await pagina.click('#fDelegaciones');
-    await pagina.keyboard.type('zz');
-    comprueba_que('lo que no esta en los datos se dice', await pagina.isVisible('#fDelegacionesLista li.nada'));
-    await pagina.fill('#fDelegaciones', 'mad');
-    await pagina.keyboard.press('Enter');
-    comprueba_que('y lo elegido dice con cuantos centros encaja',
-      (await pagina.textContent('#rDelegaciones')).includes('MADRID: 2 centros')
-      && (await pagina.textContent('#rClientes')).includes('CONSUM: entero, 1 centro'), await pagina.textContent('#rClientes'));
+    comprueba_que('lo elegido dice con cuantos centros encaja',
+      (await pagina.textContent('#rClientes')).includes('CONSUM: entero, 1 centro'), await pagina.textContent('#rClientes'));
     await pagina.uncheck('#cajaSesiones input[value="cuadro"]');
     comprueba_que('sin el cuadro marcado no hay partes que elegir', !(await pagina.isVisible('#campoCuadro')));
     await pagina.check('#cajaSesiones input[value="cuadro"]');
@@ -798,8 +879,8 @@ const servidor = http.createServer((pet, res) => {
     envio = guardado();
     await pagina.click('#bGuardar');
     cuerpo = await envio;
-    comprueba('se guarda el cliente entero y la delegacion', [cuerpo.ambito, cuerpo.sesiones],
-      [{ clientes: ['CONSUM'], centros: [], delegaciones: ['MADRID'] }, ['resumen', 'cuadro']]);
+    comprueba('se guarda el cliente entero, sin delegaciones', [cuerpo.ambito, cuerpo.sesiones],
+      [{ clientes: ['CONSUM'], centros: [] }, ['resumen', 'cuadro']]);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
@@ -900,7 +981,7 @@ const servidor = http.createServer((pet, res) => {
       catalogo_sesiones: { resumen: 'Resumen', venta_consumo: 'Venta y consumo', disponibilidad: 'Disponibilidad', instalaciones: 'Instalaciones y altas' } };
     const { pagina, errores, fuera } = await abre('/operativo/');
     await pagina.waitForSelector('#cuadros .cuadro');
-    comprueba('arranca en ayer', await pagina.inputValue('#dia'), iso(AYER));
+    comprueba_que('arranca en ayer', pagina.url().includes(`dia=${iso(AYER)}`), pagina.url());
     comprueba('los cuadrados en su orden, con Preferidos el primero',
       await pagina.$$eval('#cuadros .cuadro', x => x.map(c => c.dataset.id)),
       ['preferidos', 'rutas', 'averias', 'devoluciones', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas', 'revision', 'utilizo']);
@@ -913,13 +994,15 @@ const servidor = http.createServer((pet, res) => {
     comprueba('utilizo: los usuarios del ultimo dia, y lleva a su pagina',
       [(await pagina.textContent('.cuadro[data-id="utilizo"] .vl')).trim(),
        await pagina.getAttribute('.cuadro[data-id="utilizo"]', 'href')], ['37', '/utilizo/']);
-    comprueba('devoluciones: el total del mes, sin semaforo, y lleva a su pagina',
-      [(await pagina.textContent('.cuadro[data-id="devoluciones"] .vl')).trim(),
+    comprueba('devoluciones: el dinero devuelto en el mes, sin semaforo, y lleva a su pagina',
+      [(await pagina.textContent('.cuadro[data-id="devoluciones"] .vl')).trim().replace(/\s/g, ' '),
        await pagina.$eval('.cuadro[data-id="devoluciones"]', c => ['verde', 'amarillo', 'rojo'].some(k => c.classList.contains(k))),
-       await pagina.getAttribute('.cuadro[data-id="devoluciones"]', 'href')], ['518', false, '/devoluciones/']);
-    comprueba_que('y lo compara con el mes anterior, y dice cuantas son especiales',
-      (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('569 el mes anterior')
-      && (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('92 de solicitudes especiales'));
+       await pagina.getAttribute('.cuadro[data-id="devoluciones"]', 'href')], ['1121 €', false, '/devoluciones/']);
+    comprueba_que('debajo, cuantas, el mes anterior y las que no dicen importe',
+      (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('518 devoluciones')
+      && (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('el mes anterior a estas alturas')
+      && (await pagina.textContent('.cuadro[data-id="devoluciones"] .sub')).includes('87 sin resolver'),
+      await pagina.textContent('.cuadro[data-id="devoluciones"] .sub'));
     comprueba('tarifas al 81,3 % en amarillo y lleva a su pagina',
       [await pagina.$eval('.cuadro[data-id="tarifas"]', c => c.classList.contains('amarillo')),
        await pagina.getAttribute('.cuadro[data-id="tarifas"]', 'href')], [true, '/tarifas/']);
@@ -940,12 +1023,62 @@ const servidor = http.createServer((pet, res) => {
     comprueba('los que tienen pagina propia dicen Ver detalle',
       await pagina.$$eval('#cuadros .cuadro', x => x.filter(c => ['rutas', 'furgonetas', 'averias'].includes(c.dataset.id))
         .map(c => c.textContent.includes('Ver detalle'))), [true, true, true]);
-    await pagina.selectOption('#dia', '2026-10-01');
+    // El calendario (docs/66): el mes; pulsando el titulo, los meses; otra vez, los años.
+    await pagina.click('#bFecha');
+    comprueba_que('el calendario abre en el mes de ayer, con ayer marcado',
+      (await pagina.getAttribute('#cal .cal-rej button.sel', 'data-dia')) === iso(AYER));
+    comprueba_que('los dias sin dato salen apagados',
+      await pagina.$eval(`#cal .cal-rej button[data-dia="${iso(HOY)}"]`, b => b.disabled).catch(() => true));
+    await pagina.click('#cal .cal-cab .tit');
+    comprueba('pulsando el mes, los doce meses', await pagina.locator('#cal .cal-rej button').count(), 12);
+    await pagina.click('#cal .cal-cab .tit');
+    comprueba_que('pulsando el año, los años', (await pagina.$$eval('#cal .cal-rej button', x => x.map(b => b.dataset.anio))).includes(String(HOY.getFullYear() - (iso(AYER).slice(0, 4) === String(HOY.getFullYear()) ? 0 : 1))));
+    await pagina.click('#cal .cal-rej button:not(:disabled)');
+    await pagina.click('#cal .cal-rej button[data-mes="9"]');
+    await pagina.click('#cal .cal-rej button[data-dia="2026-10-01"]');
+    comprueba_que('elegir un dia lo pinta', pagina.url().includes('dia=2026-10-01'), pagina.url());
     comprueba_que('un dia sin plan dice el motivo, no un cero',
       (await pagina.textContent('.cuadro[data-id="rutas"]')).includes('Falta el plan de visitas'));
     comprueba('y ese cuadrado no lleva color de semaforo',
       await pagina.$eval('.cuadro[data-id="rutas"]', c => c.classList.contains('sin')), true);
-    await pagina.selectOption('#dia', iso(AYER));
+    comprueba_que('el calendario se cierra al elegir', await pagina.$eval('#cal', c => c.hidden));
+    await pagina.click('#bFecha');
+    await pagina.click('#cal .cal-pie button[data-atajo="ultimo"]');
+    comprueba_que('«Último día calculado» vuelve a ayer', pagina.url().includes(`dia=${iso(AYER)}`), pagina.url());
+
+    // Varios dias: lo que se suma se suma, el porcentaje sale del total y las
+    // furgonetas son las distintas.
+    const antier = iso(new Date(AYER.getTime() - 86400000));
+    await pagina.click('#mVarios');
+    await pagina.click('#bFecha');
+    await pagina.click(`#cal .cal-rej button[data-dia="${antier}"]`);
+    await pagina.click(`#cal .cal-rej button[data-dia="${iso(AYER)}"]`);
+    comprueba_que('el rango va en la direccion', pagina.url().includes(`desde=${antier}`) && pagina.url().includes(`hasta=${iso(AYER)}`), pagina.url());
+    comprueba('rutas de los dos dias: 400 de 500, el 80 %',
+      (await pagina.textContent('.cuadro[data-id="rutas"] .vl')).trim(), '80 %');
+    comprueba('furgonetas distintas en los dos dias: cuatro, no cinco',
+      (await pagina.textContent('.cuadro[data-id="furgonetas"] .vl')).trim(), '4');
+    comprueba('incidencias: el dia sin cierres no rebaja el porcentaje',
+      (await pagina.textContent('.cuadro[data-id="averias"] .vl')).trim(), '69,8 %');
+    comprueba_que('ventas sumadas', (await pagina.textContent('.cuadro[data-id="ventas"] .vl')).includes('50.859'));
+
+    // Area y delegacion.
+    comprueba('las areas del usuario', await pagina.$$eval('#area option', x => x.map(o => o.value)), ['', 'Centro', 'Levante']);
+    await pagina.selectOption('#area', 'Levante');
+    comprueba('el area deja sus delegaciones', await pagina.$$eval('#deleg option', x => x.map(o => o.value)),
+      ['', 'Levante - Murcia', 'Levante - Valencia']);
+    comprueba('rutas de Levante en los dos dias: 110 de 200',
+      (await pagina.textContent('.cuadro[data-id="rutas"] .vl')).trim(), '55 %');
+    comprueba('furgonetas de Levante: tres distintas',
+      (await pagina.textContent('.cuadro[data-id="furgonetas"] .vl')).trim(), '3');
+    comprueba('puntos de venta de Levante, de la foto', (await pagina.textContent('.cuadro[data-id="pdvs"] .vl')).trim(), '195');
+    comprueba_que('lo que no se reparte por delegacion lo dice',
+      (await pagina.textContent('.cuadro[data-id="tarifas"]')).includes('no se reparte por delegación'));
+    await pagina.selectOption('#deleg', 'Levante - Murcia');
+    comprueba_que('y la delegacion va en la direccion', pagina.url().includes('delegacion=Levante'), pagina.url());
+    await pagina.selectOption('#area', '');
+    await pagina.click('#mUno');
+    comprueba_que('un dia vuelve al ultimo del rango', pagina.url().includes(`dia=${iso(AYER)}`), pagina.url());
     comprueba('el cuadrado de averias se llama Incidencias',
       await pagina.textContent('.cuadro[data-id="averias"] .et'), 'Incidencias');
     await Promise.all([pagina.waitForURL('**/incidencias/**'), pagina.click('.cuadro[data-id="averias"]')]);
@@ -995,6 +1128,81 @@ const servidor = http.createServer((pet, res) => {
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nLa bienvenida del informe operativo (docs/68)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno',
+      sesiones: ['resumen', 'venta_consumo', 'disponibilidad', 'instalaciones'] };
+    let x = await abre('/operativo/');
+    await x.pagina.waitForSelector('#cuadros .cuadro');
+    comprueba('sin la marca de la entrada, no sale', await x.pagina.$('.bv-capa'), null);
+    // La pantalla de acceso deja la marca; la pagina la borra nada mas leerla.
+    await x.pagina.evaluate(() => sessionStorage.setItem('digivend.bienvenida', '1'));
+    await x.pagina.reload();
+    comprueba_que('al entrar, sale', !!(await x.pagina.$('.bv-capa')));
+    comprueba('y la marca ya no esta', await x.pagina.evaluate(() => sessionStorage.getItem('digivend.bienvenida')), null);
+    await x.pagina.waitForTimeout(1500);
+    comprueba('mientras gira, los cuadrados estan tapados',
+      await x.pagina.$$eval('#cuadros .cuadro', c => c.every(e => getComputedStyle(e).opacity === '0')), true);
+    await x.pagina.waitForFunction(() => !document.querySelector('.bv-capa'), null, { timeout: 8000 });
+    comprueba('al acabar, todos los cuadrados a la vista',
+      await x.pagina.$$eval('#cuadros .cuadro', c => c.every(e => getComputedStyle(e).opacity === '1')), true);
+    await x.pagina.reload();
+    await x.pagina.waitForSelector('#cuadros .cuadro');
+    comprueba('volver al informe no la repite', await x.pagina.$('.bv-capa'), null);
+    comprueba('ni una peticion fuera del dominio', x.fuera, []);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+
+    x = await abre('/operativo/?bienvenida');
+    await x.pagina.waitForTimeout(600);
+    await x.pagina.mouse.click(300, 300);
+    await x.pagina.waitForFunction(() => !document.querySelector('.bv-capa'), null, { timeout: 2000 });
+    comprueba('un clic la salta y deja los cuadrados',
+      await x.pagina.$$eval('#cuadros .cuadro', c => c.length > 0 && c.every(e => getComputedStyle(e).opacity === '1')), true);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+
+    // El asistente tambien en el informe general (docs/69): Vendi espera a que
+    // acabe la bienvenida para saludar, y pregunta con pagina=operativo.
+    console.log('  · Vendi en el informe general');
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: true, motivo: '' } };
+    x = await abre('/operativo/?bienvenida');
+    const pedido = [];
+    await x.pagina.route('**/api/pregunta', async ruta => {
+      pedido.push(JSON.parse(ruta.request().postData() || '{}'));
+      await ruta.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ respuesta: 'Ayer **81 %** de rutas.\n\n| Delegación | % |\n|---|---|\n| Sevilla | 81 % |\n\n- <script>x</script>', quedan_hoy: 39 }) });
+    });
+    await x.pagina.waitForSelector('#bVendi .muneco');
+    comprueba('durante la bienvenida, Vendi aun no saluda',
+      await x.pagina.$eval('#bVendi .muneco', m => m.classList.contains('saluda')), false);
+    await x.pagina.waitForFunction(() => !document.querySelector('.bv-capa'), null, { timeout: 9000 });
+    await x.pagina.waitForSelector('#bVendi .muneco.saluda', { timeout: 3000 });
+    comprueba_que('al acabar, saluda', true);
+    comprueba_que('y el boton Preguntar esta en la cabecera', await x.pagina.isVisible('#bPreguntar'));
+    await x.pagina.click('#bVendi');
+    await x.pagina.waitForSelector('#chat.vis');
+    comprueba_que('con sugerencias de sus cuadrados', (await x.pagina.$$('#sugerencias button')).length > 0);
+    await x.pagina.fill('#chatTexto', '¿como fueron las rutas?');
+    await x.pagina.press('#chatTexto', 'Enter');
+    await x.pagina.waitForSelector('.turno.el table');
+    comprueba('pregunta desde el informe general', pedido[0] && pedido[0].pagina, 'operativo');
+    comprueba('las negritas salen en negrita', await x.pagina.$eval('.turno.el p b', b => b.textContent), '81 %');
+    comprueba('la tabla, en tabla', await x.pagina.$$eval('.turno.el td', t => t.map(e => e.textContent)), ['Sevilla', '81 %']);
+    comprueba('y lo que trae etiquetas sale como texto', await x.pagina.$$eval('.turno.el script', s => s.length), 0);
+    comprueba('ni una peticion fuera del dominio', x.fuera, []);
+    comprueba('sin un solo error en la consola del navegador', x.errores, []);
+    await x.pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: false, motivo: '' } };
+
+    const tranquilo = await navegador.newPage({ reducedMotion: 'reduce' });
+    await tranquilo.goto(base + '/operativo/?bienvenida');
+    await tranquilo.waitForSelector('#cuadros .cuadro');
+    comprueba('con reducir movimiento no sale', await tranquilo.$('.bv-capa'), null);
+    await tranquilo.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
@@ -1142,46 +1350,89 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nRutas: delegaciones, rutas, puntos de venta y festivos (docs/55)');
+  console.log('\nRutas: areas, rutas, maquinas, puntos de venta y festivos (docs/55 y 67)');
   {
+    const FOTOS = process.env.FOTOS_RUTAS;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre(`/rutas/?dia=${iso(AYER)}`);
-    await pagina.waitForSelector('#tDeleg table');
+    await pagina.waitForSelector('#areas .area.si');
     comprueba('arranca en el dia que trae la direccion', await pagina.inputValue('#dia'), iso(AYER));
-    comprueba('los seis indicadores del Power BI, en su orden',
+    comprueba('la portada: lo nacional, los seis indicadores del Power BI en su orden',
       await pagina.$$eval('#kpis .kpi .et', x => x.map(e => e.textContent.trim())),
       ['Visitas pendientes', 'Cumplimiento de ruta', 'Visitas en ruta', 'Visitas efectuadas',
        'Visitas no planificadas', 'Pasaje vacío']);
-    comprueba('las cifras: 2 pendientes, 75 % en amarillo, 8, 6, 2 y 2',
+    comprueba('las cifras nacionales: 2 pendientes, 75 % en amarillo, 8, 6, 2 y 2',
       [await pagina.$$eval('#kpis .kpi .vl', x => x.map(e => e.textContent.trim())),
        await pagina.$eval('#kpis .kpi:nth-child(2)', k => k.classList.contains('amarillo'))],
       [['2', '75 %', '8', '6', '2', '2'], true]);
-    comprueba('las dos delegaciones', await pagina.$$eval('#tDeleg tbody tr', x => x.map(t => t.dataset.d)),
+    comprueba('el mapa: cada area con datos lleva su porcentaje con el semaforo, y nada mas',
+      await pagina.$$eval('#areas .area.si', x => x.map(e => [e.dataset.area, e.querySelector('.pc').textContent.trim(),
+        e.querySelector('.pc').getAttribute('class'), e.querySelectorAll('text').length])),
+      [['Centro', '66,7 %', 'pc rojo', 2], ['Sur', '100 %', 'pc verde', 2]]);
+    comprueba('el porcentaje en blanco si va bien y en rojo si no',
+      await pagina.$$eval('#areas .area.si .pc', x => x.map(e => getComputedStyle(e).fill)),
+      ['rgb(255, 90, 79)', 'rgb(255, 255, 255)']);
+    await pagina.hover('#areas .area[data-area="Sur"] .cara', { force: true });
+    await pagina.waitForTimeout(300);
+    comprueba('al pasar el raton el area se resalta y las demas se apagan',
+      await pagina.$$eval('#areas .area', x => x.map(e => [e.dataset.area, getComputedStyle(e).opacity])),
+      [['Norte', '0.45'], ['Centro', '0.45'], ['Cataluña', '0.45'], ['Levante', '0.45'], ['Sur', '1']]);
+    await pagina.mouse.move(0, 0);
+    comprueba('las areas fuera de los datos, en gris, sin cifra y sin pulsar',
+      await pagina.$$eval('#areas .area:not(.si)', x => x.map(e => [e.dataset.area, e.querySelectorAll('text').length, e.getAttribute('tabindex')])),
+      [['Norte', 0, null], ['Cataluña', 0, null], ['Levante', 0, null]]);
+    comprueba_que('el porcentaje de la pieza es el de dentro del area',
+      (await pagina.getAttribute('#areas .area[data-area="Centro"]', 'aria-label')).includes('66,7 %'));
+    comprueba('en la portada no hay rutas ni filtro de delegacion',
+      [await pagina.isVisible('#tRutas'), await pagina.isVisible('#deleg')], [false, false]);
+    comprueba('las dos delegaciones, con su area', await pagina.$$eval('#tDeleg tbody tr', x => x.map(t => t.dataset.d)),
       ['Madrid - Leganes', 'Andalucía - Málaga']);
-    comprueba('las tres rutas, con el nombre escapado', await pagina.locator('#tRutas tbody tr').count(), 3);
+    comprueba_que('el autonomico de la delegacion sale en su fila', (await pagina.textContent('#tDeleg')).includes('festivo autonómico'));
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'rutas-portada.png'), fullPage: true });
+
+    await pagina.click('#areas .area[data-area="Centro"]');
+    await pagina.waitForSelector('#tRutas table');
+    comprueba('dentro del area: sus cifras y su delegacion',
+      [(await pagina.textContent('#tArea')).trim(), (await pagina.textContent('#kpis .kpi:nth-child(2) .vl')).trim(),
+       await pagina.$$eval('#deleg option', o => o.map(x => x.value))],
+      ['Centro', '66,7 %', ['', 'Madrid - Leganes']]);
+    comprueba('las dos rutas del area, con el nombre escapado', await pagina.locator('#tRutas tbody tr').count(), 2);
     comprueba_que('sin colar HTML del nombre', (await pagina.textContent('#tRutas')).includes('Ruta Getafe <Airbus>'));
-    comprueba('la matriz: Getafe 2 hechas, 2 pendientes, 2 fuera, 6 en total',
+    comprueba('la ruta: quien la hizo, en ruta, hechas, no hechas, fuera, total',
       await pagina.$$eval('#tRutas tbody tr', x => {
         const t = x.find(r => r.textContent.includes('Getafe'));
-        return [...t.querySelectorAll('td.n')].slice(0, 4).map(c => c.textContent.trim()); }),
-      ['2', '2', '2', '6']);
+        return [t.querySelector('td.quien').textContent.trim(), ...[...t.querySelectorAll('td.n')].slice(0, 5).map(c => c.textContent.trim())]; }),
+      ['Ana Pérez', '4', '2', '2', '2', '6']);
+    comprueba_que('una ruta que nadie hizo lo dice', (await pagina.textContent('#tRutas')).includes('nadie'));
     comprueba('el donut con los tres estados', await pagina.locator('#dona svg circle').count(), 3);
     comprueba('maquinas no visitadas: las dos de Getafe', await pagina.locator('#tPdv tbody tr').count(), 2);
     comprueba_que('con matricula y ubicacion', (await pagina.textContent('#tPdv')).includes('19FP1530')
       && (await pagina.textContent('#tPdv')).includes('Planta 8'));
-    await pagina.click('#tRutas tbody tr[data-r$="Ruta Leganés"]');
+
+    comprueba('las tres cifras de maquinas del area',
+      await pagina.$$eval('#mqs .kpi .vl', x => x.map(e => e.textContent.trim())), ['2', '1', '1']);
+    await pagina.click('#mqs button[data-ver="llamadas"]');
+    comprueba('llamadas: juntas por maquina, la de Getafe con dos',
+      await pagina.$$eval('#tLista tbody tr', x => x.map(t => [t.querySelector('.mat').textContent, t.querySelectorAll('td')[3].textContent.trim()])),
+      [['19FP1530', '2']]);
+    await pagina.click('#mqs button[data-ver="recaudar"]');
+    comprueba_que('por recaudar: la maquina y lo que recauda al mes',
+      (await pagina.textContent('#tLista')).includes('19FP1530') && (await pagina.textContent('#cLista')).includes('411'));
+    await pagina.click('#mqs button[data-ver="reponer"]');
+    comprueba('sin reponer: 30 laborables', (await pagina.textContent('#tLista tbody tr td:nth-child(7)')).trim(), '30');
+    await pagina.click('#pestanasM button[data-p="nunca"]');
+    comprueba_que('y las que no tienen ninguna carga', (await pagina.textContent('#tLista')).includes('Fuente de agua'));
+    const [dm] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bCsvM')]);
+    comprueba('el CSV de la lista', dm.suggestedFilename(), `rutas_reponer_nunca_${iso(AYER)}_Centro.csv`);
+    await pagina.click('#mqs button[data-ver="reponer"]');
+    comprueba('al volver a pulsar, se cierra', await pagina.isVisible('#cajaLista'), false);
+
+    await pagina.click('#tRutas tbody tr[data-r$="Ruta Getafe <Airbus>"]');
     comprueba('al pulsar una ruta, todo se filtra a ella',
       [await pagina.inputValue('#deleg'), await pagina.locator('#tRutas tbody tr').count(),
-       (await pagina.textContent('#kpis .kpi:nth-child(2) .vl')).trim(),
-       (await pagina.textContent('#tPdv')).includes('Ninguna')],
-      ['Madrid - Leganes', 1, '100 %', true]);
+       (await pagina.textContent('#kpis .kpi:nth-child(2) .vl')).trim()],
+      ['Madrid - Leganes', 1, '50 %']);
     await pagina.selectOption('#ruta', '');
-    await pagina.click('#tDeleg tbody tr[data-d="Andalucía - Málaga"]');
-    comprueba('al pulsar una delegacion, se filtra todo',
-      [await pagina.inputValue('#deleg'), await pagina.locator('#tRutas tbody tr').count(),
-       (await pagina.textContent('#tPdv')).includes('Ninguna')], ['Andalucía - Málaga', 1, true]);
-    await pagina.click('#tDeleg tbody tr[data-d="Andalucía - Málaga"]');
-    comprueba('y al volver a pulsarla, todas', await pagina.inputValue('#deleg'), '');
     await pagina.click('#pestanas button[data-p="vacio"]');
     comprueba('pasaje vacio: las dos, resaltadas', await pagina.locator('#tPdv tbody tr.vacio').count(), 2);
     await pagina.click('#pestanas button[data-p="fuera"]');
@@ -1189,15 +1440,27 @@ const servidor = http.createServer((pet, res) => {
     await pagina.fill('#busca', 'consum');
     comprueba('el buscador', await pagina.locator('#tPdv tbody tr').count(), 1);
     const [descarga] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bCsv')]);
-    comprueba('el CSV', descarga.suggestedFilename(), `rutas_fuera_${iso(AYER)}.csv`);
+    comprueba('el CSV, con la delegacion elegida', descarga.suggestedFilename(), `rutas_fuera_${iso(AYER)}_Madrid_-_Leganes.csv`);
+    await pagina.fill('#busca', '');
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'rutas-area.png'), fullPage: true });
+
+    await pagina.selectOption('#periodo', 'semana');
+    comprueba('la semana suma los dos dias: 6 + 260 en ruta, el festivo dentro',
+      (await pagina.textContent('#kpis .kpi:nth-child(3) .vl')).trim(), '266');
+    comprueba_que('y la lista de varios dias lleva el dia', (await pagina.textContent('#tPdv thead')).includes('Día'));
+    await pagina.selectOption('#periodo', 'dia');
+
+    await pagina.click('#bAreas');
+    await pagina.click('#tDeleg tbody tr[data-d="Andalucía - Málaga"]');
+    comprueba('desde la portada, una delegacion abre su area filtrada',
+      [(await pagina.textContent('#tArea')).trim(), await pagina.inputValue('#deleg'), await pagina.locator('#tRutas tbody tr').count()],
+      ['Sur', 'Andalucía - Málaga', 1]);
     comprueba_que('el control de festivos marca el festivo con visitas de dia normal',
       (await pagina.textContent('#tFest')).includes('Visitas de día normal')
       && (await pagina.textContent('#tFest')).includes('sin descontar'));
-    comprueba_que('el autonomico de la delegacion sale en su fila', (await pagina.textContent('#tDeleg')).includes('festivo autonómico'));
     await pagina.selectOption('#dia', HACE3);
     comprueba_que('un festivo lo dice arriba', !(await pagina.$eval('#festivoDia', n => n.hidden))
       && (await pagina.textContent('#festivoDia')).includes('festivo nacional'));
-    await pagina.fill('#busca', '');
     await pagina.click('#pestanas button[data-p="hechas"]');
     comprueba_que('y de un dia calculado antes, sin hechas en la lista, lo dice',
       (await pagina.textContent('#tPdv')).includes('antes de que la lista'));
@@ -1206,6 +1469,8 @@ const servidor = http.createServer((pet, res) => {
     await pagina.setViewportSize({ width: 380, height: 800 });
     comprueba('en movil no se sale de la pantalla',
       await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await pagina.click('#bAreas');
+    comprueba('ni la portada', await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
     await pagina.emulateMedia({ colorScheme: 'dark' });
     comprueba_que('en oscuro el fondo es oscuro',
       (await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(18, 18, 17)');
@@ -1292,26 +1557,51 @@ const servidor = http.createServer((pet, res) => {
   {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre(`/furgonetas/?dia=${iso(AYER)}`);
-    await pagina.waitForSelector('#kpis .kpi');
+    await pagina.waitForSelector('#areas .area');
     comprueba('arranca en el dia que llega', await pagina.inputValue('#dia'), iso(AYER));
+    comprueba('la portada: un cuadrante por area, con el % de furgonetas bien y su color',
+      await pagina.$$eval('#areas .area', x => x.map(e => [e.dataset.area, e.querySelector('.pc').textContent, e.className])),
+      [['Centro', '50 %', 'area rojo'], ['Sur', '0 %', 'area rojo']]);
+    comprueba_que('sin tabla en la portada', !(await pagina.isVisible('#cajaTabla')));
+    await pagina.click('.area[data-area="Centro"]');
+    await pagina.waitForSelector('#tabla table');
+    comprueba('al entrar, la direccion lleva el area', new URL(pagina.url()).searchParams.get('area'), 'Centro');
     const kpi = async i => pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent);
-    comprueba('furgonetas, visitas, por furgoneta y sin vehiculo', [await kpi(1), await kpi(2), await kpi(3), await kpi(4)],
-      ['2', '25', '10', '5']);
-    comprueba('una fila por furgoneta, la de mas visitas primero',
-      await pagina.$$eval('#tabla tbody tr .mat', x => x.map(e => e.textContent)), ['1234ABC', '5678DEF']);
-    comprueba_que('el nombre de la ruta se escapa', (await pagina.textContent('#tabla')).includes('Ruta Getafe <Airbus>'));
-    comprueba('y los dias con visitas de los ultimos',
-      await pagina.$eval('#tabla tbody tr:first-child td:last-child', e => e.textContent), '2');
-    await pagina.selectOption('#deleg', 'Andalucía - Málaga');
-    comprueba('la delegacion filtra: la que paso por dos sale en las dos',
-      [await pagina.$$eval('#tabla tbody tr .mat', x => x.map(e => e.textContent)), await kpi(1), await kpi(4)],
-      [['5678DEF'], '1', '5']);
-    await pagina.click('#pestanas button[data-p="sin"]');
-    comprueba_que('las visitas sin vehiculo, por reponedor', (await pagina.textContent('#tabla')).includes('Rosa Gil'));
-    await pagina.selectOption('#deleg', '');
-    await pagina.click('#pestanas button[data-p="deleg"]');
-    comprueba('por delegacion', await pagina.$$eval('#tabla tbody tr', x => x.length), 2);
-    comprueba('el dia a dia, con los dos dias', await pagina.$$eval('#dias .fb', x => x.length), 2);
+    const mats = () => pagina.$$eval('#tabla tbody tr .mat', x => x.map(e => e.textContent));
+    const col = n => pagina.$$eval(`#tabla tbody tr td:nth-child(${n})`, x => x.map(e => e.textContent.trim()));
+    comprueba('activas, con visitas, sin visitas y km en rojo del area', [await kpi(1), await kpi(2), await kpi(3), await kpi(4)],
+      ['2', '1', '1', '1']);
+    comprueba('solo las del area, primero las que no estan bien', await mats(), ['9999ZZZ', '1234ABC']);
+    comprueba('modelo, persona de la ruta y km desde el 1-ene-2025',
+      [await col(2), await col(3), await col(13)],
+      [['—CADDY', 'CrafterCRAFTER - Ana'], ['sin ruta', 'Ana PérezRuta Getafe'], ['012 jornadas sin km', '25.703']]);
+    comprueba('desde cuantos dias no visita', await col(5), ['Más de 7 días', 'Visitó']);
+    comprueba('y si esta bien, o por que no', await col(14), ['1 día con km en rojo', 'Bien']);
+    comprueba('los km de los ultimos 7 dias, el elegido el ultimo',
+      await pagina.$$eval('#tabla tbody tr:last-child td.km', x => x.map(e => e.textContent)),
+      ['s/d', 's/d', 's/d', 's/d', 's/d', '50', '95']);
+    comprueba('en rojo la jornada sin km; 95 no',
+      await pagina.$$eval('#tabla tbody tr', x => x.map(f => f.querySelector('td.km.hoy span').className)), ['falta', '']);
+    await pagina.click('#kpis .kpi[data-ver="con"]');
+    comprueba('pulsar una cifra filtra la tabla', [await mats(), await pagina.textContent('#tTabla')],
+      [['1234ABC'], 'Furgonetas con visitas ese día']);
+    await pagina.click('#kpis .kpi[data-ver="con"]');
+    comprueba('y pulsarla otra vez la quita', await mats(), ['9999ZZZ', '1234ABC']);
+    await pagina.click('#kpis .kpi[data-ver="km"]');
+    comprueba('km en rojo', await mats(), ['9999ZZZ']);
+    await pagina.click('#kpis .kpi[data-ver="sin"]');
+    comprueba('sin visitas', await mats(), ['9999ZZZ']);
+    await pagina.selectOption('#dia', iso(new Date(AYER.getTime() - 3 * 86400000)));
+    await pagina.click('#kpis .kpi[data-ver=""]');
+    comprueba('otro dia: la semana que acaba en el', await pagina.$$eval('#tabla tbody tr td:last-child', x => x.map(e => e.textContent.trim())), ['sin usar en 5 días', 'Bien']);
+    comprueba('el dia a dia, de la flota del area, hasta el dia elegido', await pagina.$$eval('#dias .fb', x => x.length), 5);
+    await pagina.selectOption('#dia', iso(AYER));
+    await pagina.click('#bAreas');
+    comprueba_que('vuelve a la portada', await pagina.isVisible('#areas .area'));
+    await pagina.click('.area[data-area="Sur"]');
+    comprueba('otra area, sus furgonetas', await mats(), ['5678DEF']);
+    comprueba_que('el nombre del vehiculo se escapa', (await pagina.textContent('#tabla')).includes('JUMPER <Luis>'));
+    comprueba_que('y si la persona no es de una ruta, se dice', (await pagina.textContent('#tabla')).includes('su última jornada'));
     await pagina.setViewportSize({ width: 380, height: 800 });
     comprueba('en movil no se sale de la pantalla',
       await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
@@ -1476,66 +1766,94 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nLas devoluciones (docs/57)');
+  console.log('\nLas devoluciones por areas (docs/57)');
   {
+    const FOTOS = process.env.FOTOS_DEVOLUCIONES;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre('/devoluciones/');
-    await pagina.waitForSelector('#kpis .kpi');
+    await pagina.waitForSelector('#areas .area');
     comprueba('arranca en el mes corriente, como el cuadrado', await pagina.inputValue('#periodo'), 'mes');
-    const kpi = async i => (await pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent)).trim();
-    comprueba('las cuatro de ayer, una sin cerrar', [await kpi(1), await kpi(2)], ['4', '1']);
-    comprueba('la mediana hasta cerrar: 1, 2 y 4 horas, 2', await kpi(3), '2 h');
-    comprueba('por origen: tres de atencion al cliente y una especial',
-      await pagina.$$eval('#gOrigen .fb', x => x.map(e => [e.dataset.o, e.querySelector('.v').textContent.split(' ')[0]])),
-      [['Atención al cliente', '3'], ['Solicitud especial', '1']]);
-    await pagina.click('#gOrigen .fb[data-o="Solicitud especial"]');
-    comprueba('pulsar el origen filtra por el', [await pagina.inputValue('#origen'), await kpi(1)], ['Solicitud especial', '1']);
-    await pagina.click('#bLimpiar');
-    comprueba_que('sin cerrar hoy cuenta tambien la vieja', (await pagina.textContent('#kpis .kpi:nth-child(2)')).includes('3 en total hoy'));
+    const txt = async s => (await pagina.textContent(s)).replace(/\s+/g, ' ').trim();
+    comprueba_que('arriba, el dinero abonado de toda Espana: 0,60 + 3,50 + 5, sin la de hoy, la de 44.504, la en estudio ni la rechazada',
+      (await txt('#total')).startsWith('9,10 €') && (await txt('#total')).includes('4 abonadas de 6 devoluciones · 1 sin resolver (0,80 €)'),
+      await txt('#total'));
+    comprueba('un cuadrante por area, en su orden, con su dinero',
+      await pagina.$$eval('#areas .area', x => x.map(e => [e.dataset.area, e.querySelector('.pc').textContent.replace(/\s/g, ' ')])),
+      [['Centro', '4,10 €'], ['Levante', '5,00 €']]);
+    comprueba_que('y cuantas son', (await txt('#areas .area[data-area="Centro"]')).includes('4 devoluciones · 3 abonadas'));
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'devoluciones-portada.png'), fullPage: true });
+    await pagina.click('#areas .area[data-area="Centro"]');
+    await pagina.waitForSelector('#kpis .kpi');
+    comprueba('dentro del area, su nombre y el filtro de delegacion',
+      [await txt('#tArea'), await pagina.$$eval('#deleg option', x => x.map(o => o.value))],
+      ['Centro', ['', 'Madrid - Leganes', 'Madrid - Sur']]);
+    const kpi = async i => (await pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent)).replace(/\s/g, ' ').trim();
+    comprueba('las cuatro cifras: dinero, devoluciones, sin resolver y rechazadas',
+      [await kpi(1), await kpi(2), await kpi(3), await kpi(4)], ['4,10 €', '4', '1', '0']);
+    comprueba('las registradas, la ultima primero',
+      await pagina.$$eval('#tRegistradas tbody tr td:nth-child(2) .mat', x => x.map(e => e.textContent)), ['93', '92', '99', '98']);
+    comprueba_que('la de 44.504 se ensena pero no suma',
+      (await txt('#tRegistradas tbody tr:nth-child(4)')).includes('44.504,00 € · no suma'), await txt('#tRegistradas tbody tr:nth-child(4)'));
+    comprueba_que('y cada una con su estado', (await txt('#tRegistradas tbody tr:nth-child(3)')).includes('En estudio'));
+    await pagina.click('#kpis .kpi[data-ver="abiertas"]');
+    comprueba('pulsar «sin resolver» filtra la lista', await pagina.$$eval('#tRegistradas tbody .mat', x => x.filter((_, i) => i % 2 === 0).map(e => e.textContent)), ['99']);
+    await pagina.click('#kpis .kpi[data-ver="abiertas"]');
+    comprueba('maquinas: empatadas a dos, primero la de mas dinero',
+      await pagina.$$eval('#tMaquinas tbody tr', x => x.map(e => [e.querySelector('.mat').textContent, e.querySelector('td:nth-child(4)').textContent])),
+      [['M1', '2'], ['M2', '2']]);
+    comprueba('importes: las abonadas de mayor a menor, sin la de 44.504 ni la en estudio',
+      await pagina.$$eval('#tImportes tbody td:last-child', x => x.map(e => e.textContent.replace(/\s/g, ' '))), ['3,50 €', '0,60 €']);
+    comprueba_que('y dice que hay una por encima del tope', (await txt('#sImp')).includes('1 más tiene un importe de más de 50,00 €'));
+    comprueba('clientes: el primero, AIRBUS', await pagina.$$eval('#tClientes tbody td[data-et="Cliente"]', x => x.map(e => e.textContent)),
+      ['AIRBUS', 'HOSPITAL']);
     comprueba('un mes por columna, trece', await pagina.locator('#gMeses .golpe').count(), 13);
-    comprueba('la leyenda con los canales que hay', await pagina.$$eval('#leyenda span', x => x.map(e => e.textContent)),
-      ['En el sitio', 'Transferencia', 'Tarjeta de crédito']);
     await pagina.hover('#gMeses .golpe[data-i="12"]');
-    comprueba_que('pasar por encima dice el reparto del mes', !(await pagina.$eval('#punta', e => e.hidden))
-      && (await pagina.textContent('#punta')).includes('Transferencia'));
-    comprueba_que('y el mes llega hasta ayer, como las cifras: tres, sin la de hoy',
-      (await pagina.textContent('#punta')).endsWith('Total4'), await pagina.textContent('#punta'));
+    comprueba_que('pasar por encima dice el reparto y el dinero del mes, hasta ayer',
+      (await txt('#punta')).includes('Total4') && (await txt('#punta')).includes('Devuelto4,10 €'), await txt('#punta'));
     await pagina.click('#bVista');
     comprueba('y la misma cifra en tabla', await pagina.locator('#tMeses tbody tr').count(), 13);
     await pagina.click('#bVista');
-    comprueba('por canal', await pagina.$$eval('#gCanal .fb .nom', x => x.map(e => e.textContent)),
-      ['En el sitio', 'Transferencia', 'Tarjeta de crédito']);
-    comprueba_que('el nombre del centro va escapado', (await pagina.innerHTML('#tCentros')).includes('CONSUM &lt;MURCIA&gt;'));
-    await pagina.click('#gCanal .fb[data-k="Transferencia"]');
-    comprueba('pulsar un canal filtra por el', [await pagina.inputValue('#canal'), await kpi(1)], ['Transferencia', '1']);
-    await pagina.click('#bLimpiar');
-    await pagina.click('#tCentros tr[data-c="1001"]');
-    comprueba('pulsar un centro filtra por el', [await pagina.inputValue('#centro'), await kpi(1)], ['1001', '2']);
-    await pagina.click('#bLimpiar');
-    await pagina.click('.hojas button[data-h="pendientes"]');
-    comprueba('sin cerrar: las tres, tambien la de hoy, la mas vieja primero',
-      await pagina.$$eval('#tLista tbody .mat', x => x.filter((_, i) => i % 2 === 0).map(e => e.textContent)), ['A-95', 'A-93', 'A-96']);
+    await pagina.selectOption('#deleg', 'Madrid - Sur');
+    comprueba('la delegacion filtra todo', [await kpi(1), await kpi(2)], ['0,00 €', '2']);
+    await pagina.selectOption('#deleg', '');
+    await pagina.selectOption('#periodo', 'anio');
+    comprueba('en el ultimo ano, catorce en Centro: diez y la flecha',
+      [await pagina.locator('#tRegistradas tbody tr').count(), await txt('#tRegistradas button.flecha')], [10, 'Ver todas (14)']);
+    await pagina.click('#tRegistradas button.flecha');
+    comprueba('la flecha abre todas', await pagina.locator('#tRegistradas tbody tr').count(), 14);
+    await pagina.click('#tRegistradas button.flecha');
+    comprueba('y las vuelve a cerrar', await pagina.locator('#tRegistradas tbody tr').count(), 10);
+    comprueba('importes: cinco y la flecha', [await pagina.locator('#tImportes tbody tr').count(), await txt('#tImportes button.flecha')],
+      [5, 'Ver todas (12)']);
+    await pagina.click('#tImportes button.flecha');
+    comprueba('la flecha de importes abre todas', await pagina.locator('#tImportes tbody tr').count(), 12);
     const [descarga] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bCsv')]);
-    comprueba('el CSV', descarga.suggestedFilename(), `devoluciones_sin_cerrar_${iso(AYER)}.csv`);
-    await pagina.click('.hojas button[data-h="panel"]');
+    comprueba_que('el CSV del area', descarga.suggestedFilename().startsWith('devoluciones_Centro_'), descarga.suggestedFilename());
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'devoluciones-area.png'), fullPage: true });
+    await pagina.click('#bAreas');
+    comprueba_que('volver lleva a la portada', await pagina.isVisible('#areas'));
     await pagina.setViewportSize({ width: 380, height: 800 });
+    await pagina.click('#areas .area[data-area="Centro"]');
     await pagina.waitForTimeout(250);
     comprueba('en movil no se sale de la pantalla',
       await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'devoluciones-movil.png'), fullPage: true });
+    await pagina.setViewportSize({ width: 1280, height: 900 });
     await pagina.emulateMedia({ colorScheme: 'dark' });
     comprueba_que('en oscuro el fondo es oscuro',
       (await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(18, 18, 17)');
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'devoluciones-oscuro.png'), fullPage: true });
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
 
-    // Sin M13 no se cuenta nada: se dice por que.
+    // Sin M16 no se cuenta nada: se dice por que.
     const antes = API['/api/devoluciones'];
     API['/api/devoluciones'] = { generado: antes.generado, perfil: 'interno', ultimo_dia: iso(AYER),
-      sin_dato: 'Falta el informe M13 · EXT_SAT_INCIDENCIAS de VenCloud (docs/17).', devoluciones: [] };
+      sin_dato: 'Falta el informe M16 · EXT_DEVOLUCIONES de VenCloud (docs/17).', devoluciones: [] };
     const b = await abre('/devoluciones/');
     await b.pagina.waitForSelector('#aviso:not([hidden])');
-    comprueba_que('sin M13 lo dice', (await b.pagina.textContent('#aviso')).includes('M13'));
+    comprueba_que('sin M16 lo dice', (await b.pagina.textContent('#aviso')).includes('M16'));
     comprueba('sin un solo error en la consola del navegador', b.errores, []);
     await b.pagina.close();
     API['/api/devoluciones'] = antes;
@@ -1561,12 +1879,14 @@ const servidor = http.createServer((pet, res) => {
         averias: { nombre: 'Incidencias', tablas: { zonas: 'Total de incidencias por zona',
           tecnicas: 'Los 10 centros con más averías técnicas', abiertas: 'Lista de incidencias y su ficha' } },
         devoluciones: { nombre: 'Devoluciones', tablas: { meses: 'Devoluciones por mes y canal', pendientes: 'Devoluciones sin cerrar' } },
-        furgonetas: { nombre: 'Furgonetas', tablas: { vehiculos: 'Furgonetas con visitas', dias: 'Furgonetas activas, día a día' } },
+        furgonetas: { nombre: 'Furgonetas', tablas: { vehiculos: 'Furgonetas activas', dias: 'Furgonetas con visitas, día a día' } },
         ventas: { nombre: 'Ventas', tablas: {} } } };
     const { pagina, errores, fuera } = await abre('/consola/');
     await pagina.waitForSelector('[data-ed="olga@serunion.es"]');
     comprueba_que('la lista de usuarios dice lo que se le ha quitado',
       (await pagina.textContent('body')).includes('4 de 5 cuadrados · 1 tabla quitada'));
+    comprueba_que('y las delegaciones que ve: sin marcar, las de su perfil de antes',
+      (await pagina.textContent('tr:has-text("olga@serunion.es") td[data-et="Delegaciones"]')).includes('SEVILLA (del perfil, de antes)'));
     comprueba_que('y a quien no se le quita nada, que no tiene cuadrados (cliente)',
       (await pagina.textContent('tr:has-text("eva@airbus.com")')).includes('—'));
     await pagina.click('[data-ed="olga@serunion.es"]');
@@ -1585,6 +1905,18 @@ const servidor = http.createServer((pet, res) => {
       [true, true]);
     await pagina.check('#cajaCuadrados fieldset[data-c="devoluciones"] input[data-cuadrado]');
     await pagina.uncheck('#cajaCuadrados fieldset[data-c="averias"] input[value="abiertas"]');
+    // Las delegaciones, en el usuario (docs/65): salen marcadas las que su
+    // perfil tenia de antes, para que guardarlo no le cambie lo que ve.
+    comprueba('sus delegaciones: las que el perfil tenia de antes',
+      await pagina.$$eval('#mDelegacionesU .elegido > span', x => x.map(s => s.textContent)), ['SEVILLA']);
+    await pagina.click('#fDelegacionesU');
+    await pagina.fill('#fDelegacionesU', 'mad');
+    await pagina.keyboard.press('Enter');
+    await pagina.keyboard.press('Escape');
+    comprueba_que('y cada una dice con cuantos centros encaja',
+      (await pagina.textContent('#rDelegacionesU')).includes('MADRID: 2 centros')
+      && (await pagina.textContent('#rDelegacionesU')).includes('SEVILLA: 1 centro'),
+      await pagina.textContent('#rDelegacionesU'));
     if (FOTOS) {
       await pagina.screenshot({ path: path.join(FOTOS, 'consola-claro.png'), fullPage: false });
       await pagina.emulateMedia({ colorScheme: 'dark' });
@@ -1604,65 +1936,39 @@ const servidor = http.createServer((pet, res) => {
     const cuerpo = await envio;
     comprueba('se guarda lo que se le quita', [cuerpo.cuadrados_ocultos, cuerpo.tablas_ocultas],
       [['furgonetas'], { rutas: ['festivos'], averias: ['abiertas'] }]);
+    comprueba('y sus delegaciones', cuerpo.delegaciones, ['SEVILLA', 'MADRID']);
     await pagina.waitForSelector('[data-ed="olga@serunion.es"]');
     await pagina.click('[data-ed="olga@serunion.es"]');
     await pagina.selectOption('#fPerfil', 'cli-airbus');
     comprueba_que('un perfil de cliente no tiene cuadrados que quitar', !(await pagina.isVisible('#campoCuadrados')));
+    comprueba_que('ni delegaciones: son organizacion interna', !(await pagina.isVisible('#campoDelegacionesU')));
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
     API['/api/admin/usuarios'] = antesU;
 
-    // Al crear un perfil, lo que le sale en el informe operativo con las
-    // sesiones marcadas: Revision clientes no es una sesion, va con
-    // «Instalaciones y altas» (pasó el 19-oct: no se encontraba).
-    API['/api/admin/perfiles'] = { ...antesP, niveles: { cliente: 0, operaciones: 1, direccion: 2, admin: 3 },
-      catalogo_sesiones: {
-        resumen: { nombre: 'Resumen', minimo: 'operaciones', bloques: ['servicio', 'dinero'] },
-        instalaciones: { nombre: 'Instalaciones y altas', minimo: 'operaciones', bloques: ['instalaciones'] },
-        cuadro: { nombre: 'Cuadro de mando', minimo: 'cliente', bloques: [] } },
-      catalogo_cuadrados: {
-        rutas: { nombre: 'Rutas', tablas: {}, bloque: 'servicio' },
-        ventas: { nombre: 'Ventas', tablas: {}, bloque: 'dinero' },
-        telemetria: { nombre: 'Telemetría', tablas: {}, bloque: 'instalaciones' },
-        revision: { nombre: 'Revisión clientes', tablas: {}, bloque: 'instalaciones' },
-        utilizo: { nombre: 'Utilizo', tablas: {}, bloque: 'instalaciones', solo_direccion: true, sin_ambito: true } } };
-    {
-      const c = await abre('/consola/');
-      await c.pagina.waitForSelector('#pestanas button[data-s="perfiles"]');
-      await c.pagina.click('#pestanas button[data-s="perfiles"]');
-      await c.pagina.click('#bNuevoPerfil');
-      await c.pagina.selectOption('#fTipo', 'operaciones');
-      comprueba_que('cada sesion dice que cuadrados da',
-        (await c.pagina.textContent('#cajaSesiones label:has(input[value="instalaciones"])')).includes('Revisión clientes'));
-      comprueba('sin sesiones, ningun cuadrado', await c.pagina.textContent('#rOperativo'),
-        'Ninguno con las sesiones marcadas.');
-      await c.pagina.check('#cajaSesiones input[value="instalaciones"]');
-      comprueba('con Instalaciones y altas sale Revision clientes (Utilizo es de direccion)',
-        await c.pagina.textContent('#rOperativo'),
-        'Telemetría · Revisión clientes  —  No le salen: Utilizo (de dirección para arriba).');
-      await c.pagina.selectOption('#fTipo', 'direccion');
-      await c.pagina.check('#cajaSesiones input[value="instalaciones"]');
-      comprueba('en direccion sin ambito, tambien Utilizo', await c.pagina.textContent('#rOperativo'),
-        'Telemetría · Revisión clientes · Utilizo');
-      if (FOTOS) await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-operativo.png'), fullPage: false });
-      await c.pagina.selectOption('#fTipo', 'cliente');
-      comprueba_que('un cliente no tiene informe operativo', !(await c.pagina.isVisible('#campoOperativo')));
-      comprueba('ni una peticion fuera del dominio', c.fuera, []);
-      comprueba('sin un solo error en la consola del navegador', c.errores, []);
-      await c.pagina.close();
-    }
-    API['/api/admin/perfiles'] = antesP;
-
-    // Al crear un perfil: el cuadro de mando de los clientes se enciende o se
-    // apaga, y en cada sesion del personal se eligen sus paneles (docs/63).
+    // Al crear un perfil, el cuadro de mando de los clientes se enciende o se
+    // apaga (docs/63), y el personal se elige cuadrado a cuadrado, con sus
+    // tablas, sin sesiones que agrupen varios (docs/64).
     API['/api/admin/perfiles'] = { ...antesP, niveles: { cliente: 0, operaciones: 1, direccion: 2, admin: 3 },
       catalogo_sesiones: {
         resumen: { nombre: 'Resumen', minimo: 'operaciones', bloques: ['servicio', 'dinero'],
           paneles: { visitas_dia: 'Visitas por día', semana: 'Patrón semanal' } },
-        rutas: { nombre: 'Rutas y jornada', minimo: 'operaciones', bloques: ['jornadas'], paneles: {} },
+        avisos: { nombre: 'Avisos y acciones', minimo: 'operaciones', bloques: ['alarmas'], paneles: {} },
+        instalaciones: { nombre: 'Instalaciones y altas', minimo: 'operaciones', bloques: ['instalaciones'], paneles: {} },
         cuadro: { nombre: 'Cuadro de mando', minimo: 'cliente', bloques: [], paneles: {} } },
-      catalogo_cuadrados: { rutas: { nombre: 'Rutas', tablas: {}, bloque: 'servicio' } } };
+      otras_pantallas: ['resumen', 'avisos', 'cuadro'],
+      catalogo_cuadrados: {
+        rutas: { nombre: 'Rutas', bloque: 'servicio', paneles: {},
+          tablas: { rutas: 'Visitas por ruta', estado: 'Estado de las visitas', maquinas: 'Máquinas no visitadas' } },
+        almacenes: { nombre: 'Almacenes', bloque: 'inventario', solo_direccion: true, paneles: {}, tablas: { productos: 'Productos' } },
+        ventas: { nombre: 'Ventas', bloque: 'dinero', tablas: {},
+          paneles: { recaudacion: 'Recaudación por mes', ciego: 'Efectivo sin telemetría' } },
+        telemetria: { nombre: 'Telemetría', bloque: 'instalaciones', paneles: {}, tablas: { maquinas: 'Máquinas' } },
+        revision: { nombre: 'Revisión clientes', bloque: 'instalaciones', paneles: {},
+          tablas: { planograma: 'Sin planograma', tarifa: 'Sin tarifa', precio: 'Precio distinto' } },
+        utilizo: { nombre: 'Utilizo', bloque: 'instalaciones', solo_direccion: true, sin_ambito: true, paneles: {},
+          tablas: { uso: 'Uso de VenCloud' } } } };
     {
       const c = await abre('/consola/');
       await c.pagina.waitForSelector('#pestanas button[data-s="perfiles"]');
@@ -1670,9 +1976,10 @@ const servidor = http.createServer((pet, res) => {
       comprueba_que('la lista dice si el cliente tiene el cuadro',
         (await c.pagina.textContent('tr:has-text("cli-airbus")')).includes('Cuadro de mando'));
       await c.pagina.click('#bNuevoPerfil');
-      comprueba('un cliente nuevo trae el cuadro encendido, con sus partes',
-        [await c.pagina.isVisible('#fCuadroOn'), await c.pagina.isChecked('#fCuadroOn'), await c.pagina.isVisible('#campoCuadro')],
-        [true, true, true]);
+      comprueba('un cliente nuevo trae el cuadro encendido, con sus partes, y sin cuadrados',
+        [await c.pagina.isVisible('#fCuadroOn'), await c.pagina.isChecked('#fCuadroOn'),
+         await c.pagina.isVisible('#campoCuadro'), await c.pagina.isVisible('#campoSesiones')],
+        [true, true, true, false]);
       await c.pagina.uncheck('#fCuadroOn');
       comprueba_que('apagado, no hay partes que elegir', !(await c.pagina.isVisible('#campoCuadro')));
       if (FOTOS) await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-cliente-sin-cuadro.png'), fullPage: false });
@@ -1682,36 +1989,56 @@ const servidor = http.createServer((pet, res) => {
         if (q.method() === 'POST' && q.url().endsWith('/api/admin/perfiles')) r(JSON.parse(q.postData()));
       }));
       await c.pagina.click('#bGuardar');
-      comprueba('se guarda sin la sesion del cuadro', (await envio).sesiones, []);
+      const cli = await envio;
+      comprueba('se guarda sin la sesion del cuadro y sin cuadrados', [cli.sesiones, 'cuadrados' in cli], [[], false]);
 
       await c.pagina.waitForSelector('#bNuevoPerfil');
       await c.pagina.click('#bNuevoPerfil');
       await c.pagina.selectOption('#fTipo', 'operaciones');
       comprueba_que('el personal no tiene el interruptor del cliente', !(await c.pagina.isVisible('#fCuadroOn')));
-      comprueba_que('sin la sesion marcada no salen sus paneles',
-        !(await c.pagina.isVisible('.sesion[data-s="resumen"] .paneles')));
-      await c.pagina.check('#cajaSesiones input[data-sesion][value="resumen"]');
-      comprueba('marcada, salen sus paneles, todos puestos',
-        await c.pagina.$$eval('.sesion[data-s="resumen"] input[data-panel]', x => x.map(i => [i.value, i.checked])),
-        [['visitas_dia', true], ['semana', true]]);
-      comprueba_que('una sesion sin paneles propios no ofrece ninguno',
-        (await c.pagina.locator('.sesion[data-s="rutas"] input[data-panel]').count()) === 0);
-      await c.pagina.uncheck('.sesion[data-s="resumen"] input[value="semana"]');
+      comprueba('cada cuadrado por separado, en el orden del informe',
+        await c.pagina.$$eval('#cajaSesiones input[data-cuadrado]', x => x.map(i => i.value)),
+        ['rutas', 'almacenes', 'ventas', 'telemetria', 'revision', 'utilizo']);
+      comprueba('y aparte, lo que no es un cuadrado',
+        await c.pagina.$$eval('#cajaSesiones input[data-sesion]', x => x.map(i => i.value)),
+        ['resumen', 'avisos', 'cuadro']);
+      comprueba_que('ninguna casilla agrupa cuadrados',
+        !(await c.pagina.textContent('#cajaSesiones')).includes('Instalaciones y altas'));
+      comprueba('almacenes y utilizo son de direccion: apagados en operaciones',
+        await c.pagina.$$eval('#cajaSesiones input[data-cuadrado]:disabled', x => x.map(i => i.value)), ['almacenes', 'utilizo']);
+      comprueba('sin marcar, sus tablas apagadas',
+        await c.pagina.$$eval('fieldset[data-c="revision"] input[data-tabla]', x => x.every(i => i.disabled)), true);
+      await c.pagina.check('#cajaSesiones input[data-cuadrado][value="revision"]');
+      comprueba('marcado, sus tablas, todas puestas',
+        await c.pagina.$$eval('fieldset[data-c="revision"] input[data-tabla]', x => x.map(i => [i.value, i.checked, i.disabled])),
+        [['planograma', true, false], ['tarifa', true, false], ['precio', true, false]]);
+      await c.pagina.uncheck('fieldset[data-c="revision"] input[value="precio"]');
+      await c.pagina.check('#cajaSesiones input[data-cuadrado][value="ventas"]');
+      comprueba('ventas lleva al panel: dentro, sus paneles',
+        await c.pagina.$$eval('fieldset[data-c="ventas"] input[data-panel]', x => x.map(i => i.value)), ['recaudacion', 'ciego']);
+      await c.pagina.uncheck('fieldset[data-c="ventas"] input[value="ciego"]');
       await c.pagina.selectOption('#fTipo', 'direccion');
-      comprueba('cambiar de tipo no pierde lo quitado',
-        await c.pagina.isChecked('.sesion[data-s="resumen"] input[value="semana"]'), false);
-      await c.pagina.check('#cajaSesiones input[data-sesion][value="resumen"]');
+      comprueba('cambiar de tipo no pierde lo marcado',
+        [await c.pagina.isChecked('#cajaSesiones input[data-cuadrado][value="revision"]'),
+         await c.pagina.isChecked('fieldset[data-c="revision"] input[value="precio"]'),
+         await c.pagina.isEnabled('#cajaSesiones input[data-cuadrado][value="utilizo"]')], [true, false, true]);
+      await c.pagina.check('#cajaSesiones input[data-cuadrado][value="utilizo"]');
+      await c.pagina.check('#cajaSesiones input[data-sesion][value="avisos"]');
       if (FOTOS) {
-        await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-paneles-claro.png'), fullPage: false });
+        await c.pagina.evaluate(() => document.querySelector('#campoSesiones').scrollIntoView());
+        await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-cuadrados-claro.png'), fullPage: false });
         await c.pagina.emulateMedia({ colorScheme: 'dark' });
-        await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-paneles-oscuro.png'), fullPage: false });
+        await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-cuadrados-oscuro.png'), fullPage: false });
         await c.pagina.emulateMedia({ colorScheme: 'light' });
       }
       await c.pagina.setViewportSize({ width: 380, height: 800 });
       await c.pagina.waitForTimeout(200);
       comprueba('en movil el dialogo no se sale de la pantalla',
         await c.pagina.evaluate(() => document.querySelector('#dlg').scrollWidth <= window.innerWidth), true);
-      if (FOTOS) await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-paneles-movil.png'), fullPage: false });
+      if (FOTOS) {
+        await c.pagina.evaluate(() => document.querySelector('#campoSesiones').scrollIntoView());
+        await c.pagina.screenshot({ path: path.join(FOTOS, 'perfil-cuadrados-movil.png'), fullPage: false });
+      }
       await c.pagina.setViewportSize({ width: 1280, height: 800 });
       await c.pagina.fill('#fPid', 'dir-prueba');
       await c.pagina.fill('#fNombreP', 'Prueba');
@@ -1720,7 +2047,9 @@ const servidor = http.createServer((pet, res) => {
       }));
       await c.pagina.click('#bGuardar');
       const cuerpo = await envio;
-      comprueba('se guardan la sesion y el panel quitado', [cuerpo.sesiones, cuerpo.paneles_ocultos], [['resumen'], ['semana']]);
+      comprueba('se guardan los cuadrados, sus tablas y paneles quitados, y las otras pantallas',
+        [cuerpo.cuadrados, cuerpo.tablas_ocultas, cuerpo.paneles_ocultos, cuerpo.sesiones],
+        [['ventas', 'revision', 'utilizo'], { revision: ['precio'] }, ['ciego'], ['avisos']]);
       comprueba('ni una peticion fuera del dominio', c.fuera, []);
       comprueba('sin un solo error en la consola del navegador', c.errores, []);
       await c.pagina.close();
@@ -1735,10 +2064,11 @@ const servidor = http.createServer((pet, res) => {
       await x.pagina.waitForSelector(espera);
       return x;
     };
-    let x = await conQuitadas('/rutas/', { rutas: ['maquinas', 'estado'] }, '#todo:not([hidden])');
-    comprueba('rutas: sin las maquinas ni la dona, con lo demas',
-      await x.pagina.$$eval('[data-tabla]', s => s.map(e => [e.dataset.tabla, !e.hidden])),
+    let x = await conQuitadas('/rutas/?area=Centro', { rutas: ['maquinas', 'estado', 'recaudar'] }, '#todo:not([hidden])');
+    comprueba('rutas: sin las maquinas, la dona ni por recaudar, con lo demas',
+      await x.pagina.$$eval('[data-tabla]', s => s.filter(e => e.tagName !== 'SPAN').map(e => [e.dataset.tabla, !e.hidden])),
       [['rutas', true], ['estado', false], ['maquinas', false], ['delegaciones', true], ['festivos', true]]);
+    comprueba('y sin su cifra de maquinas', await x.pagina.$$eval('#mqs .kpi', b => b.map(e => e.dataset.ver)), ['llamadas', 'reponer']);
     comprueba_que('la de rutas ocupa la fila entera',
       await x.pagina.evaluate(() => getComputedStyle(document.querySelector('.dos')).gridTemplateColumns.split(' ').length === 1));
     if (FOTOS) await x.pagina.screenshot({ path: path.join(FOTOS, 'rutas-sin-maquinas.png'), fullPage: true });
@@ -1753,16 +2083,11 @@ const servidor = http.createServer((pet, res) => {
     x = await conQuitadas('/incidencias/?ver=abiertas', { averias: ['abiertas'] }, '#todo:not([hidden])');
     comprueba('ni pidiendola en la direccion', await x.pagina.isVisible('#hAbiertas'), false);
     await x.pagina.close();
-    x = await conQuitadas('/furgonetas/', { furgonetas: ['vehiculos', 'sin_vehiculo', 'delegaciones'] }, '#todo:not([hidden])');
-    comprueba('furgonetas: sin las tres tablas quedan las cifras y el dia a dia',
-      [await x.pagina.isVisible('#cajaTabla'), await x.pagina.isVisible('#pestanas'),
+    x = await conQuitadas('/furgonetas/?area=Centro', { furgonetas: ['vehiculos'] }, '#todo:not([hidden])');
+    comprueba('furgonetas: sin la lista quedan las cifras y el dia a dia, sin CSV',
+      [await x.pagina.isVisible('#cajaTabla'), await x.pagina.isVisible('#bCsv'),
        await x.pagina.isVisible('#kpis .kpi'), await x.pagina.isVisible('[data-tabla="dias"]')], [false, false, true, true]);
     comprueba('sin un solo error en la consola del navegador', x.errores, []);
-    await x.pagina.close();
-    x = await conQuitadas('/furgonetas/', { furgonetas: ['vehiculos'] }, '#todo:not([hidden])');
-    comprueba('sin una, arranca en la siguiente',
-      await x.pagina.$$eval('#pestanas button', b => b.map(e => [e.dataset.p, e.getAttribute('aria-pressed')])),
-      [['sin', 'true'], ['deleg', 'false']]);
     await x.pagina.close();
     x = await conQuitadas('/revision/', { revision: ['planograma', 'precio'] }, '#vista .kpi');
     comprueba('revision: sin las quitadas, y arranca en la primera que ve',
@@ -1784,7 +2109,7 @@ const servidor = http.createServer((pet, res) => {
     const FOTOS = process.env.FOTOS_USUARIOS;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     PREFS = [];
-    let x = await abre('/rutas/');
+    let x = await abre('/rutas/?area=Centro');
     await x.pagina.waitForSelector('[data-estrella="maquinas"] .estrella');
     comprueba('rutas: una estrella junto al titulo de cada tabla, apagadas',
       await x.pagina.$$eval('.estrella', b => b.map(e => [e.closest('[data-estrella]').dataset.estrella, e.getAttribute('aria-pressed')])),
@@ -1805,19 +2130,16 @@ const servidor = http.createServer((pet, res) => {
     comprueba('sin un solo error en la consola del navegador', x.errores, []);
     await x.pagina.close();
 
-    x = await abre('/furgonetas/');
+    x = await abre('/furgonetas/?area=Centro');
     await x.pagina.waitForSelector('#cajaTabla .estrella');
     put = guardado();
-    await x.pagina.click('#pestanas button[data-p="sin"]');
-    await x.pagina.waitForTimeout(100);
     await x.pagina.click('#cajaTabla .estrella');
     await put;
-    comprueba('furgonetas: la estrella de las pestanas es la de la que se ve',
-      PREFS.map(p => p.t), ['maquinas', 'sin_vehiculo']);
-    await x.pagina.click('#pestanas button[data-p="vehiculos"]');
+    comprueba('furgonetas: la estrella de la lista', PREFS.map(p => p.t), ['maquinas', 'vehiculos']);
+    await x.pagina.click('#kpis .kpi[data-ver="sin"]');
     await x.pagina.waitForTimeout(100);
-    comprueba('al cambiar de pestana, la de esa otra (apagada)',
-      await x.pagina.getAttribute('#cajaTabla .estrella', 'aria-pressed'), 'false');
+    comprueba('y sigue encendida al filtrar',
+      await x.pagina.getAttribute('#cajaTabla .estrella', 'aria-pressed'), 'true');
     comprueba('sin un solo error en la consola del navegador', x.errores, []);
     await x.pagina.close();
 

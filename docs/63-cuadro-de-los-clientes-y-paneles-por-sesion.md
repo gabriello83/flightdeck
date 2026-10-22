@@ -25,6 +25,11 @@ En la lista de perfiles, la columna Sesiones de un cliente dice «Cuadro de mand
 
 ## Personal: los paneles de cada sesión
 
+> Desde docs/64 el formulario ya no enseña sesiones: se elige cuadrado a cuadrado. Los paneles
+> siguen guardándose en `paneles_ocultos`: los de Puntos de venta, Ventas y Reposiciones van dentro
+> de su cuadrado, y los de Resumen, Servicio recibido y Disponibilidad, en «Además del informe
+> operativo».
+
 Cada sesión de «Sesiones que ve» que dibuja paneles propios en `/panel/` lleva debajo **«En el
 panel ve:»**, con sus paneles. Salen al marcar la sesión, todos puestos de serie, y se desmarca
 lo que ese perfil no deba ver.

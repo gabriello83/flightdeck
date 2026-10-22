@@ -422,8 +422,8 @@ res = L.lambda_handler({}, None)
 comprueba("se leyo el informe de venta por telemetria sin ningun cuadro", res["filas_leidas"].get("telemetria"), 2)
 comprueba("el resumen dice con que ficheros se cruzo",
           (res["telemetria_externa"]["faltan"], res["telemetria_externa"]["maquinas"]), ([], n))
-oi = json.loads(ALMACEN["cabina/interno/operativo.json"])
-oa = json.loads(ALMACEN["cabina/amazon/operativo.json"])
+oi = json.loads(gzip.decompress(ALMACEN["cabina/interno/operativo.json.gz"]))
+oa = json.loads(gzip.decompress(ALMACEN["cabina/amazon/operativo.json.gz"]))
 ti, ta = oi["dias"][DIA]["telemetria"], oa["dias"][DIA]["telemetria"]
 comprueba("interno: el dato de VenCloud (3 marcadas, ningun DEX suyo)", (ti["auditables"], ti["con_dex"]), (3, 0))
 comprueba("  y las diferencias", ti["diferencias"]["solo_vencloud"], 1)
@@ -440,7 +440,7 @@ del ALMACEN["cabina/interno/telemetria.json"]
 for t_ in TE.TIPOS:
     del ALMACEN[f"externo/telemetria/{t_}/actual.json"]
 L.lambda_handler({}, None)
-oi = json.loads(ALMACEN["cabina/interno/operativo.json"])
+oi = json.loads(gzip.decompress(ALMACEN["cabina/interno/operativo.json.gz"]))
 comprueba("sin ficheros, el cuadrado vuelve a ser el de VenCloud",
           "auditables" in oi["dias"][DIA]["telemetria"] or "sin_dato" in oi["dias"][DIA]["telemetria"], True)
 comprueba("y no se escribe la pagina", "cabina/interno/telemetria.json" in ALMACEN, False)

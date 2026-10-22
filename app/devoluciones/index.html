@@ -58,34 +58,44 @@ button.btn,a.btn{
 button.btn:hover,a.btn:hover{border-color:var(--tinta-3)}
 button.btn[aria-pressed="true"]{background:var(--s1);border-color:var(--s1);color:#fff}
 button.btn:disabled{opacity:.5;cursor:default}
-.hojas{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 0}
-.barra{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:14px 0 6px}
+.barra{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:16px 0 6px}
 .barra label{font-size:13px;color:var(--tinta-2);display:flex;align-items:center;gap:8px;min-width:0}
 .barra select,.barra input{
   font:inherit;font-size:14px;color:var(--tinta);background:var(--tarjeta);
   border:1px solid var(--borde-fuerte);border-radius:8px;padding:5px 8px;max-width:100%
 }
 .barra select{max-width:260px}
-.barra input[type=search]{min-width:220px}
 .nota{
   margin:12px 0 4px;padding:10px 13px;border:1px solid var(--borde);border-left:3px solid var(--s1);
   border-radius:8px;background:var(--tarjeta);color:var(--tinta-2);font-size:13px
 }
 .nota.mal{border-left-color:var(--rojo)}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:14px}
+.sub{font-size:12.5px;color:var(--tinta-2);margin:2px 0 10px}
+/* La portada: el total de España y un cuadrante por área, con el dinero. */
+.total{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px;margin-top:10px}
+.total .vl{font-size:30px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.total .nt{font-size:13px;color:var(--tinta-2)}
+.areas{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px}
+button.area{all:unset;box-sizing:border-box;display:block;cursor:pointer;background:var(--tarjeta);
+  border:1px solid var(--borde);border-left:5px solid var(--c-dev);border-radius:12px;padding:14px 16px;box-shadow:var(--sombra)}
+button.area:hover{border-color:var(--tinta-3);border-left-color:var(--c-dev)}
+button.area:focus-visible{outline:2px solid var(--s1);outline-offset:1px}
+.area .nom{font-size:15px;font-weight:650}
+.area .pc{font-size:32px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:4px}
+.area .nt{font-size:12.5px;color:var(--tinta-2);margin-top:2px}
+.volver{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+.volver h2{font-size:18px;margin:0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:14px}
 .kpi{background:var(--tarjeta);border:1px solid var(--borde);border-radius:10px;padding:11px 13px;box-shadow:var(--sombra);
      text-align:left;font:inherit;color:inherit}
 .kpi .et{font-size:12px;color:var(--tinta-2);text-transform:uppercase;letter-spacing:.04em}
 .kpi .vl{font-size:26px;font-weight:650;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums}
 .kpi .nt{font-size:12px;color:var(--tinta-3);margin-top:2px}
 .kpi .dl{font-size:12.5px;color:var(--tinta-2);margin-top:4px;font-variant-numeric:tabular-nums}
-.kpi.verde{background:var(--verde);border-color:var(--verde)}
-.kpi.amarillo{background:var(--amarillo);border-color:var(--amarillo)}
-.kpi.rojo{background:var(--rojo);border-color:var(--rojo)}
-.kpi.verde *,.kpi.rojo *{color:var(--t-verde)!important}
-.kpi.amarillo *{color:var(--t-amarillo)!important}
+/* Las cifras de un área filtran la lista de registradas: son botones. */
 button.kpi{cursor:pointer}
 button.kpi:hover{border-color:var(--tinta-3)}
+button.kpi:focus-visible{outline:2px solid var(--s1);outline-offset:1px}
 button.kpi[aria-pressed="true"]{border-color:var(--s1);box-shadow:0 0 0 2px var(--s1) inset}
 .mejor{color:var(--texto-verde);font-weight:600}
 .peor{color:var(--texto-rojo);font-weight:600}
@@ -95,26 +105,9 @@ section.caja{
 }
 .cabsec{display:flex;align-items:baseline;gap:12px;justify-content:space-between;flex-wrap:wrap}
 section.caja h2{font-size:15px;margin:0;font-weight:650}
-section.caja .sub{font-size:12.5px;color:var(--tinta-2);margin:2px 0 10px}
-.dos{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.dos > section.caja{margin-top:14px}
+.dos{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
 /* Con una de las dos quitada al usuario (docs/61), la otra ocupa la fila. */
 .dos:has(> section[hidden]){grid-template-columns:minmax(0,1fr)}
-.ficha-y-tabla{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:14px;align-items:start}
-/* Barras: una sola serie, del color de la marca. El numero va siempre escrito
-   al lado, asi que la barra no es la unica forma de leerlo. */
-.barras{display:flex;flex-direction:column;gap:3px}
-.fb{display:grid;grid-template-columns:minmax(120px,240px) 1fr;gap:10px;align-items:center;
-    padding:3px 4px;border-radius:6px;cursor:pointer;background:none;border:0;font:inherit;color:inherit;text-align:left;width:100%}
-.fb:hover{background:color-mix(in srgb, var(--s1) 6%, transparent)}
-.fb.elegida{background:color-mix(in srgb, var(--s1) 12%, transparent)}
-.fb .nom{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fb .pis{display:flex;align-items:center;gap:8px;min-width:0}
-.fb .b{height:14px;border-radius:0 4px 4px 0;background:var(--barra);min-width:2px}
-.fb .v{font-size:12.5px;color:var(--tinta-2);font-variant-numeric:tabular-nums;white-space:nowrap}
-.zona{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--tinta-3);margin:8px 0 2px 4px;
-      display:flex;gap:8px}
-.zona:first-child{margin-top:0}
 .tabla{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;font-weight:600;color:var(--tinta-2);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;
@@ -122,29 +115,22 @@ th{text-align:left;font-weight:600;color:var(--tinta-2);font-size:11.5px;text-tr
 td{padding:7px 10px 7px 0;border-bottom:1px solid var(--borde);vertical-align:top}
 tr:last-child td{border-bottom:0}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
-tr.elige{cursor:pointer}
-tr.elige:hover td{background:color-mix(in srgb, var(--s1) 6%, transparent)}
-tr.elegida td{background:color-mix(in srgb, var(--s1) 12%, transparent)}
+.pos{color:var(--tinta-3);font-variant-numeric:tabular-nums;width:1%;white-space:nowrap}
 .mat{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;white-space:nowrap}
 .tenue{color:var(--tinta-3);font-size:12px}
-.etq{display:inline-block;font-size:11.5px;border-radius:5px;padding:0 6px;border:1px solid var(--borde-fuerte);
-     color:var(--tinta-2);white-space:nowrap}
-.dias{display:inline-block;min-width:44px;white-space:nowrap;text-align:center;border-radius:6px;padding:0 6px;font-weight:650;
-      font-variant-numeric:tabular-nums;background:var(--sin);color:var(--t-sin)}
-.dias.verde{background:var(--verde);color:var(--t-verde)}
-.dias.amarillo{background:var(--amarillo);color:var(--t-amarillo)}
-.dias.rojo{background:var(--rojo);color:var(--t-rojo)}
-.ficha{position:sticky;top:12px}
-.ficha dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13.5px}
-.ficha dt{color:var(--tinta-3);font-size:12px;text-transform:uppercase;letter-spacing:.03em;padding-top:2px}
-.ficha dd{margin:0;overflow-wrap:anywhere}
-.ficha .texto{margin-top:10px;padding:9px 11px;border-radius:8px;background:var(--fondo);font-size:13.5px;white-space:pre-wrap;overflow-wrap:anywhere}
+.no{color:var(--texto-rojo);font-weight:600}
+/* La flecha que abre una lista entera y la vuelve a cerrar. */
+button.flecha{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+  margin-top:8px;padding:5px 10px 5px 8px;border-radius:8px;border:1px solid var(--borde-fuerte);font-size:13px;color:var(--tinta)}
+button.flecha:hover{border-color:var(--tinta-3)}
+button.flecha:focus-visible{outline:2px solid var(--s1);outline-offset:1px}
+button.flecha svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
+button.flecha[aria-expanded="true"] svg{transform:rotate(180deg)}
 .vacio{color:var(--tinta-3);font-size:13.5px;padding:8px 0}
 footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid var(--borde);padding-top:12px}
 #cargando{padding:40px 0;color:var(--tinta-2)}
 @media (max-width:900px){
-  .dos,.ficha-y-tabla{grid-template-columns:1fr}
-  .ficha{position:static}
+  .dos{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:700px){
   .tabla table,.tabla tbody,.tabla tr,.tabla td{display:block;width:100%}
@@ -152,13 +138,11 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   .tabla tr{border-bottom:1px solid var(--borde);padding:9px 0}
   .tabla tr:last-child{border-bottom:0}
   .tabla td{border:0;padding:2px 0;text-align:left!important;overflow-wrap:anywhere}
+  .tabla td.pos{width:auto}
   .tabla td[data-et]:not(:empty)::before{content:attr(data-et) " · ";color:var(--tinta-3);font-size:12px}
-  .barra input[type=search]{min-width:0;width:100%}
-  .barra label.busca{flex:1 1 100%}
   .barra select{max-width:100%;min-width:0}
   .barra label{flex:1 1 calc(50% - 8px)}
   .barra label select{flex:1}
-  .fb{grid-template-columns:minmax(90px,40%) 1fr}
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .kpi .vl{font-size:22px}
 }
@@ -166,11 +150,11 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
    fijo (el color va con el canal, no con su puesto). Validada con el
    comprobador de paletas en claro y en oscuro; en claro tres quedan por debajo
    de 3:1 contra el fondo, y por eso cada cifra va escrita y hay vista de tabla. */
-:root{ --k0:#2a78d6; --k1:#eb6834; --k2:#1baf7a; --k3:#eda100; --k4:#e87ba4; --rejilla:#e1e0d9; --eje:#c3c2b7; --tenue-eje:#898781; }
+:root{ --k0:#2a78d6; --k1:#eb6834; --k2:#1baf7a; --k3:#eda100; --k4:#e87ba4; --rejilla:#e1e0d9; --eje:#c3c2b7; --tenue-eje:#898781; --c-dev:#7a4e1d; }
 @media (prefers-color-scheme: dark){
-  :root:where(:not([data-theme="light"])){ --k0:#3987e5; --k1:#d95926; --k2:#199e70; --k3:#c98500; --k4:#d55181; --rejilla:#2c2c2a; --eje:#383835; }
+  :root:where(:not([data-theme="light"])){ --k0:#3987e5; --k1:#d95926; --k2:#199e70; --k3:#c98500; --k4:#d55181; --rejilla:#2c2c2a; --eje:#383835; --c-dev:#b07a3f; }
 }
-:root[data-theme="dark"]{ --k0:#3987e5; --k1:#d95926; --k2:#199e70; --k3:#c98500; --k4:#d55181; --rejilla:#2c2c2a; --eje:#383835; }
+:root[data-theme="dark"]{ --k0:#3987e5; --k1:#d95926; --k2:#199e70; --k3:#c98500; --k4:#d55181; --rejilla:#2c2c2a; --eje:#383835; --c-dev:#b07a3f; }
 .leyenda{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0 0 8px;font-size:12.5px;color:var(--tinta-2)}
 .leyenda span{display:inline-flex;align-items:center;gap:6px}
 .leyenda i{width:10px;height:10px;border-radius:3px;display:inline-block}
@@ -183,7 +167,6 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 .punta .l{display:flex;justify-content:space-between;gap:12px;font-variant-numeric:tabular-nums}
 .punta .l span:first-child{display:inline-flex;align-items:center;gap:6px;color:var(--tinta-2)}
 .punta i{width:8px;height:8px;border-radius:2px;display:inline-block}
-.fb.canal .b{background:var(--kc)}
 </style>
 <script src="/comun/preferidos.js"></script>
 </head>
@@ -206,36 +189,51 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   <div class="nota" id="aviso" hidden></div>
 
   <div id="todo" hidden>
-    <div class="hojas" role="tablist">
-      <button class="btn" type="button" role="tab" data-h="panel">Panel de control</button>
-      <button class="btn" type="button" role="tab" data-h="pendientes">Sin cerrar</button>
-    </div>
-
     <div class="barra">
-      <label class="solo-panel">Periodo <select id="periodo">
+      <label>Periodo <select id="periodo">
         <option value="mes">Mes corriente</option>
         <option value="ultimo">Último mes</option>
         <option value="tres">Últimos 3 meses</option>
         <option value="anio">Último año</option>
         <option value="libre">Intervalo libre</option>
       </select></label>
-      <label class="solo-panel libre" hidden>Desde <input type="date" id="desde"></label>
-      <label class="solo-panel libre" hidden>Hasta <input type="date" id="hasta"></label>
-      <label>Origen <select id="origen"></select></label>
-      <label>Canal <select id="canal"></select></label>
-      <label>Zona <select id="zona"></select></label>
-      <label>Delegación <select id="deleg"></select></label>
-      <label>Centro <select id="centro"></select></label>
-      <button class="btn" id="bLimpiar" type="button">Limpiar filtros</button>
+      <label class="libre" hidden>Desde <input type="date" id="desde"></label>
+      <label class="libre" hidden>Hasta <input type="date" id="hasta"></label>
+      <label class="enArea">Delegación <select id="deleg"></select></label>
+      <button class="btn enArea" id="bCsv" type="button">Descargar CSV</button>
+    </div>
+    <p class="tenue" id="rango"></p>
+
+    <div id="portada" hidden>
+      <div class="total" id="total"></div>
+      <div class="areas" id="areas"></div>
     </div>
 
-    <!-- ============================ hoja 1 ============================ -->
-    <div id="hPanel">
-      <p class="tenue" id="rango"></p>
+    <div id="vistaArea" hidden>
+      <div class="volver"><button class="btn" id="bAreas" type="button">← Todas las áreas</button><h2 id="tArea"></h2></div>
       <div class="kpis" id="kpis"></div>
 
+      <section class="caja" data-tabla="registradas">
+        <div class="cabsec" data-estrella="registradas"><h2 id="tReg">Devoluciones registradas</h2><span class="tenue" id="cReg"></span></div>
+        <p class="sub" id="sReg"></p>
+        <div class="tabla" id="tRegistradas"></div>
+      </section>
+
+      <div class="dos">
+        <section class="caja" data-tabla="maquinas">
+          <div class="cabsec" data-estrella="maquinas"><h2>Máquinas con más devoluciones</h2><span class="tenue" id="cMaq"></span></div>
+          <p class="sub">Muchas devoluciones en la misma máquina suelen apuntar al monedero, al lector de tarjetas o a un carril que no suelta el producto.</p>
+          <div class="tabla" id="tMaquinas"></div>
+        </section>
+        <section class="caja" data-tabla="importes">
+          <div class="cabsec" data-estrella="importes"><h2>Devoluciones con más importe</h2><span class="tenue" id="cImp"></span></div>
+          <p class="sub" id="sImp"></p>
+          <div class="tabla" id="tImportes"></div>
+        </section>
+      </div>
+
       <section class="caja" data-tabla="meses">
-        <div class="cabsec" data-estrella="meses"><h2>Devoluciones por mes y canal</h2>
+        <div class="cabsec" data-estrella="meses"><h2>Devoluciones por mes y tipo</h2>
           <button class="btn" id="bVista" type="button" aria-pressed="false">Ver como tabla</button></div>
         <p class="sub" id="sMeses"></p>
         <div class="leyenda" id="leyenda"></div>
@@ -243,52 +241,10 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
         <div class="tabla" id="tMeses" hidden></div>
       </section>
 
-      <div class="dos">
-        <section class="caja" data-tabla="canal">
-          <div class="cabsec" data-estrella="canal"><h2>Por canal</h2><span class="tenue">Pulsa un canal para filtrar por él</span></div>
-          <p class="sub" id="sCanal"></p>
-          <div id="gCanal"></div>
-          <div class="cabsec" style="margin-top:16px"><h2>Por origen</h2><span class="tenue">Pulsa uno para filtrar por él</span></div>
-          <p class="sub">En VenCloud están en solicitudes especiales (serie E) y en atención al cliente (serie A).</p>
-          <div id="gOrigen"></div>
-        </section>
-        <section class="caja" data-tabla="zonas">
-          <div class="cabsec" data-estrella="zonas"><h2>Por zona y delegación</h2><span class="tenue">Pulsa una delegación para filtrar</span></div>
-          <p class="sub" id="sZonas"></p>
-          <div id="gZonas"></div>
-        </section>
-      </div>
-
-      <section class="caja" data-tabla="centros">
-        <div class="cabsec" data-estrella="centros"><h2>Los 15 centros con más devoluciones</h2><span class="tenue">Pulsa un centro para filtrar por él</span></div>
-        <p class="sub">Cada canal en su columna. «Sin cerrar» son las del periodo que siguen abiertas hoy.</p>
-        <div class="tabla" id="tCentros"></div>
-      </section>
-
-      <div class="dos">
-        <section class="caja" data-tabla="maquinas">
-          <div class="cabsec" data-estrella="maquinas"><h2>Las 15 máquinas con más devoluciones</h2></div>
-          <p class="sub">Muchas devoluciones en la misma máquina suelen apuntar al monedero, al lector de tarjetas o a un carril que no suelta el producto.</p>
-          <div class="tabla" id="tMaquinas"></div>
-        </section>
-        <section class="caja" data-tabla="tecnicos">
-          <div class="cabsec" data-estrella="tecnicos"><h2>Por técnico</h2></div>
-          <p class="sub">El técnico asignado a cada devolución y lo que tarda en cerrarlas.</p>
-          <div class="tabla" id="tTecnicos"></div>
-        </section>
-      </div>
-    </div>
-
-    <!-- ============================ hoja 2 ============================ -->
-    <div id="hPendientes" hidden>
-      <section class="caja" data-tabla="pendientes">
-        <div class="cabsec" data-estrella="pendientes"><h2>Devoluciones sin cerrar</h2><span class="tenue" id="cLista"></span></div>
-        <p class="sub">Todas las que siguen abiertas hoy, sean de cuando sean, la que más lleva esperando primero.</p>
-        <div class="barra" style="margin-top:0">
-          <label class="busca">Buscar <input id="busca" type="search" placeholder="Nº, máquina, centro, técnico…"></label>
-          <button class="btn" id="bCsv" type="button">Descargar CSV</button>
-        </div>
-        <div class="tabla" id="tLista"></div>
+      <section class="caja" data-tabla="clientes">
+        <div class="cabsec" data-estrella="clientes"><h2>Clientes con más devoluciones</h2><span class="tenue" id="cCli"></span></div>
+        <p class="sub">Cada cliente con sus centros del área. Lo devuelto es lo de sus devoluciones abonadas.</p>
+        <div class="tabla" id="tClientes"></div>
       </section>
     </div>
   </div>
@@ -300,10 +256,20 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 /* ===================================================================
    Devoluciones · digivend.es  (docs/57)
 
-   Lo que abre el cuadrado de Devoluciones del informe general: las
-   devoluciones de dinero de la SAT, que Gabriele sacó del estudio de
-   incidencias el 16-oct-2026 para verlas aparte. Se cuentan devoluciones, no
-   euros: VenCloud no guarda el importe en ningún campo.
+   Lo que abre el cuadrado de Devoluciones del informe general, por áreas,
+   como lo pidió Gabriele el 20-oct-2026:
+
+   · La portada: el dinero devuelto en toda España y un cuadrante por área
+     (Centro, Sur, Cataluña, Levante, Norte) con el suyo.
+   · Dentro de un área, con filtro por delegación: las devoluciones
+     registradas (las 10 últimas; la flecha abre todas), las 5 máquinas con
+     más devoluciones y las 5 devoluciones con más importe (la flecha abre
+     todas), el gráfico por mes y canal, y los 5 clientes con más.
+
+   Las devoluciones son las de la Gestión de Devoluciones de VenCloud (M16),
+   con su importe en un campo y su estado. El dinero devuelto es el de las
+   abonadas; lo de las que siguen en estudio o pendientes se dice aparte. Un
+   importe por encima del tope (importe_max) se enseña, pero no suma.
 
    El fichero ya llega con el ámbito del perfil aplicado: lo escribió la noche
    para este perfil, y la API no deja pedir otro. Esta página no decide qué
@@ -313,10 +279,13 @@ const CLAVE_TEMA = "digivend.tema";
 const nf = new Intl.NumberFormat("es-ES");
 const num = n => nf.format(Math.round(n||0));
 const dec = (n, d=1) => n==null ? "—" : new Intl.NumberFormat("es-ES",{maximumFractionDigits:d, minimumFractionDigits:0}).format(n);
-const fpct = p => p==null ? "—" : dec(p) + " %";
+const eur = n => new Intl.NumberFormat("es-ES",{style:"currency", currency:"EUR"}).format(n||0);
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const $ = s => document.querySelector(s);
-const PRIMERAS = 100;
+const ORDEN_AREAS = ["Centro", "Sur", "Cataluña", "Levante", "Norte", "Otra zona"];
+/* Cuántas se ven antes de pulsar la flecha. */
+const PRIMERAS = {registradas:10, maquinas:5, importes:5, clientes:5};
+const FLECHA = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 6l4.5 4.5L12.5 6"/></svg>';
 
 function leer(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
 function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
@@ -331,6 +300,7 @@ function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
   b.addEventListener("click", ()=>{
     const n = oscuro() ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
+    if(AREA && !TABLA) pintaMeses();
   });
 })();
 $("#bSalir").addEventListener("click", async ()=>{
@@ -338,7 +308,11 @@ $("#bSalir").addEventListener("click", async ()=>{
   location.href = "/";
 });
 
-let D = null, DEV = [], HOJA = "panel", TODAS_FILAS = false, TABLA = false;
+/* AREA: "" es la portada; "*" son todas las áreas juntas (un perfil de una
+   sola área, o la vista suelta de preferidos). VER: la cifra que filtra la
+   lista de registradas. ABIERTAS: las listas con la flecha abierta. */
+let D = null, DEV = [], AREA = "", VER = "", TABLA = false, VARIAS_AREAS = false, TOPE = 50;
+const ABIERTAS = new Set();
 /* Las tablas que el administrador le quitó a este usuario (docs/61). */
 let QUITADAS = new Set();
 
@@ -376,120 +350,215 @@ function periodo(){
   return {d, h, pd: sumaDias(d, -largo), ph: sumaDias(d, -1), nombre:`los ${num(largo)} días de antes`};
 }
 
-/* ------------------------------------------------------------ filtros */
-const abierta = r => !("x" in r);
+/* ------------------------------------------------------------ las filas */
 const fila = r => r._;
+const abierta = r => ["En estudio", "Pendiente", "Sin estado"].includes(fila(r).estado);
+const abonada = r => fila(r).estado === "Abonada";
+const rechazada = r => fila(r).estado === "Rechazada";
+/* Lo devuelto de una devolución: su importe si está abonada. */
+const devuelto = r => abonada(r) ? (r.i || 0) : 0;
 function prepara(){
   DEV = (D.devoluciones||[]).map(r => {
     const c = D.centros[r.c] || [], dl = D.delegaciones[r.d] || "";
     r._ = {dia: r.a.slice(0,10), mes: r.a.slice(0,7), deleg: dl, zona: (D.zonas||{})[dl] || "Otra zona",
            num_centro: c[0]||"", centro: c[1]||"", cod_cliente: c[2]||"", cliente: c[3]||"",
-           canal: (D.canales||[])[r.k] || "Otra", tecnico: (D.tecnicos||[])[r.t] || "",
-           origen: (D.origenes||["Atención al cliente","Solicitud especial"])[r.e ? 1 : 0]};
+           canal: (D.tipos||[])[r.k] || "Sin tipo", estado: (D.estados||[])[r.s] || "Sin estado",
+           motivo: (D.motivos||[])[r.o] || ""};
     return r;
   });
+  /* Los cinco tipos con más devoluciones llevan su color, siempre el mismo;
+     los demás, gris. */
+  const n = new Map();
+  DEV.forEach(r => n.set(fila(r).canal, (n.get(fila(r).canal)||0)+1));
+  ORDEN_TIPOS = [...n].sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
 }
-const colorCanal = k => `var(--k${Math.max(0, (D.canales||[]).indexOf(k))})`;
-function enLugar(r){
-  const o = $("#origen").value, k = $("#canal").value, z = $("#zona").value, dl = $("#deleg").value, c = $("#centro").value, x = fila(r);
-  return (!o || x.origen===o) && (!k || x.canal===k) && (!z || x.zona===z) && (!dl || x.deleg===dl) && (!c || x.num_centro===c);
-}
+let ORDEN_TIPOS = [];
+const colorCanal = k => { const i = ORDEN_TIPOS.indexOf(k); return i >= 0 && i < 5 ? `var(--k${i})` : "var(--tinta-3)"; };
+const deArea = r => AREA === "*" || fila(r).zona === AREA;
+const enLugar = r => deArea(r) && (!$("#deleg").value || fila(r).deleg === $("#deleg").value);
 const entre = (r, d, h) => fila(r).dia >= d && fila(r).dia <= h;
+const euros = lista => lista.reduce((s, r) => s + devuelto(r), 0);
+const eurosDe = lista => lista.reduce((s, r) => s + (r.i || 0), 0);
 
-function opciones(sel, valores, todas, etiqueta){
-  const antes = sel.value;
-  sel.innerHTML = `<option value="">${esc(todas)}</option>` + valores.map(v =>
-    `<option value="${esc(v[0])}">${esc(etiqueta ? etiqueta(v) : v[1])}</option>`).join("");
-  sel.value = valores.some(v => String(v[0])===antes) ? antes : "";
+/* El importe de una devolución: el que suma si está abonada, el de por encima
+   del tope (no suma) o ninguno. */
+function textoImporte(r){
+  if(r.i != null) return abonada(r) ? eur(r.i) : `<span class="tenue" title="No está abonada: no suma al dinero devuelto">${esc(eur(r.i))}</span>`;
+  if(r.g != null) return `<span class="tenue" title="En VenCloud: ${esc(eur(r.g))}. Por encima de ${esc(eur(TOPE))} no se suma: en una máquina de vending es casi seguro un error al teclear.">${esc(eur(r.g))} · no suma</span>`;
+  return `<span class="tenue">sin importe</span>`;
 }
-function pintaFiltros(){
-  const origenes = [...new Set(DEV.map(r=>fila(r).origen))].sort((a,b)=>a.localeCompare(b,"es"));
-  opciones($("#origen"), origenes.map(o=>[o,o]), "Todos");
-  const hay = new Set(DEV.map(r=>fila(r).canal));
-  opciones($("#canal"), (D.canales||[]).filter(k=>hay.has(k)).map(k=>[k,k]), "Todos");
-  const zonas = [...new Set(DEV.map(r=>fila(r).zona))].sort((a,b)=>a.localeCompare(b,"es"));
-  opciones($("#zona"), zonas.map(z=>[z,z]), "Todas");
-  const z = $("#zona").value;
-  const delegs = [...new Set(DEV.filter(r=>!z || fila(r).zona===z).map(r=>fila(r).deleg))].filter(Boolean)
-    .sort((a,b)=>a.localeCompare(b,"es"));
-  opciones($("#deleg"), delegs.map(d=>[d,d]), "Todas");
-  const dl = $("#deleg").value, centros = new Map();
-  DEV.forEach(r => { const x = fila(r);
-    if((!z || x.zona===z) && (!dl || x.deleg===dl) && x.num_centro) centros.set(x.num_centro, x.centro); });
-  opciones($("#centro"), [...centros].sort((a,b)=>a[1].localeCompare(b[1],"es")), "Todos",
-    v => `${v[1]} (${v[0]})`);
-}
+const CLASE_ESTADO = {"Abonada":"tenue", "Rechazada":"tenue", "En estudio":"no", "Pendiente":"no", "Sin estado":"no"};
 
-/* ------------------------------------------------------------ hoja 1 */
-function mediana(xs){
-  const s = xs.slice().sort((a,b)=>a-b);
-  return s.length ? (s.length%2 ? s[(s.length-1)/2] : (s[s.length/2-1]+s[s.length/2])/2) : null;
+/* La flecha que abre la lista entera, y la vuelve a cerrar. */
+function flecha(id, total){
+  if(total <= PRIMERAS[id]) return "";
+  const abierta = ABIERTAS.has(id);
+  return `<button class="flecha" type="button" data-flecha="${id}" aria-expanded="${abierta}">${FLECHA}${
+    abierta ? `Ver solo ${num(PRIMERAS[id])}` : `Ver todas (${num(total)})`}</button>`;
 }
-function medidas(lista){
-  const hs = lista.filter(r=>r.h!=null).map(r=>r.h);
-  const porMaq = new Map();
-  lista.forEach(r => { if(r.m) porMaq.set(r.m, (porMaq.get(r.m)||0)+1); });
-  return {
-    total: lista.length,
-    sin_cerrar: lista.filter(abierta).length,
-    mediana: mediana(hs),
-    media: hs.length ? hs.reduce((a,b)=>a+b,0)/hs.length : null,
-    con_horas: hs.length,
-    maquinas: porMaq.size,
-    repetidas: [...porMaq.values()].filter(n=>n>=3).length,
-  };
+function atiendeFlechas(caja){
+  caja.querySelectorAll("button.flecha").forEach(b=>b.addEventListener("click", ()=>{
+    const id = b.dataset.flecha;
+    if(ABIERTAS.has(id)) ABIERTAS.delete(id); else ABIERTAS.add(id);
+    pintaArea();
+  }));
 }
-/* La flecha dice hacia donde va; el color, si es para bien. Mas devoluciones,
-   mas horas o mas maquinas es peor. */
-function delta(actual, previo){
-  if(actual==null || previo==null) return `<div class="dl tenue">sin periodo anterior con que comparar</div>`;
-  if(!previo) return `<div class="dl tenue">el periodo anterior está a cero</div>`;
+const corta = (id, lista) => ABIERTAS.has(id) ? lista : lista.slice(0, PRIMERAS[id]);
+
+/* La flecha del delta dice hacia donde va; el color, si es para bien. Más
+   devoluciones o más dinero devuelto es peor. */
+function delta(actual, previo, p){
+  if(previo==null) return `<div class="dl tenue">sin periodo anterior con que comparar</div>`;
+  if(!previo) return `<div class="dl tenue">${actual ? "el periodo anterior está a cero" : "igual que el periodo anterior"}</div>`;
   const v = 100*(actual-previo)/previo;
-  if(Math.abs(v) < 0.05) return `<div class="dl">= igual que ${esc(periodo().nombre)}</div>`;
-  return `<div class="dl"><span class="${v<0?"mejor":"peor"}">${v>0?"▲":"▼"} ${dec(Math.abs(v))} %</span> contra ${esc(periodo().nombre)}</div>`;
+  if(Math.abs(v) < 0.05) return `<div class="dl">= igual que ${esc(p.nombre)}</div>`;
+  return `<div class="dl"><span class="${v<0?"mejor":"peor"}">${v>0?"▲":"▼"} ${dec(Math.abs(v))} %</span> contra ${esc(p.nombre)}</div>`;
 }
-function pintaPanel(){
+
+function pintaRango(){
   const p = periodo(), desde = D.desde || p.d;
-  const lugar = DEV.filter(enLugar);
-  const ahora = lugar.filter(r=>entre(r, p.d, p.h));
-  const hayPrevio = p.pd >= desde;
-  const antes = hayPrevio ? lugar.filter(r=>entre(r, p.pd, p.ph)) : null;
-  const a = medidas(ahora), b = antes ? medidas(antes) : {};
   $("#rango").textContent = `Del ${fechaCorta(p.d)} al ${fechaCorta(p.h)}, por la fecha en que entró cada devolución.`
     + (p.d < desde ? ` Ojo: los datos empiezan el ${fechaCorta(desde)}.` : "");
-  const kpi = (et, vl, nt, dl) => `<div class="kpi"><div class="et">${esc(et)}</div>
-    <div class="vl">${vl}</div><div class="nt">${nt}</div>${dl||""}</div>`;
-  const pendientesHoy = lugar.filter(abierta).length;
+}
+
+/* ------------------------------------------------------------ portada */
+function pintaPortada(){
+  const p = periodo(), hayPrevio = p.pd >= (D.desde || p.d);
+  const ahora = DEV.filter(r=>entre(r, p.d, p.h));
+  const antes = hayPrevio ? DEV.filter(r=>entre(r, p.pd, p.ph)) : null;
+  const por = {};
+  ahora.forEach(r=>{ const a = por[fila(r).zona] = por[fila(r).zona] || {n:0, e:0, abonadas:0, abiertas:0};
+    a.n++; a.e += devuelto(r); if(abonada(r)) a.abonadas++; if(abierta(r)) a.abiertas++; });
+  const prev = {};
+  (antes||[]).forEach(r=>{ prev[fila(r).zona] = (prev[fila(r).zona]||0) + devuelto(r); });
+  /* Las áreas del perfil, aunque en el periodo no tengan ninguna. */
+  [...new Set(DEV.map(r=>fila(r).zona))].forEach(z=>{ por[z] = por[z] || {n:0, e:0, abonadas:0, abiertas:0}; });
+  const abiertasT = ahora.filter(abierta);
+  $("#total").innerHTML = `<span class="vl">${esc(eur(euros(ahora)))}</span>
+    <span class="nt">devueltos en ${num(ahora.filter(abonada).length)} abonadas de ${num(ahora.length)} ${ahora.length===1?"devolución":"devoluciones"}`
+    + (abiertasT.length ? ` · ${num(abiertasT.length)} sin resolver (${esc(eur(eurosDe(abiertasT)))})` : "") + `</span>`
+    + delta(euros(ahora), antes ? euros(antes) : null, p).replace('class="dl', 'class="nt dl');
+  const areas = Object.keys(por).sort((a,b)=>ORDEN_AREAS.indexOf(a)-ORDEN_AREAS.indexOf(b) || a.localeCompare(b,"es"));
+  $("#areas").innerHTML = areas.map(a=>{ const x = por[a];
+    return `<button class="area" type="button" data-area="${esc(a)}">
+      <div class="nom">${esc(a)}</div>
+      <div class="pc">${esc(eur(x.e))}</div>
+      <div class="nt">${num(x.n)} ${x.n===1?"devolución":"devoluciones"} · ${num(x.abonadas)} ${x.abonadas===1?"abonada":"abonadas"}</div>
+      <div class="nt">${x.abiertas ? `${num(x.abiertas)} sin resolver` : "ninguna sin resolver"}${
+        antes ? ` · ${esc(eur(prev[a]||0))} antes` : ""}</div>
+    </button>`; }).join("") || `<p class="vacio">Ninguna devolución en tu ámbito.</p>`;
+  $("#areas").querySelectorAll("button.area").forEach(b=>b.addEventListener("click", ()=>abreArea(b.dataset.area)));
+}
+
+/* ------------------------------------------------------------ un área */
+function delPeriodo(){ const p = periodo(); return DEV.filter(r=>enLugar(r) && entre(r, p.d, p.h)); }
+
+function kpis(){
+  const p = periodo(), hayPrevio = p.pd >= (D.desde || p.d);
+  const ahora = delPeriodo(), antes = hayPrevio ? DEV.filter(r=>enLugar(r) && entre(r, p.pd, p.ph)) : null;
+  const abiertas = ahora.filter(abierta), rech = ahora.filter(rechazada), abon = ahora.filter(abonada);
+  const grandes = ahora.filter(r=>r.g!=null).length;
+  const kpi = (id, et, vl, nt, dl) => `<button class="kpi" type="button" data-ver="${id}" aria-pressed="${VER===id}">
+    <div class="et">${esc(et)}</div><div class="vl">${vl}</div><div class="nt">${nt}</div>${dl||""}</button>`;
   $("#kpis").innerHTML =
-    kpi("Devoluciones", num(a.total), "entradas en el periodo", delta(a.total, antes ? b.total : null))
-    + kpi("Sin cerrar", num(a.sin_cerrar), `de las del periodo · ${num(pendientesHoy)} en total hoy`,
-          `<div class="dl tenue">${a.total ? fpct(100*a.sin_cerrar/a.total) + " de las del periodo" : ""}</div>`)
-    + kpi("Tiempo hasta cerrar", a.mediana==null ? "—" : `${dec(a.mediana)} h`,
-          a.media==null ? "mediana de las cerradas con hora" : `mediana · la media es ${dec(a.media)} h`,
-          delta(a.mediana, antes ? b.mediana : null))
-    + kpi("Máquinas", num(a.maquinas), `con alguna devolución · ${num(a.repetidas)} con 3 o más`,
-          delta(a.maquinas, antes ? b.maquinas : null));
-  pintaMeses(lugar, p);
-  pintaCanal(ahora);
-  pintaZonas(ahora);
-  pintaCentros(ahora);
-  pintaMaquinas(ahora);
-  pintaTecnicos(ahora);
+    `<div class="kpi"><div class="et">Dinero devuelto</div><div class="vl">${esc(eur(euros(ahora)))}</div><div class="nt">${
+        abon.length ? `de ${num(abon.length)} abonadas · media de ${esc(eur(euros(ahora) / Math.max(1, abon.filter(r=>r.i!=null).length)))}` : "ninguna abonada en el periodo"}${
+        grandes ? ` · ${num(grandes)} de más de ${esc(eur(TOPE))} no suman` : ""}</div>${
+        delta(euros(ahora), antes ? euros(antes) : null, p)}</div>`
+    + kpi("", "Devoluciones", num(ahora.length), "registradas en el periodo",
+        delta(ahora.length, antes ? antes.length : null, p))
+    + kpi("abiertas", "Sin resolver", `<span class="${abiertas.length ? "no" : ""}">${num(abiertas.length)}</span>`,
+        abiertas.length ? `en estudio o pendientes · ${esc(eur(eurosDe(abiertas)))}` : "ninguna en estudio ni pendiente")
+    + kpi("rechazadas", "Rechazadas", num(rech.length),
+        rech.length ? `${esc(eur(eurosDe(rech)))} que no se devolvieron` : "ninguna rechazada");
+  $("#kpis").querySelectorAll("button.kpi").forEach(b=>b.addEventListener("click", ()=>{
+    VER = (VER === b.dataset.ver) ? "" : b.dataset.ver; ABIERTAS.delete("registradas"); pintaArea(); }));
 }
 
-/* Las barras horizontales: una serie, el numero siempre escrito al lado. */
-function barras(filas, max, attr, elegido, color){
-  return `<div class="barras">${filas.map(([clave, nombre, n, titulo, extra])=>
-    `<button type="button" class="fb${color?" canal":""}${clave===elegido?" elegida":""}" ${attr}="${esc(clave)}" title="${esc(titulo||nombre)}: ${num(n)}"
-      ${color ? `style="--kc:${color(clave)}"` : ""}>
-      <span class="nom">${esc(nombre)}</span>
-      <span class="pis"><span class="b" style="width:${max ? Math.max(.5, 100*n/max) : 0}%"></span><span class="v">${num(n)}${extra||""}</span></span>
-    </button>`).join("")}</div>`;
+const TITULO_REG = {"":"Devoluciones registradas",
+  abiertas:"Devoluciones sin resolver", rechazadas:"Devoluciones rechazadas"};
+function filasRegistradas(){
+  return delPeriodo().filter(r => VER==="abiertas" ? abierta(r) : VER==="rechazadas" ? rechazada(r) : true)
+    .sort((a,b)=>b.a.localeCompare(a.a));
+}
+function pintaRegistradas(){
+  const fs = filasRegistradas();
+  $("#tReg").textContent = TITULO_REG[VER];
+  $("#cReg").textContent = `${num(fs.length)} ${fs.length===1?"devolución":"devoluciones"}`;
+  $("#sReg").textContent = `La última primero. Se ven las ${num(PRIMERAS.registradas)} últimas; la flecha abre todas.`
+    + (VER ? " Vuelve a pulsar la cifra de arriba para ver todas las del periodo." : "");
+  if(!fs.length){ $("#tRegistradas").innerHTML = `<p class="vacio">Ninguna con estos filtros.</p>`; return; }
+  $("#tRegistradas").innerHTML = `<table><thead><tr><th>Fecha</th><th>Nº</th><th>Máquina</th><th>Centro</th><th>Tipo</th><th class="n">Importe</th><th>Estado</th></tr></thead><tbody>
+    ${corta("registradas", fs).map(r=>{ const x = fila(r);
+      return `<tr><td data-et="Fecha">${esc(fechaHora(r.a))}</td><td data-et="Nº"><span class="mat">${esc(r.n)}</span></td>
+        <td data-et="Máquina"><span class="mat">${esc(r.m)}</span></td>
+        <td data-et="Centro">${esc(x.centro)}<br><span class="tenue">${esc(x.cliente)} · ${esc(x.deleg)}</span></td>
+        <td data-et="Tipo"><span class="leyenda" style="margin:0"><span><i style="background:${colorCanal(x.canal)}"></i>${esc(x.canal)}</span></span>${
+          x.motivo ? `<br><span class="tenue">${esc(x.motivo)}</span>` : ""}</td>
+        <td class="n" data-et="Importe">${textoImporte(r)}</td>
+        <td data-et="Estado"><span class="${CLASE_ESTADO[x.estado]||""}">${esc(x.estado)}</span></td></tr>`; }).join("")}
+    </tbody></table>` + flecha("registradas", fs.length);
+  atiendeFlechas($("#tRegistradas"));
 }
 
-/* ---- el grafico de meses: columnas apiladas por canal, una por mes de los
-   trece que trae el fichero. Respeta canal y lugar, no el periodo: es la
-   historia entera, con el periodo elegido marcado debajo. */
+function pintaMaquinas(){
+  const m = new Map();
+  delPeriodo().filter(r=>r.m).forEach(r => { const x = fila(r);
+    const v = m.get(r.m) || {m:r.m, centro:x.centro, cliente:x.cliente, deleg:x.deleg, total:0, e:0, abiertas:0, ultima:"", k:new Map()};
+    v.total++; v.e += devuelto(r); if(abierta(r)) v.abiertas++; if(r.a > v.ultima) v.ultima = r.a;
+    v.k.set(x.canal, (v.k.get(x.canal)||0)+1); m.set(r.m, v); });
+  const fs = [...m.values()].sort((a,b)=>b.total-a.total || b.e-a.e || b.ultima.localeCompare(a.ultima));
+  $("#cMaq").textContent = `${num(fs.length)} ${fs.length===1?"máquina":"máquinas"}`;
+  if(!fs.length){ $("#tMaquinas").innerHTML = `<p class="vacio">Ninguna devolución con estos filtros.</p>`; return; }
+  $("#tMaquinas").innerHTML = `<table><thead><tr><th></th><th>Máquina</th><th>Centro</th><th class="n">Devoluciones</th><th class="n">Devuelto</th></tr></thead><tbody>
+    ${corta("maquinas", fs).map((v,i)=>{ const k = [...v.k].sort((a,b)=>b[1]-a[1])[0];
+      return `<tr><td class="pos">${num(i+1)}</td><td data-et="Máquina"><span class="mat">${esc(v.m)}</span></td>
+      <td data-et="Centro">${esc(v.centro)}<br><span class="tenue">${esc(v.deleg)} · sobre todo ${esc(k[0].toLowerCase())} · la última el ${esc(fechaCorta(v.ultima))}</span></td>
+      <td class="n" data-et="Devoluciones"><b>${num(v.total)}</b></td>
+      <td class="n" data-et="Devuelto">${esc(eur(v.e))}${v.abiertas ? `<br><span class="tenue">${num(v.abiertas)} sin resolver</span>` : ""}</td></tr>`; }).join("")}
+    </tbody></table>` + flecha("maquinas", fs.length);
+  atiendeFlechas($("#tMaquinas"));
+}
+
+function pintaImportes(){
+  const todas = delPeriodo();
+  const fs = todas.filter(r=>abonada(r) && r.i!=null).sort((a,b)=>b.i-a.i || b.a.localeCompare(a.a));
+  const grandes = todas.filter(r=>r.g!=null).sort((a,b)=>b.g-a.g);
+  $("#cImp").textContent = `${num(fs.length)} abonadas`;
+  $("#sImp").textContent = "De mayor a menor, las abonadas con su importe."
+    + (grandes.length ? ` ${num(grandes.length)} más ${grandes.length===1?"tiene":"tienen"} un importe de más de ${eur(TOPE)} en VenCloud y no se ${grandes.length===1?"cuenta":"cuentan"} aquí: es casi seguro un error al teclear. Salen en la lista de registradas.` : "");
+  if(!fs.length){ $("#tImportes").innerHTML = `<p class="vacio">Ninguna abonada con estos filtros.</p>`; return; }
+  $("#tImportes").innerHTML = `<table><thead><tr><th></th><th>Fecha</th><th>Máquina</th><th>Centro</th><th class="n">Importe</th></tr></thead><tbody>
+    ${corta("importes", fs).map((r,i)=>{ const x = fila(r);
+      return `<tr><td class="pos">${num(i+1)}</td><td data-et="Fecha">${esc(fechaCorta(r.a))}<br><span class="tenue mat">${esc(r.n)}</span></td>
+      <td data-et="Máquina"><span class="mat">${esc(r.m)}</span></td>
+      <td data-et="Centro">${esc(x.centro)}<br><span class="tenue">${esc(x.canal)}</span></td>
+      <td class="n" data-et="Importe"><b>${esc(eur(r.i))}</b></td></tr>`; }).join("")}
+    </tbody></table>` + flecha("importes", fs.length);
+  atiendeFlechas($("#tImportes"));
+}
+
+function pintaClientes(){
+  const m = new Map();
+  delPeriodo().forEach(r => { const x = fila(r), clave = x.cod_cliente || x.cliente;
+    const v = m.get(clave) || {cliente:x.cliente || "Sin cliente", total:0, e:0, abiertas:0, centros:new Set(), maquinas:new Set()};
+    v.total++; v.e += devuelto(r); if(abierta(r)) v.abiertas++; if(x.num_centro) v.centros.add(x.num_centro); if(r.m) v.maquinas.add(r.m);
+    m.set(clave, v); });
+  const fs = [...m.values()].sort((a,b)=>b.total-a.total || b.e-a.e || a.cliente.localeCompare(b.cliente,"es"));
+  $("#cCli").textContent = `${num(fs.length)} ${fs.length===1?"cliente":"clientes"}`;
+  if(!fs.length){ $("#tClientes").innerHTML = `<p class="vacio">Ninguna devolución con estos filtros.</p>`; return; }
+  $("#tClientes").innerHTML = `<table><thead><tr><th></th><th>Cliente</th><th class="n">Devoluciones</th><th class="n">Devuelto</th><th class="n">Centros</th><th class="n">Máquinas</th></tr></thead><tbody>
+    ${corta("clientes", fs).map((v,i)=>`<tr><td class="pos">${num(i+1)}</td><td data-et="Cliente">${esc(v.cliente)}</td>
+      <td class="n" data-et="Devoluciones"><b>${num(v.total)}</b></td>
+      <td class="n" data-et="Devuelto">${esc(eur(v.e))}${v.abiertas ? `<br><span class="tenue">${num(v.abiertas)} sin resolver</span>` : ""}</td>
+      <td class="n" data-et="Centros">${num(v.centros.size)}</td><td class="n" data-et="Máquinas">${num(v.maquinas.size)}</td></tr>`).join("")}
+    </tbody></table>` + flecha("clientes", fs.length);
+  atiendeFlechas($("#tClientes"));
+}
+
+/* ---- el grafico de meses: columnas apiladas por tipo de devolución, una por mes de los
+   trece que trae el fichero. Respeta el área y la delegación, no el periodo:
+   es la historia entera, con el periodo elegido marcado debajo. */
 function meses(){
   const out = [], fin = D.ultimo_dia.slice(0,7);
   let m = (D.desde || inicioMes(D.ultimo_dia, 12)).slice(0,7);
@@ -509,23 +578,24 @@ function colTop(x, y, w, h, r){
   r = Math.min(r, w/2, h);
   return `M${x},${y+h}V${y+r}Q${x},${y} ${x+r},${y}H${x+w-r}Q${x+w},${y} ${x+w},${y+r}V${y+h}Z`;
 }
-function pintaMeses(lugar, p){
-  const ms = meses(), canales = D.canales || [];
-  const cuenta = new Map(ms.map(m=>[m, new Map()]));
+function pintaMeses(){
+  const p = periodo(), lugar = DEV.filter(enLugar);
+  const ms = meses(), canales = ORDEN_TIPOS;
+  const cuenta = new Map(ms.map(m=>[m, new Map()])), dinero = new Map(ms.map(m=>[m, 0]));
   /* Hasta ayer, como las cifras de arriba: la foto de la noche ya trae las de hoy. */
   lugar.forEach(r => { const x = fila(r), c = cuenta.get(x.mes);
-    if(c && x.dia <= D.ultimo_dia) c.set(x.canal, (c.get(x.canal)||0)+1); });
+    if(c && x.dia <= D.ultimo_dia){ c.set(x.canal, (c.get(x.canal)||0)+1); dinero.set(x.mes, dinero.get(x.mes) + devuelto(r)); } });
   const usados = canales.filter(k => ms.some(m => cuenta.get(m).get(k)));
   const totales = ms.map(m => [...cuenta.get(m).values()].reduce((a,b)=>a+b,0));
   const parcial = D.ultimo_dia.slice(0,7);
-  $("#sMeses").textContent = `${num(totales.reduce((a,b)=>a+b,0))} devoluciones en ${num(ms.length)} meses. `
+  $("#sMeses").textContent = `${num(totales.reduce((a,b)=>a+b,0))} devoluciones y ${eur([...dinero.values()].reduce((a,b)=>a+b,0))} en ${num(ms.length)} meses. `
     + `${nombreMes(parcial, true).replace(/^./, c=>c.toUpperCase())} va hasta el ${fechaCorta(D.ultimo_dia)}. Pasa por encima de una columna para ver su reparto.`;
   $("#leyenda").innerHTML = usados.map(k => `<span><i style="background:${colorCanal(k)}"></i>${esc(k)}</span>`).join("");
   /* La vista de tabla: la misma cifra, para quien no distingue los colores. */
-  $("#tMeses").innerHTML = `<table><thead><tr><th>Mes</th>${usados.map(k=>`<th class="n">${esc(k)}</th>`).join("")}<th class="n">Total</th></tr></thead><tbody>
+  $("#tMeses").innerHTML = `<table><thead><tr><th>Mes</th>${usados.map(k=>`<th class="n">${esc(k)}</th>`).join("")}<th class="n">Total</th><th class="n">Devuelto</th></tr></thead><tbody>
     ${ms.map((m,i)=>`<tr><td data-et="Mes">${esc(nombreMes(m, true))}${m===parcial?" <span class=\"tenue\">(hasta ayer)</span>":""}</td>
       ${usados.map(k=>`<td class="n" data-et="${esc(k)}">${num(cuenta.get(m).get(k)||0)}</td>`).join("")}
-      <td class="n" data-et="Total"><b>${num(totales[i])}</b></td></tr>`).join("")}</tbody></table>`;
+      <td class="n" data-et="Total"><b>${num(totales[i])}</b></td><td class="n" data-et="Devuelto">${esc(eur(dinero.get(m)))}</td></tr>`).join("")}</tbody></table>`;
   $("#gMeses").hidden = TABLA; $("#tMeses").hidden = !TABLA;
   $("#bVista").textContent = TABLA ? "Ver como gráfico" : "Ver como tabla";
   $("#bVista").setAttribute("aria-pressed", String(TABLA));
@@ -537,7 +607,7 @@ function pintaMeses(lugar, p){
   const banda = ancho / ms.length, w = Math.max(6, Math.min(44, banda * 0.62));
   const y = v => arr + alto - alto * v / tope;
   const movil = W < 520;
-  let svg = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Devoluciones por mes y canal">`;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Devoluciones por mes y tipo">`;
   tk.forEach(v => { svg += `<line x1="${izq}" x2="${W-der}" y1="${y(v)}" y2="${y(v)}" style="stroke:${v?"var(--rejilla)":"var(--eje)"}" stroke-width="1"/>`
     + `<text x="${izq-6}" y="${y(v)+4}" text-anchor="end" font-size="11" style="fill:var(--tenue-eje)">${num(v)}</text>`; });
   ms.forEach((m, i) => {
@@ -556,7 +626,7 @@ function pintaMeses(lugar, p){
     if(mostrar) svg += `<text x="${cx}" y="${H-abj+15}" text-anchor="middle" font-size="11" style="fill:${enPeriodo?"var(--tinta)":"var(--tenue-eje)"}"${enPeriodo?' font-weight="600"':""}>${esc(nombreMes(m))}</text>`;
     if(mostrar && (i === 0 || m.endsWith("-01"))) svg += `<text x="${cx}" y="${H-abj+28}" text-anchor="middle" font-size="10.5" style="fill:var(--tenue-eje)">${m.slice(0,4)}</text>`;
     if(enPeriodo) svg += `<rect x="${izq + banda*i + 1}" y="${H-abj+2}" width="${banda-2}" height="2" rx="1" style="fill:var(--s1)"/>`;
-    svg += `<rect class="golpe" data-i="${i}" x="${izq + banda*i}" y="${arr}" width="${banda}" height="${alto}" fill="transparent" tabindex="0" aria-label="${esc(nombreMes(m, true))}: ${num(totales[i])} devoluciones"/>`;
+    svg += `<rect class="golpe" data-i="${i}" x="${izq + banda*i}" y="${arr}" width="${banda}" height="${alto}" fill="transparent" tabindex="0" aria-label="${esc(nombreMes(m, true))}: ${num(totales[i])} devoluciones, ${esc(eur(dinero.get(m)))}"/>`;
   });
   svg += `</svg><div class="punta" id="punta" hidden></div>`;
   caja.innerHTML = svg;
@@ -565,7 +635,8 @@ function pintaMeses(lugar, p){
     const i = +el.dataset.i, m = ms[i], c = cuenta.get(m);
     punta.innerHTML = `<b>${esc(nombreMes(m, true))}${m===parcial ? " (hasta ayer)" : ""}</b>`
       + usados.filter(k=>c.get(k)).map(k=>`<div class="l"><span><i style="background:${colorCanal(k)}"></i>${esc(k)}</span><span>${num(c.get(k))}</span></div>`).join("")
-      + `<div class="l" style="margin-top:3px"><span>Total</span><span><b style="display:inline">${num(totales[i])}</b></span></div>`;
+      + `<div class="l" style="margin-top:3px"><span>Total</span><span><b style="display:inline">${num(totales[i])}</b></span></div>`
+      + `<div class="l"><span>Devuelto</span><span>${esc(eur(dinero.get(m)))}</span></div>`;
     punta.hidden = false;
     const cx = izq + banda*i + banda/2, pw = punta.offsetWidth;
     punta.style.left = `${Math.min(Math.max(0, cx - pw/2), W - pw)}px`;
@@ -577,150 +648,57 @@ function pintaMeses(lugar, p){
   });
 }
 
-function pintaCanal(lista){
-  const por = new Map();
-  lista.forEach(r => { const k = fila(r).canal; por.set(k, (por.get(k)||0)+1); });
-  const filas = (D.canales||[]).filter(k=>por.get(k)).map(k=>[k, k, por.get(k), k,
-    ` · ${fpct(100*por.get(k)/lista.length)}`]);
-  $("#sCanal").textContent = lista.length ? "Cómo se le devolvió el dinero a cada usuario." : "";
-  $("#gCanal").innerHTML = filas.length
-    ? barras(filas, Math.max(...filas.map(f=>f[2])), "data-k", $("#canal").value, colorCanal)
-    : `<p class="vacio">Ninguna devolución con estos filtros.</p>`;
-  $("#gCanal").querySelectorAll(".fb").forEach(b=>b.addEventListener("click", ()=>{
-    $("#canal").value = $("#canal").value===b.dataset.k ? "" : b.dataset.k; pintaTodo(); }));
-  const po = new Map();
-  lista.forEach(r => { const o = fila(r).origen; po.set(o, (po.get(o)||0)+1); });
-  const fo = [...po].sort((a,b)=>b[1]-a[1]).map(([o,n])=>[o, o, n, o, ` · ${fpct(100*n/lista.length)}`]);
-  $("#gOrigen").innerHTML = fo.length ? barras(fo, fo[0][2], "data-o", $("#origen").value)
-    : `<p class="vacio">Ninguna devolución con estos filtros.</p>`;
-  $("#gOrigen").querySelectorAll(".fb").forEach(b=>b.addEventListener("click", ()=>{
-    $("#origen").value = $("#origen").value===b.dataset.o ? "" : b.dataset.o; pintaTodo(); }));
-}
-function pintaZonas(lista){
-  const porZona = new Map();
-  lista.forEach(r => { const x = fila(r);
-    if(!porZona.has(x.zona)) porZona.set(x.zona, new Map());
-    const m = porZona.get(x.zona); m.set(x.deleg, (m.get(x.deleg)||0)+1); });
-  const zonas = [...porZona].map(([z, m]) => [z, [...m].sort((a,b)=>b[1]-a[1]), [...m.values()].reduce((a,b)=>a+b,0)])
-    .sort((a,b)=>b[2]-a[2]);
-  const max = Math.max(0, ...zonas.flatMap(z=>z[1].map(d=>d[1])));
-  $("#sZonas").textContent = `${num(lista.length)} devoluciones en ${num(zonas.length)} ${zonas.length===1?"zona":"zonas"}.`;
-  if(!lista.length){ $("#gZonas").innerHTML = `<p class="vacio">Ninguna devolución con estos filtros.</p>`; return; }
-  $("#gZonas").innerHTML = zonas.map(([z, ds, t]) =>
-    `<div class="zona"><span>${esc(z)}</span><span>${num(t)}</span></div>`
-    + barras(ds.map(([d,n])=>[d, d||"Sin delegación", n]), max, "data-d", $("#deleg").value)).join("");
-  $("#gZonas").querySelectorAll(".fb").forEach(b=>b.addEventListener("click", ()=>{
-    const d = b.dataset.d;
-    if($("#deleg").value === d){ $("#deleg").value = ""; }
-    else { $("#zona").value = ""; pintaFiltros(); $("#deleg").value = d; }
-    pintaTodo();
-  }));
-}
-function pintaCentros(lista){
-  const canales = (D.canales||[]).filter(k => lista.some(r=>fila(r).canal===k));
-  const m = new Map();
-  lista.forEach(r => { const x = fila(r);
-    const v = m.get(x.num_centro) || {nc:x.num_centro, centro:x.centro, cliente:x.cliente, deleg:x.deleg, total:0, abiertas:0, k:new Map()};
-    v.total++; if(abierta(r)) v.abiertas++; v.k.set(x.canal, (v.k.get(x.canal)||0)+1); m.set(x.num_centro, v); });
-  const filas = [...m.values()].sort((a,b)=>b.total-a.total || a.centro.localeCompare(b.centro,"es")).slice(0,15);
-  if(!filas.length){ $("#tCentros").innerHTML = `<p class="vacio">Ninguna devolución con estos filtros.</p>`; return; }
-  $("#tCentros").innerHTML = `<table><thead><tr><th>Centro</th><th>Delegación</th>${canales.map(k=>`<th class="n">${esc(k)}</th>`).join("")}
-    <th class="n">Total</th><th class="n">Sin cerrar</th></tr></thead><tbody>
-    ${filas.map(v=>`<tr class="elige${v.nc===$("#centro").value?" elegida":""}" data-c="${esc(v.nc)}">
-      <td data-et="Centro">${esc(v.centro)}<br><span class="tenue">nº ${esc(v.nc)}${v.cliente ? " · " + esc(v.cliente) : ""}</span></td>
-      <td data-et="Delegación">${esc(v.deleg)}</td>
-      ${canales.map(k=>`<td class="n" data-et="${esc(k)}">${v.k.get(k) ? num(v.k.get(k)) : ""}</td>`).join("")}
-      <td class="n" data-et="Total"><b>${num(v.total)}</b></td><td class="n" data-et="Sin cerrar">${v.abiertas ? num(v.abiertas) : ""}</td></tr>`).join("")}
-    </tbody></table>`;
-  $("#tCentros").querySelectorAll("tr.elige").forEach(tr=>tr.addEventListener("click", ()=>{
-    const c = tr.dataset.c;
-    if($("#centro").value === c) $("#centro").value = "";
-    else { $("#zona").value = ""; $("#deleg").value = ""; pintaFiltros(); $("#centro").value = c; }
-    pintaTodo();
-  }));
-}
-function pintaMaquinas(lista){
-  const m = new Map();
-  lista.filter(r=>r.m).forEach(r => { const x = fila(r);
-    const v = m.get(r.m) || {m:r.m, centro:x.centro, nc:x.num_centro, total:0, ultima:"", k:new Map()};
-    v.total++; if(r.a > v.ultima) v.ultima = r.a; v.k.set(x.canal, (v.k.get(x.canal)||0)+1); m.set(r.m, v); });
-  const filas = [...m.values()].sort((a,b)=>b.total-a.total || b.ultima.localeCompare(a.ultima)).slice(0,15);
-  if(!filas.length){ $("#tMaquinas").innerHTML = `<p class="vacio">Ninguna devolución con estos filtros.</p>`; return; }
-  $("#tMaquinas").innerHTML = `<table><thead><tr><th>Máquina</th><th>Centro</th><th class="n">Devoluciones</th><th>La última</th></tr></thead><tbody>
-    ${filas.map(v=>{ const k = [...v.k].sort((a,b)=>b[1]-a[1])[0];
-      return `<tr><td data-et="Máquina"><span class="mat">${esc(v.m)}</span></td>
-      <td data-et="Centro">${esc(v.centro)}<br><span class="tenue">nº ${esc(v.nc)} · sobre todo ${esc(k[0].toLowerCase())}</span></td>
-      <td class="n" data-et="Devoluciones"><b>${num(v.total)}</b></td><td data-et="La última">${esc(fechaCorta(v.ultima))}</td></tr>`; }).join("")}
-    </tbody></table>`;
-}
-function pintaTecnicos(lista){
-  const m = new Map();
-  lista.forEach(r => { const t = fila(r).tecnico || "Sin técnico";
-    const v = m.get(t) || {t, total:0, abiertas:0, hs:[]};
-    v.total++; if(abierta(r)) v.abiertas++; if(r.h!=null) v.hs.push(r.h); m.set(t, v); });
-  const filas = [...m.values()].sort((a,b)=>b.total-a.total || a.t.localeCompare(b.t,"es")).slice(0,15);
-  if(!filas.length){ $("#tTecnicos").innerHTML = `<p class="vacio">Ninguna devolución con estos filtros.</p>`; return; }
-  $("#tTecnicos").innerHTML = `<table><thead><tr><th>Técnico</th><th class="n">Devoluciones</th><th class="n">Sin cerrar</th><th class="n">Mediana hasta cerrar</th></tr></thead><tbody>
-    ${filas.map(v=>{ const md = mediana(v.hs);
-      return `<tr><td data-et="Técnico">${esc(v.t)}</td><td class="n" data-et="Devoluciones"><b>${num(v.total)}</b></td>
-      <td class="n" data-et="Sin cerrar">${v.abiertas ? num(v.abiertas) : ""}</td>
-      <td class="n" data-et="Mediana hasta cerrar">${md==null ? "—" : `${dec(md)} h`}</td></tr>`; }).join("")}
-    </tbody></table>`;
+function pintaArea(){
+  $("#tArea").textContent = AREA === "*" ? "" : AREA;
+  kpis();
+  if(!QUITADAS.has("registradas")) pintaRegistradas();
+  if(!QUITADAS.has("maquinas")) pintaMaquinas();
+  if(!QUITADAS.has("importes")) pintaImportes();
+  if(!QUITADAS.has("meses")) pintaMeses();
+  if(!QUITADAS.has("clientes")) pintaClientes();
 }
 
-/* ------------------------------------------------------------ hoja 2 */
-const diasEsperando = r => Math.max(0, Math.floor((deIso(D.ultimo_dia) - deIso(r.a)) / 864e5) + 1);
-const colorDias = d => d <= 1 ? "verde" : d <= 3 ? "amarillo" : "rojo";
-function filasPendientes(){
-  const q = $("#busca").value.trim().toLowerCase();
-  return DEV.filter(r => abierta(r) && enLugar(r)).filter(r => { if(!q) return true; const x = fila(r);
-      return [r.n, r.m, x.centro, x.num_centro, x.cliente, x.deleg, x.tecnico, x.canal, x.origen].join(" ").toLowerCase().includes(q); })
-    .sort((a,b)=>a.a.localeCompare(b.a));
+function pintaDelegs(){
+  const antes = $("#deleg").value;
+  const l = [...new Set(DEV.filter(deArea).map(r=>fila(r).deleg))].filter(Boolean).sort((a,b)=>a.localeCompare(b,"es"));
+  $("#deleg").innerHTML = `<option value="">Todas</option>` + l.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
+  $("#deleg").value = l.includes(antes) ? antes : "";
 }
-function pintaPendientes(){
-  const filas = filasPendientes();
-  $("#bCsv").disabled = !filas.length;
-  $("#cLista").textContent = `${num(filas.length)} ${filas.length===1?"devolución":"devoluciones"}`;
-  if(!filas.length){ $("#tLista").innerHTML = `<p class="vacio">Ninguna sin cerrar con estos filtros.</p>`; return; }
-  const vis = filas.slice(0, TODAS_FILAS ? filas.length : PRIMERAS), resto = filas.length - vis.length;
-  $("#tLista").innerHTML = `<table><thead><tr><th>Entró</th><th>Nº</th><th>Canal</th><th>Máquina</th><th>Centro</th><th>Técnico</th><th>Esperando</th></tr></thead><tbody>
-    ${vis.map(r=>{ const x = fila(r), d = diasEsperando(r);
-      return `<tr><td data-et="Entró">${esc(fechaHora(r.a))}</td><td data-et="Nº"><span class="mat">${esc(r.n)}</span></td>
-        <td data-et="Canal"><span class="leyenda" style="margin:0"><span><i style="background:${colorCanal(x.canal)}"></i>${esc(x.canal)}</span></span></td>
-        <td data-et="Máquina"><span class="mat">${esc(r.m)}</span></td>
-        <td data-et="Centro">${esc(x.centro)}<br><span class="tenue">nº ${esc(x.num_centro)} · ${esc(x.deleg)}</span></td>
-        <td data-et="Técnico">${esc(x.tecnico)}</td>
-        <td data-et="Esperando"><span class="dias ${colorDias(d)}">${num(d)} ${d===1?"día":"días"}</span></td></tr>`; }).join("")}</tbody></table>`
-    + (resto > 0 ? `<p class="vacio">Y ${num(resto)} más. <button class="btn" id="bMas" type="button">Ver todas</button> o bájalas en CSV.</p>` : "");
-  const mas = $("#bMas"); if(mas) mas.addEventListener("click", ()=>{ TODAS_FILAS = true; pintaPendientes(); });
+
+function pinta(){
+  const portada = AREA === "";
+  $("#portada").hidden = !portada;
+  $("#vistaArea").hidden = portada;
+  document.querySelectorAll(".enArea").forEach(el=>{ el.hidden = portada; });
+  if(QUITADAS.has("registradas")) $("#bCsv").hidden = true;
+  document.querySelectorAll("label.libre").forEach(l=>{ l.hidden = $("#periodo").value !== "libre"; });
+  $("#bAreas").hidden = !VARIAS_AREAS || !!Preferidos.solo;
+  pintaRango();
+  if(portada) pintaPortada(); else pintaArea();
 }
+function abreArea(a){
+  AREA = a; VER = ""; ABIERTAS.clear();
+  pintaDelegs();
+  const q = new URLSearchParams(location.search);
+  if(a && a !== "*") q.set("area", a); else q.delete("area");
+  try{ history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "")); }catch(e){}
+  pinta();
+  window.scrollTo(0, 0);
+}
+
 function csv(){
-  const filas = filasPendientes();
+  const fs = filasRegistradas(), p = periodo();
   const q = v => { const s = String(v==null?"":v); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
-  const cab = ["Nº","Entró","Días esperando","Origen","Canal","Máquina","Nº centro","Centro","Cliente","Delegación","Zona","Técnico"];
-  const texto = "﻿" + [cab.join(";"), ...filas.map(r=>{ const x = fila(r);
-    return [r.n, r.a, diasEsperando(r), x.origen, x.canal, r.m, x.num_centro, x.centro, x.cliente, x.deleg, x.zona, x.tecnico].map(q).join(";"); })].join("\r\n");
+  const n2 = v => v==null ? "" : String(v).replace(".", ",");
+  const cab = ["Nº","Fecha","Estado","Tipo","Motivo","Máquina","Nº centro","Centro","Cliente","Delegación","Área","Importe (€)","Importe de más del tope, sin sumar (€)"];
+  const texto = "﻿" + [cab.join(";"), ...fs.map(r=>{ const x = fila(r);
+    return [r.n, r.a, x.estado, x.canal, x.motivo, r.m, x.num_centro, x.centro, x.cliente,
+      x.deleg, x.zona, n2(r.i), n2(r.g)].map(q).join(";"); })].join("\r\n");
   const url = URL.createObjectURL(new Blob([texto], {type:"text/csv;charset=utf-8"}));
   const a = document.createElement("a");
-  a.href = url; a.download = `devoluciones_sin_cerrar_${D.ultimo_dia}.csv`;
+  a.href = url; a.download = `devoluciones_${AREA && AREA!=="*" ? AREA + "_" : ""}${p.d}_${p.h}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
-}
-
-/* ------------------------------------------------------------ todo */
-function pintaHoja(){
-  /* Sin la lista de las sin cerrar sólo queda el panel, y no hay hojas que elegir. */
-  if(QUITADAS.has("pendientes")) HOJA = "panel";
-  $(".hojas").hidden = QUITADAS.has("pendientes");
-  document.querySelectorAll(".hojas button").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.h===HOJA)));
-  $("#hPanel").hidden = HOJA !== "panel";
-  $("#hPendientes").hidden = HOJA !== "pendientes";
-  document.querySelectorAll(".solo-panel").forEach(l => {
-    l.hidden = HOJA !== "panel" || (l.classList.contains("libre") && $("#periodo").value !== "libre"); });
-}
-function pintaTodo(){
-  pintaHoja();
-  if(HOJA === "panel") pintaPanel(); else pintaPendientes();
 }
 
 (async function arranca(){
@@ -732,7 +710,7 @@ function pintaTodo(){
   const yo = await r.json();
   if(yo.tipo === "cliente"){ location.replace("/cuadro/"); return; }
   /* Lo que el administrador le quitó a este usuario dentro de esta página
-     (docs/61): no se dibuja, y lo que sólo usa esa tabla ya no llega. */
+     (docs/61): no se dibuja. */
   QUITADAS = new Set((yo.tablas_ocultas||{})["devoluciones"] || []);
   document.querySelectorAll("[data-tabla]").forEach(el=>{ if(QUITADAS.has(el.dataset.tabla)) el.hidden = true; });
 
@@ -751,6 +729,7 @@ function pintaTodo(){
   }
   D = await ri.json();
   if(D.sin_dato){ mal(D.sin_dato); return; }
+  TOPE = D.importe_max || TOPE;
   prepara();
   const q = new URLSearchParams(location.search);
   const pedido = q.get("periodo");
@@ -758,30 +737,31 @@ function pintaTodo(){
   const desde = D.desde || D.ultimo_dia;
   $("#desde").value = inicioMes(D.ultimo_dia); $("#hasta").value = D.ultimo_dia;
   $("#desde").min = $("#hasta").min = desde; $("#desde").max = $("#hasta").max = D.ultimo_dia;
-  if(q.get("ver") === "pendientes") HOJA = "pendientes";
-  pintaFiltros();
-  document.querySelectorAll(".hojas button").forEach(b=>b.addEventListener("click", ()=>{ HOJA = b.dataset.h; pintaTodo(); }));
-  ["#periodo","#desde","#hasta","#origen","#canal","#centro"].forEach(s=>$(s).addEventListener("change", pintaTodo));
-  $("#zona").addEventListener("change", ()=>{ pintaFiltros(); pintaTodo(); });
-  $("#deleg").addEventListener("change", ()=>{ pintaFiltros(); pintaTodo(); });
-  $("#bLimpiar").addEventListener("click", ()=>{
-    ["#origen","#canal","#zona","#deleg","#centro"].forEach(s=>$(s).value=""); pintaFiltros(); pintaTodo(); });
-  $("#bVista").addEventListener("click", ()=>{ TABLA = !TABLA; pintaTodo(); });
-  $("#busca").addEventListener("input", ()=>{ TODAS_FILAS = false; pintaPendientes(); });
+  /* Con una sola área no hay portada; en la vista suelta, tampoco. */
+  const areas = [...new Set(DEV.map(r=>fila(r).zona))];
+  VARIAS_AREAS = areas.length > 1;
+  const pedida = q.get("area");
+  AREA = !VARIAS_AREAS || Preferidos.solo ? "*" : areas.includes(pedida) ? pedida : "";
+  pintaDelegs();
+  if(q.get("delegacion")) $("#deleg").value = q.get("delegacion");
+  ["#periodo","#desde","#hasta"].forEach(s=>$(s).addEventListener("change", ()=>{ ABIERTAS.clear(); pinta(); }));
+  $("#deleg").addEventListener("change", ()=>{ ABIERTAS.clear(); pinta(); });
+  $("#bAreas").addEventListener("click", ()=>abreArea(""));
+  $("#bVista").addEventListener("click", ()=>{ TABLA = !TABLA; pintaMeses(); });
   $("#bCsv").addEventListener("click", csv);
   let espera = null;
-  addEventListener("resize", ()=>{ clearTimeout(espera); espera = setTimeout(()=>{ if(HOJA==="panel" && !TABLA) pintaPanel(); }, 150); });
+  addEventListener("resize", ()=>{ clearTimeout(espera); espera = setTimeout(()=>{ if(AREA && !TABLA && !QUITADAS.has("meses")) pintaMeses(); }, 150); });
   $("#todo").hidden = false;
-  pintaTodo();
+  pinta();
   const gen = D.generado ? new Date(D.generado) : null;
-  $("#pie").innerHTML = `Devoluciones de dinero de la SAT de VenCloud (${esc(D.fuente)}), sin la matrícula ficticia del centro de pruebas. `
-    + "Se cuentan devoluciones, no euros: VenCloud no guarda el importe en ningún campo, solo en el texto que escribe el técnico. "
-    + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
+  $("#pie").innerHTML = `Devoluciones de la Gestión de Devoluciones de VenCloud (${esc(D.fuente)}), sin la matrícula ficticia del centro de pruebas. `
+    + "El dinero devuelto es la suma de los importes de las abonadas; las que siguen en estudio o pendientes y las rechazadas no suman. "
+    + `Un importe de más de ${esc(eur(TOPE))} se enseña pero no suma: en una máquina de vending es casi seguro un error al teclear. `
+    + "El área sale de la delegación. Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
     + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;
   /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
-  Preferidos.monta("devoluciones", {ocultar: [".hojas", "#kpis"],
-    abre: t => { HOJA = t === "pendientes" ? "pendientes" : "panel"; pintaTodo(); }});
+  Preferidos.monta("devoluciones", {ocultar: ["#kpis", ".volver", "#rango"]});
 })();
 </script>
 </body>

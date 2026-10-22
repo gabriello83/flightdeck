@@ -60,6 +60,7 @@ Variables de entorno:
 
 import datetime
 import gzip
+import hashlib
 import json
 import os
 from collections import defaultdict
@@ -77,6 +78,7 @@ import telemetria as TE
 import almacenes as AL
 import incidencias as IN
 import devoluciones as DV
+import rutas as RT
 from cuadro import Cuadro
 
 s3 = boto3.client("s3")
@@ -97,9 +99,22 @@ CLAVE_CENSO_ANTERIOR = "cabina/_censo/anterior.json"
 # tenga el informe, la pagina de incidencias sale sin el estado y lo dice.
 CLAVE_SAT_INCIDENCIAS = os.environ.get("SAT_INCIDENCIAS",
                                        "maestros/sat_incidencias/m_sat_incidencias.json.gz")
+# Las devoluciones (M16, informe 198, docs/57): la Gestion de Devoluciones de
+# VenCloud, con su importe y su estado.
+CLAVE_DEVOLUCIONES = os.environ.get("DEVOLUCIONES",
+                                    "maestros/devoluciones/m_devoluciones.json.gz")
 # El maestro de rutas: lo unico que dice de que delegacion es cada almacen
 # (informe general operativo, docs/51).
 CLAVE_RUTAS = os.environ.get("RUTAS", "maestros/rutas/m_rutas.json.gz")
+# El maestro de vehiculos (M12, informe 191): que furgonetas estan activas y de
+# que delegacion es cada una, para la pagina de furgonetas (docs/58).
+CLAVE_VEHICULOS = os.environ.get("VEHICULOS", "maestros/vehiculos/m_vehiculos.json.gz")
+# Quien es cada empleado (M11, informe 190): quien llevo la furgoneta sin ruta.
+CLAVE_EMPLEADOS = os.environ.get("EMPLEADOS", "maestros/empleados/m_empleados.json.gz")
+# Las jornadas de todos los dias desde OP.KM_DESDE, para los km acumulados de
+# cada furgoneta. Se guardan una vez y cada noche se rehace la ventana.
+CLAVE_HISTORIA_KM = "cabina/_furgonetas/jornadas.json.gz"
+JORNADAS = ("crudo/jornadas", "jornadas")
 # El plan de visitas de cada dia (D12, informe 184 de VenCloud, docs/17). Un dia
 # sin fichero (los anteriores al 13-oct-2026) no tiene plan, y el cuadrado de
 # rutas lo dice.
@@ -112,6 +127,9 @@ CLAVE_FESTIVOS = os.environ.get("FESTIVOS", "config/festivos.json")
 # que no se ha movido; el maestro de articulos y sus fotos, cuando existan en
 # VenCloud. Las fotos se guardan una vez para todos los perfiles.
 MOV_ALMACEN = ("crudo/stock_almacen", "stock_almacen")
+# Las visitas de los tecnicos de la SAT (informe 163): traen la furgoneta, y
+# un tecnico no hace partes de reposicion. Solo para la pagina de furgonetas.
+SAT_VISITAS = ("crudo/sat_visitas", "sat_visitas")
 DETALLE_CIERRE = ("crudo/stock_balance_prod", "stock_balance_prod")
 CLAVE_ARTICULOS = os.environ.get("ARTICULOS", "maestros/articulos/m_articulos.json.gz")
 CLAVE_FOTOS = os.environ.get("FOTOS", "maestros/articulos_fotos/m_articulos_fotos.json.gz")
@@ -417,6 +435,88 @@ def perfiles_de_la_consola():
         return [], f"{type(e).__name__}: {e}"[:300]
 
 
+def usuarios_de_la_consola():
+    """Los usuarios de la consola: de cada uno, su perfil y sus delegaciones.
+
+    Con las delegaciones que el administrador le marca a cada usuario del
+    personal (docs/65) se le escribe su propio panel. Si la tabla no se puede
+    leer, nadie gana nada: esos usuarios se quedan sin su panel esa noche, y la
+    API no les da el de su perfil en su lugar.
+    """
+    try:
+        ddb = boto3.client("dynamodb")
+        out, arranque = [], None
+        while True:
+            kw = {"TableName": TABLA,
+                  "FilterExpression": "begins_with(pk, :p) AND sk = :s",
+                  "ExpressionAttributeValues": {":p": {"S": "USUARIO#"}, ":s": {"S": "FICHA"}}}
+            if arranque:
+                kw["ExclusiveStartKey"] = arranque
+            res = ddb.scan(**kw)
+            for it in res.get("Items", []):
+                d = json.loads(it.get("dato", {}).get("S", "{}"))
+                out.append({"perfil_id": str(d.get("perfil_id", "")),
+                            "delegaciones": d.get("delegaciones") or []})
+            arranque = res.get("LastEvaluatedKey")
+            if not arranque:
+                return out, None
+    except Exception as e:
+        return [], f"{type(e).__name__}: {e}"[:300]
+
+
+def cabina_de(perfil_id, delegaciones):
+    """La carpeta de cabina/ de un perfil con esas delegaciones.
+
+    La MISMA cuenta esta en infra/api/comun.py (cabina_de), que es donde la API
+    decide de que carpeta lee cada sesion. Las dos pruebas fijan el mismo valor.
+    """
+    ds = sorted({str(d) for d in delegaciones or []})
+    if not perfil_id or not ds:
+        return perfil_id
+    return f"{perfil_id}~{hashlib.sha1(chr(10).join(ds).encode('utf-8')).hexdigest()[:12]}"
+
+
+def paneles_por_usuario(perfiles, de_la_consola, usuarios):
+    """Un perfil a calcular por cada usuario del personal con delegaciones.
+
+    Las delegaciones se eligen en el usuario, no en el perfil (docs/65). El
+    ambito se sigue aplicando aqui, al escribir: cada combinacion de perfil y
+    delegaciones tiene su carpeta, `<perfil>~<huella>`, con esas delegaciones y
+    ninguna otra. Dos usuarios con las mismas comparten panel.
+
+    - Las delegaciones del usuario sustituyen a las que tuviera el perfil de
+      antes; los clientes y centros del perfil, si los tiene, se quedan.
+    - Un cliente no lleva: la delegacion es organizacion interna de Serunion.
+    - El perfil puede no estar en `perfiles` (uno del personal sin ambito no se
+      calcula: sus usuarios sin delegaciones leen el del interno). Su panel con
+      delegaciones si se calcula, porque las delegaciones ya lo acotan.
+    """
+    consola = {c["id"]: c for c in de_la_consola}
+    calculados = {p.get("id"): p for p in perfiles}
+    out = {}
+    for u in usuarios:
+        pid = u.get("perfil_id", "")
+        c = consola.get(pid)
+        if not c or c.get("tipo", "cliente") == "cliente":
+            continue
+        ds = sorted({str(d).strip()[:80] for d in (u.get("delegaciones") or [])
+                     if str(d).strip()})[:200]
+        if not ds:
+            continue
+        cid = cabina_de(pid, ds)
+        if cid in out:
+            continue
+        base = (calculados.get(pid) or c).get("ambito") or {}
+        p = {"id": cid, "nombre": c.get("nombre", ""), "tipo": c["tipo"],
+             "ambito": {"clientes": [str(x) for x in base.get("clientes", [])],
+                        "centros": [str(x) for x in base.get("centros", [])],
+                        "delegaciones": ds}}
+        if "cuadro" in c:
+            p["cuadro"] = c["cuadro"]
+        out[cid] = p
+    return list(out.values())
+
+
 def junta_perfiles(del_fichero, de_la_consola):
     """Una lista de perfiles a calcular, con las dos fuentes.
 
@@ -427,7 +527,9 @@ def junta_perfiles(del_fichero, de_la_consola):
     - Un perfil que solo esta en la consola entra si tiene ambito. SIN ambito
       NO entra: un ambito vacio es «todo el parque», y eso solo se declara en el
       fichero, a proposito y a mano. Un perfil de cliente creado con el ambito
-      sin rellenar veria entonces los datos de todos los clientes.
+      sin rellenar veria entonces los datos de todos los clientes. Uno del
+      personal sin ambito tampoco entra, pero no por eso: es todo el parque, y
+      sus usuarios leen el panel del interno, o el de sus delegaciones (docs/65).
     - Un perfil que solo esta en el fichero se queda como esta.
 
     Devuelve la lista y los que se han dejado fuera, para el resumen.
@@ -451,8 +553,10 @@ def junta_perfiles(del_fichero, de_la_consola):
                 p["cuadro"] = c["cuadro"]
         elif tiene_ambito(amb_c):
             por_id[c["id"]] = c
-        else:
+        elif c.get("tipo", "cliente") == "cliente":
             fuera.append(c["id"])
+        # Uno del personal sin ambito no se calcula ni es un aviso: es todo el
+        # parque, y sus usuarios leen el panel del interno (docs/65).
     return list(por_id.values()), fuera
 
 
@@ -1174,6 +1278,70 @@ def lee_telemetria_externa():
     return filas, {"ficheros": meta, "faltan": [t for t in TE.TIPOS if t not in filas]}
 
 
+def delegacion_de(mapa):
+    """De que delegacion es una fila, para el filtro del informe general: la
+    que traiga ella y, si no trae (las lineas de reposicion, la SAT), la del
+    centro de su maquina segun el mapa."""
+    def de(fila):
+        d = str(R.v(fila, "delegacion", "") or "").strip()
+        if d:
+            return d
+        return str((mapa.fichas.get(mapa.clave_centro(fila)) or {}).get("delegacion", "")).strip()
+    return de
+
+
+def deleg_del_centro(mapa):
+    """La delegacion de un centro por la clave con que la serie lo parte."""
+    return lambda clave: str((mapa.fichas.get(clave) or {}).get("delegacion", "")).strip()
+
+
+def previos_averias(primero):
+    """Los dias de SAT que un relleno lee antes de su primer dia, sin pasar
+    del primero que hay (serie.PRIMER_DIA)."""
+    inicio = max(primero - datetime.timedelta(days=OP.DIAS_PREVIOS_AVERIAS),
+                 datetime.date.fromisoformat(S.PRIMER_DIA))
+    return [inicio + datetime.timedelta(days=i) for i in range((primero - inicio).days)]
+
+
+def escribe_operativo(perfil_id, op):
+    """El fichero del informe general de un perfil, comprimido: con toda la
+    historia son megas (docs/66). La primera vez se arranca del de antes, sin
+    comprimir, para no perder los dias que ya tenia."""
+    clave = f"cabina/{perfil_id}/operativo.json.gz"
+    anterior = _json_de(clave) or _json_de(f"cabina/{perfil_id}/operativo.json")
+    fichero = op.fichero(perfil_id, anterior)
+    escribe_comprimido(clave, fichero)
+    return fichero
+
+def historia_de_jornadas(operativos, hoy, context=None):
+    """Las jornadas de cada dia desde OP.KM_DESDE hasta ayer, para los km
+    acumulados de la pagina de furgonetas (docs/58).
+
+    Los dias de la ventana de esta noche se rehacen con lo leido; los que
+    faltan se leen una vez y se guardan, tambien vacios (un dia sin fichero no
+    se vuelve a pedir). La primera noche son unos 650 ficheros pequenos; si se
+    acaba el tiempo, sigue la noche siguiente.
+    """
+    historia = _json_de(CLAVE_HISTORIA_KM) or {}
+    # Las jornadas no pasan por el ambito: todos los perfiles tienen las mismas.
+    for op in operativos.values():
+        historia.update(op.jornadas)
+        break
+    dia = datetime.date.fromisoformat(OP.KM_DESDE)
+    leidos = 0
+    while dia < hoy:
+        f = dia.isoformat()
+        if f not in historia:
+            if not _queda_tiempo(context, margen=120_000):
+                print(f"AVISO: la historia de km se queda en {f}; sigue la noche que viene.")
+                break
+            historia[f] = OP.jornadas_por_vehiculo(lee_dia(*JORNADAS, dia))
+            leidos += 1
+        dia += datetime.timedelta(days=1)
+    escribe_comprimido(CLAVE_HISTORIA_KM, historia)
+    return historia
+
+
 def come_operativo(op, dia, nombre, filas, clase_de):
     """Lo que hace el informe general operativo con las filas de una fuente.
 
@@ -1184,6 +1352,9 @@ def come_operativo(op, dia, nombre, filas, clase_de):
         op.come_sat(filas)
     elif nombre == "sat_eventos":
         op.come_sat_eventos(filas)
+    elif nombre == "partes":
+        # Que dias visito cada furgoneta, para saber desde cuando no visita.
+        op.come_visitas_vehiculo(dia, filas)
     od = op.dia(dia)
     if od is None:
         return
@@ -1263,17 +1434,20 @@ def escribe_incidencias(acumuladores, operativos, incidencias, mapa, hoy):
     los tres primeros dias de cada tarea, que son los que vuelve a bajar la
     extraccion. Va antes de escribir el operativo.
 
-    De la misma foto salen las devoluciones (docs/57): su cuadrado y su pagina.
+    Aqui van tambien las devoluciones (docs/57), de su propia foto (M16): su
+    cuadrado y su pagina.
     """
     foto = _filas(_json_de(CLAVE_SAT_INCIDENCIAS))
+    devoluciones = _filas(_json_de(CLAVE_DEVOLUCIONES))
     for acu in acumuladores:
         inc = incidencias[acu.perfil["id"]]
         dev = DV.Devoluciones()
         op = operativos[acu.perfil["id"]]
+        if devoluciones:
+            dev.come_foto([f for f in devoluciones if en_ambito(f, acu.ambito, mapa)])
         if foto:
             propias = [f for f in foto if en_ambito(f, acu.ambito, mapa)]
             inc.come_foto(propias)
-            dev.come_foto(propias)
             op.come_sat(propias)
             op.come_sat_eventos(inc.eventos_de_la_foto())
         escribe_comprimido(f"cabina/{acu.perfil['id']}/incidencias.json.gz",
@@ -1393,20 +1567,30 @@ def lambda_handler(event, context):
         print(f"AVISO: no se han podido leer los perfiles de la consola ({fallo_consola}). "
               f"Se calculan solo los de {CLAVE_PERFILES}.")
     perfiles, sin_ambito = junta_perfiles(del_fichero, de_la_consola)
+    usuarios, fallo_usuarios = usuarios_de_la_consola()
+    if fallo_usuarios:
+        print(f"AVISO: no se han podido leer los usuarios de la consola ({fallo_usuarios}). "
+              f"Los paneles por delegaciones de cada usuario no se calculan esta vez.")
+    de_usuarios = paneles_por_usuario(perfiles, de_la_consola, usuarios)
+    perfiles = perfiles + [p for p in de_usuarios if p["id"] not in {q.get("id") for q in perfiles}]
     for pid in sin_ambito:
         print(f"AVISO: el perfil {pid} de la consola no tiene ambito y no se calcula. "
               f"Ponle sus clientes o centros en la consola.")
     acumuladores = [Acumulador(p, hoy) for p in perfiles]
-    # El informe general operativo (docs/51): los ultimos dias, con su cifra tal
-    # cual. En un relleno historico no se escribe: el plan y el censo de hoy no
-    # describen un dia de enero de 2025.
-    publicar = [] if historico else dias[:OP.DIAS_NOCHE]
-    operativos = {acu.perfil["id"]: OP.Operativo(publicar) for acu in acumuladores}
-    # La pagina de incidencias (docs/56): las tareas de la SAT de toda la ventana.
-    incidencias = {acu.perfil["id"]: IN.Incidencias() for acu in acumuladores}
-
     leidas = defaultdict(int)
     mapa = MapaCentros()
+    # El informe general operativo (docs/51): los ultimos dias, con su cifra tal
+    # cual. En un relleno historico escribe todos los dias del tramo, sin foto:
+    # el censo de hoy no describe un dia de enero de 2025 (docs/66).
+    publicar = dias if historico else dias[:OP.DIAS_NOCHE]
+    deleg_de = delegacion_de(mapa)
+    operativos = {acu.perfil["id"]: OP.Operativo(publicar, historico, deleg_de)
+                  for acu in acumuladores}
+    # La pagina de incidencias (docs/56): las tareas de la SAT de toda la ventana.
+    incidencias = {acu.perfil["id"]: IN.Incidencias() for acu in acumuladores}
+    # La pagina de rutas por areas (docs/67): por maquina, la ultima carga, la
+    # ultima recaudacion y lo que recaudo cada mes, en toda la ventana.
+    maquinas = {acu.perfil["id"]: RT.Maquinas() for acu in acumuladores}
 
     # El censo va PRIMERO, y no solo porque sea un maestro: trae cliente, centro,
     # pdv y matricula de TODO el parque, asi que el mapa arranca completo en vez
@@ -1445,6 +1629,23 @@ def lambda_handler(event, context):
     else:
         clase_de = {}
     del censo
+
+    # En un relleno historico, la SAT de antes del tramo: una averia cerrada el
+    # primer dia pudo abrirse semanas antes, y sin su apertura no se mide.
+    if historico:
+        for dia in previos_averias(dias[0]):
+            for nombre, destino, id_informe, _, _ in FUENTES:
+                if nombre not in ("sat", "sat_eventos"):
+                    continue
+                filas = lee_dia(destino, id_informe, dia)
+                if not filas:
+                    continue
+                mapa.aprende(filas)
+                for acu in acumuladores:
+                    propias = [f for f in filas if en_ambito(f, acu.ambito, mapa)]
+                    if propias:
+                        come_operativo(operativos[acu.perfil["id"]], dia, nombre, propias, clase_de)
+                del filas
 
     # EL RECORRIDO VA POR DIAS, Y DENTRO DE CADA DIA POR INFORMES. Antes era al
     # contrario. Se cambio para poder cerrar la fila de la serie de un dia en
@@ -1497,14 +1698,22 @@ def lambda_handler(event, context):
                     # Sin filtrar: las filas de almacen no traen centro, y de quien
                     # es cada almacen lo decide OP.almacenes por su delegacion.
                     op.come_balance(filas)
+                if nombre == "jornadas" and not historico:
+                    # Tambien sin filtrar: la jornada no trae centro ni
+                    # delegacion. De quien es cada furgoneta lo dice el maestro
+                    # de vehiculos al escribir la pagina de furgonetas.
+                    op.come_jornadas(dia, filas)
                 propias = [f for f in filas if en_ambito(f, acu.ambito, mapa)]
                 acu.filas_en_ambito += len(propias)
-                if propias and not historico:
+                if propias:
                     come_operativo(op, dia, nombre, propias, clase_de)
+                if propias and not historico:
                     if nombre == "sat":
                         incidencias[acu.perfil["id"]].come_tareas(propias)
                     elif nombre == "sat_eventos":
                         incidencias[acu.perfil["id"]].come_eventos(propias)
+                    elif nombre in ("partes", "lineas", "recaudacion"):
+                        maquinas[acu.perfil["id"]].come(nombre, propias, dia)
                 if propias and metodo and not historico:
                     getattr(acu, metodo)(propias)
                 if propias:
@@ -1519,17 +1728,33 @@ def lambda_handler(event, context):
             # Los movimientos de almacen no traen centro ni pasan por el
             # ambito: solo se guarda el ultimo de cada producto (docs/54).
             existencias.come(lee_dia(*MOV_ALMACEN, dia))
+            # Las visitas de la SAT, por la furgoneta del tecnico (docs/58).
+            # Traen la matricula de la maquina: el ambito sale del mapa.
+            sat_v = lee_dia(*SAT_VISITAS, dia)
+            if sat_v:
+                leidas["sat_visitas"] += len(sat_v)
+                for acu in acumuladores:
+                    operativos[acu.perfil["id"]].come_visitas_sat(
+                        [f for f in sat_v if en_ambito(f, acu.ambito, mapa)])
+            del sat_v
         leidos.append(dia)
+        # El plan del dia, una vez para todos los perfiles: antes del 13-oct-2026
+        # no existe, y en un relleno seria una lectura perdida por perfil y dia.
+        plan = (_json_de(f"{PLAN_VISITAS[0]}/anio={dia.year}/mes={dia.month:02d}/"
+                         f"dia={dia.day:02d}/{PLAN_VISITAS[1]}.json.gz")
+                if dia.isoformat() in next(iter(operativos.values()), OP.Operativo([])).dias
+                else None)
         for pid, op in operativos.items():
             od = op.dia(dia)
             if od is not None:
-                od.pon_venta(del_dia[pid])
-                # El plan del dia: con su ambito, que el plan si trae centro.
-                plan = _json_de(f"{PLAN_VISITAS[0]}/anio={dia.year}/mes={dia.month:02d}/"
-                                f"dia={dia.day:02d}/{PLAN_VISITAS[1]}.json.gz")
+                od.pon_venta(del_dia[pid], deleg_del_centro(mapa))
                 if plan is not None:
+                    # Con su ambito, que el plan si trae centro.
                     acu = next(a for a in acumuladores if a.perfil["id"] == pid)
                     od.come_plan([f for f in _filas(plan) if en_ambito(f, acu.ambito, mapa)])
+                if historico:
+                    op.cierra(dia)
+        del plan
         for pid, d in del_dia.items():
             # Un dia sin una sola fila no se escribe: ocuparia sitio y no dice
             # nada que no diga su ausencia.
@@ -1594,6 +1819,10 @@ def lambda_handler(event, context):
                                                    "(EXT_INSTALACIONES) de esta noche."}
         resumen_almacenes = escribe_almacenes(acumuladores, operativos, existencias, rutas, hoy)
         festivos = _json_de(CLAVE_FESTIVOS)
+        vehiculos = _json_de(CLAVE_VEHICULOS)
+        vehiculos = _filas(vehiculos) if vehiculos is not None else None
+        empleados = _filas(_json_de(CLAVE_EMPLEADOS))
+        historia_km = historia_de_jornadas(operativos, hoy, context)
         # Donde esta cada maquina dentro del centro («Planta 4»), para la lista de
         # la pagina de rutas: el plan y los partes no lo traen, el censo si.
         ubicaciones = {str(R.v(f, "matricula", "") or "").strip():
@@ -1602,9 +1831,7 @@ def lambda_handler(event, context):
                        if R.v(f, "matricula", "") and R.v(f, "ubicacion", "")}
         for acu in acumuladores:
             op = operativos[acu.perfil["id"]]
-            clave = f"cabina/{acu.perfil['id']}/operativo.json"
-            fichero = op.fichero(acu.perfil["id"], _json_de(clave))
-            escribe(clave, fichero)
+            fichero = escribe_operativo(acu.perfil["id"], op)
             # La pagina de telemetria (docs/53), solo si hay ficheros subidos.
             clave_t = f"cabina/{acu.perfil['id']}/telemetria.json"
             detalle = op.detalle_telemetria(acu.perfil["id"], _json_de(clave_t))
@@ -1612,11 +1839,17 @@ def lambda_handler(event, context):
                 escribe(clave_t, detalle)
             # La pagina de rutas (docs/55): delegaciones, rutas y puntos de venta.
             clave_r = f"cabina/{acu.perfil['id']}/rutas.json.gz"
-            escribe_comprimido(clave_r, op.detalle_rutas(acu.perfil["id"], _json_de(clave_r),
-                                                         festivos, ubicaciones))
+            fichero_r = op.detalle_rutas(acu.perfil["id"], _json_de(clave_r), festivos, ubicaciones)
+            fichero_r.update(maquinas[acu.perfil["id"]].bloque(
+                [f for f in censo if en_ambito(f, acu.ambito, mapa)],
+                incidencias[acu.perfil["id"]], festivos, hoy))
+            escribe_comprimido(clave_r, fichero_r)
             # La pagina de furgonetas (docs/58): vehiculo a vehiculo, cada dia.
             clave_f = f"cabina/{acu.perfil['id']}/furgonetas.json.gz"
-            escribe_comprimido(clave_f, op.detalle_furgonetas(acu.perfil["id"], _json_de(clave_f)))
+            op.desde = dias_leidos and min(dias_leidos)
+            escribe_comprimido(clave_f, op.detalle_furgonetas(acu.perfil["id"], _json_de(clave_f),
+                                                              vehiculos, acu.ambito, historia_km,
+                                                              rutas, empleados))
             # Lo que falta, a la vista en la respuesta: un cuadrado sin dato
             # todos los dias es un informe que no llega, no un dia flojo.
             ultimo = fichero["dias"].get(fichero["ultimo_dia"] or "", {})
@@ -1628,6 +1861,14 @@ def lambda_handler(event, context):
                             acu.panel(hoy, dict(periodo, dias=DIAS),
                                       nuevos.get(acu.perfil["id"], {})))
                     for acu in acumuladores]
+    if historico:
+        # El informe general con los dias del tramo (docs/66), sobre lo que ya
+        # habia: la foto y los dias de fuera del tramo se quedan como estaban.
+        for acu in acumuladores:
+            fichero = escribe_operativo(acu.perfil["id"], operativos[acu.perfil["id"]])
+            resumen_operativo[acu.perfil["id"]] = {
+                "dias": len(operativos[acu.perfil["id"]].cerrados),
+                "primer_dia": fichero["primer_dia"], "ultimo_dia": fichero["ultimo_dia"]}
     for acu in acumuladores:
         if acu.cuadro:
             cuadros[acu.perfil["id"]] = escribe_cuadro(acu, periodo, dias_leidos)
@@ -1675,7 +1916,10 @@ def lambda_handler(event, context):
         # no se ha podido leer la tabla; `sin_ambito`, los perfiles de la
         # consola que no se calculan porque no dicen de que cliente son.
         "consola": {"leidos": len(de_la_consola), "error": fallo_consola,
-                    "sin_ambito": sin_ambito},
+                    "sin_ambito": sin_ambito,
+                    # Los paneles por delegaciones de los usuarios (docs/65).
+                    "por_usuario": [p["id"] for p in de_usuarios],
+                    "error_usuarios": fallo_usuarios},
         "ficheros": escritos,
         # Que fuente de venta uso el cuadro y cuantas maquinas del censo tienen
         # venta. «visita_ventas» es la parcial: falta el informe de telemetria.

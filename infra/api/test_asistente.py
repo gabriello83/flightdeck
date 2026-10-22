@@ -104,9 +104,11 @@ def sesion_de(correo):
     return comun.abre_sesion(correo)
 
 
-def pregunta(texto, cookie, historial=None):
-    ev = falsos.peticion("POST", "/api/pregunta",
-                         {"pregunta": texto, "historial": historial or []}, cookie)
+def pregunta(texto, cookie, historial=None, pagina=None):
+    d = {"pregunta": texto, "historial": historial or []}
+    if pagina:
+        d["pagina"] = pagina
+    ev = falsos.peticion("POST", "/api/pregunta", d, cookie)
     return L.lambda_handler(ev, None)
 
 
@@ -183,6 +185,54 @@ falsos.pon_fila("PERFIL#cli-airbus", {
     "sesiones": ["resumen", "disponibilidad"], "permisos": {"asistente": True}})
 falsos.pon_fila("USUARIO#ana@airbus.com", {"nombre": "Ana", "perfil_id": "cli-airbus",
                                            "estado": "activo", "asistente": True})
+
+print("\nDesde el informe general, contesta con el informe general (docs/69)")
+import gzip  # noqa: E402
+OPERATIVO = {
+    "generado": "2026-10-22T04:45:00Z", "ultimo_dia": "2026-10-21", "primer_dia": "2026-10-20",
+    "umbrales": {"verde": 95, "amarillo": 75},
+    "dias": {"2026-10-21": {"rutas": {"previstas": 100, "hechas": 81, "pct": 81.0, "color": "amarillo"},
+                            "ventas": {"importe": 777777.0}}},
+    "foto": {"rutas": {"x": 1}, "ventas": {"y": 2}},
+}
+falsos.OBJETOS["cabina/cli-airbus/operativo.json.gz"] = gzip.compress(json.dumps(OPERATIVO).encode())
+falsos.pon_fila("PERFIL#cli-airbus", {
+    "nombre": "AIRBUS", "tipo": "operaciones",
+    "ambito": {"clientes": ["AIRBUS"], "centros": ["AIRBUS GETAFE"], "delegaciones": []},
+    "sesiones": ["resumen", "disponibilidad"], "permisos": {"asistente": True},
+    "cuadrados": ["rutas"]})
+LLAMADAS.clear()
+L.cliente().beta.messages.create = _Mensajes().create
+r = pregunta("como fueron las rutas ayer?", COOKIE, pagina="operativo")
+comprueba("200", r["statusCode"], 200)
+enviado = LLAMADAS[0]["messages"][-1]["content"]
+comprueba("lleva las rutas del dia", '"hechas":81' in enviado, True)
+comprueba("dice de que pagina es", "informe general operativo" in enviado, True)
+comprueba("y la fecha de hoy, para saber que es ayer", '"hoy":"' in enviado, True)
+comprueba("sin el cuadrado que su perfil no ve", "777777" in enviado, False)
+comprueba("y sin el panel", "1107" in enviado, False)
+LLAMADAS.clear()
+falsos.pon_fila("USUARIO#ana@airbus.com", {"nombre": "Ana", "perfil_id": "cli-airbus",
+                                           "estado": "activo", "asistente": True,
+                                           "cuadrados_ocultos": ["rutas"]})
+pregunta("y las rutas?", COOKIE, pagina="operativo")
+comprueba("ni el que le quitaron a el (docs/61)", '"hechas":81' in LLAMADAS[0]["messages"][-1]["content"], False)
+falsos.pon_fila("USUARIO#ana@airbus.com", {"nombre": "Ana", "perfil_id": "cli-airbus",
+                                           "estado": "activo", "asistente": True})
+falsos.pon_fila("PERFIL#cli-airbus", {
+    "nombre": "AIRBUS", "tipo": "cliente", "ambito": {"clientes": ["AIRBUS"]},
+    "sesiones": ["cuadro"], "permisos": {"asistente": True}})
+comprueba("un cliente no tiene informe general, 403",
+          pregunta("rutas?", COOKIE, pagina="operativo")["statusCode"], 403)
+falsos.pon_fila("PERFIL#cli-airbus", {
+    "nombre": "AIRBUS", "tipo": "operaciones",
+    "ambito": {"clientes": ["AIRBUS"], "centros": ["AIRBUS GETAFE"], "delegaciones": []},
+    "sesiones": ["resumen", "disponibilidad"], "permisos": {"asistente": True}})
+del falsos.OBJETOS["cabina/cli-airbus/operativo.json.gz"]
+comprueba("sin informe calculado, 503 que lo dice",
+          pregunta("rutas?", COOKIE, pagina="operativo")["statusCode"], 503)
+comprueba("sin pagina, sigue siendo el panel",
+          "1107" in (pregunta("visitas?", COOKIE) and LLAMADAS[-1]["messages"][-1]["content"]), True)
 
 print("\nSin sesion, nada")
 comprueba("401", pregunta("hola", None)["statusCode"], 401)

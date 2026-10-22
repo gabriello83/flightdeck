@@ -33,7 +33,7 @@ class _S3Falso:
 
 
 # La tabla de la consola. None = la Lambda no tiene permiso para leerla.
-CONSOLA = {"fichas": None}
+CONSOLA = {"fichas": None, "usuarios": [("ana@x.com", {})]}
 
 
 class _DdbFalso:
@@ -44,7 +44,8 @@ class _DdbFalso:
             raise PermissionError("AccessDeniedException: not authorized to perform dynamodb:Scan")
         items = [{"pk": {"S": f"PERFIL#{pid}"}, "sk": {"S": "FICHA"},
                   "dato": {"S": json.dumps(d)}} for pid, d in CONSOLA["fichas"]]
-        items.append({"pk": {"S": "USUARIO#ana@x.com"}, "sk": {"S": "FICHA"}, "dato": {"S": "{}"}})
+        items += [{"pk": {"S": f"USUARIO#{c}"}, "sk": {"S": "FICHA"}, "dato": {"S": json.dumps(d)}}
+                  for c, d in CONSOLA["usuarios"]]
         p = ExpressionAttributeValues[":p"]["S"]
         items = [i for i in items if i["pk"]["S"].startswith(p)]
         ini = ExclusiveStartKey["n"] if ExclusiveStartKey else 0
@@ -345,6 +346,36 @@ _j, _ = L.junta_perfiles([PERFIL], [{"id": "cli-x", "ambito": {"centros": ["5000
 comprueba("al sumar no se repite un centro", _j[0]["ambito"]["centros"], ["500092", "2002"])
 _j, _ = L.junta_perfiles([PERFIL], [{"id": "cli-x", "ambito": {}}])
 comprueba("y una ficha de consola vacia no le quita nada al fichero", _j[0]["ambito"]["centros"], ["500092"])
+
+print("\nDelegaciones por usuario (docs/65): un panel por perfil y delegaciones")
+comprueba("la carpeta, fijada: la misma cuenta que comun.cabina_de (infra/api)",
+          L.cabina_de("ope-sur", ["SEVILLA", "CADIZ", "SEVILLA"]), "ope-sur~43165e23b879")
+_cons = [{"id": "ope-sur", "nombre": "Sur", "tipo": "operaciones", "ambito": {"delegaciones": ["MADRID"]}},
+         {"id": "cli-x", "nombre": "X", "tipo": "cliente", "ambito": {"centros": ["2002"]}}]
+_pu = L.paneles_por_usuario([], _cons, [
+    {"perfil_id": "ope-sur", "delegaciones": ["SEVILLA", "CADIZ"]},
+    {"perfil_id": "ope-sur", "delegaciones": ["CADIZ", "SEVILLA", " "]},
+    {"perfil_id": "ope-sur", "delegaciones": []},
+    {"perfil_id": "cli-x", "delegaciones": ["SEVILLA"]},
+    {"perfil_id": "no-existe", "delegaciones": ["SEVILLA"]}])
+comprueba("uno por combinacion: dos usuarios con las mismas comparten panel",
+          [p["id"] for p in _pu], ["ope-sur~43165e23b879"])
+comprueba("con las delegaciones del usuario, no las que el perfil tenia de antes",
+          _pu[0]["ambito"], {"clientes": [], "centros": [], "delegaciones": ["CADIZ", "SEVILLA"]})
+comprueba("y solo coge lo de esas delegaciones",
+          [L.en_ambito({"delegacion": d, "centro": "C"}, _pu[0]["ambito"]) for d in ("SEVILLA", "MADRID")],
+          [True, False])
+CONSOLA["fichas"].append(("ope-sur", {"nombre": "Sur", "tipo": "operaciones", "ambito": {}}))
+CONSOLA["usuarios"] = [("olga@x.com", {"perfil_id": "ope-sur", "delegaciones": ["SEVILLA", "CADIZ"]}),
+                       ("eva@x.com", {"perfil_id": "cli-consum", "delegaciones": ["SEVILLA"]})]
+res = L.lambda_handler({}, None)
+comprueba("la Lambda escribe el panel de esas delegaciones",
+          json.loads(ALMACEN["cabina/ope-sur~43165e23b879/panel.json"])["perfil"], "ope-sur~43165e23b879")
+comprueba("el resumen lo dice", res["consola"]["por_usuario"], ["ope-sur~43165e23b879"])
+comprueba("y el perfil del personal sin ambito sigue sin panel propio: lee el del interno",
+          [k for k in ALMACEN if k.startswith("cabina/ope-sur/")], [])
+CONSOLA["fichas"].pop()
+CONSOLA["usuarios"] = [("ana@x.com", {})]
 
 print("\nSi la Lambda no puede leer la consola, sigue con el fichero")
 CONSOLA["fichas"] = None

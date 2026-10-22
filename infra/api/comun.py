@@ -124,7 +124,64 @@ def quien_es(evento):
     perfil = lee(f"PERFIL#{usuario.get('perfil_id', '')}") or {"tipo": "cliente"}
     usuario["correo"] = fila["correo"]
     perfil["perfil_id"] = usuario.get("perfil_id", "")
+    perfil["cabina"], perfil["ambito"] = cabina_y_ambito(perfil["perfil_id"], perfil, usuario)
     return {"usuario": usuario, "perfil": perfil, "token": token}
+
+
+# ----------------------------------------------------------------------
+# la carpeta del panel de cada usuario (docs/65)
+# ----------------------------------------------------------------------
+def delegaciones_de(perfil, usuario):
+    """Las delegaciones que el administrador le marco a ESTE usuario.
+
+    Solo cuentan para el personal de Serunion: la delegacion es organizacion
+    interna, un cliente no la ve (ve_delegaciones). Vacio = las de su perfil.
+    """
+    if perfil.get("tipo", "cliente") == "cliente":
+        return []
+    ds = usuario.get("delegaciones")
+    if not isinstance(ds, list):
+        return []
+    return sorted({str(d).strip()[:80] for d in ds if str(d).strip()})[:200]
+
+
+def cabina_de(perfil_id, delegaciones):
+    """La carpeta de cabina/ de un perfil con esas delegaciones.
+
+    La MISMA cuenta esta en lambda_agregados.cabina_de, que es quien escribe la
+    carpeta: si dejaran de coincidir, el usuario se quedaria sin panel, nunca
+    con el de otro. Las dos pruebas fijan el mismo valor.
+    """
+    ds = sorted({str(d) for d in delegaciones or []})
+    if not perfil_id or not ds:
+        return perfil_id
+    return f"{perfil_id}~{hashlib.sha1(chr(10).join(ds).encode('utf-8')).hexdigest()[:12]}"
+
+
+def cabina_y_ambito(perfil_id, perfil, usuario):
+    """De que carpeta lee la sesion de este usuario, y con que ambito.
+
+    El ambito se aplica al escribir: la Lambda de agregados escribe un panel por
+    perfil y, para cada usuario del personal con delegaciones, uno con esas
+    delegaciones y ninguna otra. Aqui solo se elige cual de los ya escritos le
+    toca, y no hay ningun parametro de la peticion que entre en la cuenta.
+
+    - Con delegaciones: su panel, `<perfil>~<huella>`. Las del usuario sustituyen
+      a las que tuviera el perfil de antes; los clientes y centros del perfil,
+      si los tiene, se quedan.
+    - Del personal, sin delegaciones y con un perfil sin ambito: todo el parque,
+      que es el panel del interno.
+    - Lo demas, el de su perfil, como siempre.
+    """
+    ambito = dict(perfil.get("ambito") or {})
+    ds = delegaciones_de(perfil, usuario)
+    if ds:
+        ambito["delegaciones"] = ds
+        return cabina_de(perfil_id, ds), ambito
+    if (perfil.get("tipo", "cliente") != "cliente" and perfil_id
+            and not any(ambito.get(k) for k in ("clientes", "centros", "delegaciones"))):
+        return "interno", ambito
+    return perfil_id, ambito
 
 
 # ----------------------------------------------------------------------

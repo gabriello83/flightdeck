@@ -538,6 +538,18 @@ del falsos.OBJETOS["cabina/ope-sur/operativo.json"]
 comprueba("sin calcular todavia, 503",
           llama("GET", "/api/operativo", cookie=COOKIE_OLGA)["statusCode"], 503)
 
+print("\nEl informe con historia (docs/66): comprimido, y el reparto por delegacion recortado igual")
+_dia_d = dict(_dia, por_delegacion={"rutas": {"Sur - Sevilla": {"previstas": 10, "hechas": 9}},
+                                    "telemetria": {"Sur - Sevilla": {"auditables": 3, "con_dex": 1}}})
+falsos.OBJETOS["cabina/ope-sur/operativo.json.gz"] = gzip.compress(json.dumps(dict(
+    _op, primer_dia="2025-01-01", zonas={"Sur - Sevilla": "Sur"},
+    dias={"2026-10-12": _dia_d})).encode())
+o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA))
+comprueba("lee el comprimido", (o["primer_dia"], o["zonas"]), ("2025-01-01", {"Sur - Sevilla": "Sur"}))
+comprueba("por delegacion, solo los cuadrados que ve",
+          sorted(o["dias"]["2026-10-12"]["por_delegacion"]), ["rutas"])
+del falsos.OBJETOS["cabina/ope-sur/operativo.json.gz"]
+
 print("\nTarifas (docs/52): el resumen del perfil, y un centro solo si es suyo")
 import gzip as _gz  # noqa: E402
 _res = {"total": {"pct": 80.0}, "delegaciones": [{"delegacion": "Sevilla", "centros": [
@@ -827,6 +839,37 @@ comprueba("algo que no es una lista no quita nada",
           L.A.paneles_ocultos({"paneles_ocultos": "semana"}), [])
 pon_fila("PERFIL#ope-sur", _ope0)
 
+print("\nEl perfil, cuadrado a cuadrado (docs/64)")
+_ope0 = L.lee("PERFIL#ope-sur")
+llama("POST", "/api/admin/perfiles",
+      {"perfil_id": "ope-sur", "nombre": "Operaciones Sur", "tipo": "operaciones",
+       "ambito": _ope0.get("ambito"), "sesiones": ["avisos"],
+       "cuadrados": ["revision", "ventas", "no-existe", "almacenes"],
+       "tablas_ocultas": {"revision": ["precio", "inventada"], "nada": ["x"]}}, cookie=COOKIE_JEFE)
+_g = L.lee("PERFIL#ope-sur")
+comprueba("se guardan los cuadrados elegidos, sin los que no existen",
+          _g["cuadrados"], ["almacenes", "ventas", "revision"])
+comprueba("ventas lleva al panel: le da su sesion, y quita los paneles de los no elegidos",
+          (_g["sesiones"], _g["paneles_ocultos"]),
+          (["venta_consumo", "avisos"], ["carga", "censo", "altas", "incidencias", "inc_detalle"]))
+comprueba("y las tablas quitadas del perfil, solo las que existen",
+          _g["tablas_ocultas"], {"revision": ["precio"]})
+_yo = cuerpo_de(llama("GET", "/api/yo", cookie=COOKIE_OLGA))
+comprueba("ve solo lo elegido (almacenes es de direccion)", _yo["cuadrados"], ["ventas", "revision"])
+comprueba("revision sin sesion de instalaciones: entra a su pagina",
+          llama("GET", "/api/revision", cookie=COOKIE_OLGA)["statusCode"] != 403, True)
+comprueba("y lo no elegido no abre", llama("GET", "/api/rutas", cookie=COOKIE_OLGA)["statusCode"], 403)
+comprueba("la tabla quitada al perfil le llega a la pagina", _yo["tablas_ocultas"], {"revision": ["precio"]})
+comprueba("y se suma a lo que se le quite al usuario",
+          L.A.con_usuario({"tablas_ocultas": {"revision": ["precio"]}},
+                        {"tablas_ocultas": {"revision": ["planograma"]}})["tablas_ocultas"],
+          {"revision": ["planograma", "precio"]})
+_pf2 = cuerpo_de(llama("GET", "/api/admin/perfiles", cookie=COOKIE_JEFE))
+comprueba("la consola recibe los paneles de los cuadrados del panel y las otras pantallas",
+          (_pf2["catalogo_cuadrados"]["reposiciones"]["paneles"], _pf2["otras_pantallas"]),
+          ({"carga": "Reposición del periodo"}, ["resumen", "servicio", "disponibilidad", "avisos", "cuadro"]))
+pon_fila("PERFIL#ope-sur", _ope0)
+
 print("\nPreferidos (docs/62): de cada usuario, y solo lo que puede ver")
 comprueba("un cliente no tiene", llama("GET", "/api/preferidos", cookie=COOKIE_ANA)["statusCode"], 403)
 comprueba("al principio, ninguno", cuerpo_de(llama("GET", "/api/preferidos", cookie=COOKIE_OLGA))["preferidos"], [])
@@ -853,6 +896,59 @@ llama("POST", "/api/admin/usuarios", _olga, cookie=COOKIE_JEFE)
 comprueba("y vuelve si se lo devuelve", len(cuerpo_de(llama("GET", "/api/preferidos", cookie=COOKIE_OLGA))["preferidos"]), 2)
 comprueba("una lista que no es lista, 400",
           llama("PUT", "/api/preferidos", {"preferidos": "x"}, cookie=COOKIE_OLGA)["statusCode"], 400)
+
+print("\nDelegaciones por usuario (docs/65): se eligen en el usuario, no en el perfil")
+import comun as _C  # noqa: E402
+comprueba("la carpeta, fijada: la misma cuenta que lambda_agregados.cabina_de",
+          _C.cabina_de("ope-sur", ["SEVILLA", "CADIZ", "SEVILLA"]), "ope-sur~43165e23b879")
+comprueba("sin delegaciones, la de su perfil", _C.cabina_de("ope-sur", []), "ope-sur")
+llama("POST", "/api/admin/usuarios", dict(_olga, delegaciones=["SEVILLA", " CADIZ ", "", 7]),
+      cookie=COOKIE_JEFE)
+_fila = json.loads(falsos.TABLA[("USUARIO#olga@serunion.es", "FICHA")]["dato"]["S"])
+comprueba("se guardan limpias y en orden", _fila["delegaciones"], ["7", "CADIZ", "SEVILLA"])
+llama("POST", "/api/admin/usuarios", dict(_olga, delegaciones=["SEVILLA", "CADIZ"]), cookie=COOKIE_JEFE)
+comprueba("sin su panel calculado, 503: NUNCA el de su perfil en su lugar",
+          llama("GET", "/api/panel", cookie=COOKIE_OLGA)["statusCode"], 503)
+comprueba("tampoco el operativo de su perfil",
+          llama("GET", "/api/operativo", cookie=COOKIE_OLGA)["statusCode"] != 200, True)
+falsos.pon_panel("ope-sur~43165e23b879", dict(PANEL_OPE, servicio={"visitas": 77, "coste_servicio": {"coste": 5.0}}))
+_pn = cuerpo_de(llama("GET", "/api/panel", cookie=COOKIE_OLGA))
+comprueba("calculado, lee el suyo", _pn["servicio"]["visitas"], 77)
+_lu = {u["_id"]: u for u in cuerpo_de(llama("GET", "/api/admin/usuarios", cookie=COOKIE_JEFE))["usuarios"]}
+comprueba("la lista de usuarios dice sus delegaciones y si su panel esta",
+          (_lu["olga@serunion.es"]["delegaciones"], _lu["olga@serunion.es"]["panel"]["existe"]),
+          (["CADIZ", "SEVILLA"], True))
+llama("POST", "/api/admin/usuarios", {"correo": "ana@airbus.com", "nombre": "Ana", "perfil_id": "cli-airbus",
+                                      "delegaciones": ["SEVILLA"]}, cookie=COOKIE_JEFE)
+_fila = json.loads(falsos.TABLA[("USUARIO#ana@airbus.com", "FICHA")]["dato"]["S"])
+comprueba("a un cliente no se le guardan: la delegacion es nuestra", _fila["delegaciones"], [])
+comprueba("y aunque las tuviera, lee el de su perfil",
+          _C.cabina_y_ambito("cli-airbus", {"tipo": "cliente", "ambito": {"clientes": ["AIRBUS"]}},
+                             {"delegaciones": ["SEVILLA"]})[0], "cli-airbus")
+comprueba("del personal, sin delegaciones y con un perfil sin ambito: todo el parque, el del interno",
+          _C.cabina_y_ambito("ope-todo", {"tipo": "operaciones", "ambito": {}}, {})[0], "interno")
+comprueba("con un perfil acotado, el de su perfil",
+          _C.cabina_y_ambito("ope-sur", {"tipo": "operaciones", "ambito": {"delegaciones": ["SEVILLA"]}}, {})[0],
+          "ope-sur")
+comprueba("con delegaciones, utilizo no le sale: no es de toda la empresa",
+          L.A.cuadrados_de({"tipo": "direccion", "cuadrados": ["utilizo"],
+                            "ambito": _C.cabina_y_ambito("dir", {"tipo": "direccion", "ambito": {}},
+                                                         {"delegaciones": ["SEVILLA"]})[1]}), [])
+
+print("\nAl guardar un perfil con delegaciones de antes, pasan a sus usuarios")
+pon_fila("USUARIO#luis@serunion.es", {"nombre": "Luis", "perfil_id": "ope-sur", "estado": "activo"})
+llama("POST", "/api/admin/perfiles", {"perfil_id": "ope-sur", "nombre": "Operaciones Sur", "tipo": "operaciones",
+                                      "ambito": {"delegaciones": ["NO SE GUARDA"]},
+                                      "sesiones": ["resumen", "venta_consumo", "disponibilidad"]},
+      cookie=COOKIE_JEFE)
+_pf = json.loads(falsos.TABLA[("PERFIL#ope-sur", "FICHA")]["dato"]["S"])
+comprueba("el perfil se queda sin delegaciones", _pf["ambito"]["delegaciones"], [])
+_luis = json.loads(falsos.TABLA[("USUARIO#luis@serunion.es", "FICHA")]["dato"]["S"])
+comprueba("el usuario que no tenia ninguna se lleva las del perfil", _luis["delegaciones"], ["SEVILLA"])
+_fila = json.loads(falsos.TABLA[("USUARIO#olga@serunion.es", "FICHA")]["dato"]["S"])
+comprueba("el que ya tenia las suyas se queda con las suyas", _fila["delegaciones"], ["CADIZ", "SEVILLA"])
+llama("POST", "/api/admin/usuarios", dict(_olga, delegaciones=[]), cookie=COOKIE_JEFE)
+falsos.OBJETOS.pop("cabina/ope-sur~43165e23b879/panel.json", None)
 
 print("\nUna ruta que no existe")
 comprueba("404", llama("GET", "/api/loquesea", cookie=COOKIE_JEFE)["statusCode"], 404)

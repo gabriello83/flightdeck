@@ -384,6 +384,20 @@ SOLO_DIRECCION = ("almacenes", "utilizo")
 # Y los que solo ve un perfil sin ambito: son de toda la empresa.
 SIN_AMBITO = ("utilizo",)
 
+# El perfil se elige cuadrado a cuadrado (docs/64): la consola guarda en
+# `cuadrados` los que ve, y eso manda sobre las sesiones. Los cuadrados que no
+# tienen pagina propia llevan al panel: elegirlos da la sesion que abren, y de
+# esa sesion se ven solo sus paneles. Los de un cuadrado no elegido se quitan
+# (paneles_ocultos), aunque compartan sesion con uno elegido.
+PANEL_DE_CUADRADO = {
+    "pdvs": ("instalaciones", ("censo", "altas", "incidencias", "inc_detalle")),
+    "ventas": ("venta_consumo", ("recaudacion", "ciego")),
+    "reposiciones": ("venta_consumo", ("carga",)),
+}
+# Lo que no es un cuadrado y se sigue eligiendo: el resto del panel, los
+# avisos y el cuadro de mando.
+OTRAS_PANTALLAS = ("resumen", "servicio", "disponibilidad", "avisos", "cuadro")
+
 # Como se llama cada cuadrado en la pagina y en la consola.
 NOMBRE_CUADRADO = {
     "rutas": "Rutas", "averias": "Incidencias", "devoluciones": "Devoluciones",
@@ -401,6 +415,9 @@ TABLAS = {
         "rutas": "Visitas por ruta",
         "estado": "Estado de las visitas",
         "maquinas": "Máquinas no visitadas",
+        "llamadas": "Llamadas de máquina vacía",
+        "recaudar": "Máquinas por recaudar en el mes",
+        "reponer": "Máquinas sin reponer",
         "delegaciones": "Por delegación",
         "festivos": "Festivos por delegación",
     },
@@ -409,20 +426,17 @@ TABLAS = {
         "tecnicas": "Los 10 centros con más averías técnicas",
         "abiertas": "Lista de incidencias y su ficha",
     },
+    # Por areas desde el 20-oct-2026 (docs/57): lo que se ve al entrar en una.
     "devoluciones": {
+        "registradas": "Devoluciones registradas",
+        "maquinas": "Máquinas con más devoluciones",
+        "importes": "Devoluciones con más importe",
         "meses": "Devoluciones por mes y canal",
-        "canal": "Por canal y por origen",
-        "zonas": "Por zona y delegación",
-        "centros": "Los 15 centros con más devoluciones",
-        "maquinas": "Las 15 máquinas con más devoluciones",
-        "tecnicos": "Por técnico",
-        "pendientes": "Devoluciones sin cerrar",
+        "clientes": "Clientes con más devoluciones",
     },
     "furgonetas": {
-        "vehiculos": "Furgonetas con visitas",
-        "sin_vehiculo": "Visitas sin vehículo",
-        "delegaciones": "Por delegación",
-        "dias": "Furgonetas activas, día a día",
+        "vehiculos": "Furgonetas activas",
+        "dias": "Furgonetas con visitas, día a día",
     },
     # Las paginas de una sola tabla: en la consola van con su cuadrado, pero la
     # tabla tiene su estrella de preferidos como las demas.
@@ -452,7 +466,12 @@ def con_usuario(perfil, usuario):
     """
     out = dict(perfil)
     out["cuadrados_ocultos"] = limpia_restricciones(usuario)["cuadrados_ocultos"]
-    out["tablas_ocultas"] = _tablas_validas(usuario.get("tablas_ocultas"))
+    # Las tablas que no ve: las que se le quitaron al perfil (docs/64) y,
+    # ademas, las que se le quitaron a el.
+    del_perfil = _tablas_validas(perfil.get("tablas_ocultas"))
+    del_usuario = _tablas_validas(usuario.get("tablas_ocultas"))
+    out["tablas_ocultas"] = _tablas_validas(
+        {c: del_perfil.get(c, []) + del_usuario.get(c, []) for c in TABLAS})
     return out
 
 
@@ -484,9 +503,15 @@ def cuadrados_de(perfil):
     Con `con_usuario` delante, los de este usuario: los de su perfil menos los
     que el administrador le quito.
     """
-    necesarios = bloques_de(perfil)
     tipo = perfil.get("tipo", "cliente")
-    out = [c for c, bloque in CUADRADOS if bloque in necesarios]
+    elegidos = perfil.get("cuadrados")
+    if isinstance(elegidos, list):
+        # Elegido cuadrado a cuadrado en la consola (docs/64).
+        out = [c for c, _ in CUADRADOS if c in elegidos]
+    else:
+        # Un perfil guardado antes: los cuadrados salen de sus sesiones.
+        necesarios = bloques_de(perfil)
+        out = [c for c, bloque in CUADRADOS if bloque in necesarios]
     if nivel_de(tipo) < NIVEL["direccion"]:
         out = [c for c in out if c not in SOLO_DIRECCION]
     ambito = perfil.get("ambito") or {}
@@ -517,6 +542,9 @@ def tablas_visibles(perfil, cuadrado):
 _SOLO_DE_UNA = {
     "rutas": (
         ("maquinas", "dias", ("visitas",)),
+        ("llamadas", "raiz", ("llamadas",)),
+        ("recaudar", "raiz", ("por_recaudar",)),
+        ("reponer", "raiz", ("sin_reponer", "nunca_repuestas")),
         ("festivos", "raiz", ("control_festivos",)),
     ),
     "averias": (
@@ -524,8 +552,9 @@ _SOLO_DE_UNA = {
         ("abiertas", "filas:incidencias", ("tx", "u", "p")),
     ),
     "furgonetas": (
-        ("vehiculos", "dias", ("vehiculos",)),
-        ("sin_vehiculo", "dias", ("sin_vehiculo",)),
+        # Los km solo salen en la lista; la flota y las visitas las usa
+        # tambien el dia a dia.
+        ("vehiculos", "raiz", ("km",)),
     ),
     "revision": (
         ("planograma", "raiz", ("sin_planograma",)),
@@ -577,10 +606,16 @@ def recorta_operativo(datos, perfil):
     Lo que no ve no sale de aqui: ni en el dia, ni en la foto.
     """
     ve = cuadrados_de(perfil)
-    out = {k: datos.get(k) for k in ("generado", "ultimo_dia", "umbrales", "_nota")}
+    out = {k: datos.get(k) for k in ("generado", "ultimo_dia", "primer_dia", "umbrales", "zonas", "_nota")}
     out["cuadrados"] = ve
-    out["dias"] = {f: {c: v for c, v in (d or {}).items() if c in ve}
-                   for f, d in (datos.get("dias") or {}).items()}
+    dias = {}
+    for f, d in (datos.get("dias") or {}).items():
+        x = {c: v for c, v in (d or {}).items() if c in ve}
+        # El reparto por delegacion (docs/66), con la misma tijera.
+        if "por_delegacion" in (d or {}):
+            x["por_delegacion"] = {c: v for c, v in d["por_delegacion"].items() if c in ve}
+        dias[f] = x
+    out["dias"] = dias
     out["foto"] = {c: v for c, v in (datos.get("foto") or {}).items() if c in ve}
     return out
 
@@ -601,6 +636,9 @@ def contexto_asistente(panel_recortado, perfil):
             "tipo": perfil.get("tipo"),
             "centros": perfil.get("ambito", {}).get("centros", []),
             "clientes": perfil.get("ambito", {}).get("clientes", []),
+            # Las del usuario, si se las marcaron (docs/65); un cliente no lleva.
+            "delegaciones": perfil.get("ambito", {}).get("delegaciones", [])
+            if perfil.get("tipo", "cliente") != "cliente" else [],
         },
         "datos": panel_recortado,
     }
