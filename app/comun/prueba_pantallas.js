@@ -1061,7 +1061,7 @@ const servidor = http.createServer((pet, res) => {
   {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre('/tarifas/');
-    // Dos areas (docs/69): la portada es un cuadrado por area, con su % en el color del semaforo.
+    // Dos areas (docs/70): la portada es un cuadrado por area, con su % en el color del semaforo.
     await pagina.waitForSelector('.ar-area');
     comprueba('un cuadrado por area, con su porcentaje y su semaforo',
       await pagina.$$eval('.ar-area', x => x.map(b => [b.dataset.area, b.querySelector('.ar-pc').textContent, b.querySelector('.ar-pc').className.split(' ')[1]])),
@@ -1230,7 +1230,7 @@ const servidor = http.createServer((pet, res) => {
   {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre('/almacenes/');
-    // Dos areas (docs/69): la portada, con la parte de productos con compra que no esta bajo minimo.
+    // Dos areas (docs/70): la portada, con la parte de productos con compra que no esta bajo minimo.
     await pagina.waitForSelector('.ar-area');
     comprueba('un cuadrado por area, Sevilla y Leganés',
       await pagina.$$eval('.ar-area', x => x.map(b => [b.dataset.area, b.querySelector('.ar-pc').textContent])),

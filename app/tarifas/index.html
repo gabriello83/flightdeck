@@ -251,7 +251,7 @@ function miga(partes){
 }
 const DELEGACIONES = () => RES.delegaciones||[];
 const unaSola = () => DELEGACIONES().length === 1;
-/* Las areas (docs/69): con mas de una, la portada es un cuadrado por area y
+/* Las areas (docs/70): con mas de una, la portada es un cuadrado por area y
    cada area lleva a sus delegaciones. */
 const AREAS = () => Areas.de(DELEGACIONES().map(d=>d.delegacion));
 const variasAreas = () => AREAS().length > 1;

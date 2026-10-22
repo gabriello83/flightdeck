@@ -484,7 +484,7 @@ comprueba("sin censo, la telemetria dice por que",
           OP.Operativo([DIA], historico=True).telemetria_vencloud(OP.DiaOperativo(DIA))["sin_dato"],
           OP.SIN_CENSO_HISTORICO)
 
-# Las areas del navegador (app/comun/areas.js, docs/69) son las mismas que zona_de.
+# Las areas del navegador (app/comun/areas.js, docs/70) son las mismas que zona_de.
 import json as _json, os, re
 _txt = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "comun", "areas.js"), encoding="utf-8").read()
 _zonas = _json.loads(re.search(r"const ZONAS = (\[.*?\]);", _txt, re.S).group(1))
