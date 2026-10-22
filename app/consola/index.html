@@ -238,7 +238,12 @@ function escribir(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
     document.documentElement.setAttribute("data-theme", n); escribir(CLAVE_TEMA,n); pinta();
   });
 })();
-$("#bOperativo").addEventListener("click", ()=>{ location.href="/operativo/"; });
+/* Del administrador al informe general, con la bienvenida animada cada vez
+   (Gabriele, 21-oct-2026, docs/68): la marca la borra el informe al leerla. */
+$("#bOperativo").addEventListener("click", ()=>{
+  try{ sessionStorage.setItem("digivend.bienvenida", "1"); }catch(e){}
+  location.href="/operativo/";
+});
 $("#bPanel").addEventListener("click", ()=>{ location.href="/panel/"; });
 $("#bAvisos").addEventListener("click", ()=>{ location.href="/avisos/"; });
 $("#bSalir").addEventListener("click", async ()=>{
