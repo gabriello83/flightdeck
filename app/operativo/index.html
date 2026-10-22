@@ -159,6 +159,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 <!-- La bienvenida animada, solo al entrar (comun/bienvenida.js). Va antes que
      la pagina para tapar el «Cargando…» desde el primer instante. -->
 <script src="/comun/bienvenida.js"></script>
+<script src="/comun/asistente.js"></script>
 <div class="env">
   <header class="top">
     <div class="marca">
@@ -167,6 +168,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
     </div>
     <div class="acciones">
       <a class="btn" href="/panel/" id="bPanel">Panel completo</a>
+      <button class="btn" id="bPreguntar" type="button" hidden>Preguntar</button>
       <button class="btn" id="bTema" type="button">Modo oscuro</button>
       <button class="btn" id="bSalir" type="button">Salir</button>
     </div>
@@ -807,6 +809,21 @@ function avisa(texto, mal){
     return;
   }
   DATOS = await ro.json();
+  /* El asistente contesta con este mismo informe, recortado igual en el
+     servidor (docs/69). Las sugerencias, de los cuadrados que ve. */
+  if(YO.asistente && YO.asistente.habilitado){
+    const ve = new Set(DATOS.cuadrados || []);
+    Asistente.monta({pagina:"operativo", boton:$("#bPreguntar"),
+      hola:"¡Hola! Pregúntame por el informe general.",
+      pie:"Sólo ve los datos de este informe. No ejecuta acciones ni consulta nada más.",
+      sugerencias:()=>[
+        ve.has("rutas") && "¿Qué delegación cumplió peor las rutas ayer?",
+        ve.has("averias") && "¿Cómo van las averías cerradas en 24 h esta semana?",
+        ve.has("ventas") && "¿Cuánto se vendió ayer y cómo va contra la semana pasada?",
+        ve.has("furgonetas") && "¿Cuántas furgonetas salieron ayer?",
+        ve.has("telemetria") && "¿Qué delegación tiene peor telemetría?",
+      ].filter(Boolean)});
+  }
   try{
     const rp = await fetch("/api/preferidos", {credentials:"same-origin"});
     if(rp.ok) PREFERIDOS = (await rp.json()).preferidos || [];

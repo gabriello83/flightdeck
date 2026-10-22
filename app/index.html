@@ -161,11 +161,13 @@ async function aDondeVa(){
   return "/operativo/";
 }
 
-/* Al informe operativo se entra con su bienvenida animada, una vez: la marca
-   la borra la propia pagina en cuanto la lee (comun/bienvenida.js). */
+/* Al informe operativo se entra con su bienvenida animada, una vez por
+   entrada: la marca la borra la propia pagina en cuanto la lee
+   (comun/bienvenida.js). Se deja aunque el destino sea otro: el administrador
+   empieza en la consola y la ve al pasar al informe; un cliente nunca llega. */
 async function entra(){
   const destino = await aDondeVa();
-  if(destino === "/operativo/"){ try{ sessionStorage.setItem("digivend.bienvenida", "1"); }catch(e){} }
+  try{ sessionStorage.setItem("digivend.bienvenida", "1"); }catch(e){}
   location.href = destino;
 }
 
