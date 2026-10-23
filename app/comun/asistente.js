@@ -93,6 +93,11 @@
 .saluda .todo{animation:as-bote .84s ease-in-out 3}
 @keyframes as-saluda{from{transform:rotate(-16deg)}to{transform:rotate(22deg)}}
 @keyframes as-bote{0%,100%{transform:none}50%{transform:translateY(-3px) rotate(-2deg)}}
+.furgo .rueda{transform-box:fill-box;transform-origin:center}
+.furgo.saluda .rueda{animation:as-rueda .7s linear 3}
+.furgo.saluda .todo{animation:as-traqueteo .35s ease-in-out 6}
+@keyframes as-rueda{to{transform:rotate(360deg)}}
+@keyframes as-traqueteo{0%,100%{transform:none}50%{transform:translateY(-1.2px)}}
 .bufy .cuerpo,.bufy .pata1,.bufy .pata2{transform-box:view-box}
 .bufy .cuerpo{transform-origin:36px 156px}
 .bufy .pata1{transform-origin:153px 162px}
@@ -112,6 +117,7 @@
 .turno.munecos .lista button[aria-pressed="true"]{border-color:var(--s1);box-shadow:0 0 0 1px var(--s1)}
 .turno.munecos .lista b{color:var(--tinta);font-size:13px}
 .turno.munecos .lista .muneco{width:52px;height:64px}
+.turno.munecos .lista .muneco.ancho{width:100px}
 #bVendi{
   position:fixed;right:18px;bottom:18px;z-index:30;width:76px;height:94px;padding:0;
   background:transparent;border:0;cursor:pointer;filter:drop-shadow(0 4px 8px rgba(0,0,0,.18))
@@ -126,9 +132,13 @@
 }
 #bocadillo.vis{opacity:1;transform:none}
 #chat header .muneco{width:30px;height:37px;flex:none}
+#chat header .muneco.ancho{width:56px}
+#bVendi:has(.ancho){width:128px}
+#bVendi:has(.ancho) + #bocadillo{right:152px}
+.btn .muneco.ancho{width:34px}
 .btn .muneco{display:inline-block;width:15px;height:19px;vertical-align:-4px;margin-right:5px}
-@media (max-width:520px){ #bVendi{width:60px;height:74px;right:12px;bottom:12px} #bocadillo{right:80px;bottom:52px} }
-@media (prefers-reduced-motion:reduce){ .saluda .mano,.saluda .todo,.bufy.saluda *{animation:none} #bocadillo{transition:none} }
+@media (max-width:520px){ #bVendi{width:60px;height:74px;right:12px;bottom:12px} #bVendi:has(.ancho){width:100px} #bVendi:has(.ancho) + #bocadillo{right:118px} #bocadillo{right:80px;bottom:52px} }
+@media (prefers-reduced-motion:reduce){ .saluda .mano,.saluda .todo,.bufy.saluda *,.furgo.saluda *{animation:none} #bocadillo{transition:none} }
 `;
 
   /* Los munecos (docs/76). Vendi es el de siempre; cada usuario puede
@@ -146,7 +156,7 @@
   <circle cx="${x1+2}" cy="${y+2}" r="4.2" fill="${t}"/><circle cx="${x2-2}" cy="${y+2}" r="4.2" fill="${t}"/>
   <circle cx="${x1+3.5}" cy="${y+0.4}" r="1.3" fill="#fff"/><circle cx="${x2-0.5}" cy="${y+0.4}" r="1.3" fill="#fff"/>`;
   const svg = (dentro, origen) => `<svg class="muneco" viewBox="0 0 120 150" aria-hidden="true" focusable="false" style="--mano:${origen}"><g class="todo">${dentro}</g></svg>`;
-  let bufys = 0;
+  let bufys = 0, furgos = 0;
 
   function vendi(){
     const snack=(x,y,c)=>`<rect x="${x}" y="${y}" width="9" height="10" rx="2" fill="${c}"/>`;
@@ -243,27 +253,36 @@
   }
 
   function furgo(){
-    const azul = "#0f5b84";
-    return svg(`
-    <rect x="22" y="118" width="16" height="20" rx="4" fill="#2b2b2b" stroke="${t}" stroke-width="2"/>
-    <rect x="82" y="118" width="16" height="20" rx="4" fill="#2b2b2b" stroke="${t}" stroke-width="2"/>
-    <path d="M24 44q2-12 14-12h44q12 0 14 12l6 40v38q0 6-6 6H24q-6 0-6-6V84z" fill="${azul}" stroke="${t}" stroke-width="3" stroke-linejoin="round"/>
-    <path d="M30 40q1-4 6-4h48q5 0 6 4l4 34H26z" fill="#d6ecf8" stroke="${t}" stroke-width="2.2" stroke-linejoin="round"/>
-    <path d="M34 42l8-2" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".8"/>
-    ${ojos(48, 72, 56)}
-    <rect x="18" y="82" width="84" height="9" fill="#fff"/>
-    <text x="60" y="89.2" text-anchor="middle" font-family="system-ui,sans-serif" font-size="6.6" font-weight="800" fill="${azul}" letter-spacing=".3">SERUNION VENDING</text>
-    <circle cx="30" cy="102" r="6" fill="#fff7c2" stroke="${t}" stroke-width="2"/>
-    <circle cx="90" cy="102" r="6" fill="#fff7c2" stroke="${t}" stroke-width="2"/>
-    <path d="M44 99q16 14 32 0" fill="#2b2b2b" stroke="${t}" stroke-width="2.5" stroke-linejoin="round"/>
-    <path d="M49 101q11 7 22 0" fill="none" stroke="#fff" stroke-width="1.4" opacity=".6"/>
-    <rect x="20" y="112" width="80" height="8" rx="3" fill="#cfd6dc" stroke="${t}" stroke-width="2"/>
-    <rect x="10" y="50" width="9" height="13" rx="3" fill="${azul}" stroke="${t}" stroke-width="2"/>
-    <g class="mano">
-      <rect x="101" y="50" width="9" height="13" rx="3" fill="${azul}" stroke="${t}" stroke-width="2"/>
-      <path d="M104 52Q110 40 108 30" fill="none" stroke="${t}" stroke-width="5" stroke-linecap="round"/>
-      ${guante(108, 18)}
-    </g>`, "104px 56px");
+    /* La furgoneta de Serunion Vending de lado, como las de la calle: blanca,
+       con el bisonte del logo en la parte de atras y la marca en la puerta.
+       No tiene manos ni piernas: al saludar le giran las ruedas. */
+    const n = ++furgos, az = "#1b6fc9", negro = "#26292c", B = "M156 204.5 145 204.5 142.7 203 142.2 201 142.7 197 151.4 161 151.2 159 148.7 156 145 154.8 139 154.4 101 148.7 96 148.3 88 146.8 68 144.3 63 144.9 59 146.5 37 159.7 34 162.1 31.9 166 31.7 170 40.4 198 40.6 202 40.4 203 39 204.2 37 204.6 26 204.5 25 204.3 23.5 203 22.7 202 22.4 200 22 193 20.7 183 19.3 165 19.5 159 20.7 154 34.1 116 36.1 109 35.4 107 33.8 105 21 98.2 14 93.2 8.7 87 6.6 83 4.7 78 3.3 69 4.7 48 5.5 46 7 45.2 9 45.5 16.2 55 16.4 59 14.6 63 12.6 71 13.5 77 14.6 80 17 83.7 24 90.1 30 92.4 39 92.4 46 89.5 52 84.8 58 84.5 68 91.4 79 96.4 87 98.4 98 98.7 104 98.2 112 96.2 122 91.3 132 83.4 139.3 74 142.4 68 144.3 63 146.1 56 146.7 49 146.2 38 144.3 31 139.6 20 139.7 16 141 13.2 143 11.5 150 8.6 158 6.7 164 5.9 178 5.7 187 6.7 195 8.7 205 12.5 209 14.6 217 19.8 227 28.2 230 29.4 234 30 241 28.9 246 29 256 30.7 265 34.6 274.1 42 281.2 52 284.2 60 285.3 68 285.1 76 284.2 82 282.1 88 263 123.9 261 126 257 128.3 237 135.5 235 135.7 231 135.4 228 134.1 217 124.9 213 122.9 210 122.8 206.1 125 178.3 154 174.2 159 162.5 171 159.4 175 158.5 179 158.5 202 156 204.5ZM231.2 83 234 81 235.1 79 235.5 77 235.2 75 233 71.7 227 68.1 222.8 64 218.8 57 217.3 50 216 49.3 214.7 51 213.7 61 214.6 68 216.6 73 219.7 78 225 82.3 228 83.5 231.2 83ZM103 91.2 97 92 88 91.5 79 89.2 71 85.2 67 82.4 63 78.7 56.6 71 52.7 63 50.7 56 50.2 43 50.6 38 52.7 31 58.7 20 64.2 14 71 8.8 79 4.8 86 2.7 93 2 104 2.8 111 4.9 119 8.9 124 12.6 130.3 19 134.3 25 138.4 35 140 47 139.4 54 138.4 59 134.4 69 128 77.6 120 84.4 113 88.3 107 90.4 103 91.2ZM71.2 68 119 27.2 120.4 24 119.6 22 118 20 112 15.8 105 12.9 97 11.4 93 11.4 86 12.6 80 14.7 74.3 18 69 22.6 66 26.2 61.6 34 59.5 42 59.4 49 60.7 57 64.9 66 66 67.3 68 68.5 71.2 68ZM96 204.5 86 204.6 84 204.5 82 203.4 79.7 201 71.8 188 60.6 169 60 167 59.9 164 60.5 161 63.7 154 65 152.9 68 152.7 82 154.8 84.4 156 84.7 158 84 159.7 75 165.1 73.7 167 73.5 170 76.9 175 98.3 199 98.3 202 96 204.5ZM189 178.2 186 177.2 184.7 175 184.7 173 186.3 169 186.7 166 188 164.5 191 162.6 205 156.1 210.4 153 210.2 151 209 150.5 200 150.1 198.5 149 198.3 147 199.2 145 209 134.7 212 134.3 214 134.7 224 142.7 227.3 146 228.2 149 227.5 152 226 154 223 156.2 193 176.3 189 178.2Z";
+    const CARRO = "M15 15Q10 15 10 21V79Q10 85 16 85H187Q193 85 193 79V63Q193 55 185 52L161 44Q153 41 147 34L135 19Q131 15 125 15Z";
+    const rueda = (x) => `<g class="rueda"><circle cx="${x}" cy="84" r="13" fill="${negro}"/><circle cx="${x}" cy="84" r="8.6" fill="#d9dee3" stroke="#9aa3ab" stroke-width=".8"/>` +
+      [0,45,90,135,180,225,270,315].map(a => `<circle cx="${(x + 6 * Math.cos(a * Math.PI / 180)).toFixed(2)}" cy="${(84 + 6 * Math.sin(a * Math.PI / 180)).toFixed(2)}" r="1.1" fill="#7d868e"/>`).join("") +
+      `<circle cx="${x}" cy="84" r="2.6" fill="#59626a"/><path d="M${x} 81.6v4.8" stroke="#c3c9ce" stroke-width=".9"/></g>`;
+    return `<svg class="muneco ancho furgo" viewBox="0 0 200 100" preserveAspectRatio="xMidYMax meet" aria-hidden="true" focusable="false">
+  <defs><clipPath id="fC${n}"><path d="${CARRO}"/></clipPath></defs>
+  <g class="todo">
+    <path d="${CARRO}" fill="#fff" stroke="#8d969e" stroke-width="1.2" stroke-linejoin="round"/>
+    <g clip-path="url(#fC${n})">
+      <path d="${B}" transform="translate(3.5 15) scale(.31)" fill="${az}" fill-rule="evenodd"/>
+    </g>
+    <path d="M106 20H131L146 40Q146 42 143 42H106Z" fill="#33414c"/>
+    <path d="M110 23H128L120 39H110Z" fill="#fff" opacity=".16"/>
+    <path d="M145 37q5 0 5 5v4h-6z" fill="${negro}"/>
+    <path d="M62 16V84M104 16V84" stroke="#b9c0c6" stroke-width=".8"/>
+    <rect x="80" y="45" width="12" height="2.6" rx="1.3" fill="${negro}"/><rect x="108" y="45" width="12" height="2.6" rx="1.3" fill="${negro}"/>
+    <rect x="64" y="68" width="78" height="5" rx="2.5" fill="${negro}"/>
+    <path d="M10 76H22V85H16Q10 85 10 79Z M186 72H193V79Q193 85 187 85H178Z" fill="${negro}"/>
+    <path d="M184 50l7 3v4l-7-1z" fill="#cfd8df" stroke="#8d969e" stroke-width=".6"/>
+    <path d="M10 46h2v14h-2z" fill="#c0392b"/>
+    <path d="M27 84a15 15 0 0 1 30 0M145 84a15 15 0 0 1 30 0" fill="${negro}"/>
+    <path d="${B}" transform="translate(110.5 52) scale(.028)" fill="${az}" fill-rule="evenodd"/>
+    <text x="120" y="58.6" font-family="system-ui,sans-serif" font-size="6.4" font-weight="800" fill="${az}">SERUNION</text>
+    <text x="140" y="63.4" text-anchor="middle" font-family="system-ui,sans-serif" font-size="2.9" font-weight="700" fill="${az}">VENDING</text>
+    ${rueda(42)}${rueda(160)}
+  </g></svg>`;
   }
 
   function bufy(){
@@ -274,7 +293,7 @@
        se vea la costura. Lo blanco del anillo y del ojo va pintado, no hueco,
        para que en oscuro siga siendo el logo. */
     const n = ++bufys, az = "#015a82", C = "M156 204.5 145 204.5 142.7 203 142.2 201 142.7 197 151.4 161 151.2 159 148.7 156 145 154.8 139 154.4 101 148.7 96 148.3 88 146.8 68 144.3 63 144.9 59 146.5 37 159.7 34 162.1 31.9 166 31.7 170 40.4 198 40.6 202 40.4 203 39 204.2 37 204.6 26 204.5 25 204.3 23.5 203 22.7 202 22.4 200 22 193 20.7 183 19.3 165 19.5 159 20.7 154 34.1 116 36.1 109 35.4 107 33.8 105 21 98.2 14 93.2 8.7 87 6.6 83 4.7 78 3.3 69 4.7 48 5.5 46 7 45.2 9 45.5 16.2 55 16.4 59 14.6 63 12.6 71 13.5 77 14.6 80 17 83.7 24 90.1 30 92.4 39 92.4 46 89.5 52 84.8 58 84.5 68 91.4 79 96.4 87 98.4 98 98.7 104 98.2 112 96.2 122 91.3 132 83.4 139.3 74 142.4 68 144.3 63 146.1 56 146.7 49 146.2 38 144.3 31 139.6 20 139.7 16 141 13.2 143 11.5 150 8.6 158 6.7 164 5.9 178 5.7 187 6.7 195 8.7 205 12.5 209 14.6 217 19.8 227 28.2 230 29.4 234 30 241 28.9 246 29 256 30.7 265 34.6 274.1 42 281.2 52 284.2 60 285.3 68 285.1 76 284.2 82 282.1 88 263 123.9 261 126 257 128.3 237 135.5 235 135.7 231 135.4 228 134.1 217 124.9 213 122.9 210 122.8 206.1 125 178.3 154 174.2 159 162.5 171 159.4 175 158.5 179 158.5 202 156 204.5ZM231.2 83 234 81 235.1 79 235.5 77 235.2 75 233 71.7 227 68.1 222.8 64 218.8 57 217.3 50 216 49.3 214.7 51 213.7 61 214.6 68 216.6 73 219.7 78 225 82.3 228 83.5 231.2 83Z";
-    return `<svg class="muneco bufy" viewBox="0 0 292 210" preserveAspectRatio="xMidYMax meet" aria-hidden="true" focusable="false">
+    return `<svg class="muneco ancho bufy" viewBox="0 0 292 210" preserveAspectRatio="xMidYMax meet" aria-hidden="true" focusable="false">
   <defs>
     <clipPath id="bR${n}"><path clip-rule="evenodd" d="M-90-90H390V300H-90ZM8 154H54V215H8ZM134 165H176V215H134Z"/></clipPath>
     <clipPath id="bT${n}"><path d="M8 148H54V215H8Z"/></clipPath>

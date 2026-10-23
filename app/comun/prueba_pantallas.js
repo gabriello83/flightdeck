@@ -1583,7 +1583,18 @@ const servidor = http.createServer((pet, res) => {
       const y = await abre('/incidencias/');
       await y.pagina.waitForSelector('#bocadillo.vis', { timeout: 5000 });
       comprueba_que('si no toca, el hola de siempre', !(await y.pagina.textContent('#bocadillo')).includes('Muñeco'));
-      comprueba_que('y sale con el suyo', await y.pagina.$eval('#bVendi', b => b.textContent.includes('SERUNION VENDING')));
+      comprueba_que('y sale con el suyo', !!(await y.pagina.$('#bVendi .muneco.furgo')));
+      await y.pagina.evaluate(() => document.querySelector('#bVendi .muneco').classList.remove('saluda'));
+      await y.pagina.hover('#bVendi');
+      comprueba_que('Furgo no saluda con la mano: le giran las ruedas',
+        await y.pagina.$eval('#bVendi .muneco', m => !m.querySelector('.mano') && getComputedStyle(m.querySelector('.rueda')).animationName === 'as-rueda'));
+      if (process.env.FOTOS_VENDI) {
+        await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'furgo.png') });
+        await y.pagina.click('#bVendi');
+        await y.pagina.click('#chatMuneco');
+        await y.pagina.waitForSelector('.turno.munecos');
+        await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'munecos-furgo.png') });
+      }
       await y.pagina.close();
     }
     MUNECO = { muneco: 'vendi', avisar: false };

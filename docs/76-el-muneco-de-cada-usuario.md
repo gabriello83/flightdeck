@@ -11,11 +11,11 @@ después de preguntarlo tres veces no lo preguntes más… un usuario te lo pued
 | `vendi` | Vendi | la máquina de snacks azul, el de siempre |
 | `tom` | Tom | el compañero de polo blanco, gafas y vaqueros, entero |
 | `kiko` | Kiko | como Vendi, pero un grano de café |
-| `furgo` | Furgo | la furgoneta de Serunion Vending, de frente |
+| `furgo` | Furgo | la furgoneta de Serunion Vending de lado, blanca, con el bisonte detrás y la marca en la puerta |
 | `bufy` | Bufy | la silueta del logo de Derichebourg, en su azul |
 
 Todos son SVG dentro de `app/comun/asistente.js`: ni imágenes ni nada que pedir fuera del dominio.
-Los cuatro primeros saludan con la mano. Bufy no tiene mano: al pasarle el ratón, al entrar y al
+Vendi, Tom y Kiko saludan con la mano. Furgo no tiene manos ni piernas: al saludar le giran las ruedas. Bufy tampoco tiene mano: al pasarle el ratón, al entrar y al
 abrir el chat **se levanta de manos como un caballo**. El cuerpo gira sobre la cadera, las patas
 traseras se quedan en el suelo y las delanteras patean el aire. Está hecho a partir del logo, en
 tres trozos del mismo trazo, y los recortes se pisan un poco para que no se vea la costura. Lo
