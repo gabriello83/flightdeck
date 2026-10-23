@@ -93,8 +93,9 @@ Vendi con esa misma línea. El panel y el informe general lo siguen montando ell
 
 ## Serie y tarifas: el detalle va con parámetros
 
-23-oct: Gabriele preguntó por el precio del agua en Málaga y por la venta de Font Vella en el
-Hospital Clínico (290010), y Vendi contestó que no podía. Los registros muestran por qué: consultó
+23-oct: Gabriele hizo dos preguntas que, por lo que Vendi consultó (el texto de la pregunta no
+se guarda), iban del agua en Málaga y de Font Vella en el Hospital Clínico (290010), y Vendi
+contestó que no podía. Los registros muestran por qué: consultó
 `serie` y `tarifas` sin `parametros`, que solo dan el índice, y dio vueltas buscando dentro hasta
 quedarse sin ellas. El detalle estaba, pero detrás de `{"mes": …}`, `{"centros": …}` o
 `{"centro": …}`.
