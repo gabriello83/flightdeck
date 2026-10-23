@@ -145,14 +145,38 @@ def delegaciones_de(perfil, usuario):
     return sorted({str(d).strip()[:80] for d in ds if str(d).strip()})[:200]
 
 
-def cabina_de(perfil_id, delegaciones):
-    """La carpeta de cabina/ de un perfil con esas delegaciones.
+def acota_de(usuario):
+    """Los clientes y centros a los que el administrador le recorto a ESTE
+    usuario lo que ve (docs/74). Vale para cualquier perfil, de cliente o del
+    personal: se suma como un Y a lo que ya ve, nunca le da nada. Vacio = nada
+    que recortar.
+
+    - clientes: el nombre del cliente, como en el ambito de un perfil.
+    - centros: el numero de centro (o su nombre exacto, lo escrito de antes).
+    """
+    out = {}
+    for k in ("clientes", "centros"):
+        xs = usuario.get(k)
+        if isinstance(xs, list):
+            xs = sorted({str(x).strip()[:80] for x in xs if str(x).strip()})[:200]
+            if xs:
+                out[k] = xs
+    return out
+
+
+def cabina_de(perfil_id, delegaciones, acota=None):
+    """La carpeta de cabina/ de un perfil con esas delegaciones, y con esos
+    clientes y centros si se le recortan al usuario (docs/74).
 
     La MISMA cuenta esta en lambda_agregados.cabina_de, que es quien escribe la
     carpeta: si dejaran de coincidir, el usuario se quedaria sin panel, nunca
-    con el de otro. Las dos pruebas fijan el mismo valor.
+    con el de otro. Las dos pruebas fijan el mismo valor. Sin clientes ni
+    centros la cuenta es la de siempre (docs/65): nadie pierde su panel.
     """
     ds = sorted({str(d) for d in delegaciones or []})
+    acota = acota or {}
+    ds += [f"cliente:{c}" for c in sorted({str(x) for x in acota.get("clientes") or []})]
+    ds += [f"centro:{c}" for c in sorted({str(x) for x in acota.get("centros") or []})]
     if not perfil_id or not ds:
         return perfil_id
     return f"{perfil_id}~{hashlib.sha1(chr(10).join(ds).encode('utf-8')).hexdigest()[:12]}"
@@ -162,22 +186,28 @@ def cabina_y_ambito(perfil_id, perfil, usuario):
     """De que carpeta lee la sesion de este usuario, y con que ambito.
 
     El ambito se aplica al escribir: la Lambda de agregados escribe un panel por
-    perfil y, para cada usuario del personal con delegaciones, uno con esas
-    delegaciones y ninguna otra. Aqui solo se elige cual de los ya escritos le
-    toca, y no hay ningun parametro de la peticion que entre en la cuenta.
+    perfil y, para cada usuario con delegaciones o con clientes y centros
+    recortados, uno con eso y nada mas. Aqui solo se elige cual de los ya
+    escritos le toca, y no hay ningun parametro de la peticion que entre en la
+    cuenta.
 
-    - Con delegaciones: su panel, `<perfil>~<huella>`. Las del usuario sustituyen
-      a las que tuviera el perfil de antes; los clientes y centros del perfil,
-      si los tiene, se quedan.
-    - Del personal, sin delegaciones y con un perfil sin ambito: todo el parque,
+    - Con delegaciones o recorte: su panel, `<perfil>~<huella>`. Las
+      delegaciones del usuario sustituyen a las que tuviera el perfil de antes;
+      los clientes y centros del perfil, si los tiene, se quedan, y el recorte
+      (`acota`) va encima: solo lo que encaje en los dos.
+    - Del personal, sin nada de eso y con un perfil sin ambito: todo el parque,
       que es el panel del interno.
     - Lo demas, el de su perfil, como siempre.
     """
     ambito = dict(perfil.get("ambito") or {})
     ds = delegaciones_de(perfil, usuario)
+    acota = acota_de(usuario)
     if ds:
         ambito["delegaciones"] = ds
-        return cabina_de(perfil_id, ds), ambito
+    if acota:
+        ambito["acota"] = acota
+    if ds or acota:
+        return cabina_de(perfil_id, ds, acota), ambito
     if (perfil.get("tipo", "cliente") != "cliente" and perfil_id
             and not any(ambito.get(k) for k in ("clientes", "centros", "delegaciones"))):
         return "interno", ambito

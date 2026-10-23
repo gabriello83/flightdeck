@@ -307,7 +307,7 @@ function vistaUsuarios(){
   const filas = USUARIOS.map(u=>`<tr>
     <td><b>${esc(u.nombre||"—")}</b><br><span class="cond">${esc(u._id)}</span></td>
     <td data-et="Perfil">${esc(nombrePerfil(u.perfil_id))}</td>
-    <td data-et="Delegaciones">${resumenDelegaciones(u)}</td>
+    <td data-et="Qué ve">${resumenDelegaciones(u)}</td>
     <td data-et="Estado">${u.estado==="bloqueado"
       ? `<span class="pill c">bloqueado</span>` : `<span class="pill b">activo</span>`}</td>
     <td data-et="Informe">${esc(resumenInforme(u))}</td>
@@ -323,22 +323,39 @@ function vistaUsuarios(){
       <button class="btn fuerte" id="bNuevoUsuario" type="button">Nuevo usuario</button></div>
     <p class="sub">${USUARIOS.length} de alta. La contraseña inicial la entregas tú: el usuario tiene que cambiarla al entrar.</p>
     ${USUARIOS.length ? `<div class="tabla"><table>
-      <thead><tr><th>Quién</th><th>Perfil</th><th>Delegaciones</th><th>Estado</th><th>Informe operativo</th><th>Asistente</th><th></th></tr></thead>
+      <thead><tr><th>Quién</th><th>Perfil</th><th>Qué ve</th><th>Estado</th><th>Informe operativo</th><th>Asistente</th><th></th></tr></thead>
       <tbody>${filas}</tbody></table></div>`
      : `<p class="vacio">Todavía no hay ningún usuario además de ti.</p>`}
   </section>`;
 }
 
-/* Las delegaciones que ve (docs/65). Su panel se escribe en la pasada de
-   agregados siguiente a marcarlas: hasta entonces se dice. */
+/* Las delegaciones que ve (docs/65), y los clientes y centros a los que se le
+   recorta (docs/74). Su panel se escribe en la pasada de agregados siguiente a
+   marcarlas: hasta entonces se dice. */
 function resumenDelegaciones(u){
   const p = PERFILES.find(x=>x._id===u.perfil_id);
-  if(!p || (p.tipo||"cliente")==="cliente") return `<span class="tenue">—</span>`;
-  const ds = u.delegaciones || [];
-  if(!ds.length) return `<span class="cond">${esc(delegacionesDelPerfil(p))}</span>`;
+  const personal = p && (p.tipo||"cliente")!=="cliente";
+  const ds = personal ? (u.delegaciones || []) : [];
+  const recorte = resumenRecorte(u);
+  if(!ds.length && !recorte) return personal ? `<span class="cond">${esc(delegacionesDelPerfil(p))}</span>`
+                                             : `<span class="tenue">—</span>`;
   const pan = u.panel || {};
-  return `<span class="cond">${esc(ds.join(", "))}</span>` + (pan.existe ? ""
-    : `<br><span class="pill c">sin panel hasta la noche</span>`);
+  return [ds.length ? `<span class="cond">${esc(ds.join(", "))}</span>` : "",
+          recorte ? `<span class="cond">${esc(recorte)}</span>` : ""].filter(Boolean).join("<br>")
+    + (pan.existe ? "" : `<br><span class="pill c">sin panel hasta la noche</span>`);
+}
+/* Los clientes y centros recortados, en una línea: los clientes por nombre y
+   los centros por nombre si están en los datos. */
+function resumenRecorte(u){
+  const cl = u.clientes || [], ce = u.centros || [];
+  if(!cl.length && !ce.length) return "";
+  const D = datosAmbito();
+  const nombres = ce.map(n=>(D.porNum[n] || {}).nombre || n);
+  const trozos = [];
+  if(cl.length) trozos.push("solo " + cl.join(", "));
+  if(ce.length) trozos.push(ce.length > 3 ? `${cl.length?"y ":"solo "}${num(ce.length)} centros`
+                                          : `${cl.length?"y ":"solo "}${nombres.join(", ")}`);
+  return trozos.join(" ");
 }
 /* Lo que ve un usuario del personal sin delegaciones marcadas. */
 function delegacionesDelPerfil(p){
@@ -438,6 +455,16 @@ function formUsuario(correo){
        <div class="multi" id="mDelegacionesU"></div>
        <p class="pista" id="rDelegacionesU"></p>
      </div>
+     <div class="campo" id="campoClientesU">
+       <label for="fClientesU">Clientes que ve</label>
+       <div class="multi" id="mClientesU"></div>
+       <p class="pista" id="rClientesU"></p>
+     </div>
+     <div class="campo" id="campoCentrosU">
+       <label for="fCentrosU">Centros que ve</label>
+       <div class="multi" id="mCentrosU"></div>
+       <p class="pista" id="rCentrosU"></p>
+     </div>
      <div class="campo" id="campoCuadrados" hidden>
        <label>Qué ve en el informe operativo</label>
        <div class="cuadrados" id="cajaCuadrados"></div>
@@ -478,6 +505,7 @@ function formUsuario(correo){
         telefono: $("#fTelefono").value.trim(),
         ...restriccionesUsuario(),
         delegaciones: $("#campoDelegacionesU").hidden ? [] : leeDelegaciones(),
+        ...leeRecorte(),
       };
       if(!u) cuerpo.clave = $("#fClave").value;
       const res = await api("POST","/api/admin/usuarios",cuerpo);
@@ -487,11 +515,14 @@ function formUsuario(correo){
     });
   /* Al cambiar de perfil cambian los cuadrados que se pueden quitar: lo que
      tuviera quitado de otro perfil se olvida. */
-  let leeDelegaciones = () => [];
+  let leeDelegaciones = () => [], leeRecorte = () => ({clientes: [], centros: []}), alDelegaciones = () => {};
   const alPerfil = () => {
     const mismo = u && u.perfil_id===$("#fPerfil").value ? u : null;
     pintaCuadradosUsuario(mismo);
-    leeDelegaciones = pintaDelegacionesUsuario(mismo);
+    leeDelegaciones = pintaDelegacionesUsuario(mismo, () => alDelegaciones());
+    /* Los clientes y centros se guardan aunque cambie el perfil: el recorte es
+       del usuario, y lo que el perfil nuevo no vea simplemente no le sale. */
+    [leeRecorte, alDelegaciones] = pintaRecorteUsuario(u, () => leeDelegaciones());
   };
   $("#fPerfil").addEventListener("change", alPerfil);
   alPerfil();
@@ -502,7 +533,7 @@ function formUsuario(correo){
    y un cliente no la ve. Vacío = todas las de su perfil. Las que el perfil
    tuviera de antes salen marcadas a quien todavía no tiene ninguna: guardar el
    usuario no le cambia lo que ve. Devuelve con qué leer lo marcado. */
-function pintaDelegacionesUsuario(u){
+function pintaDelegacionesUsuario(u, alCambiar){
   const p = PERFILES.find(x=>x._id===$("#fPerfil").value);
   const campo = $("#campoDelegacionesU");
   campo.hidden = !p || (p.tipo||"cliente")==="cliente";
@@ -528,9 +559,107 @@ function pintaDelegacionesUsuario(u){
     r.className = "pista" + (mal ? " mal" : "");
   };
   const m = multiple($("#mDelegacionesU"), {id: "fDelegacionesU", todas: D.delegaciones, opciones: () => D.delegaciones,
-    valores, manual: !D.hay, placeholder: D.hay ? "Todas · buscar delegación…" : "", alCambiar: () => explica()});
+    valores, manual: !D.hay, placeholder: D.hay ? "Todas · buscar delegación…" : "",
+    alCambiar: () => { explica(); if(alCambiar) alCambiar(); }});
   explica();
   return () => m.valores();
+}
+
+/* Los clientes y centros que ve este usuario (docs/74). Es un recorte: encima
+   de lo que ve su perfil (y sus delegaciones, si es del personal), solo lo que
+   encaje además en uno de estos. Nunca le da nada que su perfil no vea, así que
+   la lista sólo trae los centros que su perfil ve, y de sus delegaciones si se
+   han marcado. Vacío = todo lo de su perfil.
+
+   Se guarda con la misma regla que el ámbito del perfil (montaAmbito): un
+   cliente al que se le marcan centros no se guarda como cliente, sólo sus
+   centros, por número. «SERUNION, SA» con sus diez centros de AIRBUS marcados
+   son esos diez, no todo SERUNION. Devuelve con qué leerlo y qué hacer cuando
+   cambian las delegaciones. */
+function pintaRecorteUsuario(u, delegaciones){
+  const p = PERFILES.find(x=>x._id===$("#fPerfil").value);
+  const D = datosAmbito();
+  const amb = (p && p.ambito) || {};
+  const esCliente = !p || (p.tipo||"cliente")==="cliente";
+  /* Lo que ve el perfil, con la regla de en_ambito(): basta con encajar en uno. */
+  const delPerfil = o => {
+    const f = D.porNum[o.valor] || {};
+    const hay = ["clientes","centros", ...(esCliente ? ["delegaciones"] : [])].some(k=>(amb[k]||[]).length);
+    if(!hay) return true;
+    return ["clientes","centros", ...(esCliente ? ["delegaciones"] : [])]
+      .some(k=>(amb[k]||[]).some(v=>encaja(k, v, o.valor, f)));
+  };
+  const enDelegaciones = o => {
+    const ds = esCliente ? [] : delegaciones();
+    return !ds.length || ds.includes((D.porNum[o.valor] || {}).delegacion);
+  };
+  const centrosQueVe = () => D.centros.filter(o=>delPerfil(o) && enDelegaciones(o));
+  const clientesQueVe = () => {
+    const cs = new Map();
+    for(const o of centrosQueVe()) if(o.cliente) cs.set(o.cliente, (cs.get(o.cliente) || 0) + 1);
+    return D.clientes.filter(c=>cs.has(c.valor))
+      .map(c=>Object.assign({}, c, {n: cs.get(c.valor), detalle: `${num(cs.get(c.valor))} ${cs.get(c.valor)===1?"centro":"centros"}`}));
+  };
+  const reales = new Map(D.clientes.map(c=>[c.valor, c]));
+  const clienteDe = n => (D.porNum[n] || {}).cliente;
+  const centros0 = ((u && u.centros) || []).map(String);
+  const clientes0 = ((u && u.clientes) || []).map(String);
+  for(const n of centros0){
+    const c = clienteDe(n);
+    if(c && !clientes0.includes(c)) clientes0.push(c);
+  }
+  const delCliente = (c, o) => reales.has(c) ? o.cliente === c : encaja("clientes", c, o.valor, D.porNum[o.valor] || {});
+  const centrosPosibles = () => {
+    const cs = mCl.valores(), todos = centrosQueVe();
+    return cs.length ? todos.filter(o=>cs.some(c=>delCliente(c, o))) : todos;
+  };
+
+  const explica = () => {
+    const rCl = $("#rClientesU"), rCe = $("#rCentrosU");
+    const cl = mCl.valores(), ce = mCe.valores();
+    if(!D.hay){
+      rCl.className = "pista";
+      rCl.textContent = "Sin el histórico cargado no hay lista de la que elegir: se escribe a mano y se pone con Intro.";
+      rCe.textContent = "";
+      return;
+    }
+    if(!cl.length && !ce.length){
+      rCl.className = "pista";
+      rCl.textContent = "Vacío, ve todos los clientes de su perfil" + (esCliente ? "." : " y de sus delegaciones.");
+      rCe.className = "pista";
+      rCe.textContent = "Para que vea sólo algunos centros de un cliente, elige el cliente y luego sus centros.";
+      return;
+    }
+    const ven = new Map(clientesQueVe().map(c=>[c.valor, c.n]));
+    let mal = false;
+    rCl.textContent = cl.map(c=>{
+      const k = ce.filter(n=>clienteDe(n) === c).length;
+      if(k) return `${c}: ${num(k)} de sus ${num(ven.get(c) || 0)} centros`;
+      const n = ven.has(c) ? ven.get(c) : centrosQueVe().filter(o=>delCliente(c, o)).length;
+      if(!n){ mal = true; return `${c}: ningún centro que su perfil vea`; }
+      return `${c}: entero, ${num(n)} ${n===1?"centro":"centros"}`;
+    }).join(" · ") + ". Su panel con este recorte se escribe en la pasada de agregados de esta noche.";
+    rCl.className = "pista" + (mal ? " mal" : "");
+    const posibles = new Set(centrosQueVe().map(o=>o.valor));
+    const fuera = ce.filter(n=>!posibles.has(n));
+    rCe.textContent = ce.length ? `Se guardan por número: ${ce.join(" · ")}`
+      + (fuera.length ? `. Fuera de lo que ve su perfil: ${fuera.join(", ")}` : "") : "";
+    rCe.className = "pista" + (fuera.length ? " mal" : "");
+  };
+
+  const mCl = multiple($("#mClientesU"), {id: "fClientesU", todas: D.clientes, opciones: clientesQueVe,
+    valores: clientes0, manual: !D.hay, placeholder: D.hay ? "Todos · buscar cliente…" : "",
+    /* Quitado un cliente, se van con él los centros suyos que estaban marcados. */
+    alCambiar: () => { const ok = new Set(centrosPosibles().map(o=>o.valor));
+                       mCe.filtra(n => !D.porNum[n] || ok.has(n)); explica(); }});
+  const mCe = multiple($("#mCentrosU"), {id: "fCentrosU", todas: D.centros, opciones: centrosPosibles,
+    valores: centros0, manual: !D.hay, placeholder: D.hay ? "Todos · nombre o número…" : "",
+    alCambiar: () => explica()});
+  explica();
+  return [() => {
+    const ce = mCe.valores();
+    return {clientes: mCl.valores().filter(c=>!reales.has(c) || !ce.some(n=>clienteDe(n) === c)), centros: ce};
+  }, () => explica()];
 }
 
 function nuevaClave(correo){
