@@ -109,6 +109,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 </style>
 <script src="/comun/xlsx.js"></script>
 <script src="/comun/preferidos.js"></script>
+<script src="/comun/filtros.js"></script>
 </head>
 <body>
 <div class="env">
@@ -130,6 +131,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   <div id="todo" hidden>
     <div class="barra">
       <label>Día <select id="dia"></select></label>
+      <span id="fLugar"></span>
       <label>Mostrar <select id="filtro">
         <option value="falta">Con alguna diferencia</option>
         <option value="sin_marca">Sin telemetría en VenCloud</option>
@@ -199,6 +201,10 @@ $("#bSalir").addEventListener("click", async ()=>{
 });
 
 let D=null, PESTANA="nayax", VENTA={}, DEX={}, AREA="";
+/* Area, delegacion, cliente y centro, con seleccion multiple y buscador
+   (David, 22-oct, docs/73). Cada maquina trae los suyos. Sin nada elegido, y
+   con varias areas, un cuadrado por area. */
+let F = null;
 
 /* ------------------------------------------------------------- las areas
    Gabriele, 19-oct: quien ve más de un área (el nacional) abre primero un
@@ -210,19 +216,11 @@ const zonaDe = d => (D.zonas||{})[d] || "Otra zona";
 const areasDe = filas => [...new Set(filas.map(m=>zonaDe(m.delegacion)))]
   .sort((x,y)=>(ORDEN_ZONAS.indexOf(x)+99)%99 - (ORDEN_ZONAS.indexOf(y)+99)%99 || x.localeCompare(y,"es"));
 const porAreas = () => areasDe(D.maquinas||[]).length > 1;
+/* Pulsar un área es elegirla en el filtro; «Todas las áreas» lo quita todo. */
 function ir(area){
-  AREA = area || "";
-  const u = new URL(location.href);
-  if(AREA) u.searchParams.set("a", AREA); else u.searchParams.delete("a");
-  history.pushState(null, "", u);
-  pinta();
+  if(area) F.pon("areas", [area]); else F.limpia();
   window.scrollTo(0, 0);
 }
-addEventListener("popstate", ()=>{
-  const a = new URLSearchParams(location.search).get("a") || "";
-  AREA = D && porAreas() && areasDe(D.maquinas||[]).includes(a) ? a : "";
-  pinta();
-});
 
 function fechaLarga(s){
   const d = new Date(String(s)+"T00:00:00");
@@ -256,7 +254,7 @@ const desde = () => Object.keys(D.dias||{}).sort()[0];
 const cmp = (a,b) => String(a||"").localeCompare(String(b||""), "es", {numeric:true});
 function filasDe(sistema){
   const dia = $("#dia").value, v = VENTA[dia]||new Set(), x = DEX[dia]||new Set();
-  return (D.maquinas||[]).filter(m=>m.sistema===sistema && (!AREA || zonaDe(m.delegacion)===AREA)).map(m=>({
+  return (D.maquinas||[]).filter(m=>m.sistema===sistema && F.pasaCentro(m.num_centro, m.delegacion)).map(m=>({
     ...m, venta: v.has(m.matricula), dex: x.has(m.matricula),
   })).sort((a,b)=>cmp(a.centro,b.centro) || cmp(a.num_centro,b.num_centro) || cmp(a.modelo,b.modelo)
                   || cmp(a.ubicacion,b.ubicacion) || cmp(a.matricula,b.matricula));
@@ -356,9 +354,10 @@ function vistaAreas(filas){
 function pinta(){
   const dia = $("#dia").value;
   const mi = $("#miga");
+  AREA = F.texto();
   mi.hidden = !AREA || PESTANA==="fuera";
   if(!mi.hidden){
-    mi.innerHTML = `<a href="?" id="volverArea">Todas las áreas</a> › <b>${esc(AREA)}</b>`;
+    mi.innerHTML = `<a href="?" id="volverArea">${porAreas() ? "Todas las áreas" : "Todas"}</a> › <b>${esc(AREA)}</b>`;
     $("#volverArea").addEventListener("click", e=>{ e.preventDefault(); ir(""); });
   }
   const sistemas = ["nayax","prodelfi","nebula","solo_vencloud"].filter(s=>(D.maquinas||[]).some(m=>m.sistema===s));
@@ -439,7 +438,7 @@ function excel(){
                                   .map(([,i])=>i+COLS_SITIO.length);
   const que = fuera ? "están en un sistema y no en VenCloud" : `${NOMBRE[PESTANA]} · ${QUE[$("#filtro").value]}`;
   const busca = $("#busca").value.trim();
-  const donde = [fuera ? "" : (AREA ? `Área ${AREA}` : "Todo el ámbito"), fuera ? "" : fechaLarga(dia),
+  const donde = [fuera ? "" : (AREA || "Todo el ámbito"), fuera ? "" : fechaLarga(dia),
                  busca ? `buscando «${busca}»` : "", `generado el ${hoy.toLocaleDateString("es-ES")}`].filter(Boolean).join(" · ");
   const limpio = t => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^A-Za-z0-9]+/g,"_").replace(/^_|_$/g,"").toLowerCase();
   XLSX.descarga(XLSX.libro([{nombre: fuera ? "No están en VenCloud" : NOMBRE[PESTANA],
@@ -493,8 +492,18 @@ function pintaFicheros(){
   if(!dias.includes(pedido) && !dias.includes(ayer))
     avisa(`Todavía no hay datos de ayer: lo último cruzado es del ${fechaLarga(dias[0])}.`, true);
   pintaFicheros();
+  /* Los cuatro filtros, de las propias máquinas. Un enlace de antes con ?a=Área
+     abre esa área. */
+  const zonas = {}, centros = {};
+  (D.maquinas||[]).forEach(m=>{
+    if(m.delegacion) zonas[m.delegacion] = zonaDe(m.delegacion);
+    if(m.num_centro && !centros[m.num_centro]) centros[m.num_centro] = {n: m.centro || m.num_centro, c: m.cliente || "", d: m.delegacion};
+  });
+  F = Filtros.cuatro($("#fLugar"), {zonas, centros, zonaDe,
+    ordenAreas: (x, y)=>(ORDEN_ZONAS.indexOf(x)+99)%99 - (ORDEN_ZONAS.indexOf(y)+99)%99 || x.localeCompare(y,"es"),
+    alCambiar: pinta});
   const pideArea = new URLSearchParams(location.search).get("a") || "";
-  if(porAreas() && areasDe(D.maquinas||[]).includes(pideArea)) AREA = pideArea;
+  if(pideArea && !F.alguno()) F.pon("areas", [pideArea]);
   ["#dia","#filtro"].forEach(s=>$(s).addEventListener("change", pinta));
   $("#busca").addEventListener("input", pinta);
   $("#bExcel").addEventListener("click", excel);

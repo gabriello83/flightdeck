@@ -146,6 +146,7 @@ th.num{text-align:right}
 }
 </style>
 <script src="/comun/preferidos.js"></script>
+<script src="/comun/filtros.js"></script>
 </head>
 <body>
 <div class="env">
@@ -167,7 +168,7 @@ th.num{text-align:right}
   <div id="todo" hidden>
     <div class="barra">
       <label>Día <select id="dia"></select></label>
-      <label class="enArea">Delegación <select id="deleg"></select></label>
+      <span id="fLugar"></span>
       <label class="busca enArea">Buscar <input id="busca" type="search" placeholder="Matrícula, modelo, persona…"></label>
       <button class="btn enArea" id="bCsv" type="button">Descargar CSV</button>
     </div>
@@ -251,6 +252,12 @@ $("#bSalir").addEventListener("click", async ()=>{
 /* AREA: "" es la portada; "*" son todas las áreas juntas (un perfil de una
    sola área, o la vista suelta de preferidos). VER: la cifra que filtra. */
 let D=null, TODAS=false, AREA="", VER="", UMBRAL={min:10, max:400}, SEMANA=7;
+/* Area, delegacion, cliente y centro, con seleccion multiple y buscador
+   (David, 22-oct, docs/73). La portada sale mientras no se elige nada. */
+let F = null;
+/* El reparto por centro de cada mes (docs/72): mes -> {dias} o null. De ahi
+   salen las furgonetas que visitaron cada centro cada dia. */
+const MESES = {};
 
 function fechaLarga(s){
   const d = new Date(String(s)+"T00:00:00");
@@ -313,8 +320,31 @@ function estado(x, dia){
   return {u, sin: u == null ? null : entre(u, dia), ok: !motivos.length, motivos, hoy: km(x.m, dia)};
 }
 
-const deArea = x => AREA === "*" || x.z === AREA;
-const enDeleg = (texto, dl) => !dl || String(texto||"").split(" · ").includes(dl);
+/* Una furgoneta puede llevar rutas de varias delegaciones («A · B»): entra si
+   alguna está en lo elegido. */
+const delegsDe = x => String(x.d||"").split(" · ").filter(Boolean);
+const enLugar = x => (!F.sel.areas.length || F.sel.areas.includes(x.z))
+  && (!F.sel.delegs.length || delegsDe(x).some(d => F.sel.delegs.includes(d)));
+
+/* Con cliente o centro: las matrículas que visitaron esos centros en la
+   semana hasta el día elegido, del reparto por centro. `sin` son los días de
+   esa semana que no lo tienen. */
+function deLosCentros(dia){
+  const semana = hasta(dia, SEMANA), m = new Set(); let sin = 0;
+  semana.forEach(f=>{
+    const mes = MESES[f.slice(0,7)], d = mes && (mes.dias||{})[f], por = d && d.furgonetas;
+    if(!por){ sin++; return; }
+    Object.entries(por).forEach(([c, a])=>{ if(F.pasaCentro(c)) (a[2]||[]).forEach(x=>m.add(x)); });
+  });
+  return {m, sin, dias: semana.length};
+}
+async function cargaMeses(){
+  if(!F.porCentro()) return;
+  const meses = [...new Set(hasta($("#dia").value, SEMANA).map(f=>f.slice(0,7)))].filter(m=>!(m in MESES));
+  const l = await Promise.all(meses.map(m=>Filtros.mesCentros(m)));
+  meses.forEach((m, i)=>{ MESES[m] = l[i]; });
+}
+async function repinta(){ await cargaMeses(); pinta(); }
 
 /* ---------------------------------------------------------------- portada */
 function pintaPortada(){
@@ -337,7 +367,10 @@ function pintaPortada(){
 }
 
 /* ---------------------------------------------------------------- un área */
-function flotaArea(){ const dl = $("#deleg").value; return (D.flota||[]).filter(x=>deArea(x) && enDeleg(x.d, dl)); }
+function flotaArea(){
+  const c = F.porCentro() ? deLosCentros($("#dia").value).m : null;
+  return (D.flota||[]).filter(x=>enLugar(x) && (!c || c.has(x.m)));
+}
 
 function filas(){
   const dia = $("#dia").value, q = $("#busca").value.trim().toLowerCase(), fks = hasta(dia, DIAS_KM);
@@ -382,16 +415,16 @@ const TITULO = {"":"Furgonetas activas", con:"Furgonetas con visitas ese día", 
 
 function pintaArea(){
   const dia = $("#dia").value, fks = hasta(dia, DIAS_KM), fs = filas();
-  $("#tArea").textContent = AREA === "*" ? "" : AREA;
+  $("#tArea").textContent = F.texto();
   kpis();
   $("#tTabla").textContent = TITULO[VER];
   $("#cuenta").textContent = `${num(fs.length)} ${fs.length===1?"furgoneta":"furgonetas"}`;
   const desde = D.km_desde ? fechaNum(D.km_desde) : null;
   $("#sTabla").textContent = "Cada furgoneta activa del maestro de vehículos, con la persona de su ruta, su última visita "
     + `y los km de sus jornadas de los últimos ${fks.length} días. Primero las que no están bien.`
-    + (VER ? " Vuelve a pulsar la cifra para ver todas." : "");
+    + (VER ? " Vuelve a pulsar la cifra para ver todas." : "") + textoCentros(dia);
   if(!fs.length){
-    $("#tabla").innerHTML = `<p class="vacio">Ninguna${$("#deleg").value || $("#busca").value || VER ? " con este filtro" : ""}.</p>`;
+    $("#tabla").innerHTML = `<p class="vacio">Ninguna${F.alguno() || $("#busca").value || VER ? " con este filtro" : ""}.</p>`;
   }else{
     const vis = fs.slice(0, TODAS ? fs.length : MAX_FILAS);
     $("#tabla").innerHTML = `<table><thead><tr><th>Matrícula</th><th>Modelo</th><th>Persona de la ruta</th><th>Delegación</th>
@@ -422,6 +455,15 @@ function pintaArea(){
   pintaDias();
 }
 
+/* Lo que significa el filtro de cliente o centro aquí, y lo que falta. */
+function textoCentros(dia){
+  if(!F.porCentro()) return "";
+  const c = deLosCentros(dia);
+  return ` Con cliente o centro salen las furgonetas que visitaron sus centros en los ${num(c.dias)} días hasta el ${fechaCorta(dia)}.`
+    + (c.sin === c.dias ? " Esos días no tienen el reparto por centro: empezó a calcularse la noche del 22 de octubre de 2026."
+      : c.sin ? ` ${num(c.sin)} de esos días no tienen el reparto por centro (empezó la noche del 22 de octubre de 2026).` : "");
+}
+
 /* Cuántas de la flota del área visitaron cada día hasta el elegido. */
 function pintaDias(){
   const dia = $("#dia").value, flota = flotaArea().map(x=>x.m);
@@ -438,16 +480,20 @@ function pintaDias(){
     </div>`).join("")}</div>`;
 }
 
-function pintaDelegs(){
-  const antes = $("#deleg").value, todas = new Set();
-  (D.flota||[]).filter(deArea).forEach(x => String(x.d||"").split(" · ").forEach(d => { if(d) todas.add(d); }));
-  const l = [...todas].sort((a,b)=>a.localeCompare(b,"es"));
-  $("#deleg").innerHTML = `<option value="">Todas</option>` + l.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
-  $("#deleg").value = l.includes(antes) ? antes : "";
+/* Los cuatro filtros: las delegaciones de la flota, y los clientes y centros
+   de las fichas del informe general. */
+async function montaFiltros(){
+  const fi = await Filtros.fichas(), zonas = {};
+  (D.flota||[]).forEach(x=>delegsDe(x).forEach(d=>{ zonas[d] = (fi.zonas||{})[d] || x.z; }));
+  F = Filtros.cuatro($("#fLugar"), {zonas, centros: fi.centros || {},
+    zonaDe: d => (fi.zonas||{})[d] || "Otra zona",
+    ordenAreas: (a, b)=>ORDEN_AREAS.indexOf(a)-ORDEN_AREAS.indexOf(b) || a.localeCompare(b,"es"),
+    alCambiar: ()=>{ VER = ""; TODAS = false; repinta(); }});
 }
 
 let VARIAS_AREAS = false;
 function pinta(){
+  AREA = VARIAS_AREAS && !Preferidos.solo && !F.alguno() ? "" : "*";
   const portada = AREA === "";
   $("#portada").hidden = !portada;
   $("#vistaArea").hidden = portada;
@@ -456,13 +502,10 @@ function pinta(){
   $("#bAreas").hidden = !VARIAS_AREAS || !!Preferidos.solo;
   if(portada) pintaPortada(); else pintaArea();
 }
+/* Pulsar un área es elegirla en el filtro; «Todas las áreas» lo quita todo. */
 function abreArea(a){
-  AREA = a; VER = ""; TODAS = false; $("#busca").value = "";
-  pintaDelegs();
-  const q = new URLSearchParams(location.search);
-  if(a && a !== "*") q.set("area", a); else q.delete("area");
-  try{ history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "")); }catch(e){}
-  pinta();
+  VER = ""; TODAS = false; $("#busca").value = "";
+  if(a) F.pon("areas", [a]); else F.limpia();
   window.scrollTo(0, 0);
 }
 
@@ -478,7 +521,7 @@ function csv(){
   const texto = "﻿" + [cab, ...lineas].map(l=>l.map(q).join(";")).join("\r\n");
   const url = URL.createObjectURL(new Blob([texto], {type:"text/csv;charset=utf-8"}));
   const a = document.createElement("a");
-  a.href = url; a.download = `furgonetas_${AREA && AREA!=="*" ? AREA + "_" : ""}${dia}.csv`;
+  a.href = url; a.download = `furgonetas_${F.alguno() ? F.texto().replace(/[^\w\-]+/g, "_") + "_" : ""}${dia}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
@@ -525,12 +568,9 @@ let QUITADAS = new Set();
   /* Con una sola área no hay portada; en la vista suelta, tampoco. */
   const areas = [...new Set((D.flota||[]).map(x=>x.z))];
   VARIAS_AREAS = areas.length > 1;
-  const pedida = q.get("area");
-  AREA = !VARIAS_AREAS || Preferidos.solo ? "*" : areas.includes(pedida) ? pedida : "";
-  pintaDelegs();
-  if(q.get("delegacion")) $("#deleg").value = q.get("delegacion");
-  $("#dia").addEventListener("change", ()=>{ TODAS=false; pinta(); });
-  $("#deleg").addEventListener("change", ()=>{ TODAS=false; pinta(); });
+  await montaFiltros();
+  await cargaMeses();
+  $("#dia").addEventListener("change", ()=>{ TODAS=false; repinta(); });
   $("#busca").addEventListener("input", ()=>{ TODAS=false; pinta(); });
   $("#bAreas").addEventListener("click", ()=>abreArea(""));
   $("#bCsv").addEventListener("click", csv);

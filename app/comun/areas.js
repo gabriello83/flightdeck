@@ -81,6 +81,6 @@ button.ar-area:focus-visible{outline:2px solid var(--s1);outline-offset:1px}
     return [...new Set(delegaciones.map(zona))].filter(a => a !== OTRA).sort(orden);
   }
 
-  window.Areas = {ZONAS, ORDEN, OTRA, zona, color, de, portada,
+  window.Areas = {ZONAS, ORDEN, OTRA, zona, color, de, portada, orden,
     pct: (a, b) => b ? Math.round(1000*a/b)/10 : null};
 })();

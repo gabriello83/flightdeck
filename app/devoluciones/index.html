@@ -169,6 +169,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 .punta i{width:8px;height:8px;border-radius:2px;display:inline-block}
 </style>
 <script src="/comun/preferidos.js"></script>
+<script src="/comun/filtros.js"></script>
 </head>
 <body>
 <div class="env">
@@ -199,7 +200,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
       </select></label>
       <label class="libre" hidden>Desde <input type="date" id="desde"></label>
       <label class="libre" hidden>Hasta <input type="date" id="hasta"></label>
-      <label class="enArea">Delegación <select id="deleg"></select></label>
+      <span id="fLugar"></span>
       <button class="btn enArea" id="bCsv" type="button">Descargar CSV</button>
     </div>
     <p class="tenue" id="rango"></p>
@@ -312,6 +313,9 @@ $("#bSalir").addEventListener("click", async ()=>{
    sola área, o la vista suelta de preferidos). VER: la cifra que filtra la
    lista de registradas. ABIERTAS: las listas con la flecha abierta. */
 let D = null, DEV = [], AREA = "", VER = "", TABLA = false, VARIAS_AREAS = false, TOPE = 50;
+/* Area, delegacion, cliente y centro, con seleccion multiple y buscador
+   (David, 22-oct, docs/73). La portada sale mientras no se elige nada. */
+let F = null;
 const ABIERTAS = new Set();
 /* Las tablas que el administrador le quitó a este usuario (docs/61). */
 let QUITADAS = new Set();
@@ -374,8 +378,10 @@ function prepara(){
 }
 let ORDEN_TIPOS = [];
 const colorCanal = k => { const i = ORDEN_TIPOS.indexOf(k); return i >= 0 && i < 5 ? `var(--k${i})` : "var(--tinta-3)"; };
-const deArea = r => AREA === "*" || fila(r).zona === AREA;
-const enLugar = r => deArea(r) && (!$("#deleg").value || fila(r).deleg === $("#deleg").value);
+/* Lo elegido en los cuatro filtros. Cliente y centro los trae cada devolución. */
+const enLugar = r => { const x = fila(r);
+  return F.pasaDeleg(x.deleg) && (F.sel.centros.length ? F.sel.centros.includes(x.num_centro)
+    : !F.sel.clientes.length || F.sel.clientes.includes(x.cliente)); };
 const entre = (r, d, h) => fila(r).dia >= d && fila(r).dia <= h;
 const euros = lista => lista.reduce((s, r) => s + devuelto(r), 0);
 const eurosDe = lista => lista.reduce((s, r) => s + (r.i || 0), 0);
@@ -649,7 +655,7 @@ function pintaMeses(){
 }
 
 function pintaArea(){
-  $("#tArea").textContent = AREA === "*" ? "" : AREA;
+  $("#tArea").textContent = F.texto();
   kpis();
   if(!QUITADAS.has("registradas")) pintaRegistradas();
   if(!QUITADAS.has("maquinas")) pintaMaquinas();
@@ -658,14 +664,19 @@ function pintaArea(){
   if(!QUITADAS.has("clientes")) pintaClientes();
 }
 
-function pintaDelegs(){
-  const antes = $("#deleg").value;
-  const l = [...new Set(DEV.filter(deArea).map(r=>fila(r).deleg))].filter(Boolean).sort((a,b)=>a.localeCompare(b,"es"));
-  $("#deleg").innerHTML = `<option value="">Todas</option>` + l.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
-  $("#deleg").value = l.includes(antes) ? antes : "";
+/* Los cuatro filtros, de las propias devoluciones. */
+function montaFiltros(){
+  const zonas = {}, centros = {};
+  DEV.forEach(r => { const x = fila(r);
+    if(x.deleg) zonas[x.deleg] = x.zona;
+    if(x.num_centro && !centros[x.num_centro]) centros[x.num_centro] = {n: x.centro || x.num_centro, c: x.cliente, d: x.deleg}; });
+  F = Filtros.cuatro($("#fLugar"), {zonas, centros,
+    ordenAreas: (a, b)=>ORDEN_AREAS.indexOf(a)-ORDEN_AREAS.indexOf(b) || a.localeCompare(b,"es"),
+    alCambiar: () => { VER = ""; ABIERTAS.clear(); pinta(); }});
 }
 
 function pinta(){
+  AREA = VARIAS_AREAS && !Preferidos.solo && !F.alguno() ? "" : "*";
   const portada = AREA === "";
   $("#portada").hidden = !portada;
   $("#vistaArea").hidden = portada;
@@ -676,13 +687,10 @@ function pinta(){
   pintaRango();
   if(portada) pintaPortada(); else pintaArea();
 }
+/* Pulsar un área es elegirla en el filtro; «Todas las áreas» lo quita todo. */
 function abreArea(a){
-  AREA = a; VER = ""; ABIERTAS.clear();
-  pintaDelegs();
-  const q = new URLSearchParams(location.search);
-  if(a && a !== "*") q.set("area", a); else q.delete("area");
-  try{ history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "")); }catch(e){}
-  pinta();
+  VER = ""; ABIERTAS.clear();
+  if(a) F.pon("areas", [a]); else F.limpia();
   window.scrollTo(0, 0);
 }
 
@@ -696,7 +704,7 @@ function csv(){
       x.deleg, x.zona, n2(r.i), n2(r.g)].map(q).join(";"); })].join("\r\n");
   const url = URL.createObjectURL(new Blob([texto], {type:"text/csv;charset=utf-8"}));
   const a = document.createElement("a");
-  a.href = url; a.download = `devoluciones_${AREA && AREA!=="*" ? AREA + "_" : ""}${p.d}_${p.h}.csv`;
+  a.href = url; a.download = `devoluciones_${F.alguno() ? F.texto().replace(/[^\w\-]+/g, "_") + "_" : ""}${p.d}_${p.h}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
@@ -740,12 +748,8 @@ function csv(){
   /* Con una sola área no hay portada; en la vista suelta, tampoco. */
   const areas = [...new Set(DEV.map(r=>fila(r).zona))];
   VARIAS_AREAS = areas.length > 1;
-  const pedida = q.get("area");
-  AREA = !VARIAS_AREAS || Preferidos.solo ? "*" : areas.includes(pedida) ? pedida : "";
-  pintaDelegs();
-  if(q.get("delegacion")) $("#deleg").value = q.get("delegacion");
+  montaFiltros();
   ["#periodo","#desde","#hasta"].forEach(s=>$(s).addEventListener("change", ()=>{ ABIERTAS.clear(); pinta(); }));
-  $("#deleg").addEventListener("change", ()=>{ ABIERTAS.clear(); pinta(); });
   $("#bAreas").addEventListener("click", ()=>abreArea(""));
   $("#bVista").addEventListener("click", ()=>{ TABLA = !TABLA; pintaMeses(); });
   $("#bCsv").addEventListener("click", csv);

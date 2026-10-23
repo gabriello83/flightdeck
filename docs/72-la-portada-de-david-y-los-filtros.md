@@ -98,6 +98,5 @@ Hasta que corran los agregados, Cliente y Centro no salen (no hay fichas) y la p
 
 ## Lo que queda
 
-Llevar el mismo filtro a las demás secciones (rutas, incidencias, devoluciones, furgonetas, almacenes,
-tarifas, cifras, revisión, utilizo, telemetría): cada una tiene sus propios datos de la noche, y
-varias necesitan cliente y centro en su fichero. Va aparte.
+~~Llevar el mismo filtro a las demás secciones.~~ Hecho en docs/73: las once secciones llevan los
+cuatro filtros, y los cuadrados de esta portada pasan lo elegido a su sección.

@@ -55,6 +55,7 @@ button.btn,a.btn{
 }
 button.btn:hover,a.btn:hover{border-color:var(--tinta-3)}
 button.btn.primario{background:var(--s1);border-color:var(--s1);color:#fff;font-weight:600}
+.barra{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:16px 0 4px}
 nav.miga{margin:16px 0 4px;font-size:14px;color:var(--tinta-2);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 nav.miga a{color:var(--s1);text-decoration:none}
 nav.miga a:hover{text-decoration:underline}
@@ -127,6 +128,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 @media (max-width:360px){ .cuadros{grid-template-columns:1fr} }
 </style>
 <script src="/comun/preferidos.js"></script>
+<script src="/comun/filtros.js"></script>
 </head>
 <body>
 <div class="env">
@@ -142,6 +144,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
     </div>
   </header>
 
+  <div class="barra" id="barraLugar" hidden><span id="fLugar"></span></div>
   <nav class="miga" id="miga" aria-label="Dónde estás" hidden></nav>
   <div id="cargando">Cargando…</div>
   <div class="nota" id="aviso" hidden></div>
@@ -198,6 +201,9 @@ const ESTADO = {coincide:"Coincide", no_coincide:"Precio distinto", sin_tarifa:"
 const MEDIOS = [["ef","Efectivo"],["tp","Tarjeta privada"],["tc","Tarjeta crédito"]];
 const SEMAFORO = {verde:"En objetivo", amarillo:"Vigilar", rojo:"Por debajo"};
 let YO=null, RES=null;
+/* Area, delegacion, cliente y centro, con seleccion multiple y buscador
+   (David, 22-oct, docs/73). Cada centro trae su cliente: todo se reparte. */
+let F = null;
 const CENTROS = {};   // num -> detalle ya pedido
 
 function fechaCorta(s){
@@ -237,23 +243,41 @@ function ruta(){
   const q = new URLSearchParams(location.hash.slice(1));
   return {d:q.get("d"), c:q.get("c"), a:q.get("a")};
 }
-function irArea(a){ location.hash = new URLSearchParams({a}).toString(); }
+/* Pulsar un área es elegirla en el filtro, y volver a las delegaciones. */
+function irArea(a){ if(location.hash.length > 1) location.hash = ""; F.pon("areas", [a]); }
 function ir(d, c){
   const q = new URLSearchParams();
   if(d!=null) q.set("d", d);
   if(c!=null) q.set("c", c);
   location.hash = q.toString();
 }
+/* Un paso de la miga con `limpia` quita los filtros; con `area`, elige esa. */
 function miga(partes){
   const m = $("#miga");
-  m.innerHTML = partes.map((p,i)=> i===partes.length-1 ? `<b>${esc(p.t)}</b>` : `<a href="${p.h}">${esc(p.t)}</a>`).join(" › ");
+  m.innerHTML = partes.map((p,i)=> i===partes.length-1 ? `<b>${esc(p.t)}</b>`
+    : `<a href="${p.h || "#"}" data-i="${i}">${esc(p.t)}</a>`).join(" › ");
+  m.querySelectorAll("a[data-i]").forEach(a=>a.addEventListener("click", e=>{
+    const p = partes[+a.dataset.i];
+    if(!p.limpia && !p.area) return;
+    e.preventDefault();
+    if(location.hash.length > 1) history.replaceState(null, "", location.pathname + location.search);
+    if(p.limpia) F.limpia(); else F.pon("areas", [p.area]);
+  }));
   m.hidden = partes.length < 2;
 }
-const DELEGACIONES = () => RES.delegaciones||[];
-const unaSola = () => DELEGACIONES().length === 1;
+/* Las delegaciones de lo elegido, y en cada una sus centros. Con cliente o
+   centro, la cifra de la delegación es la suma de los centros que quedan. */
+function DELEGACIONES(){
+  return (RES.delegaciones||[]).filter(d=>F.pasaDeleg(d.delegacion)).map(d=>{
+    if(!F.porCentro()) return d;
+    const centros = (d.centros||[]).filter(c=>F.pasaCentro(String(c.num_centro), d.delegacion));
+    return Object.assign({}, d, sumaDe(centros), {centros});
+  }).filter(d=>!F.porCentro() || d.centros.length);
+}
+const unaSola = () => (RES.delegaciones||[]).length === 1;
 /* Las areas (docs/70): con mas de una, la portada es un cuadrado por area y
    cada area lleva a sus delegaciones. */
-const AREAS = () => Areas.de(DELEGACIONES().map(d=>d.delegacion));
+const AREAS = () => Areas.de((RES.delegaciones||[]).map(d=>d.delegacion));
 const variasAreas = () => AREAS().length > 1;
 function sumaDe(lista){
   const s = {coincide:0, no_coincide:0, sin_tarifa:0, sin_dato:0, controlados:0};
@@ -261,8 +285,8 @@ function sumaDe(lista){
   s.pct = Areas.pct(s.coincide, s.controlados);
   return s;
 }
-function migaArea(a){ return {t:a, h:"#"+new URLSearchParams({a}).toString()}; }
-const TODAS_AREAS = {t:"Todas las áreas", h:"#"};
+function migaArea(a){ return {t:a, area:a}; }
+const TODAS_AREAS = {t:"Todas las áreas", limpia:true};
 
 /* ------------------------------------------------------- vista total */
 function vistaTotal(){
@@ -284,10 +308,13 @@ function vistaTotal(){
   miga([{t:"Todas las delegaciones"}]);
   pintaDelegs(DELEGACIONES());
 }
-function vistaArea(a){
-  const lista = DELEGACIONES().filter(d=>Areas.zona(d.delegacion)===a);
-  if(!lista.length){ ir(); return; }
-  miga([TODAS_AREAS, {t:a}]);
+/* Lo elegido en los filtros: su cifra y sus delegaciones. */
+function vistaElegido(){
+  const lista = DELEGACIONES();
+  miga(variasAreas() ? [TODAS_AREAS, {t:F.texto()}] : [{t:"Todas las delegaciones", limpia:true}, {t:F.texto()}]);
+  if(!lista.length){
+    $("#vista").innerHTML = `<p class="peq">Ningún centro de lo elegido tiene productos que comprobar.</p>`; return;
+  }
   const s = sumaDe(lista);
   $("#vista").innerHTML = `<div class="cifra"><span class="gr">${s.pct==null ? "Sin dato" : pct(s.pct)}</span>`
     + `<span class="ex">${esc(lineaCuenta(s))}</span></div><div class="cuadros" id="cuadros"></div>`;
@@ -318,7 +345,7 @@ function vistaDelegacion(nombre){
   const area = Areas.zona(d.delegacion);
   miga(unaSola() ? [{t:d.delegacion}]
     : variasAreas() ? [TODAS_AREAS, ...(area!==Areas.OTRA ? [migaArea(area)] : []), {t:d.delegacion}]
-    : [{t:"Todas las delegaciones", h:"#"}, {t:d.delegacion}]);
+    : [{t:"Todas las delegaciones", limpia:true}, {t:d.delegacion}]);
   const v = $("#vista");
   v.innerHTML = `<div class="cifra"><span class="gr">${d.pct==null ? "Sin dato" : pct(d.pct)}</span>`
     + `<span class="ex">${esc(lineaCuenta(d))}</span></div>`
@@ -342,7 +369,7 @@ async function vistaCentro(nombreDeleg, numCentro){
   if(!c){ ir(); return; }
   const area = Areas.zona(d.delegacion);
   miga([...(unaSola() ? [] : variasAreas() ? [TODAS_AREAS, ...(area!==Areas.OTRA ? [migaArea(area)] : [])]
-                          : [{t:"Todas las delegaciones", h:"#"}]),
+                          : [{t:"Todas las delegaciones", limpia:true}]),
         {t:d.delegacion, h:"#"+new URLSearchParams({d:d.delegacion}).toString()}, {t:c.centro}]);
   const v = $("#vista");
   v.innerHTML = `<p class="peq">Cargando los productos del centro…</p>`;
@@ -470,9 +497,10 @@ function pinta(){
   const {d, c, a} = ruta();
   if(d && c) return vistaCentro(d, c);
   if(d) return vistaDelegacion(d);
-  if(a) return vistaArea(a);
-  if(unaSola()) return vistaDelegacion(DELEGACIONES()[0].delegacion);
-  return vistaTotal();
+  /* Un enlace de antes con #a=Área abre esa área en el filtro. */
+  if(a){ history.replaceState(null, "", location.pathname + location.search); return F.pon("areas", [a]); }
+  if(unaSola()) return vistaDelegacion(RES.delegaciones[0].delegacion);
+  return F.alguno() ? vistaElegido() : vistaTotal();
 }
 
 (async function arranca(){
@@ -496,7 +524,14 @@ function pinta(){
     return;
   }
   RES = await rt.json();
-  if(!DELEGACIONES().length){ avisa("Este perfil no tiene ninguna máquina instalada con productos repuestos en seis meses.", true); return; }
+  if(!(RES.delegaciones||[]).length){ avisa("Este perfil no tiene ninguna máquina instalada con productos repuestos en seis meses.", true); return; }
+  /* Los cuatro filtros, de las propias tarifas: cada centro trae su cliente. */
+  const zonas = {}, centros = {};
+  RES.delegaciones.forEach(d=>{ zonas[d.delegacion] = Areas.zona(d.delegacion);
+    (d.centros||[]).forEach(c=>{ centros[String(c.num_centro)] = {n:c.centro || String(c.num_centro), c:c.cliente || "", d:d.delegacion}; }); });
+  F = Filtros.cuatro($("#fLugar"), {zonas, centros, zonaDe: Areas.zona, ordenAreas: Areas.orden,
+    alCambiar: ()=>{ const {d} = ruta(); if(d && !DELEGACIONES().some(x=>x.delegacion===d)) ir(); else pinta(); }});
+  $("#barraLugar").hidden = unaSola();
   window.addEventListener("hashchange", pinta);
   pinta();
 

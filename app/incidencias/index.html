@@ -187,6 +187,7 @@ button.area.rojo{border-left-color:var(--rojo)}
 }
 </style>
 <script src="/comun/preferidos.js"></script>
+<script src="/comun/filtros.js"></script>
 </head>
 <body>
 <div class="env">
@@ -206,6 +207,7 @@ button.area.rojo{border-left-color:var(--rojo)}
   <div class="nota" id="aviso" hidden></div>
 
   <div id="todo" hidden>
+    <div class="barra" id="barraLugar"><span id="fLugar"></span></div>
     <div class="volver" id="cabArea" hidden><button class="btn" id="bAreas" type="button">← Todas las áreas</button><h2 id="tArea"></h2></div>
 
     <!-- Las últimas 24 horas: en la portada, lo nacional y un cuadrante por
@@ -254,9 +256,6 @@ button.area.rojo{border-left-color:var(--rojo)}
       <label class="solo-panel">Estado <select id="estado">
         <option value="">Todas</option><option value="abierta">Abierta</option><option value="cerrada">Cerrada</option>
       </select></label>
-      <label id="lZona">Zona <select id="zona"></select></label>
-      <label>Delegación <select id="deleg"></select></label>
-      <label>Centro <select id="centro"></select></label>
       <button class="btn" id="bLimpiar" type="button">Limpiar filtros</button>
     </div>
     <div class="nota" id="notaEstado" hidden></div>
@@ -346,7 +345,10 @@ $("#bSalir").addEventListener("click", async ()=>{
 let D = null, M = {}, INC = [], HOJA = "panel", TARJETA = "tecnicas", ELEGIDA = null, TODAS_FILAS = false;
 /* AREA: "" es la portada; "*" son todas las áreas juntas (un perfil de una
    sola área, la vista suelta de preferidos o «todas juntas»). */
-let AREA = "", VARIAS_AREAS = false, TODAS_24 = false;
+let AREA = "", VARIAS_AREAS = false, TODAS_24 = false, VER_TODAS = false;
+/* Area, delegacion, cliente y centro, con seleccion multiple y buscador
+   (David, 22-oct, docs/73). La portada sale mientras no se elige nada. */
+let F = null;
 const ORDEN_AREAS = ["Centro", "Sur", "Cataluña", "Levante", "Norte", "Otra zona"];
 const ordenAreas = (a, b) => (ORDEN_AREAS.indexOf(a)+1 || 99) - (ORDEN_AREAS.indexOf(b)+1 || 99) || a.localeCompare(b, "es");
 /* Las tablas que el administrador le quitó a este usuario (docs/61). */
@@ -410,12 +412,12 @@ function prepara(){
 }
 const tiene = (r, m) => (r.f & (M[m]||0)) !== 0;
 const tecnica = r => tiene(r,"tecnica") && !tiene(r,"especial");
-/* La zona la fija el área en la que se ha entrado; con todas juntas, el filtro. */
-const zonaElegida = () => AREA && AREA !== "*" ? AREA : $("#zona").value;
-function enLugar(r){
-  const z = zonaElegida(), dl = $("#deleg").value, c = $("#centro").value, x = fila(r);
-  return (!z || x.zona===z) && (!dl || x.deleg===dl) && (!c || x.num_centro===c);
-}
+/* Lo elegido en los cuatro filtros. Cliente y centro los trae cada fila. */
+const enCliente = x => F.sel.centros.length ? F.sel.centros.includes(x.num_centro)
+  : !F.sel.clientes.length || F.sel.clientes.includes(x.cliente);
+const enLugar = r => { const x = fila(r); return F.pasaDeleg(x.deleg) && enCliente(x); };
+/* Lo mismo sin la delegacion: la tabla de delegaciones deja elegir otra. */
+const enArea = r => { const x = fila(r); return (!F.sel.areas.length || F.sel.areas.includes(x.zona)) && enCliente(x); };
 function enEstado(r){
   const e = $("#estado").value;
   if(!e || !D.estado_al_dia) return true;
@@ -424,24 +426,15 @@ function enEstado(r){
 const entre = (r, d, h) => fila(r).dia >= d && fila(r).dia <= h;
 const cerradaEntre = (r, d, h) => !abierta(r) && r.x && r.x.slice(0,10) >= d && r.x.slice(0,10) <= h;
 
-function opciones(sel, valores, todas, etiqueta){
-  const antes = sel.value;
-  sel.innerHTML = `<option value="">${esc(todas)}</option>` + valores.map(v =>
-    `<option value="${esc(v[0])}">${esc(etiqueta ? etiqueta(v) : v[1])}</option>`).join("");
-  sel.value = valores.some(v => String(v[0])===antes) ? antes : "";
-}
-function pintaFiltros(){
-  const zonas = [...new Set(INC.map(r=>fila(r).zona))].sort((a,b)=>a.localeCompare(b,"es"));
-  opciones($("#zona"), zonas.map(z=>[z,z]), "Todas");
-  const z = zonaElegida();
-  const delegs = [...new Set(INC.filter(r=>!z || fila(r).zona===z).map(r=>fila(r).deleg))].filter(Boolean)
-    .sort((a,b)=>a.localeCompare(b,"es"));
-  opciones($("#deleg"), delegs.map(d=>[d,d]), "Todas");
-  const dl = $("#deleg").value, centros = new Map();
+/* Los cuatro filtros, de las propias incidencias: cada una trae su
+   delegacion, su centro y su cliente. */
+function montaFiltros(){
+  const zonas = {}, centros = {};
   INC.forEach(r => { const x = fila(r);
-    if((!z || x.zona===z) && (!dl || x.deleg===dl) && x.num_centro) centros.set(x.num_centro, x.centro); });
-  opciones($("#centro"), [...centros].sort((a,b)=>a[1].localeCompare(b[1],"es")), "Todos",
-    v => `${v[1]} (${v[0]})`);
+    if(x.deleg) zonas[x.deleg] = x.zona;
+    if(x.num_centro && !centros[x.num_centro]) centros[x.num_centro] = {n: x.centro || x.num_centro, c: x.cliente, d: x.deleg}; });
+  F = Filtros.cuatro($("#fLugar"), {zonas, centros, ordenAreas,
+    alCambiar: () => { ELEGIDA = null; TODAS_24 = false; pintaTodo(); }});
 }
 
 /* ------------------------------------------------------------ hoja 1 */
@@ -513,7 +506,7 @@ function pintaPanel(){
   pintaZonas(ahora);
   $("#gTecnicas").innerHTML = topCentros(ahora.filter(tecnica));
   document.querySelectorAll("#gTecnicas .fb").forEach(b=>b.addEventListener("click", ()=>{
-    $("#centro").value = $("#centro").value===b.dataset.c ? "" : b.dataset.c; pintaTodo();
+    F.pon("centros", F.una("centros")===b.dataset.c ? [] : [b.dataset.c]);
   }));
 }
 function barras(filas, max, attr, elegido){
@@ -535,13 +528,10 @@ function pintaZonas(lista){
   if(!lista.length){ $("#gZonas").innerHTML = `<p class="vacio">Ninguna incidencia con estos filtros.</p>`; return; }
   $("#gZonas").innerHTML = zonas.map(([z, ds, t]) =>
     `<div class="zona"><span>${esc(z)}</span><span>${num(t)}</span></div>`
-    + barras(ds.map(([d,n])=>[d, d||"Sin delegación", n]), max, "data-d", $("#deleg").value)).join("");
+    + barras(ds.map(([d,n])=>[d, d||"Sin delegación", n]), max, "data-d", F.una("delegs"))).join("");
   $("#gZonas").querySelectorAll(".fb").forEach(b=>b.addEventListener("click", ()=>{
     const d = b.dataset.d;
-    if($("#deleg").value === d){ $("#deleg").value = ""; }
-    else { $("#zona").value = ""; pintaFiltros(); $("#deleg").value = d; }
-    pintaFiltros();
-    pintaTodo();
+    F.pon("delegs", F.una("delegs") === d ? [] : [d]);
   }));
 }
 function topCentros(lista){
@@ -550,7 +540,7 @@ function topCentros(lista){
     const v = m.get(k) || [k, x.centro || "Sin centro", 0, `${x.centro} (nº ${x.num_centro})`]; v[2]++; m.set(k, v); });
   const filas = [...m.values()].sort((a,b)=>b[2]-a[2] || a[1].localeCompare(b[1],"es")).slice(0,10);
   if(!filas.length) return `<p class="vacio">Ninguna en el periodo.</p>`;
-  return barras(filas, filas[0][2], "data-c", $("#centro").value);
+  return barras(filas, filas[0][2], "data-c", F.una("centros"));
 }
 
 /* ------------------------------------------------------------ hoja 2 */
@@ -727,7 +717,7 @@ function pinta24(){
   /* Dentro de un área cuenta su lugar (área, delegación y centro elegidos);
      en la portada, todo el perfil. */
   const lugar = portada ? INC : INC.filter(enLugar), c = portada ? todas : cifras24(lugar, dia);
-  const donde = portada ? "" : AREA === "*" ? ($("#deleg").value || zonaElegida() || "") : ($("#deleg").value || AREA);
+  const donde = portada ? "" : F.texto();
   $("#r24").textContent = `Las 24 horas del ${fechaLarga(dia)}, de 0:00 a 24:00`
     + (dia === D.ultimo_dia ? ": las últimas con dato, porque VenCloud manda cada noche el día anterior." : ".")
     + (portada ? " Pulsa un área para ver todo su detalle." : "");
@@ -744,7 +734,7 @@ function pinta24(){
         semaforo(c.sla))
     + kpi("Abiertas ahora", c.ahora==null ? "—" : num(c.ahora), c.ahora==null ? sinM13 : "de cualquier día, siguen sin cerrar");
   if(portada) pintaAreas(todas);
-  pintaDeleg24(portada ? INC : INC.filter(r=>{ const z = zonaElegida(); return !z || fila(r).zona===z; }), dia, portada, todas.n);
+  pintaDeleg24(portada ? INC : INC.filter(enArea), dia, portada, todas.n);
   pintaLista24(c.entradas);
 }
 function pintaAreas(todas){
@@ -775,7 +765,7 @@ function pintaDeleg24(lista, dia, portada, total){
     : `El porcentaje es la parte de las ${num(base)} llamadas del área. Pulsa una delegación para filtrar todo por ella.`;
   $("#cDeleg24").textContent = `${num(base)} ${base===1?"llamada":"llamadas"}`;
   if(!filas.length){ $("#tDeleg24").innerHTML = `<p class="vacio">Ninguna delegación con incidencias.</p>`; return; }
-  const elegida = portada ? "" : $("#deleg").value;
+  const elegida = portada ? "" : F.una("delegs");
   $("#tDeleg24").innerHTML = `<table><thead><tr>${portada?"<th>Área</th>":""}<th>Delegación</th><th class="n">Llamadas</th><th class="n">%</th>
     <th class="n">Técnicas</th><th class="n">Siguen abiertas</th><th>Cerradas en &lt; ${num(D.horas_sla)} h</th></tr></thead><tbody>
     ${filas.map(([dl, z, c])=>`<tr class="elige${dl===elegida?" elegida":""}" data-d="${esc(dl)}">
@@ -786,9 +776,8 @@ function pintaDeleg24(lista, dia, portada, total){
     </tr>`).join("")}</tbody></table>`;
   $("#tDeleg24").querySelectorAll("tr.elige").forEach(tr=>tr.addEventListener("click", ()=>{
     const dl = tr.dataset.d;
-    if(portada){ abreArea(VARIAS_AREAS ? fila(lista.find(r=>fila(r).deleg===dl)).zona : "*", dl); return; }
-    $("#deleg").value = $("#deleg").value === dl ? "" : dl;
-    pintaFiltros(); ELEGIDA = null; pintaTodo();
+    if(portada){ abreArea(fila(lista.find(r=>fila(r).deleg===dl)).zona, dl); return; }
+    F.pon("delegs", F.una("delegs") === dl ? [] : [dl]);
   }));
 }
 function pintaLista24(entradas){
@@ -809,16 +798,14 @@ function pintaLista24(entradas){
     + (resto > 0 ? `<p class="vacio">Y ${num(resto)} más. <button class="btn" id="bMas24" type="button">Ver todas</button></p>` : "");
   const mas = $("#bMas24"); if(mas) mas.addEventListener("click", ()=>{ TODAS_24 = true; pintaLista24(entradas); });
 }
+/* Pulsar un área o una delegación de la portada es elegirla en el filtro;
+   «Todas las áreas» lo quita todo y «todas juntas» entra sin elegir nada. */
 function abreArea(a, dl){
-  AREA = a; ELEGIDA = null; TODAS_24 = false;
-  $("#zona").value = ""; $("#centro").value = ""; $("#deleg").value = "";
-  pintaFiltros();
-  if(dl){ $("#deleg").value = dl; pintaFiltros(); }
-  const q = new URLSearchParams(location.search);
-  if(a === "*" && VARIAS_AREAS) q.set("area", "todas"); else if(a && a !== "*") q.set("area", a); else q.delete("area");
-  q.delete("delegacion");
-  try{ history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "")); }catch(e){}
-  pintaTodo();
+  ELEGIDA = null; TODAS_24 = false;
+  if(a === "*"){ VER_TODAS = true; pintaTodo(); }
+  else if(dl){ F.pon("areas", [a]); F.pon("delegs", [dl]); }
+  else if(a) F.pon("areas", [a]);
+  else { VER_TODAS = false; F.limpia(); }
   window.scrollTo(0, 0);
 }
 
@@ -836,14 +823,14 @@ function pintaHoja(){
   $("#estado").disabled = !D.estado_al_dia || $("#periodo").value === "dia";
 }
 function pintaTodo(){
+  AREA = VARIAS_AREAS && !Preferidos.solo && !VER_TODAS && !F.alguno() ? "" : "*";
   const portada = AREA === "";
   $("#portada").hidden = !portada;
   $("#detalle").hidden = portada;
   $("#b24").hidden = !!Preferidos.solo;
   $("#cabArea").hidden = portada || !VARIAS_AREAS || !!Preferidos.solo;
-  $("#tArea").textContent = AREA === "*" ? "Todas las áreas" : AREA;
-  $("#lZona").hidden = AREA !== "*";
-  $("#hDetalle").textContent = portada ? "" : `Todo el detalle${AREA === "*" ? "" : " de " + AREA}`;
+  $("#tArea").textContent = F.texto() || "Todas las áreas";
+  $("#hDetalle").textContent = portada ? "" : `Todo el detalle${F.alguno() ? " · " + F.texto() : ""}`;
   pinta24();
   if(portada) return;
   pintaHoja();
@@ -907,22 +894,16 @@ function pintaTodo(){
      la vista suelta de preferidos, tampoco: todas juntas. */
   const areas = new Set(INC.map(r=>fila(r).zona));
   VARIAS_AREAS = areas.size > 1;
-  const pedida = q.get("area"), dlPedida = q.get("delegacion");
-  const zonaPedida = dlPedida ? (INC.find(r=>fila(r).deleg===dlPedida) || {_:{}})._.zona : null;
-  AREA = !VARIAS_AREAS || Preferidos.solo || pedida === "todas" || q.get("ver") === "abiertas" ? "*"
-    : areas.has(pedida) ? pedida : zonaPedida || "";
-  pintaFiltros();
-  if(dlPedida){ $("#deleg").value = dlPedida; pintaFiltros(); }
+  VER_TODAS = q.get("area") === "todas" || q.get("ver") === "abiertas";
+  montaFiltros();
   document.querySelectorAll(".hojas button").forEach(b=>b.addEventListener("click", ()=>{ HOJA = b.dataset.h; pintaTodo(); }));
   ["#periodo","#desde","#hasta","#dia","#estado"].forEach(s=>$(s).addEventListener("change", pintaTodo));
   $("#dia24").addEventListener("change", ()=>{ TODAS_24 = false; pintaTodo(); });
   $("#bAreas").addEventListener("click", ()=>abreArea(""));
   $("#bNacional").addEventListener("click", ()=>abreArea("*"));
-  $("#zona").addEventListener("change", ()=>{ pintaFiltros(); ELEGIDA = null; pintaTodo(); });
-  $("#deleg").addEventListener("change", ()=>{ pintaFiltros(); ELEGIDA = null; pintaTodo(); });
-  $("#centro").addEventListener("change", ()=>{ ELEGIDA = null; pintaTodo(); });
+  /* Limpiar deja el estado y los cuatro filtros, y se queda en el detalle. */
   $("#bLimpiar").addEventListener("click", ()=>{
-    ["#zona","#deleg","#centro","#estado"].forEach(s=>$(s).value=""); pintaFiltros(); ELEGIDA = null; pintaTodo(); });
+    $("#estado").value = ""; ELEGIDA = null; VER_TODAS = true; F.limpia(); });
   $("#busca").addEventListener("input", ()=>{ TODAS_FILAS = false; pintaAbiertas(); });
   $("#bCsv").addEventListener("click", csv);
   $("#todo").hidden = false;
