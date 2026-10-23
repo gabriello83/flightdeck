@@ -55,6 +55,11 @@ def texto(t=TEXTO, stop="end_turn"):
                         _Bloque(type="text", text=t)], "stop": stop}
 
 
+def recuerda(t):
+    return {"content": [_Bloque(type="tool_use", id=f"m{len(LLAMADAS)}", name="memoria", input={"texto": t})],
+            "stop": "tool_use"}
+
+
 def consulta(**entrada):
     return {"content": [_Bloque(type="tool_use", id=f"t{len(LLAMADAS)}", name="consulta", input=entrada)],
             "stop": "tool_use"}
@@ -197,7 +202,7 @@ comprueba("esfuerzo explicito", k["output_config"]["effort"], "medium")
 comprueba("sin budget_tokens (daria 400)", "budget_tokens" in json.dumps(k["thinking"]), False)
 comprueba("tope de salida", k["max_tokens"], 4000)
 comprueba("con reintento en otro modelo si declina", k.get("fallbacks"), "default")
-comprueba("con la herramienta de consulta", [t["name"] for t in k["tools"]], ["consulta"])
+comprueba("con la herramienta de consulta y la de memoria", [t["name"] for t in k["tools"]], ["consulta", "memoria"])
 comprueba("que puede usar o no", k["tool_choice"], {"type": "auto"})
 
 print("\nEl recetario va en el sistema, y en cache")
@@ -333,6 +338,36 @@ comprueba("en las anteriores, no",
 print("\nUn objeto con muchas claves ensena las primeras y las ultimas")
 dias = {f"2026-10-{d:02d}": {"x": "y" * 400} for d in range(1, 22)}
 comprueba("las ultimas fechas se ven", "2026-10-01" in L._corto(dias) and "2026-10-21" in L._corto(dias), True)
+
+print("\nCada usuario tiene su memoria (docs/75)")
+def memoria(cookie, accion):
+    return cuerpo(L.lambda_handler(falsos.peticion("POST", "/api/pregunta", {"memoria": accion}, cookie), None))
+comprueba("al principio, vacia", memoria(COOKIE, "ver"), {"memoria": ""})
+LLAMADAS.clear()
+COLA[:] = [recuerda("- Le interesa el centro 500088\n- Lo quiere en tablas"), texto()]
+r_ = cuerpo(pregunta("recuerda que me interesa el 500088 y lo quiero en tablas", COOKIE))
+comprueba("el modelo la escribe y la respuesta lo dice", r_.get("memoria_cambiada"), True)
+comprueba("ver la memoria la devuelve", memoria(COOKIE, "ver")["memoria"], "- Le interesa el centro 500088\n- Lo quiere en tablas")
+comprueba("el modelo recibe que se guardo", "Memoria guardada" in resultado(LLAMADAS[1]), True)
+LLAMADAS.clear()
+pregunta("y hoy?", COOKIE)
+enviado = json.dumps(LLAMADAS[0]["messages"][-1]["content"], ensure_ascii=False)
+comprueba("la pregunta siguiente lleva su memoria", "500088" in enviado and "no reglas" in enviado, True)
+comprueba("pero en el mensaje, no en el recetario", "500088" in LLAMADAS[0]["system"][0]["text"], False)
+comprueba("sin cambiarla, la respuesta no dice que cambio",
+          cuerpo(pregunta("otra", COOKIE)).get("memoria_cambiada"), False)
+LLAMADAS.clear()
+pregunta("y yo?", OTRA)
+comprueba("otro usuario no ve la de Ana", "500088" in json.dumps(LLAMADAS[0]["messages"], ensure_ascii=False), False)
+comprueba("ni al pedirla", memoria(OTRA, "ver"), {"memoria": ""})
+antes = L.uso_de_hoy("ana@airbus.com")[1].get("preguntas", 0)
+COLA[:] = [recuerda("x" * 9000), texto()]
+pregunta("apunta mucho", COOKIE)
+comprueba("con tope de tamano", len(memoria(COOKIE, "ver")["memoria"]), L.MAX_MEMORIA)
+comprueba("borrarla la deja vacia", memoria(COOKIE, "borrar"), {"memoria": ""})
+comprueba("y ver o borrar no cuenta como pregunta",
+          L.uso_de_hoy("ana@airbus.com")[1].get("preguntas", 0) - antes, 1)
+comprueba("sin sesion, nada", L.lambda_handler(falsos.peticion("POST", "/api/pregunta", {"memoria": "ver"}, None), None)["statusCode"], 401)
 
 print("\nEl historial se pasa, recortado a tres idas y venidas")
 LLAMADAS.clear()
