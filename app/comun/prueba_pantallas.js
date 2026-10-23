@@ -567,6 +567,8 @@ for (const [f, dia] of Object.entries({
 
 // Los preferidos del usuario de la prueba (docs/62), y los nombres que manda la API.
 let PREFS = [];
+// El muneco de este usuario (docs/76), como lo guarda el servidor.
+let MUNECO = { muneco: 'vendi', avisar: false };
 const NOMBRES_TABLAS = {
   rutas: { nombre: 'Rutas', tablas: { i_cumplimiento: 'Cumplimiento de ruta', i_en_ruta: 'Visitas en ruta',
     i_efectuadas: 'Visitas efectuadas', i_no_planificadas: 'Visitas no planificadas', i_pasaje_vacio: 'Pasaje vacío',
@@ -639,6 +641,17 @@ const servidor = http.createServer((pet, res) => {
       if (c === null) return json(RESUMEN_TARIFAS);
       if (c !== CENTRO_TARIFAS.num_centro) { res.writeHead(400); return res.end('{"error":"Ese centro no está en las tarifas de este perfil."}'); }
       return json(CENTRO_TARIFAS);
+    }
+    if (u.pathname === '/api/pregunta' && pet.method === 'POST') {
+      // Sin route en la prueba, solo contesta lo del muneco.
+      let b = '';
+      pet.on('data', c => { b += c; });
+      return pet.on('end', () => {
+        const d = JSON.parse(b || '{}');
+        if (d.muneco === 'ver') return json(MUNECO);
+        if (d.muneco) { MUNECO = { muneco: d.muneco, avisar: false }; return json({ muneco: d.muneco }); }
+        res.writeHead(404); res.end('{"error":"no existe"}');
+      });
     }
     if (u.pathname === '/api/preferidos') {
       // Como la API: los guarda y los devuelve, con los nombres de cada tabla.
@@ -1505,11 +1518,75 @@ const servidor = http.createServer((pet, res) => {
         comprueba('a la segunda, la vacia', pide.filter(p => p.memoria === 'borrar').length, 1);
         comprueba('ver la memoria no se guarda en la conversacion',
           await y.pagina.evaluate(() => JSON.parse(sessionStorage.getItem('digivend.asistente.hilo')).length), 2);
+        // El muneco (docs/76): se elige en el chat o se pide escribiendo.
+        await y.pagina.unroute('**/api/pregunta');
+        await y.pagina.click('#chatMuneco');
+        await y.pagina.waitForSelector('.turno.munecos');
+        comprueba('salen los cinco', await y.pagina.$$eval('.turno.munecos [data-muneco]', b => b.map(x => x.dataset.muneco)),
+          ['vendi', 'tom', 'kiko', 'furgo', 'bufy']);
+        comprueba('con el puesto marcado', await y.pagina.getAttribute('[data-muneco="vendi"]', 'aria-pressed'), 'true');
+        if (process.env.FOTOS_VENDI) {
+          await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'munecos.png') });
+          await y.pagina.emulateMedia({ colorScheme: 'dark' });
+          await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'munecos-oscuro.png') });
+          await y.pagina.setViewportSize({ width: 390, height: 844 });
+          await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'munecos-movil.png') });
+          await y.pagina.setViewportSize({ width: 1280, height: 720 });
+          await y.pagina.emulateMedia({ colorScheme: 'light' });
+        }
+        await y.pagina.click('[data-muneco="bufy"]');
+        await y.pagina.waitForSelector('#vendiChat .muneco.bufy');
+        comprueba('se guarda en el servidor', MUNECO.muneco, 'bufy');
+        comprueba('y en la pestana', await y.pagina.evaluate(() => sessionStorage.getItem('digivend.asistente.muneco')), 'bufy');
+        comprueba('el marcado cambia', await y.pagina.getAttribute('[data-muneco="bufy"]', 'aria-pressed'), 'true');
+        comprueba('elegir no se guarda en la conversacion',
+          await y.pagina.evaluate(() => JSON.parse(sessionStorage.getItem('digivend.asistente.hilo')).length), 2);
+        comprueba_que('y cada Bufy con sus recortes propios', await y.pagina.$$eval('clipPath', c => new Set(c.map(x => x.id)).size === c.length));
+        await y.pagina.click('#chatCerrar');
+        await y.pagina.waitForFunction(() => !document.querySelector('#bVendi').hidden);
+        await y.pagina.evaluate(() => document.querySelector('#bVendi .muneco').classList.remove('saluda'));
+        await y.pagina.hover('#bVendi');
+        comprueba_que('al pasar el raton, Bufy se encabrita',
+          await y.pagina.$eval('#bVendi .muneco', m => m.classList.contains('saluda') && getComputedStyle(m.querySelector('.cuerpo')).animationName === 'as-encabrita'));
+        if (process.env.FOTOS_VENDI) {
+          await y.pagina.waitForTimeout(800);
+          await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'bufy-encabritado.png') });
+          await y.pagina.emulateMedia({ colorScheme: 'dark' });
+          await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'bufy-oscuro.png') });
+          await y.pagina.emulateMedia({ colorScheme: 'light' });
+        }
+        await y.pagina.route('**/api/pregunta', ruta => ruta.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ respuesta: 'Hecho, ahora soy Kiko.', muneco: 'kiko' }) }));
+        await y.pagina.click('#bVendi');
+        await y.pagina.fill('#chatTexto', 'ponme a Kiko');
+        await y.pagina.press('#chatTexto', 'Enter');
+        await y.pagina.waitForFunction(() => document.querySelectorAll('.turno.el').length >= 3 && sessionStorage.getItem('digivend.asistente.muneco') === 'kiko');
+        comprueba_que('pedirlo escribiendo lo cambia', !(await y.pagina.$('#vendiChat .muneco.bufy')));
+        await y.pagina.unroute('**/api/pregunta');
+        MUNECO = { muneco: 'vendi', avisar: false };
       }
       comprueba(`en /${s}/, ni una peticion fuera del dominio`, y.fuera, []);
       comprueba(`en /${s}/, sin errores en la consola`, y.errores, []);
       await y.pagina.close();
     }
+    // El aviso de que se puede cambiar: lo decide el servidor (3 veces como mucho).
+    MUNECO = { muneco: 'vendi', avisar: true };
+    {
+      const y = await abre('/incidencias/');
+      await y.pagina.waitForSelector('#bocadillo.vis', { timeout: 5000 });
+      comprueba_que('si toca, Vendi recuerda que se puede cambiar', (await y.pagina.textContent('#bocadillo')).includes('Muñeco'));
+      if (process.env.FOTOS_VENDI) await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'aviso-muneco.png') });
+      await y.pagina.close();
+    }
+    MUNECO = { muneco: 'furgo', avisar: false };
+    {
+      const y = await abre('/incidencias/');
+      await y.pagina.waitForSelector('#bocadillo.vis', { timeout: 5000 });
+      comprueba_que('si no toca, el hola de siempre', !(await y.pagina.textContent('#bocadillo')).includes('Muñeco'));
+      comprueba_que('y sale con el suyo', await y.pagina.$eval('#bVendi', b => b.textContent.includes('SERUNION VENDING')));
+      await y.pagina.close();
+    }
+    MUNECO = { muneco: 'vendi', avisar: false };
     API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: false, motivo: '' } };
     {
       const y = await abre('/rutas/');
