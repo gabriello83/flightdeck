@@ -567,6 +567,8 @@ _SOLO_DE_UNA = {
         # Los km solo salen en la lista; la flota y las visitas las usa
         # tambien el dia a dia.
         ("vehiculos", "raiz", ("km",)),
+        # Y en cada dia de un mes de la historia (docs/75).
+        ("vehiculos", "dias", ("km",)),
     ),
     "revision": (
         ("planograma", "raiz", ("sin_planograma",)),
@@ -600,7 +602,7 @@ def recorta_tablas(cuadrado, datos, perfil):
         if donde == "raiz":
             for k in claves:
                 out.pop(k, None)
-        elif donde == "dias":
+        elif donde == "dias" and isinstance(out.get("dias"), dict):
             out["dias"] = {f: ({k: v for k, v in d.items() if k not in claves}
                                if isinstance(d, dict) else d)
                            for f, d in (out.get("dias") or {}).items()}
@@ -619,7 +621,7 @@ def recorta_operativo(datos, perfil):
     """
     ve = cuadrados_de(perfil)
     out = {k: datos.get(k) for k in ("generado", "ultimo_dia", "primer_dia", "umbrales", "zonas",
-                                     "centros", "meses_centros", "_nota")}
+                                     "centros", "meses_centros", "meses_dias", "_nota")}
     out["cuadrados"] = ve
     dias = {}
     for f, d in (datos.get("dias") or {}).items():
@@ -631,6 +633,12 @@ def recorta_operativo(datos, perfil):
     out["dias"] = dias
     out["foto"] = {c: v for c, v in (datos.get("foto") or {}).items() if c in ve}
     return out
+
+
+def recorta_operativo_mes(datos, perfil):
+    """Un mes de la historia del informe general (docs/75), con la misma tijera
+    que el fichero del perfil."""
+    return {"mes": datos.get("mes"), "dias": recorta_operativo(datos, perfil)["dias"]}
 
 
 def fichas_operativo(datos):

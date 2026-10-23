@@ -607,6 +607,28 @@ const NOMBRES_TABLAS = {
   almacenes: { nombre: 'Almacenes', tablas: { productos: 'Productos de los almacenes' } }
 };
 
+// La historia desde 2025 (docs/75): los meses de antes de los que traen los
+// ficheros, con la forma que escriben infra/operativo.py y la API.
+const HISTORIA_MES = {
+  '/api/operativo': { '2025-03': { mes: '2025-03', dias: { '2025-03-04': {
+    rutas: { previstas: 200, hechas: 150, pct: 75, color: 'amarillo', visitas: 500, fuera_de_plan: 3 },
+    averias: { cerradas: 10, a_tiempo: 9, pct: 90, color: 'amarillo', horas: 24, sin_tarea: 0 },
+    furgonetas: { activas: 2, visitas: 500, visitas_sin_vehiculo: 0, vehiculos: ['1111AAA', '2222BBB'] },
+    ventas: { importe: 12345.5, unidades: 9000, maquinas: 800, fuente: 'telemetria', imposibles: 0 },
+    reposiciones: { unidades: 7000, por_clase: [{ clase: 'Snack', unidades: 7000 }], consumibles: 0, valor: 1 },
+    telemetria: { sin_dato: 'En el relleno histórico no hay foto del censo de ese día.' },
+    por_delegacion: { ventas: { 'Madrid - Leganes': { importe: 12345.5, unidades: 9000, maquinas: 800 } } } } } } },
+  '/api/rutas': { '2025-03': { mes: '2025-03', dias: { '2025-03-04': {
+    visitas_deleg: { 'Madrid - Leganes': 90 },
+    total: { previstas: 100, hechas: 90, pct: 90, color: 'amarillo', fuera: 0, visitas: 90 },
+    delegaciones: [{ delegacion: 'Madrid - Leganes', previstas: 100, hechas: 90, fuera: 0, vacio: 0, visitas: 90, pct: 90, color: 'amarillo' }],
+    rutas: [{ delegacion: 'Madrid - Leganes', ruta: 'Ruta Getafe', previstas: 100, hechas: 90, fuera: 0, vacio: 0, pct: 90, color: 'amarillo' }],
+    quien: { 'Madrid - Leganes\u0001Ruta Getafe': ['Ana Pérez'] } } } } },
+  '/api/furgonetas': { '2025-03': { mes: '2025-03', dias: {
+    '2025-03-03': { km: { '1234ABC': [80, 1, ''] }, v: ['1234ABC'] },
+    '2025-03-04': { km: { '1234ABC': [120, 1, ''], '5678DEF': [5, 1, ''] }, v: ['1234ABC'] } } } }
+};
+
 const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8' };
 
 const servidor = http.createServer((pet, res) => {
@@ -672,6 +694,12 @@ const servidor = http.createServer((pet, res) => {
         return pet.on('end', () => { PREFS = JSON.parse(b).preferidos; json({ preferidos: PREFS }); });
       }
       return json({ preferidos: PREFS, nombres: NOMBRES_TABLAS });
+    }
+    // La historia (docs/75): un mes de una seccion, o 404 si no lo tiene.
+    if (HISTORIA_MES[u.pathname] && u.searchParams.has('mes')) {
+      const m = HISTORIA_MES[u.pathname][u.searchParams.get('mes')];
+      if (!m) { res.writeHead(404); return res.end('{"error":"Ese mes no tiene días calculados."}'); }
+      return json(m);
     }
     if (API[u.pathname]) return json(API[u.pathname]);
     res.writeHead(404); return res.end('{"error":"no existe"}');
@@ -2759,6 +2787,71 @@ const toca = titulo => !process.env.SOLO || titulo.toLowerCase().includes(proces
     comprueba_que('sin ninguno, dice como se marcan', (await x.pagina.textContent('#vacio')).includes('Pulsa la estrella'));
     await x.pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  // ------------------------------------------- la historia desde 2025 (docs/75)
+  if (toca('La historia desde 2025')) {
+    console.log('\nLa historia desde 2025 (docs/75): cada seccion pide sus meses al ir atras');
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno' };
+    API['/api/operativo'].meses_dias = { '2025-03': [4] };
+    API['/api/rutas'].meses_dias = { '2025-03': [4] };
+    API['/api/furgonetas'].meses_dias = { '2025-03': [3, 4] };
+    pedidos.length = 0;
+    let x = await abre('/operativo/?dia=2025-03-04');
+    await x.pagina.waitForSelector('.cuadro[data-id="ventas"]');
+    comprueba('el informe general abre un dia de 2025, pidiendo solo su mes',
+      [(await x.pagina.textContent('.cuadro[data-id="ventas"] .vl')).replace(/\s/g, ' ').trim(),
+       pedidos.filter(p => p.startsWith('/api/operativo?mes='))], ['12.346 €', ['/api/operativo?mes=2025-03']]);
+    comprueba_que('la telemetria de un dia del relleno dice por que no esta',
+      (await x.pagina.textContent('.cuadro[data-id="telemetria"]')).includes('censo'));
+    await x.pagina.click('#bFecha');
+    await x.pagina.waitForSelector('#cal button[data-dia="2025-03-04"]');
+    comprueba('el calendario deja pulsar los dias de la historia y no los que no estan',
+      [await x.pagina.isDisabled('#cal button[data-dia="2025-03-04"]'), await x.pagina.isDisabled('#cal button[data-dia="2025-03-05"]')],
+      [false, true]);
+    comprueba('sin errores', x.errores, []);
+    comprueba('ni una peticion fuera del dominio', x.fuera, []);
+    await x.pagina.close();
+
+    x = await abre('/cifras/?que=ventas&dia=2025-03-04');
+    await x.pagina.waitForSelector('.cifra .gr');
+    comprueba('las ventas de un dia de 2025, del mes de la historia',
+      (await x.pagina.textContent('.cifra .gr')).replace(/\s/g, ' ').trim(), '12.346 €');
+    comprueba('sin errores', x.errores, []);
+    await x.pagina.close();
+
+    pedidos.length = 0;
+    x = await abre('/rutas/?dia=2025-03-04');
+    await x.pagina.waitForSelector('#kpis .kpi');
+    comprueba('rutas: el dia de 2025 sale en la lista y pide su mes',
+      [await x.pagina.$eval('#dia', s => s.value), pedidos.filter(p => p.startsWith('/api/rutas?mes='))],
+      ['2025-03-04', ['/api/rutas?mes=2025-03']]);
+    comprueba_que('con su cumplimiento', (await x.pagina.textContent('#kpis')).includes('90'), await x.pagina.textContent('#kpis'));
+    comprueba('sin errores', x.errores, []);
+    await x.pagina.close();
+
+    pedidos.length = 0;
+    x = await abre('/furgonetas/?dia=2025-03-04');
+    await x.pagina.waitForSelector('#areas .area');
+    comprueba('furgonetas: el dia de 2025 y su mes',
+      [await x.pagina.$eval('#dia', s => s.value), pedidos.filter(p => p.startsWith('/api/furgonetas?mes='))],
+      ['2025-03-04', ['/api/furgonetas?mes=2025-03']]);
+    await x.pagina.click('#areas .area[data-area="Centro"]');
+    await x.pagina.waitForSelector('#cajaTabla table');
+    const fila = await x.pagina.$$eval('#cajaTabla tbody tr', t => t.map(r => r.textContent).find(r => r.includes('1234ABC')) || '');
+    comprueba_que('con los km de esos dias', fila.includes('120') && fila.includes('80'), fila);
+    const otra = await x.pagina.$$eval('#cajaTabla tbody tr', t => t.map(r => r.textContent).find(r => r.includes('9999ZZZ')) || '');
+    comprueba_que('y lo que no se sabe, desde cuando no se sabe', otra.includes('Más de 3 días'), otra);
+    comprueba('sin errores', x.errores, []);
+    for (const [ancho, tema] of [[1280, 'light'], [1280, 'dark'], [390, 'light']]) {
+      await x.pagina.setViewportSize({ width: ancho, height: 900 });
+      await x.pagina.evaluate(t => document.documentElement.setAttribute('data-theme', t), tema);
+      if (process.env.CAPTURAS) await x.pagina.screenshot({ path: path.join(process.env.CAPTURAS, `furgonetas-2025-${tema}-${ancho}.png`), fullPage: true });
+    }
+    await x.pagina.close();
+    delete API['/api/operativo'].meses_dias;
+    delete API['/api/rutas'].meses_dias;
+    delete API['/api/furgonetas'].meses_dias;
   }
 
   await navegador.close();

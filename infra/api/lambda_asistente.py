@@ -189,7 +189,10 @@ dilo. En este modelo, lo que parece un hallazgo espectacular suele ser una de es
 # nombre -> (ruta de la API, parametros que admite, para que sirve)
 SECCIONES = {
     "panel": ("/api/panel", (), "el panel: servicio, dinero por mes, SAT, inventario, rentabilidad"),
-    "informe_general": ("/api/operativo", (), "los cuadrados del informe general, dia a dia y por delegacion"),
+    "informe_general": ("/api/operativo", ("mes",),
+                        "los cuadrados del informe general, dia a dia y por delegacion: sin parametros, "
+                        "los ultimos 62 dias y en meses_dias los dias que hay desde 2025; con "
+                        "mes=AAAA-MM, los dias de ese mes"),
     "serie": ("/api/serie", ("mes", "centros"),
               "la serie diaria: sin parametros, los meses que hay; con mes=AAAA-MM, ese mes dia a "
               "dia; con centros=AAAA-MM, ese mes dia a dia y centro a centro (venta por punto de venta)"),

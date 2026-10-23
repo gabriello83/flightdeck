@@ -949,6 +949,21 @@ comprueba("la reposicion del dia sale igual que de noche",
           _desp["dias"][AYER.isoformat()]["reposiciones"], _antes["dias"][AYER.isoformat()]["reposiciones"])
 comprueba("y las averias que ya tenia el dia (con M13), tambien",
           _desp["dias"][AYER.isoformat()]["averias"], _antes["dias"][AYER.isoformat()]["averias"])
+_mes = AYER.isoformat()[:7]
+_hist = json.loads(gzip.decompress(ALMACEN[f"cabina/interno/operativo/dias-{_mes}.json.gz"]))
+comprueba("la historia del informe va en un fichero por mes (docs/75)",
+          AYER.isoformat() in _hist["dias"], True)
+comprueba("y el fichero dice que dias tiene cada mes",
+          AYER.day in _desp["meses_dias"][_mes], True)
+_rut = json.loads(gzip.decompress(ALMACEN[f"cabina/interno/rutas/dias-{_mes}.json.gz"]))
+comprueba("la de rutas tambien, sin la lista maquina a maquina",
+          (AYER.isoformat() in _rut["dias"], "visitas" in _rut["dias"][AYER.isoformat()]), (True, False))
+comprueba("y el fichero de rutas dice que dias tiene cada mes",
+          AYER.day in json.loads(gzip.decompress(ALMACEN["cabina/interno/rutas.json.gz"]))["meses_dias"][_mes],
+          True)
+_fur = ALMACEN.get(f"cabina/interno/furgonetas/dias-{_mes}.json.gz")
+comprueba("la de furgonetas tambien, con los km de cada dia",
+          _fur is not None and AYER.isoformat() in json.loads(gzip.decompress(_fur))["dias"], True)
 comprueba("la SAT de antes del tramo se lee, sin pasar del primer dia",
           (len(L.previos_averias(datetime.date(2026, 3, 1))),
            len(L.previos_averias(datetime.date(2025, 1, 10)))), (120, 9))

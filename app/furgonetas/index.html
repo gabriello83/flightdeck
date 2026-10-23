@@ -258,6 +258,10 @@ let F = null;
 /* El reparto por centro de cada mes (docs/72): mes -> {dias} o null. De ahi
    salen las furgonetas que visitaron cada centro cada dia. */
 const MESES = {};
+/* La historia (docs/75): los días del fichero y los de cada mes de antes, que
+   se piden al elegir un día. HISTORIA: mes -> true cuando ya está junto. */
+let DIAS_TODOS = [];
+const HISTORIA = {};
 
 function fechaLarga(s){
   const d = new Date(String(s)+"T00:00:00");
@@ -303,7 +307,47 @@ function km(m, f){
   return {t:num(n), c:fuera ? "fuera" : "", x:`${num(n)} km${varias}${falta ? ` · otra ${falta}` : ""}`, v:n, rojo:fuera, jornada:true};
 }
 /* Los días de la semana que acaba en el elegido, y los de la tabla. */
-const hasta = (dia, n) => (D.dias||[]).filter(f=>f<=dia).slice(-n);
+const hasta = (dia, n) => DIAS_TODOS.filter(f=>f<=dia).slice(-n);
+/* Desde cuándo se conocen las visitas para ese día: lo del fichero, o el
+   primer día de los meses de la historia que hay seguidos hasta él. */
+function desdeConocido(dia){
+  if(dia >= D.desde) return D.desde;
+  let m = dia.slice(0,7), desde = dia;
+  while(HISTORIA[m]){
+    desde = `${m}-01`;
+    const d = new Date(+m.slice(0,4), +m.slice(5,7)-2, 1);
+    m = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  }
+  return desde;
+}
+/* Los meses de la historia de los días que se ven (la tabla de los últimos
+   DIAS_VISTA): sus km y sus visitas se juntan con los del fichero. */
+async function cargaHistoria(){
+  const dia = $("#dia").value, fijos = new Set(D.dias);
+  const faltan = [...new Set(hasta(dia, DIAS_VISTA).filter(f=>!fijos.has(f)).map(f=>f.slice(0,7)))]
+    .filter(m=>!HISTORIA[m] && (D.meses_dias||{})[m]);
+  if(!faltan.length) return;
+  $("#todo").style.opacity = ".55";
+  let fallo = false;
+  await Promise.all(faltan.map(async m=>{
+    try{
+      const r = await fetch(`/api/furgonetas?mes=${encodeURIComponent(m)}`, {credentials:"same-origin"});
+      if(r.status===401){ location.href = "/"; return; }
+      if(!r.ok){ fallo = true; return; }
+      const x = await r.json();
+      D.km = D.km || {}; D.visitas = D.visitas || {};
+      for(const [f, d] of Object.entries(x.dias||{})){
+        if(fijos.has(f)) continue;
+        if(d.km) D.km[f] = d.km;
+        (d.v||[]).forEach(mat=>{ (D.visitas[mat] = D.visitas[mat] || []).push(f); });
+      }
+      Object.values(D.visitas).forEach(l=>l.sort());
+      HISTORIA[m] = true;
+    }catch(e){ fallo = true; }
+  }));
+  $("#todo").style.opacity = "";
+  if(fallo) avisa("No se han podido leer todos los días de lo elegido: comprueba la conexión y vuelve a elegirlo.", true);
+}
 
 /* Lo de una furgoneta el día elegido: si está bien y por qué no. Bien = se
    usó en la última semana (visita o jornada) y ningún día de esa semana tuvo
@@ -344,7 +388,7 @@ async function cargaMeses(){
   const l = await Promise.all(meses.map(m=>Filtros.mesCentros(m)));
   meses.forEach((m, i)=>{ MESES[m] = l[i]; });
 }
-async function repinta(){ await cargaMeses(); pinta(); }
+async function repinta(){ await cargaHistoria(); await cargaMeses(); pinta(); }
 
 /* ---------------------------------------------------------------- portada */
 function pintaPortada(){
@@ -386,7 +430,7 @@ function filas(){
 function textoUltima(x, dia){
   if(x.sin === 0) return `<span class="si">Visitó</span>`;
   const cuando = x.u ? `<span class="tenue">${esc(fechaCorta(x.u))}</span><br>` : "";
-  if(x.sin == null) return `${cuando}<span class="no">Más de ${num(entre(D.desde, dia))} días</span>`;
+  if(x.sin == null) return `${cuando}<span class="no">Más de ${num(entre(desdeConocido(dia), dia))} días</span>`;
   return `${cuando}<span class="no">${num(x.sin)} ${x.sin===1?"día":"días"}</span>`;
 }
 
@@ -516,7 +560,7 @@ function csv(){
     "Última visita", "Días sin visitas", ...fks.map(f=>`km ${f}`),
     D.km_desde ? `Km desde ${D.km_desde}` : "Km acumulados", "Jornadas sin km", "Estado"];
   const lineas = filas().map(x=>[x.m, x.mod, x.n, x.p + (x.pr==="jornada" ? " (última jornada)" : ""), x.r, x.d, x.z,
-    x.u || `antes del ${D.desde}`, x.sin == null ? `más de ${entre(D.desde, dia)}` : x.sin, ...x.kms.map(k=>k.v),
+    x.u || `antes del ${desdeConocido(dia)}`, x.sin == null ? `más de ${entre(desdeConocido(dia), dia)}` : x.sin, ...x.kms.map(k=>k.v),
     x.km == null ? "sin dato" : x.km, x.skm == null ? "" : x.skm, x.ok ? "Bien" : x.motivos.join(" · ")]);
   const texto = "﻿" + [cab, ...lineas].map(l=>l.map(q).join(";")).join("\r\n");
   const url = URL.createObjectURL(new Blob([texto], {type:"text/csv;charset=utf-8"}));
@@ -557,7 +601,11 @@ let QUITADAS = new Set();
   if(D.sin_dato) avisa(D.sin_dato, true);
   UMBRAL = Object.assign(UMBRAL, D.umbrales_km || {});
   SEMANA = D.semana || SEMANA;
-  const dias = D.dias.slice().reverse();
+  const todos = new Set(D.dias);
+  for(const [m, ds] of Object.entries(D.meses_dias||{}))
+    for(const d of ds) todos.add(`${m}-${String(d).padStart(2,"0")}`);
+  DIAS_TODOS = [...todos].sort();
+  const dias = DIAS_TODOS.slice().reverse();
   $("#dia").innerHTML = dias.map(f=>`<option value="${esc(f)}">${esc(fechaLarga(f))}</option>`).join("");
   /* El día que llega en la dirección (desde el cuadrado), o ayer, o el último. */
   const q = new URLSearchParams(location.search), pedido = q.get("dia");
@@ -569,6 +617,7 @@ let QUITADAS = new Set();
   const areas = [...new Set((D.flota||[]).map(x=>x.z))];
   VARIAS_AREAS = areas.length > 1;
   await montaFiltros();
+  await cargaHistoria();
   await cargaMeses();
   $("#dia").addEventListener("change", ()=>{ TODAS=false; repinta(); });
   $("#busca").addEventListener("input", ()=>{ TODAS=false; pinta(); });
@@ -581,7 +630,7 @@ let QUITADAS = new Set();
     + "Una visita es la de un reponedor en los partes, sin los automáticos de SYSTEM, o la de un técnico de la SAT. "
     + "Los km son los finales menos los iniciales de sus jornadas de ruta, sin contar dos veces la misma jornada. "
     + "La persona es el reponedor titular de la ruta activa que lleva esa furgoneta; sin ruta, quien la llevó en su última jornada. "
-    + `Las visitas se conocen desde el ${esc(fechaLarga(D.desde))}. `
+    + `Las visitas se conocen desde el ${esc(fechaLarga(D.desde))}; los días de antes, por meses, con la flota activa de hoy. `
     + "Datos filtrados por el ámbito de tu perfil y servidos desde este mismo dominio."
     + (gen ? ` Calculado el ${esc(gen.toLocaleString("es-ES"))}.` : "");
   $("#pie").hidden = false;

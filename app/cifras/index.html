@@ -196,6 +196,10 @@ const SEL = {dia: ""};
    del mes para ventas y reposiciones. */
 let F = null;
 const MESES = {};
+/* La historia del informe (docs/75): los dias de antes de los que trae el
+   fichero, un mes cada vez. HAY son todos los dias con dato. */
+let HAY = new Set();
+const HISTORIA = {};
 const SIN_REPARTO_C = "Este día no tiene el reparto por cliente y centro: empezó a calcularse la noche del 22 de octubre de 2026.";
 
 function avisa(t, mal){ const a=$("#aviso"); a.textContent=t||""; a.hidden=!t; a.classList.toggle("mal", !!mal); }
@@ -264,11 +268,24 @@ async function cargaMes(){
   const mes = SEL.dia.slice(0,7);
   if(!(mes in MESES)) MESES[mes] = await Filtros.mesCentros(mes);
 }
-async function repinta(){ await cargaMes(); pinta(); }
+async function cargaHistoria(){
+  if(!SEC.de_un_dia || !SEL.dia || DATOS.dias[SEL.dia]) return;
+  const mes = SEL.dia.slice(0,7);
+  if(HISTORIA[mes] || !(DATOS.meses_dias||{})[mes]) return;
+  try{
+    const r = await fetch(`/api/operativo?mes=${encodeURIComponent(mes)}`, {credentials:"same-origin"});
+    if(r.status===401){ location.href = "/"; return; }
+    if(!r.ok) throw new Error(r.status);
+    const x = await r.json();
+    for(const [f, d] of Object.entries(x.dias||{})) if(!DATOS.dias[f]) DATOS.dias[f] = d;
+    HISTORIA[mes] = true;
+  }catch(e){ avisa("No se ha podido leer ese día: comprueba la conexión y vuelve a elegirlo."); }
+}
+async function repinta(){ await cargaHistoria(); await cargaMes(); pinta(); }
 function leeUrl(){
   const q = new URLSearchParams(location.search);
   const d = q.get("dia");
-  if(d && (DATOS.dias||{})[d]) SEL.dia = d;
+  if(d && HAY.has(d)) SEL.dia = d;
   else if(!SEL.dia) SEL.dia = DATOS.ultimo_dia || "";
 }
 
@@ -410,7 +427,12 @@ function fechaLarga(f){
   $("#bPanel").href = SEC.panel; $("#bPanel").hidden = false;
   $("#barra").hidden = false;
   if(SEC.de_un_dia){
-    const dias = Object.keys(DATOS.dias||{}).filter(d=>DATOS.dias[d][ID]).sort().reverse();
+    /* Los del fichero que traen este dato, y los de la historia, que llegan al elegirlos. */
+    DATOS.dias = DATOS.dias || {};
+    HAY = new Set(Object.keys(DATOS.dias).filter(d=>DATOS.dias[d][ID]));
+    for(const [m, ds] of Object.entries(DATOS.meses_dias||{}))
+      for(const d of ds){ const f = `${m}-${String(d).padStart(2,"0")}`; if(!DATOS.dias[f]) HAY.add(f); }
+    const dias = [...HAY].sort().reverse();
     $("#selDia").innerHTML = dias.map(d=>`<option value="${esc(d)}">${esc(fechaLarga(d))}</option>`).join("");
     $("#lDia").hidden = !dias.length;
     $("#selDia").addEventListener("change", ()=>{
@@ -424,7 +446,7 @@ function fechaLarga(f){
       : "Foto de la última noche";
   }
   leeUrl();
-  if(SEC.de_un_dia && !(DATOS.dias||{})[SEL.dia]){ avisa("El informe todavía no tiene ningún día calculado."); return; }
+  if(SEC.de_un_dia && !HAY.has(SEL.dia)){ avisa("El informe todavía no tiene ningún día calculado."); return; }
   /* Los cuatro filtros, con las delegaciones y las fichas de centros del informe. */
   const zonas = Object.assign({}, DATOS.zonas || {});
   Object.values(DATOS.dias||{}).forEach(d=>Object.values(d.por_delegacion||{}).forEach(p=>Object.keys(p).forEach(dl=>{
@@ -432,6 +454,7 @@ function fechaLarga(f){
   F = Filtros.cuatro($("#fLugar"), {zonas, centros: DATOS.centros || {}, zonaDe: Areas.zona, ordenAreas: Areas.orden,
     alCambiar: repinta});
   guardaDia();
+  await cargaHistoria();
   await cargaMes();
   pinta();
   const pie = $("#pie");

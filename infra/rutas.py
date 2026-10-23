@@ -145,6 +145,11 @@ class Maquinas:
         self.meses_oficiales = set()
         self.quien = {}              # fecha -> {(delegacion, ruta): {reponedores}}
 
+    def quien_por_dia(self, desde=""):
+        """Quien hizo cada ruta, por dia: {fecha: {"delegacion␁ruta": [reponedores]}}."""
+        return {f: {f"{dl}\u0001{r}": sorted(e, key=str.lower) for (dl, r), e in sorted(rs.items())}
+                for f, rs in sorted(self.quien.items()) if f >= desde}
+
     def come(self, nombre, filas, dia):
         f = _iso(dia)
         self.desde = min(self.desde or f, f)
@@ -323,8 +328,7 @@ class Maquinas:
             llamadas.sort(key=lambda x: x["f"], reverse=True)
             sanitarias.sort(key=lambda x: x["f"], reverse=True)
 
-        quien = {f: {f"{dl}\u0001{r}": sorted(e, key=str.lower) for (dl, r), e in sorted(rs.items())}
-                 for f, rs in sorted(self.quien.items()) if f >= primero}
+        quien = self.quien_por_dia(primero)
         delegs = {x["d"] for x in por_recaudar + sin_reponer + nunca + llamadas + sanitarias}
         delegs |= {dl for rs in self.quien.values() for dl, _ in rs}
         sin_oficial = not any(m in self.meses_oficiales for m in anteriores)

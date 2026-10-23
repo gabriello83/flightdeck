@@ -43,9 +43,10 @@ AMARILLO = 75.0
 DIAS_NOCHE = 7
 DIAS_GUARDADOS = 62
 # El informe general guarda toda la historia (Gabriele, 19-oct: calendario,
-# historico y varios dias). Desde el 1-ene-2025 son unos 660 dias; el tope solo
-# esta para que el fichero no crezca sin fin. Va comprimido.
-DIAS_HISTORIA = 1100
+# historico y varios dias), pero no en el mismo fichero: el del perfil lleva los
+# ultimos DIAS_GUARDADOS dias, que es lo que abre la pagina, y cada dia esta
+# ademas en un fichero por mes (operativo/dias-AAAA-MM). Gabriele, 23-oct: un
+# mes cerrado no cambia, asi que se escribe una vez y la noche ya no lo toca.
 
 # En un relleno historico, cuantos dias antes del primero se leen las tareas de
 # la SAT y sus eventos: una averia cerrada el 1 de marzo pudo abrirse en
@@ -503,6 +504,7 @@ class Operativo:
         self.historico = historico
         self.cerrados = {}
         self.cerrados_centro = {}
+        self.cerrados_rutas = {}
         self.deleg_de = deleg_de or delegacion_de_la_fila
         self.centro_de = centro_de or centro_de_la_fila
         self.deleg_tarea = {}    # id de tarea -> delegacion
@@ -550,6 +552,9 @@ class Operativo:
         if d is not None:
             self.cerrados[f] = self._del_dia(d)
             self.cerrados_centro[f] = self.por_centro(d)
+            # Lo de la pagina de rutas, sin la lista maquina a maquina: esa
+            # solo se guarda de la ultima semana (docs/55).
+            self.cerrados_rutas[f] = sin_lista(rutas_del_dia(d))
             self.dias[f] = None
 
     # ------------------------------------------------------------- furgonetas
@@ -1061,7 +1066,7 @@ class Operativo:
                       "VenCloud; null si el perfil está acotado (no tienen centro)."),
         }
 
-    def detalle_rutas(self, perfil_id, anterior=None, festivos=None, ubicaciones=None):
+    def detalle_rutas(self, perfil_id, anterior=None, festivos=None, ubicaciones=None, historia=None):
         """El fichero de la pagina de rutas (docs/55).
 
         Cada dia, por delegacion y por ruta, lo previsto y lo hecho; y los puntos
@@ -1091,6 +1096,8 @@ class Operativo:
             "umbrales": {"verde": VERDE, "amarillo": AMARILLO, "festivo_bajo": FESTIVO_BAJO},
             "festivos": resumen_festivos(festivos),
             "dias": dias,
+            # Los dias de antes, en rutas/dias-AAAA-MM (docs/75): cuales hay.
+            "meses_dias": meses_dias(anterior, historia, dias),
             "control_festivos": control_festivos(dias, festivos),
             "_nota": ("Cada día, lo previsto en el plan de visitas (D12, informe 184) contra las "
                       "visitas reales, por delegación y por ruta, contando por punto de venta. "
@@ -1098,11 +1105,79 @@ class Operativo:
                       "delegación, ruta(s), nº centro, centro, ubicación, hora, reponedor, "
                       "pasaje vacío (1, 0 o null)]. vacio: visitas sin ninguna línea de "
                       "reposición; null si no llegaron las líneas. control_festivos compara "
-                      "cada festivo y cada día laborable flojo con el día normal de su delegación."),
+                      "cada festivo y cada día laborable flojo con el día normal de su delegación. "
+                      "Los días de antes van en un fichero por mes, sin la lista y con su quien; "
+                      "meses_dias dice qué días tiene cada mes."),
         }
 
+    def rutas_por_mes(self, anterior, leer_mes, quien=None):
+        """Los ficheros de la historia de la pagina de rutas que toca esta
+        ejecucion (historia_por_mes, docs/75): cada dia con sus cifras por
+        delegacion y por ruta y quien hizo cada ruta, sin la lista maquina a
+        maquina. `quien` es {fecha: {"delegacion␁ruta": [reponedores]}}."""
+        quien = quien or {}
+        nuevos = {}
+        for f, d in self.dias.items():
+            if d is not None:
+                nuevos[f] = sin_lista(rutas_del_dia(d))
+        nuevos.update(self.cerrados_rutas)
+        for f, x in nuevos.items():
+            if quien.get(f):
+                x["quien"] = quien[f]
+        anterior = anterior or {}
+        previos = {}
+        for f, x in (anterior.get("dias") or {}).items():
+            x = sin_lista(x)
+            if (anterior.get("quien") or {}).get(f):
+                x["quien"] = anterior["quien"][f]
+            previos[f] = x
+        return historia_por_mes(nuevos, previos, leer_mes)
+
+    def furgonetas_por_mes(self, anterior, leer_mes, maestro, ambito=None, historia=None):
+        """Los ficheros de la historia de la pagina de furgonetas que toca esta
+        ejecucion (historia_por_mes, docs/75): cada dia, los km de cada
+        furgoneta («km», como en el fichero de la pagina) y las que visitaron
+        («v»). Son las furgonetas activas de hoy: una dada de baja no sale.
+
+        Los dias son los que se publican (los ultimos de la noche, o los del
+        tramo de un relleno). Los km salen de las jornadas leidas o, si no, de
+        `historia` ({fecha: {vehiculoid: jornadas}}, historia_de_jornadas).
+        Sin maestro de vehiculos no se escribe nada: no se sabe cuales son.
+        """
+        if maestro is None:
+            return {}
+        anterior = anterior or {}
+        historia = historia or {}
+        visitas = {m: set(fs) for m, fs in (anterior.get("visitas") or {}).items()}
+        for m, fs in self.visitas_de.items():
+            visitas.setdefault(m, set()).update(fs)
+        flota, mat_de = flota_del_perfil(maestro, ambito, visitas)
+
+        def del_dia(f, por):
+            junto = {}
+            for vid, js in (por or {}).items():
+                mat = mat_de.get(vid)
+                if mat in flota:
+                    junto.setdefault(mat, []).extend(js)
+            return {"km": {m: km_del_dia(js) for m, js in sorted(junto.items())},
+                    "v": sorted(m for m in flota if f in visitas.get(m, ()))}
+
+        nuevos = {}
+        for f in self.dias:
+            por = self.jornadas.get(f, historia.get(f))
+            if por is None and not any(f in fs for fs in visitas.values()):
+                continue
+            nuevos[f] = del_dia(f, por)
+            if por is None:
+                nuevos[f]["km"] = None
+        previos = {}
+        for f in anterior.get("dias") or []:
+            previos[f] = {"km": (anterior.get("km") or {}).get(f),
+                          "v": sorted(m for m, fs in (anterior.get("visitas") or {}).items() if f in fs)}
+        return historia_por_mes(nuevos, previos, leer_mes)
+
     def detalle_furgonetas(self, perfil_id, anterior=None, maestro=None, ambito=None,
-                           historia=None, rutas=None, empleados=None):
+                           historia=None, rutas=None, empleados=None, meses=None):
         """El fichero de la pagina de furgonetas (docs/58).
 
         Gabriele, 19-oct-2026: el listado de todas las furgonetas activas, si
@@ -1146,29 +1221,8 @@ class Operativo:
         for m, fs in self.visitas_de.items():
             visitas.setdefault(m, set()).update(fs)
 
-        sin_dato = None
-        flota = {}           # matricula -> {"n": nombres, "d": delegaciones}
-        mat_de = {}          # id de ficha -> matricula, tambien las de baja
-        if maestro is None:
-            sin_dato = SIN_VEHICULOS
-        else:
-            for x in maestro:
-                mat = str(R.v(x, "matricula", "") or "").strip()
-                if not mat:
-                    continue
-                mat_de[str(R.v(x, "id", ""))] = mat
-                if es_furgoneta(x):
-                    g = flota.setdefault(mat, {"n": set(), "d": set(), "mod": set()})
-                    for k, campo in (("n", "denominacion"), ("d", "delegacion"), ("mod", "modelo")):
-                        valor = str(R.v(x, campo, "") or "").strip()
-                        if valor:
-                            g[k].add(valor)
-            acota = ambito.get("acota") or {}
-            if any(ambito.get(k) for k in ("clientes", "centros", "delegaciones")) or acota:
-                # Con clientes o centros recortados al usuario (docs/74), solo las
-                # que visitaron lo suyo: las de la delegacion entera serian de mas.
-                delegs = set() if acota else {str(d) for d in ambito.get("delegaciones") or []}
-                flota = {m: g for m, g in flota.items() if g["d"] & delegs or m in visitas}
+        sin_dato = None if maestro is not None else SIN_VEHICULOS
+        flota, mat_de = flota_del_perfil(maestro, ambito, visitas)
 
         km = {}
         for f, por in (ant.get("km") or {}).items():
@@ -1229,6 +1283,8 @@ class Operativo:
             "visitas": {m: sorted(f for f in fs if limite <= f <= ultimo)
                         for m, fs in sorted(visitas.items())},
             "km": {f: km[f] for f in sorted(km) if f in dias},
+            # Los dias de antes, en furgonetas/dias-AAAA-MM (docs/75): cuales hay.
+            "meses_dias": meses_dias(ant, meses, dias),
             "_nota": ("flota: las furgonetas activas del maestro de vehículos (M12, informe 191), "
                       "{m: matrícula, n: nombre(s) en VenCloud, d: delegación(es), z: área, "
                       "mod: modelo, p: persona, pr: de dónde sale la persona («ruta»: reponedor "
@@ -1240,18 +1296,37 @@ class Operativo:
                       "y matrícula, [km, jornadas, lo que falta] del control de jornada (D5, "
                       "informe 161); km null si ninguna jornada trae el cuentakilómetros bien "
                       "(«sin cerrar», «sin anotar», «mal anotado»). Una furgoneta sin entrada "
-                      "un día no abrió jornada; un día sin entrada no se leyó."),
+                      "un día no abrió jornada; un día sin entrada no se leyó. Los días de antes "
+                      "van en un fichero por mes ({km, v: matrículas con visita}); meses_dias "
+                      "dice qué días tiene cada mes."),
         }
         if sin_dato:
             out["sin_dato"] = sin_dato
         return out
 
-    def fichero(self, perfil_id, anterior=None, meses=None):
-        """El fichero del perfil: los dias de esta noche sobre los que ya habia.
+    def nuevos(self):
+        """Los dias que ha calculado esta ejecucion: {fecha: (cuadrados, es_relleno)}."""
+        out = {}
+        for f, d in self.dias.items():
+            if d is not None:
+                out[f] = (self.cuadrados_del_dia(d), False)
+        for f, x in self.cerrados.items():
+            out[f] = (self._con_averias(f, x), True)
+        return out
 
-        Un dia recalculado sustituye al que hubiera; los demas se quedan, hasta
-        DIAS_HISTORIA. Asi la historia se acumula sin releerla, como la serie.
-        Un relleno historico escribe sus dias y deja la foto de la ultima noche.
+    def dias_por_mes(self, anterior, leer_mes):
+        """Los ficheros de la historia del informe que toca esta ejecucion
+        (historia_por_mes). Un relleno no pisa lo que sabe la noche."""
+        return historia_por_mes(self.nuevos(), (anterior or {}).get("dias"), leer_mes,
+                                lambda antes, xr: junta_dia(antes, xr[0], xr[1]))
+
+    def fichero(self, perfil_id, anterior=None, meses=None, historia=None):
+        """El fichero del perfil: los ultimos DIAS_GUARDADOS dias y que dias hay
+        en cada mes de la historia.
+
+        Un dia recalculado sustituye al que hubiera; los demas se quedan. Un
+        relleno historico escribe sus dias en sus meses (`historia`, de
+        dias_por_mes) y deja la foto de la ultima noche.
         `meses` son los ficheros por centro que se escriben con este
         (centros_por_mes): el fichero dice que meses hay y lleva la ficha de
         cada centro.
@@ -1260,40 +1335,32 @@ class Operativo:
         import incidencias as IN
         anterior = anterior or {}
         dias = dict(anterior.get("dias") or {})
-        for f, d in self.dias.items():
-            if d is not None:
-                dias[f] = self.cuadrados_del_dia(d)
-        for f, x in self.cerrados.items():
-            x = self._con_averias(f, x)
-            # Un dia que ya escribio la noche sabe mas que el relleno: la
-            # telemetria con el censo de entonces y las averias con el estado de
-            # M13 (docs/56). Esas dos se quedan como estaban.
-            antes = dias.get(f) or {}
-            for c in NO_PISA_EL_RELLENO:
-                if antes.get(c):
-                    x[c] = antes[c]
-                    por = dict(x.get("por_delegacion") or {})
-                    por.pop(c, None)
-                    if (antes.get("por_delegacion") or {}).get(c):
-                        por[c] = antes["por_delegacion"][c]
-                    x["por_delegacion"] = por
-            dias[f] = x
-        dias = dict(sorted(dias.items())[-DIAS_HISTORIA:])
+        for f, (x, relleno) in self.nuevos().items():
+            dias[f] = junta_dia(dias.get(f), x, relleno)
+        hay = meses_dias(anterior, historia, dias)
+        dias = ultimos(dias)
         delegaciones = set()
         for x in dias.values():
             for por in (x.get("por_delegacion") or {}).values():
                 delegaciones.update(por)
+        for x in (historia or {}).values():
+            for d in x["dias"].values():
+                for por in (d.get("por_delegacion") or {}).values():
+                    delegaciones.update(por)
+        delegaciones.update(anterior.get("zonas") or {})
         delegaciones.update((self.foto.get("pdvs") or {}).get("por_delegacion") or {})
         delegaciones.discard(SIN_DELEGACION)
         historico = self.historico and anterior
+        todos = sorted(f"{m}-{d:02d}" for m, ds in hay.items() for d in ds)
         return {
             "generado": (anterior.get("generado") if historico else None)
             or datetime.datetime.utcnow().isoformat() + "Z",
             "perfil": perfil_id,
-            "ultimo_dia": max(dias) if dias else None,
-            "primer_dia": min(dias) if dias else None,
+            "ultimo_dia": todos[-1] if todos else None,
+            "primer_dia": todos[0] if todos else None,
             "umbrales": {"verde": VERDE, "amarillo": AMARILLO},
             "dias": dias,
+            "meses_dias": hay,
             # El area de cada delegacion, para el filtro (Gabriele, 19-oct). Las
             # cinco del Power BI, las mismas que incidencias y devoluciones.
             "zonas": {dl: IN.zona_de(dl) for dl in sorted(delegaciones)},
@@ -1303,7 +1370,9 @@ class Operativo:
             "centros": (self.fichas_de_centros(meses, anterior) if meses is not None
                         else anterior.get("centros") or {}),
             "meses_centros": sorted(set(anterior.get("meses_centros") or []) | set(meses or {})),
-            "_nota": ("Un día por fecha, con la cifra de ese día tal cual. Lo que no tiene dato "
+            "_nota": ("Un día por fecha, con la cifra de ese día tal cual, de los últimos "
+                      f"{DIAS_GUARDADOS}; los de antes, en un fichero por mes (meses_dias dice "
+                      "qué días tiene cada mes). Lo que no tiene dato "
                       "lleva sin_dato y el motivo. Puntos de venta, telemetría auditable y "
                       "almacenes son la foto de la noche en que se escribió. por_delegacion "
                       "reparte cada cuadrado por delegación con cifras que se suman (la clave "
@@ -1311,6 +1380,108 @@ class Operativo:
                       "centros da nombre (n), cliente (c) y delegación (d) de cada centro; el "
                       "reparto por centro de cada día está en un fichero por mes (meses_centros)."),
         }
+
+
+def historia_por_mes(nuevos, previos, leer_mes, junta=None):
+    """Los ficheros de la historia que toca una ejecucion, uno por mes:
+    {"2025-03": {"mes": "2025-03", "dias": {...}}}.
+
+    `nuevos` son los dias calculados ahora; `previos`, los del fichero de la
+    seccion (los ultimos dias), y `leer_mes(mes)` da el fichero de un mes que ya
+    habia, o None. Un dia nuevo sustituye al que hubiera (`junta(antes, x)` si
+    hay que respetar algo de lo de antes); los demas del mes se quedan. Los
+    dias del fichero de la seccion que aun no esten en su mes se pasan a el (la
+    primera noche, los de antes de este cambio). Un mes que ya los tiene todos
+    y no recibe ninguno nuevo no se escribe: Gabriele, 23-oct, un mes cerrado no
+    cambia.
+    """
+    junta = junta or (lambda antes, x: x)
+    previos = previos or {}
+    meses = {}
+    for mes in sorted({f[:7] for f in nuevos} | {f[:7] for f in previos}):
+        propios = {f: v for f, v in nuevos.items() if f[:7] == mes}
+        antes = dict((leer_mes(mes) or {}).get("dias") or {})
+        faltan = {f: v for f, v in previos.items() if f[:7] == mes and f not in antes}
+        if not propios and not faltan:
+            continue
+        dias = dict(antes)
+        dias.update(faltan)
+        for f, x in propios.items():
+            dias[f] = junta(dias.get(f) or previos.get(f), x)
+        meses[mes] = {"mes": mes, "dias": dict(sorted(dias.items()))}
+    return meses
+
+
+def meses_dias(anterior, historia, dias):
+    """Que dias tiene cada mes: lo que ya decia el fichero, lo que se escribe
+    ahora en la historia y lo que queda en el fichero. Es lo que la pagina pinta
+    en el calendario o en la lista de dias: {"2025-03": [1, 2, ...]}."""
+    out = {m: set(v) for m, v in ((anterior or {}).get("meses_dias") or {}).items()}
+    for m, x in (historia or {}).items():
+        out.setdefault(m, set()).update(int(f[8:]) for f in x["dias"])
+    for f in dias:
+        out.setdefault(f[:7], set()).add(int(f[8:]))
+    return {m: sorted(ds) for m, ds in sorted(out.items())}
+
+
+def ultimos(dias, n=DIAS_GUARDADOS):
+    """Los dias de los ultimos `n`, contando desde el mas reciente."""
+    if not dias:
+        return {}
+    corte = (datetime.date.fromisoformat(max(dias)) - datetime.timedelta(days=n - 1)).isoformat()
+    return {f: v for f, v in sorted(dias.items()) if f >= corte}
+
+
+def flota_del_perfil(maestro, ambito, visitas):
+    """Las furgonetas activas del maestro de vehiculos (M12) que ve un perfil,
+    {matricula: {"n": nombres, "d": delegaciones, "mod": modelos}}, y la
+    matricula de cada ficha, {id: matricula}, tambien las de baja.
+
+    Un perfil acotado ve las de sus delegaciones y las que visitaron su ambito
+    (`visitas`: {matricula: fechas}). Sin maestro, ninguna.
+    """
+    ambito = ambito or {}
+    flota, mat_de = {}, {}
+    for x in maestro or []:
+        mat = str(R.v(x, "matricula", "") or "").strip()
+        if not mat:
+            continue
+        mat_de[str(R.v(x, "id", ""))] = mat
+        if es_furgoneta(x):
+            g = flota.setdefault(mat, {"n": set(), "d": set(), "mod": set()})
+            for k, campo in (("n", "denominacion"), ("d", "delegacion"), ("mod", "modelo")):
+                valor = str(R.v(x, campo, "") or "").strip()
+                if valor:
+                    g[k].add(valor)
+    acota = ambito.get("acota") or {}
+    if any(ambito.get(k) for k in ("clientes", "centros", "delegaciones")) or acota:
+        # Con clientes o centros recortados al usuario (docs/74), solo las
+        # que visitaron lo suyo: las de la delegacion entera serian de mas.
+        delegs = set() if acota else {str(d) for d in ambito.get("delegaciones") or []}
+        flota = {m: g for m, g in flota.items() if g["d"] & delegs or m in visitas}
+    return flota, mat_de
+
+
+def junta_dia(antes, x, relleno):
+    """Un dia calculado ahora sobre el que ya estaba escrito.
+
+    De noche sustituye entero. Un relleno historico, no del todo: un dia que ya
+    escribio la noche sabe mas que el relleno (la telemetria con el censo de
+    entonces y las averias con el estado de M13, docs/56). Esas dos se quedan
+    como estaban.
+    """
+    if not relleno or not antes:
+        return x
+    x = dict(x)
+    for c in NO_PISA_EL_RELLENO:
+        if antes.get(c):
+            x[c] = antes[c]
+            por = dict(x.get("por_delegacion") or {})
+            por.pop(c, None)
+            if (antes.get("por_delegacion") or {}).get(c):
+                por[c] = antes["por_delegacion"][c]
+            x["por_delegacion"] = por
+    return x
 
 
 # ----------------------------------------------------------------------
@@ -1400,6 +1571,11 @@ def pasajes_vacios(d):
     # Un punto de venta cuyo parte no trae id no se puede cruzar: no se marca.
     con_id = set(d.partes_pdv.values())
     return {pdv for pdv in d.visitados if pdv in con_id and pdv not in con_algo}
+
+
+def sin_lista(x):
+    """Un dia de la pagina de rutas sin la lista maquina a maquina."""
+    return {k: v for k, v in (x or {}).items() if k not in ("visitas", "no_visitados", "fuera")}
 
 
 def rutas_del_dia(d, ubicaciones=None):
