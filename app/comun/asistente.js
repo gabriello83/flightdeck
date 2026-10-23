@@ -40,7 +40,7 @@
 #chat.vis{transform:none}
 #chat header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--borde)}
 #chat header b{font-size:15px;flex:1}
-#chat header span{font-size:12px;color:var(--tinta-3)}
+#chat header span{font-size:12px;color:var(--tinta-3);white-space:nowrap}
 #chat .hilo{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
 .turno{max-width:92%;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
 .turno p{margin:0 0 6px}.turno p:last-child{margin:0}
@@ -56,6 +56,10 @@
 .turno .bajar button{font:inherit;font-size:12px;color:var(--tinta-2);background:transparent;border:1px solid var(--borde-fuerte);border-radius:999px;padding:3px 10px;cursor:pointer}
 .turno .bajar button:hover{color:var(--tinta);border-color:var(--tinta-3)}
 .turno.espera{color:var(--tinta-3);font-style:italic}
+.turno .apuntado{display:block;margin-top:6px;font-size:12px;color:var(--tinta-3)}
+.turno.memoria .acciones{display:flex;gap:6px;margin-top:10px}
+.turno.memoria .acciones button{font:inherit;font-size:12px;color:var(--tinta-2);background:transparent;border:1px solid var(--borde-fuerte);border-radius:999px;padding:3px 10px;cursor:pointer}
+.turno.memoria .acciones button:hover{color:var(--tinta);border-color:var(--tinta-3)}
 .turno.yo{align-self:flex-end;background:var(--s1);color:#fff;padding:8px 12px;border-radius:12px 12px 3px 12px;white-space:pre-wrap}
 .turno.el{align-self:flex-start;color:var(--tinta)}
 .turno.mal{align-self:flex-start;color:var(--critico,var(--rojo,#c62828))}
@@ -275,6 +279,7 @@ ${tabla.outerHTML}</body></html>`);
     <span id="vendiChat">${vendi()}</span>
     <b>Asistente</b>
     <span id="chatQuedan"></span>
+    <button class="btn" type="button" id="chatMemoria" title="Lo que Vendi recuerda de ti">Memoria</button>
     <button class="btn" type="button" id="chatCerrar" aria-label="Cerrar">Cerrar</button>
   </header>
   <div class="hilo" id="hilo" aria-live="polite"></div>
@@ -361,7 +366,8 @@ ${tabla.outerHTML}</body></html>`);
           HILO.pop(); guardaHilo(HILO);
           return;
         }
-        turno("el", d.respuesta || "", null, texto);
+        const t = turno("el", d.respuesta || "", null, texto);
+        if(d.memoria_cambiada) t.insertAdjacentHTML("beforeend", `<span class="apuntado">Apuntado en tu memoria · pulsa «Memoria» para verla</span>`);
         HILO.push({de:"asistente", texto: d.respuesta || "", pregunta: texto});
         guardaHilo(HILO);
         if(d.quedan_hoy !== null && d.quedan_hoy !== undefined)
@@ -376,6 +382,38 @@ ${tabla.outerHTML}</body></html>`);
         $("#chatTexto").focus();
       }
     }
+
+    /* Su memoria (docs/75): un Markdown por usuario que escribe Vendi cuando
+       le dicen «recuerda que…». Aqui solo se ve, se baja o se vacia. */
+    async function verMemoria(){
+      const caja = turno("el", "Mirando tu memoria…", "el espera");
+      const pide = accion => fetch("/api/pregunta", {method:"POST", credentials:"same-origin",
+        headers:{"content-type":"application/json"}, body: JSON.stringify({memoria: accion})})
+        .then(r => r.ok ? r.json() : Promise.reject(r));
+      const pinta = md => {
+        caja.className = "turno el memoria";
+        caja.innerHTML = `<span class="quien">Lo que recuerdo de ti</span>` + (md
+          ? formatea(md) + `<div class="acciones"><button type="button" data-m="bajar">Bajar .md</button><button type="button" data-m="borrar">Olvidarlo todo</button></div>`
+          : `<p>Todavía no he apuntado nada. Dime «recuerda que…» y lo apunto aquí.</p>`);
+        const b = caja.querySelector('[data-m="bajar"]');
+        if(b) b.addEventListener("click", ()=>{
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(new Blob([md + "\n"], {type: "text/markdown;charset=utf-8"}));
+          a.download = "vendi_memoria.md";
+          document.body.appendChild(a); a.click();
+          setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        });
+        const o = caja.querySelector('[data-m="borrar"]');
+        /* Dos pulsaciones: borrar no tiene vuelta atras. */
+        if(o) o.addEventListener("click", ()=>{
+          if(!o.dataset.seguro){ o.dataset.seguro = "1"; o.textContent = "¿Seguro? Pulsa otra vez"; return; }
+          pide("borrar").then(x => pinta(x.memoria || "")).catch(()=>{});
+        });
+      };
+      try{ pinta((await pide("ver")).memoria || ""); }
+      catch(e){ caja.className = "turno mal"; caja.textContent = "No he podido leer tu memoria ahora."; }
+    }
+    $("#chatMemoria").addEventListener("click", verMemoria);
 
     /* La conversacion de la pagina anterior, tal cual se dejo. */
     HILO.forEach(t => t.de === "usuario" ? turno("yo", t.texto) : turno("el", t.texto, null, t.pregunta));

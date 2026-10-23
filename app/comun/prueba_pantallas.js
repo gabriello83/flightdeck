@@ -1476,13 +1476,35 @@ const servidor = http.createServer((pet, res) => {
         await y.pagina.waitForSelector('#chat.vis');
         comprueba('con sugerencias de rutas', (await y.pagina.$$('#sugerencias button')).length, 2);
         const pide = [];
+        let md = '- Le interesan los centros **500088** y 500089\n- <b>tablas</b>';
         await y.pagina.route('**/api/pregunta', async ruta => {
-          pide.push(JSON.parse(ruta.request().postData() || '{}'));
-          await ruta.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ respuesta: 'Bien.', quedan_hoy: 38 }) });
+          const p = JSON.parse(ruta.request().postData() || '{}');
+          pide.push(p);
+          if (p.memoria === 'borrar') md = '';
+          const body = p.memoria ? { memoria: md } : { respuesta: 'Bien.', quedan_hoy: 38, memoria_cambiada: true };
+          await ruta.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
         });
         await y.pagina.click('#sugerencias button');
         await y.pagina.waitForSelector('.turno.el');
         comprueba('y pregunta diciendo desde que pagina', pide[0] && pide[0].pagina, 'rutas');
+        comprueba_que('si apunta algo, lo dice', (await y.pagina.textContent('.turno.el .apuntado')).includes('Apuntado en tu memoria'));
+        // La memoria de este usuario (docs/75): se ve, se baja y se olvida.
+        await y.pagina.click('#chatMemoria');
+        await y.pagina.waitForSelector('.turno.memoria .acciones');
+        comprueba('se ve en Markdown', await y.pagina.$eval('.turno.memoria li b', b => b.textContent), '500088');
+        comprueba('y lo que trae etiquetas, como texto', await y.pagina.$$eval('.turno.memoria li', l => l[1].textContent), '<b>tablas</b>');
+        const [dm] = await Promise.all([y.pagina.waitForEvent('download'), y.pagina.click('[data-m="bajar"]')]);
+        comprueba('se baja como vendi_memoria.md', dm.suggestedFilename(), 'vendi_memoria.md');
+        comprueba_que('con su texto', fs.readFileSync(await dm.path(), 'utf8').startsWith('- Le interesan los centros **500088**'));
+        if (process.env.FOTOS_VENDI) await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'memoria.png') });
+        await y.pagina.click('[data-m="borrar"]');
+        comprueba('olvidar pide confirmarlo', await y.pagina.textContent('[data-m="borrar"]'), '¿Seguro? Pulsa otra vez');
+        comprueba('y aun no ha borrado', pide.filter(p => p.memoria === 'borrar').length, 0);
+        await y.pagina.click('[data-m="borrar"]');
+        await y.pagina.waitForFunction(() => /Todavía no he apuntado/.test(document.querySelector('.turno.memoria').textContent));
+        comprueba('a la segunda, la vacia', pide.filter(p => p.memoria === 'borrar').length, 1);
+        comprueba('ver la memoria no se guarda en la conversacion',
+          await y.pagina.evaluate(() => JSON.parse(sessionStorage.getItem('digivend.asistente.hilo')).length), 2);
       }
       comprueba(`en /${s}/, ni una peticion fuera del dominio`, y.fuera, []);
       comprueba(`en /${s}/, sin errores en la consola`, y.errores, []);
