@@ -632,6 +632,14 @@ def recorta_operativo(datos, perfil):
     return out
 
 
+def fichas_operativo(datos):
+    """Las fichas de los centros (nombre, cliente, delegacion) y el area de cada
+    delegacion, del fichero del perfil: lo que llena los filtros de las
+    secciones (docs/73). Ninguna cifra, asi que no hay cuadrado que recortar."""
+    return {"generado": datos.get("generado"), "zonas": datos.get("zonas") or {},
+            "centros": datos.get("centros") or {}}
+
+
 def recorta_operativo_centros(datos, perfil):
     """Un mes del reparto por centro (docs/72), con la misma tijera: solo los
     cuadrados que el perfil ve."""

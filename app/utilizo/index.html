@@ -167,6 +167,9 @@ a.dia,a.mes{color:var(--s1)}
     <label id="lMes" hidden>Mes <select id="fMes"></select></label>
     <label>Buscar <input id="fBusca" type="search" placeholder="Usuario" autocomplete="off"></label>
   </div>
+  <!-- Los filtros de área, delegación, cliente y centro de las demás secciones
+       (docs/73) aquí no tienen con qué: se dice, en vez de enseñarlos vacíos. -->
+  <p id="sinLugar" style="margin:6px 0 0;font-size:13px;color:var(--tinta-2)" hidden>Área, delegación, cliente y centro no se aplican aquí: es lo que hace cada persona en VenCloud, en toda la red.</p>
   <nav class="miga" id="miga" aria-label="Dónde estás" hidden></nav>
   <div id="cargando">Cargando…</div>
   <div class="nota" id="aviso" hidden></div>
@@ -282,7 +285,7 @@ function pinta(){
   $("#fDia").innerHTML = D.dias.map(d=>`<option value="${d}"${d===dia?" selected":""}>${esc(fechaLarga(d))} de ${d.slice(0,4)}</option>`).join("");
   $("#fMes").innerHTML = MESES.map(m=>`<option value="${m}"${m===mes?" selected":""}>${esc(mesLargo(m))}</option>`).join("");
   if(document.activeElement !== $("#fBusca")) $("#fBusca").value = r.q;
-  $("#barra").hidden = false;
+  $("#barra").hidden = false; $("#sinLugar").hidden = false;
   const p = r.p && D.personas.find(x=>x.nombre===r.p);
   if(p) return vistaPersona(p, r.per==="mes" ? null : dia, r.per==="mes" ? mes : dia.slice(0,7));
   $("#miga").hidden = true;

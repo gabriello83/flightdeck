@@ -548,6 +548,19 @@ o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA))
 comprueba("lee el comprimido", (o["primer_dia"], o["zonas"]), ("2025-01-01", {"Sur - Sevilla": "Sur"}))
 comprueba("por delegacion, solo los cuadrados que ve",
           sorted(o["dias"]["2026-10-12"]["por_delegacion"]), ["rutas"])
+
+print("\nLas fichas para los filtros de las secciones (docs/73): sin ninguna cifra")
+falsos.OBJETOS["cabina/ope-sur/operativo.json.gz"] = gzip.compress(json.dumps(dict(
+    _op, zonas={"Sur - Sevilla": "Sur"}, dias={"2026-10-12": _dia_d},
+    centros={"500092": {"n": "AIRBUS SAN PABLO SUR", "c": "SERUNION, SA", "d": "Sur - Sevilla"}})).encode())
+o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA, query={"fichas": "1"}))
+comprueba("solo fichas y zonas", sorted(o), ["centros", "generado", "zonas"])
+comprueba("las del perfil", o["centros"]["500092"]["c"], "SERUNION, SA")
+comprueba("de su carpeta, aunque pida otra",
+          sorted(cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA,
+                                 query={"fichas": "1", "perfil": "interno"}))["centros"]), ["500092"])
+comprueba("un cliente tampoco",
+          llama("GET", "/api/operativo", cookie=COOKIE_ANA, query={"fichas": "1"})["statusCode"], 403)
 del falsos.OBJETOS["cabina/ope-sur/operativo.json.gz"]
 
 print("\nEl reparto por centro (docs/72): un mes, con la misma tijera, y solo el de su carpeta")

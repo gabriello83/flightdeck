@@ -134,6 +134,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 }
 </style>
 <script src="/comun/preferidos.js"></script>
+<script src="/comun/filtros.js"></script>
 </head>
 <body>
 <div class="env">
@@ -152,6 +153,9 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   <div id="cargando">Cargando…</div>
   <div class="nota mal" id="aviso" hidden></div>
   <div id="avisos"></div>
+
+  <div class="barra" id="barraLugar" hidden><span id="fLugar"></span></div>
+  <div class="nota" id="noReparte" hidden>Los almacenes no son de ningún cliente: no se reparten por cliente ni por centro. Quita ese filtro para verlos.</div>
 
   <!-- La portada: un cuadrado por área (docs/70). -->
   <div id="portada" hidden>
@@ -223,7 +227,10 @@ $("#bSalir").addEventListener("click", async ()=>{
   location.href = "/";
 });
 
-let DATOS = null, VER = "todos", MOSTRADOS = TANDA, AREA = "";
+let DATOS = null, VER = "todos", MOSTRADOS = TANDA, AREA = "", TODOS = false;
+/* Area, delegacion, cliente y centro, con seleccion multiple y buscador
+   (David, 22-oct, docs/73). La portada sale mientras no se elige nada. */
+let F = null;
 
 /* El area de un almacen (docs/70): la de su delegacion, que la noche toma del
    maestro de almacenes de VenCloud (M3). Lo que no tiene delegacion, o la
@@ -235,7 +242,8 @@ function cuentaArea(lista){
   lista.forEach(a=>a.productos.forEach(p=>{ if(p.compra || p.bajo){ con++; if(p.bajo) bajo++; } }));
   return {con, bajo, pct: Areas.pct(con - bajo, con)};
 }
-const almacenesDelArea = () => DATOS.almacenes.filter(a => !AREA || AREA === "*" || areaDe(a) === AREA);
+/* Un almacen sin delegacion solo sale sin area ni delegacion elegidas. */
+const almacenesDelArea = () => F.porCentro() ? [] : DATOS.almacenes.filter(a => F.pasaDeleg(a.delegacion || ""));
 
 function fecha(s){
   const d = new Date(String(s)+"T00:00:00");
@@ -375,7 +383,7 @@ $("#resumen").addEventListener("click", e => {
 $("#almacen").addEventListener("change", ()=>{ MOSTRADOS = TANDA; escribir("digivend.almacen", $("#almacen").value); pinta(); });
 $("#buscar").addEventListener("input", ()=>{ MOSTRADOS = TANDA; pinta(); });
 $("#bMas").addEventListener("click", ()=>{ MOSTRADOS += TANDA; pinta(); });
-$("#bAreas").addEventListener("click", ()=>abreArea(""));
+$("#bAreas").addEventListener("click", ()=>{ TODOS = false; F.limpia(); });
 
 let VARIAS = false;
 function llenaAlmacenes(primera){
@@ -387,12 +395,13 @@ function llenaAlmacenes(primera){
   const antes = primera ? leer("digivend.almacen") : "";
   if(antes && lista.some(a => a.almacen === antes)) sel.value = antes;
 }
-/* "" = la portada; "*" = todos los almacenes; otro = un area. */
-function abreArea(a, primera){
-  AREA = a; MOSTRADOS = TANDA;
-  const q = new URLSearchParams(location.search);
-  if(a && a !== "*") q.set("area", a); else if(a === "*" && VARIAS) q.set("area", "todas"); else q.delete("area");
-  if(!primera) try{ history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "")); }catch(e){}
+/* La portada mientras no se elige nada (con varias áreas); si no, los
+   almacenes de lo elegido. Pulsar un área es elegirla en el filtro. */
+function abreArea(a){ MOSTRADOS = TANDA; if(a === "*"){ TODOS = true; vista(); } else F.pon("areas", [a]); window.scrollTo(0, 0); }
+function vista(primera){
+  AREA = VARIAS && !TODOS && !F.alguno() ? "" : "*";
+  const a = AREA;
+  $("#noReparte").hidden = !F.porCentro();
   if(!a){
     $("#cuerpo").hidden = true; $("#portada").hidden = false;
     const todos = cuentaArea(DATOS.almacenes);
@@ -410,11 +419,10 @@ function abreArea(a, primera){
   } else {
     $("#portada").hidden = true; $("#cuerpo").hidden = false;
     $("#cabArea").hidden = !VARIAS;
-    $("#tArea").textContent = a === "*" ? "Todos los almacenes" : a;
+    $("#tArea").textContent = F.texto() || "Todos los almacenes";
     llenaAlmacenes(primera);
     pinta();
   }
-  if(!primera) window.scrollTo(0, 0);
 }
 
 function avisa(texto){
@@ -450,7 +458,16 @@ function avisa(texto){
   VARIAS = todas.length > 1;
   const pedida = new URLSearchParams(location.search).get("area");
   if(new URLSearchParams(location.search).get("ver") === "bajo") VER = "bajo";
-  abreArea(!VARIAS ? "*" : todas.includes(pedida) ? pedida : pedida === "todas" ? "*" : "", true);
+  TODOS = pedida === "todas";
+  /* Los cuatro filtros: las delegaciones de los almacenes, y los clientes y
+     centros de las fichas del informe general (que aquí no se reparten). */
+  const fi = await Filtros.fichas(), zonas = {};
+  DATOS.almacenes.forEach(a=>{ if(a.delegacion) zonas[a.delegacion] = areaDe(a); });
+  F = Filtros.cuatro($("#fLugar"), {zonas, centros: fi.centros || {}, zonaDe: Areas.zona,
+    ordenAreas: (x, y)=>Areas.orden(x, y),
+    alCambiar: ()=>{ MOSTRADOS = TANDA; vista(); }});
+  $("#barraLugar").hidden = false;
+  vista(true);
 
   const gen = DATOS.generado ? new Date(DATOS.generado) : null;
   $("#pie").innerHTML = "Datos de VenCloud, filtrados por las delegaciones de tu perfil y servidos desde este "

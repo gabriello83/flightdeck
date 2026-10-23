@@ -404,6 +404,16 @@ function semaforo(p){
 }
 const ESTADO = {verde:"En objetivo", amarillo:"Vigilar", rojo:"Por debajo"};
 
+/* Las secciones entienden los mismos filtros en la direccion (docs/73):
+   lo elegido aqui va con el enlace. */
+function conLugar(url){
+  const q = [["area", SEL.areas], ["delegacion", SEL.delegs], ["cliente", SEL.clientes], ["centro", SEL.centros]]
+    .flatMap(([k, l]) => l.map(v => `${k}=${encodeURIComponent(v)}`));
+  if(!q.length) return url;
+  const [base, hash] = url.split("#");
+  return base + (base.includes("?") ? "&" : "?") + q.join("&") + (hash != null ? "#" + hash : "");
+}
+
 function pinta(){
   const fecha = SEL.hasta;
   const {d, f} = vista();
@@ -425,7 +435,8 @@ function pinta(){
     const el = document.createElement(va ? "a" : "div");
     el.className = "cuadro";
     el.dataset.id = id;
-    if(va) el.href = propia || dest.url || `/panel/?ver=${encodeURIComponent(dest.sesion)}#${encodeURIComponent(dest.panel)}`;
+    if(va) el.href = propia || dest.url ? conLugar(propia || dest.url)
+      : `/panel/?ver=${encodeURIComponent(dest.sesion)}#${encodeURIComponent(dest.panel)}`;
     const color = c.sin ? null : semaforo(c.pct);
     if(c.sin) el.classList.add("sin");
     else if(color){ el.classList.add(color); el.style.setProperty("--fondo-c", `var(--${color})`); }

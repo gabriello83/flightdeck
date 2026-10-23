@@ -194,6 +194,7 @@ button.kpi[aria-pressed="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1p
 }
 </style>
 <script src="/comun/preferidos.js"></script>
+<script src="/comun/filtros.js"></script>
 </head>
 <body>
 <div class="env">
@@ -220,7 +221,7 @@ button.kpi[aria-pressed="true"]{border-color:var(--s1);box-shadow:inset 0 0 0 1p
         <option value="mes">El mes hasta</option>
       </select></label>
       <label>Día <select id="dia"></select></label>
-      <label class="enArea">Delegación <select id="deleg"></select></label>
+      <span id="fLugar"></span>
       <label class="enArea">Ruta <select id="ruta"></select></label>
     </div>
     <div class="nota" id="festivoDia" hidden></div>
@@ -346,6 +347,13 @@ $("#bSalir").addEventListener("click", async ()=>{
    perfil de una sola área, o la vista suelta de preferidos). VER: la lista de
    máquinas abierta dentro del área. */
 let D=null, AREA="", VER="", QUITADAS=new Set(), VARIAS_AREAS=false;
+/* Area, delegacion, cliente y centro, con seleccion multiple y buscador
+   (David, 22-oct, docs/73). La portada sale mientras no se elige nada. */
+let F = null;
+/* El reparto por centro de cada mes (docs/72), segun llega: mes -> {dias} o null. */
+const MESES = {};
+const SIN_REPARTO_C = "Estos días no tienen el reparto por cliente y centro: empezó a calcularse la noche del 22 de octubre de 2026.";
+const NO_SE_REPARTE_C = "no se reparte por cliente ni por centro: quita ese filtro para verla.";
 
 function fechaLarga(s){
   const d = new Date(String(s)+"T00:00:00");
@@ -400,10 +408,13 @@ function festivo(f, dl){
 
 const diaSel = () => $("#dia").value;
 const dia = () => D.dias[diaSel()] || {};
-const deleg = () => $("#deleg").value;
-/* Lo que entra en lo elegido: el área (o todas) y la delegación. */
-const enArea = dl => AREA === "" || AREA === "*" || zona(dl) === AREA;
-const deLaDeleg = dl => enArea(dl) && (deleg()===TODAS || dl===deleg());
+/* La delegación, si lo elegido deja una sola; si no, todas. */
+const deleg = () => { const l = F.delegsElegidas(); return l && l.length === 1 ? l[0] : TODAS; };
+/* Lo que entra en lo elegido: el área y la delegación; con cliente o centro,
+   lo que lleva centro mira también eso. */
+const enArea = dl => !F.sel.areas.length || F.sel.areas.includes(zona(dl));
+const deLaDeleg = dl => F.pasaDeleg(dl);
+const delCentro = (n, dl) => F.pasaCentro(n, dl);
 /* La ruta elegida va como «delegación␁ruta»: dos delegaciones pueden tener
    una ruta con el mismo nombre. */
 const SEP = "\u0001";
@@ -445,6 +456,7 @@ function suma(filas){
 /* Las cifras de lo elegido en el periodo: de un área, una delegación o una
    ruta. `sin` cuenta los días sin plan. */
 function cifras(area){
+  if(area===undefined && F.porCentro()) return cifrasCentros();
   const rs = rutaSel(), filas = []; let sin = 0, sinDato = null;
   const dentro = dl => area!==undefined ? (area==="" || area==="*" || zona(dl)===area) : deLaDeleg(dl);
   diasPeriodo().forEach(f=>{
@@ -457,6 +469,31 @@ function cifras(area){
   t.sin = sin; t.sinDato = sinDato; t.dias = diasPeriodo().length;
   return t;
 }
+
+/* Con cliente o centro, del reparto por centro de cada día: el plan y las
+   visitas de esos centros. El pasaje vacío no se reparte por centro. */
+function cifrasCentros(){
+  const filas = []; let sin = 0;
+  diasPeriodo().forEach(f=>{
+    const m = MESES[f.slice(0,7)], d = m && (m.dias||{})[f], por = d && d.rutas;
+    if(!por){ sin++; return; }
+    Object.entries(por).forEach(([c, a])=>{
+      if(delCentro(c)) filas.push({previstas:a[0], hechas:a[1], fuera:a[2], visitas:a[3], vacio:null});
+    });
+  });
+  const t = suma(filas);
+  t.sin = sin; t.sinDato = sin ? SIN_REPARTO_C : null; t.dias = diasPeriodo().length; t.porCentro = true;
+  return t;
+}
+/* Los meses del periodo que faltan, y luego se pinta. */
+async function cargaMeses(){
+  if(!F.porCentro()) return;
+  const meses = [...new Set(diasPeriodo().map(f=>f.slice(0,7)))].filter(m=>!(m in MESES));
+  if(!meses.length) return;
+  const l = await Promise.all(meses.map(m=>Filtros.mesCentros(m)));
+  meses.forEach((m, i)=>{ MESES[m] = l[i]; });
+}
+async function repinta(){ await cargaMeses(); pintaOpcionesRuta(); pintaTodo(); }
 
 function kpi(clase, et, vl, nt, id){
   return `<div class="kpi ${clase}"${id?` data-tabla="${id}" data-estrella="${id}"`:""}><div class="et">${esc(et)}</div><div class="vl">${vl}</div><div class="nt">${nt}</div></div>`;
@@ -481,7 +518,8 @@ function pintaKpis(){
     return;
   }
   const pend = f.previstas - f.hechas;
-  const sinVacio = dia().sin_vacio || "Algún día del periodo no trae el pasaje vacío.";
+  const sinVacio = f.porCentro ? "El pasaje vacío no se reparte por cliente ni por centro."
+    : dia().sin_vacio || "Algún día del periodo no trae el pasaje vacío.";
   const vacio = f.vacio==null
     ? kpi("e-vacio", "Pasaje vacío", "Sin dato", esc(sinVacio), "i_pasaje_vacio")
     : kpi("e-vacio", "Pasaje vacío", num(f.vacio), "visitas sin ninguna línea de reposición", "i_pasaje_vacio");
@@ -506,11 +544,11 @@ function tareasDe(lista, area){
   const ds = diasPeriodo(), desde = ds[0] || diaSel(), hasta = diaSel();
   return (D[lista]||[]).filter(x=>{
     const f = String(x.f).slice(0,10);
-    return f>=desde && f<=hasta && (area!==undefined ? (area==="*" || area==="" || zona(x.d)===area) : deLaDeleg(x.d));
+    return f>=desde && f<=hasta && (area!==undefined ? (area==="*" || area==="" || zona(x.d)===area) : delCentro(x.n, x.d));
   });
 }
 function maquinasDe(lista, area){
-  return (D[lista]||[]).filter(x=> area!==undefined ? (area==="*" || area==="" || zona(x.d)===area) : (deLaDeleg(x.d) && enRuta(x)));
+  return (D[lista]||[]).filter(x=> area!==undefined ? (area==="*" || area==="" || zona(x.d)===area) : (delCentro(x.n, x.d) && enRuta(x)));
 }
 const CM = () => D.control_maquinas || {};
 const sumaPm = l => l.reduce((s,x)=>s+(x.pm||0), 0);
@@ -663,7 +701,7 @@ function pintaLista(){
 }
 function csvLista(){
   const L = LISTAS[VER], cols = L.csv || L.cols, filas = filasLista();
-  const nombre = `rutas_${VER}${PEST_M?"_"+PEST_M:""}_${diaSel()}${AREA && AREA!=="*" ? "_" + AREA : ""}${deleg() ? "_" + deleg() : ""}`;
+  const nombre = `rutas_${VER}${PEST_M?"_"+PEST_M:""}_${diaSel()}${F.alguno() ? "_" + F.texto() : ""}`;
   bajaCsv(cols.map(c=>c[0]), filas.map(f=>cols.map(c=>c[2](f))), nombre);
 }
 
@@ -731,6 +769,9 @@ function rutasPeriodo(){
 function pintaRutas(){
   const dl = deleg(), rs = rutaSel();
   $("#hRutas").textContent = dl===TODAS ? "Visitas por ruta" : `Visitas por ruta · ${dl}`;
+  if(F.porCentro()){
+    $("#tRutas").innerHTML = `<p class="vacio">La tabla por ruta ${NO_SE_REPARTE_C}</p>`; $("#cRutas").textContent = ""; return;
+  }
   const {filas: todas, sin} = rutasPeriodo();
   if(!todas.length && sin){ $("#tRutas").innerHTML = `<p class="vacio">${esc(dia().sin_dato || "Sin plan en el periodo.")}</p>`; $("#cRutas").textContent=""; return; }
   const filas = todas.filter(x=>!rs || (x.delegacion===rs[0] && x.ruta===rs[1]));
@@ -763,7 +804,7 @@ function pintaRutas(){
   $("#tRutas").querySelectorAll("tr.elige").forEach(tr=>tr.addEventListener("click", ()=>{
     const [dlx] = tr.dataset.r.split(SEP);
     if($("#ruta").value === tr.dataset.r){ $("#ruta").value = ""; }
-    else { if(deleg()!==dlx){ $("#deleg").value = dlx; pintaOpcionesRuta(); } $("#ruta").value = tr.dataset.r; }
+    else { if(deleg()!==dlx){ F.pon("delegs", [dlx]); pintaOpcionesRuta(); } $("#ruta").value = tr.dataset.r; }
     pintaTodo();
   }));
 }
@@ -793,7 +834,7 @@ function visitasPeriodo(){
   return {v: con ? out : null, con, de: ds.length};
 }
 function enFiltro(x){
-  if(!deLaDeleg(x[3])) return false;
+  if(!delCentro(x[5], x[3])) return false;
   const rs = rutaSel();
   return !rs || (x[3]===rs[0] && String(x[4]||"").split(" / ").map(nombreRuta).includes(rs[1]));
 }
@@ -881,6 +922,7 @@ function semana(dl){
 }
 
 function pintaDeleg(){
+  if(F.porCentro()){ $("#tDeleg").innerHTML = `<p class="vacio">La tabla por delegación ${NO_SE_REPARTE_C}</p>`; return; }
   const por = {}; let sin = 0;
   diasPeriodo().forEach(f=>{
     const d = D.dias[f];
@@ -904,8 +946,8 @@ function pintaDeleg(){
     }).join("")}</tbody></table>`;
   $("#tDeleg").querySelectorAll("tr.elige").forEach(tr=>tr.addEventListener("click", ()=>{
     const dl = tr.dataset.d;
-    if(AREA===""){ abreArea(VARIAS_AREAS ? zona(dl) : "*", dl); return; }
-    $("#deleg").value = dl===deleg() ? TODAS : dl; pintaOpcionesRuta(); pintaTodo();
+    if(AREA===""){ abreArea(null, dl); return; }
+    F.pon("delegs", dl===deleg() ? [] : [dl]);
   }));
 }
 
@@ -950,13 +992,15 @@ function pintaFestivoDia(){
 
 function pintaTodo(){
   TODAS_PDV = false; TODAS_M = false;
+  /* La portada, mientras no se elige nada (con varias áreas). */
+  AREA = VARIAS_AREAS && !Preferidos.solo && !F.alguno() ? "" : "*";
   const portada = AREA === "";
   $("#portada").hidden = !portada;
   $("#vistaArea").hidden = portada;
   document.querySelectorAll(".enArea").forEach(el=>{ el.hidden = portada; });
   $("#bAreas").hidden = !VARIAS_AREAS || !!Preferidos.solo;
-  $("#tArea").textContent = AREA === "*" ? "" : AREA;
-  $("#cabArea").hidden = portada || (!VARIAS_AREAS && AREA === "*");
+  $("#tArea").textContent = F.texto();
+  $("#cabArea").hidden = portada || !VARIAS_AREAS;
   $("#cDeleg").textContent = portada ? "Pulsa una para entrar en su área" : "Pulsa una para ver sus rutas y sus máquinas";
   pintaFestivoDia(); pintaKpis();
   if(portada) pintaPortada();
@@ -964,16 +1008,13 @@ function pintaTodo(){
   pintaDeleg(); pintaFest();
 }
 
+/* Pulsar un área o una delegación de la portada es elegirla en el filtro;
+   «Todas las áreas» lo quita todo. */
 function abreArea(a, dl){
-  AREA = a; VER = ""; PEST_M = ""; $("#busca").value = ""; $("#buscaM").value = "";
-  pintaDelegaciones();
-  $("#deleg").value = dl || TODAS;
-  pintaOpcionesRuta();
-  $("#ruta").value = "";
-  const q = new URLSearchParams(location.search);
-  if(a && a !== "*") q.set("area", a); else q.delete("area");
-  try{ history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "")); }catch(e){}
-  pintaTodo();
+  VER = ""; PEST_M = ""; $("#busca").value = ""; $("#buscaM").value = ""; $("#ruta").value = "";
+  if(a===null){ F.pon("areas", [zona(dl)]); F.pon("delegs", [dl]); }
+  else if(a) F.pon("areas", [a]);
+  else F.limpia();
   window.scrollTo(0, 0);
 }
 
@@ -1004,19 +1045,6 @@ function pintaOpcionesRuta(){
   $("#ruta").innerHTML = `<option value="">Todas</option>` + rutas.map(x=>
     `<option value="${esc(x.delegacion + SEP + x.ruta)}">${esc(x.ruta)}${deleg()===TODAS?" · "+esc(x.delegacion):""}</option>`).join("");
   $("#ruta").value = vistas.has(antes) ? antes : "";
-}
-
-/* Las delegaciones del área, para el desplegable. */
-function pintaDelegaciones(){
-  const nombres = new Set();
-  Object.values(D.dias).forEach(v=>{
-    (v.delegaciones||[]).forEach(x=>nombres.add(x.delegacion));
-    Object.keys(v.visitas_deleg||{}).forEach(x=>nombres.add(x));
-  });
-  const antes = $("#deleg").value;
-  const l = [...nombres].filter(n=>n && enArea(n)).sort((a,b)=>a.localeCompare(b,"es"));
-  $("#deleg").innerHTML = `<option value="">Todas</option>` + l.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");
-  $("#deleg").value = l.includes(antes) ? antes : "";
 }
 
 (async function arranca(){
@@ -1063,15 +1091,26 @@ function pintaDelegaciones(){
   const areas = new Set(Object.values(D.dias).flatMap(v=>[...(v.delegaciones||[]).map(x=>x.delegacion),
     ...Object.keys(v.visitas_deleg||{})]).filter(Boolean).map(zona));
   VARIAS_AREAS = areas.size > 1;
-  const pedida = q.get("area"), solo = Preferidos.solo;
-  AREA = !VARIAS_AREAS || solo ? "*" : areas.has(pedida) ? pedida : (q.get("delegacion") ? zona(q.get("delegacion")) : "");
+  const solo = Preferidos.solo;
+  /* Los cuatro filtros: las delegaciones de las rutas, y los clientes y
+     centros de las fichas del informe general, más los de las máquinas. */
+  const zonas = {};
+  Object.values(D.dias).forEach(v=>{
+    (v.delegaciones||[]).forEach(x=>{ if(x.delegacion) zonas[x.delegacion] = zona(x.delegacion); });
+    Object.keys(v.visitas_deleg||{}).forEach(x=>{ if(x) zonas[x] = zona(x); });
+  });
+  const fi = await Filtros.fichas(), centros = Object.assign({}, fi.centros||{});
+  ["por_recaudar", "sin_reponer", "nunca_repuestas", "llamadas", "sanitarias"].forEach(k=>(D[k]||[]).forEach(x=>{
+    if(x.n && !centros[x.n]) centros[x.n] = {n: x.c || x.n, c: "", d: x.d || ""};
+  }));
+  F = Filtros.cuatro($("#fLugar"), {zonas, centros, zonaDe: zona,
+    ordenAreas: (a, b)=>ORDEN_AREAS.indexOf(a)-ORDEN_AREAS.indexOf(b) || a.localeCompare(b,"es"),
+    alCambiar: ()=>{ VER = VER && F.alguno() ? VER : ""; repinta(); }});
   if(["llamadas", "recaudar", "reponer", "sanitarias"].includes(solo)) VER = solo;
-  else if(["llamadas", "recaudar", "reponer", "sanitarias"].includes(q.get("ver")) && AREA) VER = q.get("ver");
-  pintaDelegaciones();
-  if(q.get("delegacion") && AREA) $("#deleg").value = q.get("delegacion");
+  else if(["llamadas", "recaudar", "reponer", "sanitarias"].includes(q.get("ver")) && (F.alguno() || !VARIAS_AREAS)) VER = q.get("ver");
+  await cargaMeses();
   pintaOpcionesRuta();
-  ["#dia","#periodo"].forEach(s=>$(s).addEventListener("change", ()=>{ pintaOpcionesRuta(); pintaTodo(); }));
-  $("#deleg").addEventListener("change", ()=>{ pintaOpcionesRuta(); pintaTodo(); });
+  ["#dia","#periodo"].forEach(s=>$(s).addEventListener("change", repinta));
   $("#ruta").addEventListener("change", pintaTodo);
   $("#busca").addEventListener("input", pintaPdv);
   $("#buscaM").addEventListener("input", ()=>{ TODAS_M = false; pintaLista(); });

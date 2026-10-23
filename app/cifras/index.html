@@ -98,6 +98,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 
   <div class="barra" id="barra" hidden>
     <label id="lDia" hidden>Día <select id="selDia"></select></label>
+    <span id="fLugar"></span>
     <span class="cuando" id="cuando"></span>
   </div>
 
@@ -111,6 +112,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 </div>
 
 <script src="/comun/areas.js"></script>
+<script src="/comun/filtros.js"></script>
 <!-- Vendi (docs/71). Sin data-pagina: la seccion la dice ?que=, y se monta al leer la sesion. -->
 <script src="/comun/asistente.js"></script>
 <script>
@@ -160,12 +162,14 @@ const QUE = {
     campos: ["activos", "maquinas"],
     cifra: s => num(s.activos),
     ex: s => `${num(s.maquinas)} máquinas instaladas`,
+    de_lista: a => ({activos:a[0], maquinas:a[1]}),
   },
   ventas: {
     titulo: "Ventas", de_un_dia: true, panel: "/panel/?ver=venta_consumo#recaudacion",
     campos: ["importe", "unidades", "maquinas"],
     cifra: s => eur(s.importe),
     ex: s => `${num(s.unidades)} unidades` + (s.maquinas!=null ? ` · ${num(s.maquinas)} máquinas` : ""),
+    de_lista: a => ({importe:a[0], unidades:a[1], maquinas:a[2]}),
     resto: (t, r) => `${eur(r.importe)} de ventas de máquinas sin delegación en VenCloud: están en el total de arriba y en ningún área.`,
     clave_resto: "importe",
   },
@@ -178,13 +182,21 @@ const QUE = {
         .map(([c,u])=>`${c} ${num(u)}`).join(" · ");
       return top || "Sin reposición de producto";
     },
+    de_lista: a => ({unidades:a[0], consumibles:a[1], por_clase:a[2]||{}}),
     resto: (t, r) => `${num(r.unidades)} unidades repuestas en máquinas sin delegación en VenCloud: están en el total de arriba y en ningún área.`,
     clave_resto: "unidades",
   },
 };
 
 let YO = null, DATOS = null, SEC = null, ID = null;
-const SEL = {dia: "", area: ""};
+const SEL = {dia: ""};
+/* Area, delegacion, cliente y centro, con seleccion multiple y buscador
+   (David, 22-oct, docs/73). Cliente y centro salen del reparto por centro del
+   informe general: la foto de la noche para los puntos de venta, y el fichero
+   del mes para ventas y reposiciones. */
+let F = null;
+const MESES = {};
+const SIN_REPARTO_C = "Este día no tiene el reparto por cliente y centro: empezó a calcularse la noche del 22 de octubre de 2026.";
 
 function avisa(t, mal){ const a=$("#aviso"); a.textContent=t||""; a.hidden=!t; a.classList.toggle("mal", !!mal); }
 
@@ -227,22 +239,34 @@ function datosDe(){
   return {total: totalDe(x), por: (dia.por_delegacion||{})[ID] || null};
 }
 
-function urlDe(){
-  const q = new URLSearchParams({que: ID});
-  if(SEC.de_un_dia && SEL.dia) q.set("dia", SEL.dia);
-  if(SEL.area) q.set("area", SEL.area);
-  return "?" + q.toString();
+/* El dia va en la direccion junto a lo que escriben los filtros. */
+function guardaDia(){
+  const q = new URLSearchParams(location.search);
+  if(SEC.de_un_dia && SEL.dia) q.set("dia", SEL.dia); else q.delete("dia");
+  try{ history.replaceState(null, "", "?" + q.toString()); }catch(e){}
 }
+/* Pulsar un área es elegirla en el filtro; «Todas las áreas» lo quita todo. */
 function ve(area){
-  SEL.area = area || "";
-  try{ history.pushState(null, "", urlDe()); }catch(e){}
-  pinta();
+  if(area) F.pon("areas", [area]); else F.limpia();
   window.scrollTo(0, 0);
 }
-window.addEventListener("popstate", ()=>{ leeUrl(); pinta(); });
+/* El reparto por centro de lo que se ve: {centro: {campo: n}}, o un motivo. */
+function porCentro(){
+  if(!SEC.de_un_dia){
+    const l = ((DATOS.foto||{})[ID]||{}).por_centro;
+    return l ? {por: l} : {sin: "La foto de esta noche no trae el reparto por centro."};
+  }
+  const m = MESES[SEL.dia.slice(0,7)], d = m && (m.dias||{})[SEL.dia], l = d && d[ID];
+  return l ? {por: l} : {sin: SIN_REPARTO_C};
+}
+async function cargaMes(){
+  if(!SEC.de_un_dia || !F.porCentro()) return;
+  const mes = SEL.dia.slice(0,7);
+  if(!(mes in MESES)) MESES[mes] = await Filtros.mesCentros(mes);
+}
+async function repinta(){ await cargaMes(); pinta(); }
 function leeUrl(){
   const q = new URLSearchParams(location.search);
-  SEL.area = q.get("area") || "";
   const d = q.get("dia");
   if(d && (DATOS.dias||{})[d]) SEL.dia = d;
   else if(!SEL.dia) SEL.dia = DATOS.ultimo_dia || "";
@@ -262,6 +286,11 @@ function cuadroDeleg(nombre, s){
     + `<span class="vl">${SEC.cifra(s)}</span><span class="ex">${esc(SEC.ex(s))}</span></div>`;
 }
 
+function cuadroCentro(c, s){
+  const f = F.ficha(c) || {};
+  return `<div class="deleg"><span class="nom">${esc(f.n || c)}</span>`
+    + `<span class="vl">${SEC.cifra(s)}</span><span class="ex">${esc([f.c, SEC.ex(s)].filter(Boolean).join(" · "))}</span></div>`;
+}
 function pinta(){
   const v = $("#vista");
   $("#resto").hidden = true;
@@ -269,6 +298,22 @@ function pinta(){
   const r = datosDe();
   if(r.sin){ $("#miga").hidden = true; v.innerHTML = `<div class="nota">${esc(r.sin)}</div>`; return; }
   const {total, por} = r;
+  const varias = Areas.de(Object.keys(por||{}).filter(d=>d)).length > 1;
+  const migaElegido = () => miga([{t: varias ? "Todas las áreas" : "Todas las delegaciones", area:""}, {t:F.texto()}]);
+  // Con cliente o centro: los centros de lo elegido, del reparto por centro.
+  if(F.porCentro()){
+    const pc = porCentro();
+    migaElegido();
+    if(pc.sin){ v.innerHTML = `<div class="nota">${esc(pc.sin)}</div>`; return; }
+    const cs = Object.keys(pc.por).filter(c=>F.pasaCentro(c))
+      .sort((a,b)=>String((F.ficha(a)||{}).n||a).localeCompare(String((F.ficha(b)||{}).n||b), "es"));
+    const filas = Object.fromEntries(cs.map(c=>[c, SEC.de_lista(pc.por[c])]));
+    const s = suma(cs.map(c=>filas[c]));
+    v.innerHTML = `<div class="cifra"><span class="gr">${SEC.cifra(s)}</span><span class="ex">${esc(SEC.ex(s))}</span></div>`
+      + (cs.length ? `<div class="delegs">${cs.map(c=>cuadroCentro(c, filas[c])).join("")}</div>`
+        : `<div class="nota">Ningún centro de lo elegido tiene este dato ${SEC.de_un_dia ? "ese día" : "en la foto de esta noche"}.</div>`);
+    return;
+  }
   if(!por){
     $("#miga").hidden = true;
     v.innerHTML = `<div class="cifra"><span class="gr">${SEC.cifra(total)}</span><span class="ex">${esc(SEC.ex(total))}</span></div>`
@@ -281,18 +326,18 @@ function pinta(){
   const areas = Object.keys(porArea).filter(a => a !== Areas.OTRA)
     .sort((a,b)=>(Areas.ORDEN.indexOf(a)+1||99)-(Areas.ORDEN.indexOf(b)+1||99));
 
-  // Dentro de un area: sus delegaciones.
-  if(SEL.area && porArea[SEL.area]){
-    const lista = porArea[SEL.area].sort((a,b)=>a.localeCompare(b,"es"));
+  // Con area o delegacion: las delegaciones de lo elegido. Con una sola
+  // area, sus delegaciones directamente.
+  const unaArea = areas.length === 1 && !(porArea[Areas.OTRA]||[]).length;
+  if(F.alguno() || unaArea){
+    const lista = delegs.filter(d=>F.pasaDeleg(d)).sort((a,b)=>a.localeCompare(b,"es"));
     const s = suma(lista.map(d=>por[d]));
-    if(areas.length > 1) miga([{t:"Todas las áreas", area:""}, {t:SEL.area}]);
-    else $("#miga").hidden = true;
+    if(F.alguno()) migaElegido(); else $("#miga").hidden = true;
     v.innerHTML = `<div class="cifra"><span class="gr">${SEC.cifra(s)}</span><span class="ex">${esc(SEC.ex(s))}</span></div>`
-      + `<div class="delegs">${lista.map(d=>cuadroDeleg(d, por[d])).join("")}</div>`;
+      + (lista.length ? `<div class="delegs">${lista.map(d=>cuadroDeleg(d, por[d])).join("")}</div>`
+        : `<div class="nota">Ninguna delegación de lo elegido tiene este dato.</div>`);
     return;
   }
-  // Con una sola area, sus delegaciones directamente.
-  if(areas.length === 1 && !(porArea[Areas.OTRA]||[]).length){ SEL.area = areas[0]; return pinta(); }
 
   miga([{t:"Todas las áreas"}]);
   v.innerHTML = `<div class="cifra"><span class="gr">${SEC.cifra(total)}</span><span class="ex">${esc(SEC.ex(total))}</span></div>`
@@ -370,8 +415,8 @@ function fechaLarga(f){
     $("#lDia").hidden = !dias.length;
     $("#selDia").addEventListener("change", ()=>{
       SEL.dia = $("#selDia").value;
-      try{ history.pushState(null, "", urlDe()); }catch(e){}
-      pinta();
+      guardaDia();
+      repinta();
     });
   } else {
     $("#cuando").textContent = DATOS.generado
@@ -380,6 +425,14 @@ function fechaLarga(f){
   }
   leeUrl();
   if(SEC.de_un_dia && !(DATOS.dias||{})[SEL.dia]){ avisa("El informe todavía no tiene ningún día calculado."); return; }
+  /* Los cuatro filtros, con las delegaciones y las fichas de centros del informe. */
+  const zonas = Object.assign({}, DATOS.zonas || {});
+  Object.values(DATOS.dias||{}).forEach(d=>Object.values(d.por_delegacion||{}).forEach(p=>Object.keys(p).forEach(dl=>{
+    if(dl && !zonas[dl]) zonas[dl] = Areas.zona(dl); })));
+  F = Filtros.cuatro($("#fLugar"), {zonas, centros: DATOS.centros || {}, zonaDe: Areas.zona, ordenAreas: Areas.orden,
+    alCambiar: repinta});
+  guardaDia();
+  await cargaMes();
   pinta();
   const pie = $("#pie");
   pie.textContent = "Las cifras son las del informe general, repartidas por la delegación de cada máquina. "

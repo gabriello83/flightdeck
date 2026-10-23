@@ -205,6 +205,10 @@ def encamina(evento, metodo, ruta):
         if datos is None:
             return r(503, {"error": "El informe operativo todavia no se ha calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
+        # Solo las fichas de los centros y el area de cada delegacion: lo que
+        # llena los filtros de las secciones (docs/73), sin la historia.
+        if "fichas" in q:
+            return r(200, A.fichas_operativo(datos))
         return _json_grande(A.recorta_operativo(datos, perfil))
 
     # Tarifas contra venta real (docs/52): el resumen del perfil, o un centro.

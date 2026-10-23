@@ -35,6 +35,30 @@ function comprueba_que(que, condicion, detalle) {
   if (!condicion) fallos++;
 }
 
+// Los filtros con buscador (comun/filtros.js): lo que ofrecen, marcar por el
+// buscador, quitarlos y lo que dice el boton. `caja` es el selector de uno.
+const fCaja = campo => `#fLugar [data-f="${campo}"]`;
+async function fOpciones(pagina, caja) {
+  await pagina.click(`${caja} .fm-b`);
+  const v = await pagina.$$eval(`${caja} .fm-l input`, x => x.map(i => i.value));
+  await pagina.keyboard.press('Escape');
+  return v;
+}
+async function fMarca(pagina, caja, texto) {
+  await pagina.click(`${caja} .fm-b`);
+  await pagina.fill(`${caja} input[type=search]`, texto);
+  await pagina.keyboard.press('Enter');
+  await pagina.keyboard.press('Escape');
+  await pagina.waitForTimeout(150);
+}
+async function fQuita(pagina, caja) {
+  await pagina.click(`${caja} .fm-b`);
+  await pagina.click(`${caja} .fm-acc button[data-a="nada"]`);
+  await pagina.keyboard.press('Escape');
+  await pagina.waitForTimeout(150);
+}
+const fBoton = async (pagina, caja) => (await pagina.textContent(`${caja} .fm-t`)).trim();
+
 // ---------------------------------------------------------------- la API falsa
 // Una fila de la serie con la misma forma que escribe infra/serie.py.
 function filaSerie(fecha, visitas, importe, minutos) {
@@ -662,6 +686,9 @@ const servidor = http.createServer((pet, res) => {
 });
 
 // ---------------------------------------------------------------- las pruebas
+// SOLO=rutas corre solo los bloques cuyo titulo lo contiene (para ir rapido
+// mientras se toca una pagina; las pruebas de verdad son todas).
+const toca = titulo => !process.env.SOLO || titulo.toLowerCase().includes(process.env.SOLO.toLowerCase());
 (async () => {
   const { chromium } = require(path.join(RAIZ, '..', 'node_modules', 'playwright'));
   await new Promise(r => servidor.listen(0, r));
@@ -685,8 +712,8 @@ const servidor = http.createServer((pet, res) => {
   }
 
   // ------------------------------------------------- un cliente, al cuadro
-  console.log('\nUn cliente solo tiene el cuadro');
-  {
+  if (toca('Un cliente solo tiene el cuadro')) {
+    console.log('\nUn cliente solo tiene el cuadro');
     const { pagina } = await abre('/panel/');
     await pagina.waitForURL('**/cuadro/');
     comprueba_que('si abre el panel, acaba en el cuadro', pagina.url().endsWith('/cuadro/'), pagina.url());
@@ -694,8 +721,8 @@ const servidor = http.createServer((pet, res) => {
   }
 
   // -------------------------------------------- el panel, desde operaciones
-  console.log('\nEl panel de operaciones');
-  {
+  if (toca('El panel de operaciones')) {
+    console.log('\nEl panel de operaciones');
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones' };
     const { pagina, errores } = await abre('/panel/');
     await pagina.waitForSelector('.periodo-menu');
@@ -819,8 +846,8 @@ const servidor = http.createServer((pet, res) => {
   }
 
   // ------------------------------------------------------------- la consola
-  console.log('\nLa consola de administracion');
-  {
+  if (toca('La consola de administracion')) {
+    console.log('\nLa consola de administracion');
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores } = await abre('/consola/');
     await pagina.waitForSelector('#pestanas button');
@@ -930,8 +957,8 @@ const servidor = http.createServer((pet, res) => {
   }
 
   // ----------------------------------------------------------- el cuadro
-  console.log('\nEl cuadro de mando');
-  {
+  if (toca('El cuadro de mando')) {
+    console.log('\nEl cuadro de mando');
     const { pagina, errores } = await abre('/cuadro/');
     await pagina.waitForSelector('#kpiGrid .kpi-card, #kpiGrid > *');
     comprueba_que('arranca en el ultimo mes con dato, no en la historia entera',
@@ -977,8 +1004,8 @@ const servidor = http.createServer((pet, res) => {
     await pagina.close();
   }
 
-  console.log('\nEl cuadro, con solo algunas partes');
-  {
+  if (toca('El cuadro, con solo algunas partes')) {
+    console.log('\nEl cuadro, con solo algunas partes');
     const visitasEincid = ['visitas_maquina', 'incid_operacion', 'detalle_incid', 'listado_visitas', 'preventivos'];
     API['/api/yo'] = { ...API['/api/yo'], cuadro: { secciones: visitasEincid, flujos: ['visitas', 'incidencias'] } };
     const { pagina, errores } = await abre('/cuadro/');
@@ -1000,8 +1027,8 @@ const servidor = http.createServer((pet, res) => {
     delete API['/api/yo'].cuadro;
   }
 
-  console.log('\nEl cuadro, visto desde Serunion');
-  {
+  if (toca('El cuadro, visto desde Serunion')) {
+    console.log('\nEl cuadro, visto desde Serunion');
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores } = await abre('/cuadro/');
     await pagina.waitForSelector('#filtroLugar select[data-dim="delegacion"]');
@@ -1017,8 +1044,8 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nEl informe general operativo');
-  {
+  if (toca('El informe general operativo')) {
+    console.log('\nEl informe general operativo');
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno',
       sesiones: ['resumen', 'venta_consumo', 'disponibilidad', 'instalaciones'],
       catalogo_sesiones: { resumen: 'Resumen', venta_consumo: 'Venta y consumo', disponibilidad: 'Disponibilidad', instalaciones: 'Instalaciones y altas' } };
@@ -1186,6 +1213,10 @@ const servidor = http.createServer((pet, res) => {
       (await pagina.textContent('.cuadro[data-id="tarifas"]')).includes('no se reparte por cliente ni por centro'));
     comprueba_que('el cliente va en la direccion', pagina.url().includes('cliente=AIRBUS'), pagina.url());
     comprueba('el cliente deja sus centros', await opciones('#fCentro'), ['100']);
+    comprueba('y los enlaces a las secciones llevan el cliente (docs/73)',
+      [await pagina.getAttribute('.cuadro[data-id="rutas"]', 'href'),
+       await pagina.getAttribute('.cuadro[data-id="ventas"]', 'href')],
+      [`/rutas/?dia=${iso(AYER)}&cliente=AIRBUS%20OPERATIONS%20SL`, `/cifras/?que=ventas&dia=${iso(AYER)}&cliente=AIRBUS%20OPERATIONS%20SL`]);
     await quita('#fCliente');
     await marca('#fCentro', 'consum');
     comprueba('un centro por el buscador: Consum Murcia', (await pagina.textContent('.cuadro[data-id="rutas"] .vl')).trim(), '60 %');
@@ -1205,8 +1236,8 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nPuntos de venta, ventas y reposiciones por areas (docs/70)');
-  {
+  if (toca('Puntos de venta, ventas y reposiciones por areas (docs/70)')) {
+    console.log('\nPuntos de venta, ventas y reposiciones por areas (docs/70)');
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre(`/cifras/?que=ventas&dia=${iso(AYER)}`);
     await pagina.waitForSelector('button.ar-area');
@@ -1224,9 +1255,19 @@ const servidor = http.createServer((pet, res) => {
     await pagina.selectOption('#selDia', '2026-10-01');
     comprueba_que('un dia sin venta dice el motivo, no un cero',
       (await pagina.textContent('#vista')).includes('Ese día no llegó venta'));
-    await pagina.goBack();
+    await pagina.selectOption('#selDia', iso(AYER));
     await pagina.click('#miga a');
     comprueba('la miga vuelve a todas las areas', await pagina.locator('button.ar-area').count(), 2);
+    // Cliente y centro (docs/73): del reparto por centro del dia.
+    await fMarca(pagina, fCaja('cliente'), 'airbus');
+    await pagina.waitForSelector('.deleg .nom');
+    comprueba('un cliente: su venta del reparto por centro, centro a centro',
+      [(await pagina.textContent('.cifra .gr')).replace(/\s/g, ' '), await pagina.$$eval('.deleg .nom', x => x.map(n => n.textContent)),
+       pagina.url().includes('cliente=AIRBUS') && pagina.url().includes(`dia=${iso(AYER)}`)],
+      ['30.000 €', ['AIRBUS GETAFE'], true]);
+    await pagina.selectOption('#selDia', '2026-10-01');
+    comprueba_que('un dia sin reparto por centro lo dice', (await pagina.textContent('#vista')).includes('Ese día no llegó venta')
+      || (await pagina.textContent('#vista')).includes('reparto por cliente'), await pagina.textContent('#vista'));
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
@@ -1257,6 +1298,8 @@ const servidor = http.createServer((pet, res) => {
     comprueba('puntos de venta: la foto de la noche, por area', await p.pagina.$$eval('button.ar-area .ar-pc', x => x.map(n => n.textContent.replace(/\s/g, ' '))),
       ['3000', '195']);
     comprueba_que('sin selector de dia', await p.pagina.isHidden('#lDia'));
+    await fMarca(p.pagina, fCaja('cliente'), 'sermas');
+    comprueba('puntos de venta de un cliente, de la foto por centro', (await p.pagina.textContent('.cifra .gr')).trim(), '2000');
     comprueba('sin errores', p.errores, []);
     await p.pagina.close();
 
@@ -1265,8 +1308,8 @@ const servidor = http.createServer((pet, res) => {
     await o.pagina.close();
   }
 
-  console.log('\nTarifas: delegaciones, centros, productos y el Excel del centro');
-  {
+  if (toca('Tarifas: delegaciones, centros, productos y el Excel del centro')) {
+    console.log('\nTarifas: delegaciones, centros, productos y el Excel del centro');
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre('/tarifas/');
     // Dos areas (docs/70): la portada es un cuadrado por area, con su % en el color del semaforo.
@@ -1311,14 +1354,27 @@ const servidor = http.createServer((pet, res) => {
     await pagina.goBack();
     await pagina.waitForSelector('table .pct');
     comprueba_que('volver atras vuelve a la delegacion, dentro de su area', (await pagina.textContent('nav.miga')).includes('Sur › Andalucía - Cádiz'));
+    // Cliente y centro (docs/73): cada centro trae su cliente, y la cifra es la de sus centros.
+    await pagina.click('nav.miga a');
+    await pagina.waitForSelector('.ar-area');
+    comprueba('los clientes, de los centros de las tarifas', await fOpciones(pagina, fCaja('cliente')), ['CLIENTE', 'SERUNION, SA']);
+    await fMarca(pagina, fCaja('cliente'), 'serunion');
+    await pagina.waitForSelector('#cuadros .cuadro');
+    comprueba('un cliente: su cifra y sus delegaciones, sin la portada',
+      [(await pagina.textContent('.cifra .gr')).trim(), await pagina.$$eval('#cuadros .cuadro', x => x.map(c => c.dataset.deleg)),
+       await pagina.locator('.ar-area').count(), (await pagina.textContent('nav.miga')).trim()],
+      ['50 %', ['Andalucía - Cádiz'], 0, 'Todas las áreas › SERUNION, SA']);
+    await pagina.click('nav.miga a');
+    await pagina.waitForSelector('.ar-area');
+    comprueba('«Todas las áreas» de la miga quita el filtro', await fBoton(pagina, fCaja('cliente')), 'Todos');
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nLa bienvenida del informe operativo (docs/68)');
-  {
+  if (toca('La bienvenida del informe operativo (docs/68)')) {
+    console.log('\nLa bienvenida del informe operativo (docs/68)');
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno',
       sesiones: ['resumen', 'venta_consumo', 'disponibilidad', 'instalaciones'] };
     let x = await abre('/operativo/');
@@ -1486,8 +1542,8 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nLa telemetria cruzada con los ficheros (docs/53)');
-  {
+  if (toca('La telemetria cruzada con los ficheros (docs/53)')) {
+    console.log('\nLa telemetria cruzada con los ficheros (docs/53)');
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno',
       sesiones: ['resumen', 'instalaciones'], catalogo_sesiones: { resumen: 'Resumen', instalaciones: 'Instalaciones y altas' } };
     const op = API['/api/operativo'];
@@ -1522,13 +1578,19 @@ const servidor = http.createServer((pet, res) => {
       ['Área', 'Centro', 'Modelo', 'Ubicación', 'BARAJAS T4', 'ARIA L EVO', 'Urgencias'].every(t => tAreas.includes(t)));
     await pagina.click('#tabla .area[data-a="Centro"]');
     await pagina.waitForSelector('#tabla table');
-    comprueba_que('el area queda en la direccion', new URL(pagina.url()).searchParams.get('a') === 'Centro');
+    comprueba_que('el area queda en la direccion, como en las demas secciones', new URL(pagina.url()).searchParams.get('area') === 'Centro', pagina.url());
     comprueba('dentro del area, por centro, modelo y ubicacion',
       await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(t => t.textContent.trim())), ['21SE0011', '21SE0010']);
     comprueba('las columnas: centro, luego modelo, luego ubicacion',
       await pagina.$$eval('#tabla thead th', x => x.slice(0, 4).map(t => t.textContent)), ['Matrícula', 'Centro', 'Modelo', 'Ubicación']);
     const [dArea] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
     comprueba('el Excel del area', dArea.suggestedFilename(), `telemetria_nayax_centro_${iso(AYER)}.xlsx`);
+    // Cliente y centro (docs/73): cada maquina trae los suyos.
+    await fMarca(pagina, fCaja('centro'), 'barajas');
+    comprueba('un centro: sus maquinas, y en la direccion',
+      [await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(t => t.textContent.trim())),
+       new URL(pagina.url()).searchParams.getAll('centro')], [['21SE0011', '21SE0010'], ['500']]);
+    await fQuita(pagina, fCaja('centro'));
     await pagina.click('#volverArea');
     await pagina.click('#tabla .area[data-a="Cataluña"]');
     await pagina.waitForSelector('#tabla table');
@@ -1575,8 +1637,8 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nLos almacenes por dentro');
-  {
+  if (toca('Los almacenes por dentro')) {
+    console.log('\nLos almacenes por dentro');
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'direccion', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre('/almacenes/');
     // Dos areas (docs/70): la portada, con la parte de productos con compra que no esta bajo minimo.
@@ -1588,6 +1650,14 @@ const servidor = http.createServer((pet, res) => {
     await pagina.waitForSelector('#filas tr[data-cod]');
     comprueba('dentro del area, solo sus almacenes', await pagina.$$eval('#almacen option', o => o.map(x => x.value)), ['', 'Sevilla CECO L0K071']);
     comprueba_que('y la direccion lleva el area', pagina.url().includes('area=Sur'), pagina.url());
+    comprueba('el area va marcada en su filtro', await fBoton(pagina, fCaja('area')), 'Sur');
+    comprueba('el area deja sus clientes: ninguno de Sur tiene ficha', await fOpciones(pagina, fCaja('cliente')), []);
+    await pagina.click('#bAreas');
+    await pagina.waitForSelector('.ar-area');
+    // Cliente y centro (docs/73): el stock no es de ningun cliente, y se dice.
+    await fMarca(pagina, fCaja('cliente'), 'airbus');
+    comprueba('con un cliente, lo dice y no ensena productos',
+      [await pagina.isVisible('#noReparte'), await pagina.locator('#filas tr[data-cod]').count()], [true, 0]);
     await pagina.click('#bAreas');
     await pagina.waitForSelector('.ar-area');
     await pagina.goto(base + '/almacenes/?area=todas');
@@ -1642,8 +1712,8 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nRutas: areas, rutas, maquinas, puntos de venta y festivos (docs/55 y 67)');
-  {
+  if (toca('Rutas: areas, rutas, maquinas, puntos de venta y festivos (docs/55 y 67)')) {
+    console.log('\nRutas: areas, rutas, maquinas, puntos de venta y festivos (docs/55 y 67)');
     const FOTOS = process.env.FOTOS_RUTAS;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre(`/rutas/?dia=${iso(AYER)}`);
@@ -1669,8 +1739,8 @@ const servidor = http.createServer((pet, res) => {
     comprueba('el porcentaje en rojo si no llega, y en el color del texto si va bien',
       await pagina.$$eval('#areas .area .pc', x => x.map(e => getComputedStyle(e).color === getComputedStyle(document.body).color)),
       [false, true]);
-    comprueba('en la portada no hay rutas ni filtro de delegacion',
-      [await pagina.isVisible('#tRutas'), await pagina.isVisible('#deleg')], [false, false]);
+    comprueba('en la portada no hay rutas ni filtro de ruta, y si los filtros con buscador',
+      [await pagina.isVisible('#tRutas'), await pagina.isVisible('#ruta'), await pagina.isVisible(fCaja('delegacion'))], [false, false, true]);
     comprueba('las dos delegaciones, con su area', await pagina.$$eval('#tDeleg tbody tr', x => x.map(t => t.dataset.d)),
       ['Madrid - Leganes', 'Andalucía - Málaga']);
     comprueba_que('el autonomico de la delegacion sale en su fila', (await pagina.textContent('#tDeleg')).includes('festivo autonómico'));
@@ -1678,10 +1748,10 @@ const servidor = http.createServer((pet, res) => {
 
     await pagina.click('#areas .area[data-area="Centro"]');
     await pagina.waitForSelector('#tRutas table');
-    comprueba('dentro del area: sus cifras y su delegacion',
+    comprueba('dentro del area: sus cifras, su delegacion y el area en el filtro y en la direccion',
       [(await pagina.textContent('#tArea')).trim(), (await pagina.textContent('#kpis [data-tabla="i_cumplimiento"] .vl')).trim(),
-       await pagina.$$eval('#deleg option', o => o.map(x => x.value))],
-      ['Centro', '66,7 %', ['', 'Madrid - Leganes']]);
+       await fOpciones(pagina, fCaja('delegacion')), await fBoton(pagina, fCaja('area')), pagina.url().includes('area=Centro')],
+      ['Centro', '66,7 %', ['Madrid - Leganes'], 'Centro', true]);
     comprueba('las dos rutas del area, con el nombre escapado', await pagina.locator('#tRutas tbody tr').count(), 2);
     comprueba_que('sin colar HTML del nombre', (await pagina.textContent('#tRutas')).includes('Ruta Getafe <Airbus>'));
     comprueba('la ruta: quien la hizo, en ruta, hechas, no hechas, fuera, total',
@@ -1721,9 +1791,9 @@ const servidor = http.createServer((pet, res) => {
 
     await pagina.click('#tRutas tbody tr[data-r$="Ruta Getafe <Airbus>"]');
     comprueba('al pulsar una ruta, todo se filtra a ella',
-      [await pagina.inputValue('#deleg'), await pagina.locator('#tRutas tbody tr').count(),
+      [await fBoton(pagina, fCaja('delegacion')), await pagina.locator('#tRutas tbody tr').count(),
        (await pagina.textContent('#kpis [data-tabla="i_cumplimiento"] .vl')).trim()],
-      ['Madrid - Leganes', 1, '50 %']);
+      ['Todas', 1, '50 %']);
     await pagina.selectOption('#ruta', '');
     await pagina.click('#pestanas button[data-p="vacio"]');
     comprueba('pasaje vacio: las dos, resaltadas', await pagina.locator('#tPdv tbody tr.vacio').count(), 2);
@@ -1742,11 +1812,36 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('y la lista de varios dias lleva el dia', (await pagina.textContent('#tPdv thead')).includes('Día'));
     await pagina.selectOption('#periodo', 'dia');
 
+    // Cliente y centro (docs/73): las cifras, del reparto por centro del
+    // informe general; las listas de maquinas, por su numero de centro.
     await pagina.click('#bAreas');
+    comprueba('los clientes: los de las fichas del informe general', await fOpciones(pagina, fCaja('cliente')),
+      ['AIRBUS OPERATIONS SL', 'CONSUM', 'SERMAS']);
+    await fMarca(pagina, fCaja('cliente'), 'airbus');
+    await pagina.waitForFunction(() => document.querySelector('#kpis [data-tabla="i_cumplimiento"] .vl').textContent.includes('97,5'));
+    comprueba('un cliente: su cumplimiento del reparto por centro, sin portada, y lo que no se reparte lo dice',
+      [await pagina.isVisible('#portada'), (await pagina.textContent('#kpis [data-tabla="i_en_ruta"] .vl')).trim(),
+       (await pagina.textContent('#kpis [data-tabla="i_pasaje_vacio"] .vl')).trim(),
+       (await pagina.textContent('#tRutas')).includes('no se reparte por cliente ni por centro'),
+       (await pagina.textContent('#tDeleg')).includes('no se reparte por cliente ni por centro'),
+       pagina.url().includes('cliente=AIRBUS')],
+      [false, '200', 'Sin dato', true, true, true]);
+    await fQuita(pagina, fCaja('cliente'));
+    await fMarca(pagina, fCaja('centro'), '1001');
+    await pagina.click('#pestanas button[data-p="pendientes"]');
+    comprueba('un centro de las maquinas: sus no visitadas y sus llamadas, por su numero',
+      [await pagina.$$eval('#tPdv tbody tr .mat', x => x.map(e => e.textContent)),
+       (await pagina.textContent('#mqs button[data-ver="llamadas"] .vl')).trim(),
+       (await pagina.textContent('#kpis .kpi .vl')).trim()],
+      [['19FP1530'], '2', 'Sin dato']);
+    await pagina.click('#bAreas');
+    comprueba('«Todas las áreas» lo quita todo y vuelve a la portada',
+      [await pagina.isVisible('#portada'), await fBoton(pagina, fCaja('centro'))], [true, 'Todos']);
+
     await pagina.click('#tDeleg tbody tr[data-d="Andalucía - Málaga"]');
     comprueba('desde la portada, una delegacion abre su area filtrada',
-      [(await pagina.textContent('#tArea')).trim(), await pagina.inputValue('#deleg'), await pagina.locator('#tRutas tbody tr').count()],
-      ['Sur', 'Andalucía - Málaga', 1]);
+      [(await pagina.textContent('#tArea')).trim(), await fBoton(pagina, fCaja('delegacion')), await pagina.locator('#tRutas tbody tr').count()],
+      ['Sur · Andalucía - Málaga', 'Andalucía - Málaga', 1]);
     comprueba_que('el control de festivos marca el festivo con visitas de dia normal',
       (await pagina.textContent('#tFest')).includes('Visitas de día normal')
       && (await pagina.textContent('#tFest')).includes('sin descontar'));
@@ -1772,8 +1867,8 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nLas incidencias, como el Power BI (docs/56), por areas y en 24 horas');
-  {
+  if (toca('Las incidencias, como el Power BI (docs/56), por areas y en 24 horas')) {
+    console.log('\nLas incidencias, como el Power BI (docs/56), por areas y en 24 horas');
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     const FOTOS = process.env.FOTOS_AVERIAS;
     const { pagina, errores, fuera } = await abre('/incidencias/');
@@ -1794,12 +1889,12 @@ const servidor = http.createServer((pet, res) => {
     await pagina.waitForSelector('#kpis .kpi');
     comprueba('dentro del area: su nombre, su llamada y sus delegaciones',
       [(await pagina.textContent('#tArea')).trim(), (await pagina.textContent('#kpis24 .kpi .vl')).trim(),
-       await pagina.$$eval('#deleg option', o => o.map(x => x.value)), await pagina.isVisible('#lZona')],
-      ['Levante', '1', ['', 'Levante - Murcia', 'Levante - Valencia'], false]);
+       await fOpciones(pagina, fCaja('delegacion')), await fBoton(pagina, fCaja('area'))],
+      ['Levante', '1', ['Levante - Murcia', 'Levante - Valencia'], 'Levante']);
     comprueba_que('con su parte de todas las areas', (await pagina.textContent('#kpis24 .kpi .nt')).includes('50 % de las 2'));
     comprueba('y todo el detalle, solo del area', await pagina.$eval('#kpis .kpi:nth-child(1) .vl', e => e.textContent), '5');
     await pagina.click('#tDeleg24 tbody tr[data-d="Levante - Valencia"]');
-    comprueba('pulsar una delegacion de las 24 h filtra todo', [await pagina.inputValue('#deleg'),
+    comprueba('pulsar una delegacion de las 24 h filtra todo', [await fBoton(pagina, fCaja('delegacion')),
       await pagina.$eval('#kpis .kpi:nth-child(1) .vl', e => e.textContent), (await pagina.textContent('#kpis24 .kpi .vl')).trim()],
       ['Levante - Valencia', '3', '0']);
     if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'averias-area.png'), fullPage: true });
@@ -1807,7 +1902,7 @@ const servidor = http.createServer((pet, res) => {
     comprueba('volver a todas las areas', [await pagina.isVisible('#areas'), await pagina.isVisible('#detalle')], [true, false]);
     await pagina.click('#bNacional');
     await pagina.waitForSelector('#kpis .kpi');
-    comprueba('todas juntas, con el filtro de zona', [(await pagina.textContent('#tArea')).trim(), await pagina.isVisible('#lZona')],
+    comprueba('todas juntas, con el filtro de area', [(await pagina.textContent('#tArea')).trim(), await pagina.isVisible(fCaja('area'))],
       ['Todas las áreas', true]);
     comprueba('arranca en los ultimos 3 meses: el ano no esta entero', await pagina.inputValue('#periodo'), 'tres');
     const kpi = async i => pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent);
@@ -1819,8 +1914,19 @@ const servidor = http.createServer((pet, res) => {
       await pagina.$eval('#gTecnicas .fb .nom', e => e.textContent), 'INDUSTRIA DEL CURTIDO');
     comprueba('y sin el grafico de devoluciones', await pagina.locator('#gDevol').count(), 0);
     await pagina.click('#gZonas .fb[data-d="Levante - Murcia"]');
-    comprueba('pulsar una delegacion filtra por ella', [await pagina.inputValue('#deleg'), await kpi(1)], ['Levante - Murcia', '2']);
+    comprueba('pulsar una delegacion filtra por ella', [await fBoton(pagina, fCaja('delegacion')), await kpi(1)], ['Levante - Murcia', '2']);
     await pagina.click('#bLimpiar');
+    // Cliente y centro (docs/73): cada incidencia trae los suyos.
+    const clientes = await fOpciones(pagina, fCaja('cliente'));
+    comprueba_que('los clientes, de las propias incidencias', clientes.length > 1, JSON.stringify(clientes));
+    await fMarca(pagina, fCaja('centro'), 'curtido');
+    comprueba('un centro por el buscador: solo sus incidencias, y en la direccion',
+      [await pagina.$eval('#gTecnicas .fb .nom', e => e.textContent), await pagina.locator('#gTecnicas .fb').count(),
+       new URL(pagina.url()).searchParams.getAll('centro').length],
+      ['INDUSTRIA DEL CURTIDO', 1, 1]);
+    await pagina.click('#bLimpiar');
+    comprueba('limpiar quita los cuatro y se queda en el detalle',
+      [await fBoton(pagina, fCaja('centro')), await pagina.isVisible('#detalle'), await kpi(1)], ['Todos', true, '8']);
     await pagina.selectOption('#estado', 'abierta');
     comprueba('solo las abiertas: la tasa no aplica', [await kpi(1), await kpi(2)], ['3', '—']);
     await pagina.selectOption('#estado', '');
@@ -1891,8 +1997,8 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nLas furgonetas (docs/58)');
-  {
+  if (toca('Las furgonetas (docs/58)')) {
+    console.log('\nLas furgonetas (docs/58)');
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre(`/furgonetas/?dia=${iso(AYER)}`);
     await pagina.waitForSelector('#areas .area');
@@ -1934,6 +2040,14 @@ const servidor = http.createServer((pet, res) => {
     comprueba('otro dia: la semana que acaba en el', await pagina.$$eval('#tabla tbody tr td:last-child', x => x.map(e => e.textContent.trim())), ['sin usar en 5 días', 'Bien']);
     comprueba('el dia a dia, de la flota del area, hasta el dia elegido', await pagina.$$eval('#dias .fb', x => x.length), 5);
     await pagina.selectOption('#dia', iso(AYER));
+    // Cliente y centro (docs/73): las furgonetas que visitaron sus centros esa
+    // semana, del reparto por centro; aqui ninguna de las del area.
+    await fMarca(pagina, fCaja('cliente'), 'airbus');
+    comprueba('un cliente: las que visitaron sus centros, y lo dice',
+      [(await pagina.textContent('#tabla')).trim(), (await pagina.textContent('#sTabla')).includes('visitaron sus centros')],
+      ['Ninguna con este filtro.', true]);
+    await fQuita(pagina, fCaja('cliente'));
+    comprueba('al quitarlo vuelven las del area', await mats(), ['9999ZZZ', '1234ABC']);
     await pagina.click('#bAreas');
     comprueba_que('vuelve a la portada', await pagina.isVisible('#areas .area'));
     await pagina.click('.area[data-area="Sur"]');
@@ -1952,8 +2066,8 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nLa revision de clientes (docs/59)');
-  {
+  if (toca('La revision de clientes (docs/59)')) {
+    console.log('\nLa revision de clientes (docs/59)');
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre('/revision/');
     await pagina.waitForSelector('.kpi');
@@ -1977,14 +2091,15 @@ const servidor = http.createServer((pet, res) => {
     comprueba('por delegacion, con su cabecera', await textos('#tabla tr.grupo'), ['Andalucía - Sevilla · 1 máquina']);
     comprueba_que('el cliente va escapado', (await pagina.innerHTML('#tabla')).includes('AIRBUS &lt;OPS&gt;'));
     await areas();
-    await pagina.selectOption('#fDeleg', 'Madrid - Leganes');
+    await fMarca(pagina, fCaja('delegacion'), 'leganes');
     await pagina.waitForSelector('#tabla tr.grupo');
     comprueba('la delegacion filtra las cuatro, no la actividad', await kpis(), ['1', '1', '1', '1', '120']);
     comprueba('y con una delegacion elegida va directo a su lista', await textos(`${filasMaq} td:first-child`), ['24SE0002']);
-    comprueba('y el cliente solo ofrece los de esa delegacion',
-      await pagina.$$eval('#fCliente option', x => x.map(o => o.value)), ['', '20']);
+    const clientes = await fOpciones(pagina, fCaja('cliente'));
+    comprueba('y el cliente solo ofrece los de esa delegacion', clientes.length, 1);
     await pagina.click('#bLimpiar');
-    await pagina.waitForFunction(() => document.querySelector('#fDeleg').value === '');
+    await pagina.waitForSelector('.area');
+    comprueba('quitar filtros los quita todos', await fBoton(pagina, fCaja('delegacion')), 'Todas');
     await tabla('tarifa');
     comprueba_que('sin tarifa: por area, con los productos', (await textos('.area .nt')).includes('máquinas en 1 delegación · 2 productos sin tarifa'),
       await textos('.area .nt'));
@@ -2009,6 +2124,8 @@ const servidor = http.createServer((pet, res) => {
     comprueba_que('y su Excel, con la matricula en el nombre', /^revision_sin_tarifa_24SE0005_/.test(d2.suggestedFilename()), d2.suggestedFilename());
     await volver();
     await tabla('precio');
+    // El area elegida se queda al cambiar de tabla, como los demas filtros.
+    await areas();
     await area('Centro');
     comprueba('precio distinto: cuantos productos y la diferencia maxima',
       await textos(`${filasMaq} td.n`), ['2de 8 comprobados', '+0,15 €']);
@@ -2019,6 +2136,7 @@ const servidor = http.createServer((pet, res) => {
     const t3 = fs.readFileSync(await d3.path()).toString('utf8');
     comprueba_que('el Excel lleva solo los medios que no cuadran', t3.includes('<v>2.35</v>') && !t3.includes('Tarjeta crédito</t>'));
     await volver();
+    await pagina.click('#bLimpiar');
     await tabla('creados');
     comprueba('los creados, del ultimo dia', await pagina.$$eval('#tabla tbody tr td:first-child', x => x.map(e => e.textContent)), ['24SE0003']);
     comprueba_que('y dice que el usuario aun no llega', (await pagina.textContent('#tabla')).includes('falta el informe con el usuario'));
@@ -2047,8 +2165,8 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nUtilizo (docs/60)');
-  {
+  if (toca('Utilizo (docs/60)')) {
+    console.log('\nUtilizo (docs/60)');
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre('/utilizo/');
     await pagina.waitForSelector('#tabla tbody tr');
@@ -2104,8 +2222,8 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
-  console.log('\nLas devoluciones por areas (docs/57)');
-  {
+  if (toca('Las devoluciones por areas (docs/57)')) {
+    console.log('\nLas devoluciones por areas (docs/57)');
     const FOTOS = process.env.FOTOS_DEVOLUCIONES;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     const { pagina, errores, fuera } = await abre('/devoluciones/');
@@ -2123,8 +2241,8 @@ const servidor = http.createServer((pet, res) => {
     await pagina.click('#areas .area[data-area="Centro"]');
     await pagina.waitForSelector('#kpis .kpi');
     comprueba('dentro del area, su nombre y el filtro de delegacion',
-      [await txt('#tArea'), await pagina.$$eval('#deleg option', x => x.map(o => o.value))],
-      ['Centro', ['', 'Madrid - Leganes', 'Madrid - Sur']]);
+      [await txt('#tArea'), await fOpciones(pagina, fCaja('delegacion'))],
+      ['Centro', ['Madrid - Leganes', 'Madrid - Sur']]);
     const kpi = async i => (await pagina.$eval(`#kpis .kpi:nth-child(${i}) .vl`, e => e.textContent)).replace(/\s/g, ' ').trim();
     comprueba('las cuatro cifras: dinero, devoluciones, sin resolver y rechazadas',
       [await kpi(1), await kpi(2), await kpi(3), await kpi(4)], ['4,10 €', '4', '1', '0']);
@@ -2151,9 +2269,15 @@ const servidor = http.createServer((pet, res) => {
     await pagina.click('#bVista');
     comprueba('y la misma cifra en tabla', await pagina.locator('#tMeses tbody tr').count(), 13);
     await pagina.click('#bVista');
-    await pagina.selectOption('#deleg', 'Madrid - Sur');
+    await fMarca(pagina, fCaja('delegacion'), 'sur');
     comprueba('la delegacion filtra todo', [await kpi(1), await kpi(2)], ['0,00 €', '2']);
-    await pagina.selectOption('#deleg', '');
+    await fQuita(pagina, fCaja('delegacion'));
+    // Cliente y centro (docs/73): cada devolucion trae los suyos.
+    await fMarca(pagina, fCaja('cliente'), 'airbus');
+    comprueba('un cliente filtra todo, y va en la direccion',
+      [await pagina.$$eval('#tClientes tbody td[data-et="Cliente"]', x => x.map(e => e.textContent)), pagina.url().includes('cliente=AIRBUS')],
+      [['AIRBUS'], true]);
+    await fQuita(pagina, fCaja('cliente'));
     await pagina.selectOption('#periodo', 'anio');
     comprueba('en el ultimo ano, catorce en Centro: diez y la flecha',
       [await pagina.locator('#tRegistradas tbody tr').count(), await txt('#tRegistradas button.flecha')], [10, 'Ver todas (14)']);
@@ -2199,8 +2323,39 @@ const servidor = http.createServer((pet, res) => {
   }
 
   // ------------------------------------ cuadrados y tablas por usuario
-  console.log('\nCuadrados y tablas por usuario (docs/61)');
-  {
+  if (toca('Los filtros en todas las secciones (docs/73)')) {
+    console.log('\nLos filtros en todas las secciones (docs/73)');
+    const FOTOS = process.env.FOTOS_FILTROS;
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
+    for (const s of ['rutas/', 'incidencias/', 'devoluciones/', 'furgonetas/', 'almacenes/', 'tarifas/', 'cifras/?que=ventas', 'revision/', 'telemetria/']) {
+      const nombre = s.split('/')[0];
+      const { pagina, errores, fuera } = await abre(`/${s}`);
+      await pagina.waitForSelector('#fLugar .fm', { timeout: 5000 }).catch(() => {});
+      comprueba_que(`en /${nombre}/ estan los filtros de area, delegacion, cliente y centro`, await pagina.isVisible('#fLugar .fm'));
+      if (FOTOS) {
+        await pagina.click('#fLugar .fm .fm-t');
+        await pagina.screenshot({ path: path.join(FOTOS, `${nombre}-claro.png`) });
+        await pagina.emulateMedia({ colorScheme: 'dark' });
+        await pagina.screenshot({ path: path.join(FOTOS, `${nombre}-oscuro.png`) });
+        await pagina.emulateMedia({ colorScheme: 'light' });
+        await pagina.setViewportSize({ width: 390, height: 844 });
+        await pagina.screenshot({ path: path.join(FOTOS, `${nombre}-movil.png`) });
+      }
+      comprueba(`/${nombre}/: ni una peticion fuera del dominio`, fuera, []);
+      comprueba(`/${nombre}/: sin un solo error en la consola`, errores, []);
+      await pagina.close();
+    }
+    const u = await abre('/utilizo/');
+    await u.pagina.waitForSelector('#sinLugar:not([hidden])', { timeout: 5000 }).catch(() => {});
+    comprueba_que('en /utilizo/ dice que los filtros no se aplican', await u.pagina.isVisible('#sinLugar'));
+    if (FOTOS) await u.pagina.screenshot({ path: path.join(FOTOS, 'utilizo-claro.png') });
+    comprueba('/utilizo/: sin un solo error en la consola', u.errores, []);
+    await u.pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  if (toca('Cuadrados y tablas por usuario (docs/61)')) {
+    console.log('\nCuadrados y tablas por usuario (docs/61)');
     const FOTOS = process.env.FOTOS_USUARIOS;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno' };
     const antesU = API['/api/admin/usuarios'], antesP = API['/api/admin/perfiles'];
@@ -2442,8 +2597,8 @@ const servidor = http.createServer((pet, res) => {
   }
 
   // ------------------------------------------------------------ preferidos
-  console.log('\nPreferidos (docs/62): la estrella y su pagina');
-  {
+  if (toca('Preferidos (docs/62): la estrella y su pagina')) {
+    console.log('\nPreferidos (docs/62): la estrella y su pagina');
     const FOTOS = process.env.FOTOS_USUARIOS;
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'operaciones', perfil: 'Serunion', perfil_id: 'interno' };
     PREFS = [];

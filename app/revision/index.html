@@ -140,6 +140,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 }
 </style>
 <script src="/comun/preferidos.js"></script>
+<script src="/comun/filtros.js"></script>
 </head>
 <body>
 <div class="env">
@@ -156,9 +157,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   </header>
 
   <div class="barra" id="barra" hidden>
-    <label>Delegación <select id="fDeleg"></select></label>
-    <label>Cliente <select id="fCliente"></select></label>
-    <label>Centro <select id="fCentro"></select></label>
+    <span id="fLugar"></span>
     <button class="btn" id="bLimpiar" type="button">Quitar filtros</button>
   </div>
   <nav class="miga" id="miga" aria-label="Dónde estás" hidden></nav>
@@ -236,14 +235,16 @@ function avisa(texto, mal){
 const limpio = s => String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,40);
 
 /* ----------------------------------------------------- estado en la URL */
+/* La tabla, la máquina y el día van en el ancla; área, delegación, cliente y
+   centro, en la dirección, como en las demás secciones (docs/73). */
 function ruta(){
   const q = new URLSearchParams(location.hash.slice(1));
-  return {t: q.get("t") || "planograma", m: q.get("m"), a: q.get("a") || "", d: q.get("d") || "", cl: q.get("cl") || "", ce: q.get("ce") || "", dia: q.get("dia") || ""};
+  return {t: q.get("t") || "planograma", m: q.get("m"), dia: q.get("dia") || ""};
 }
 function ir(cambios){
   const r = Object.assign(ruta(), cambios);
   const q = new URLSearchParams();
-  for(const k of ["t","a","m","d","cl","ce","dia"]) if(r[k]) q.set(k, r[k]);
+  for(const k of ["t","m","dia"]) if(r[k]) q.set(k, r[k]);
   location.hash = q.toString();
 }
 
@@ -252,30 +253,27 @@ const lista = x => Array.isArray(x) ? x : [];
 function todas(){
   return [...D.sin_planograma, ...lista(D.sin_tarifa), ...lista(D.precio_distinto), ...(D.creados||[])];
 }
-function encaja(m, r){
-  return (!r.d || m.delegacion===r.d) && (!r.cl || m.cod_cliente===r.cl) && (!r.ce || m.num_centro===r.ce);
-}
-function opciones(sel, valores, valor, todos){
-  sel.innerHTML = `<option value="">${todos}</option>`
-    + valores.map(([v,t])=>`<option value="${esc(v)}"${v===valor?" selected":""}>${esc(t)}</option>`).join("");
-}
-function pintaFiltros(r){
-  const filas = todas();
-  const deleg = [...new Set(filas.map(m=>m.delegacion))].sort((a,b)=>a.localeCompare(b,"es"));
-  opciones($("#fDeleg"), deleg.map(d=>[d,d]), r.d, "Todas");
-  const clientes = new Map();
-  filas.filter(m=>!r.d || m.delegacion===r.d).forEach(m=>clientes.set(m.cod_cliente, m.cliente || m.cod_cliente));
-  opciones($("#fCliente"), [...clientes].sort((a,b)=>a[1].localeCompare(b[1],"es")), r.cl, "Todos");
-  const centros = new Map();
-  filas.filter(m=>(!r.d || m.delegacion===r.d) && (!r.cl || m.cod_cliente===r.cl))
-    .forEach(m=>centros.set(m.num_centro, `${m.centro || m.num_centro} (${m.num_centro})`));
-  opciones($("#fCentro"), [...centros].sort((a,b)=>a[1].localeCompare(b[1],"es")), r.ce, "Todos");
+/* Area, delegacion, cliente y centro, con seleccion multiple y buscador
+   (David, 22-oct, docs/73). Cada maquina trae los suyos. */
+let F = null;
+const encaja = m => F.pasaCentro(m.num_centro, m.delegacion);
+function montaFiltros(){
+  const zonas = {}, centros = {};
+  todas().forEach(m=>{
+    if(m.delegacion) zonas[m.delegacion] = zonaDe(m.delegacion);
+    if(m.num_centro && !centros[m.num_centro]) centros[m.num_centro] = {n: m.centro || m.num_centro, c: m.cliente || m.cod_cliente || "", d: m.delegacion};
+  });
+  F = Filtros.cuatro($("#fLugar"), {zonas, centros, zonaDe,
+    ordenAreas: (x, y)=>(ORDEN_ZONAS.indexOf(x)+99)%99 - (ORDEN_ZONAS.indexOf(y)+99)%99 || x.localeCompare(y,"es"),
+    alCambiar: ()=>{ if(ruta().m) ir({m:""}); else pinta(); }});
+  /* Un enlace de antes con el área, la delegación o el centro en el ancla. */
+  const q = new URLSearchParams(location.hash.slice(1));
+  if(q.get("a")) F.pon("areas", [q.get("a")]);
+  if(q.get("d")) F.pon("delegs", [q.get("d")]);
+  if(q.get("ce")) F.pon("centros", [q.get("ce")]);
   $("#barra").hidden = false;
 }
-$("#fDeleg").addEventListener("change", e=>ir({d:e.target.value, cl:"", ce:"", m:"", a:""}));
-$("#fCliente").addEventListener("change", e=>ir({cl:e.target.value, ce:"", m:""}));
-$("#fCentro").addEventListener("change", e=>ir({ce:e.target.value, m:""}));
-$("#bLimpiar").addEventListener("click", ()=>ir({d:"", cl:"", ce:"", m:"", a:""}));
+$("#bLimpiar").addEventListener("click", ()=>{ F.limpia(); if(ruta().m) ir({m:""}); });
 
 /* -------------------------------------------------- lo comun de las filas */
 function sitio(m){
@@ -321,14 +319,14 @@ function pinta(){
     return;
   }
   if(!vistas.includes(r.t)){ r.t = vistas[0]; r.m = null; }
-  pintaFiltros(r);
+  $("#barra").hidden = false;
   /* La tabla que se ve, para su estrella de preferidos (docs/62); la ficha de
      una máquina no es una tabla. */
   VISTA_T = r.m ? null : r.t;
   if(r.t==="usuarios" && D.actividad) return vistaUsuarios(r);
   if(r.m && (r.t==="tarifa" || r.t==="precio")) return vistaMaquina(r);
   $("#miga").hidden = true;
-  const filtra = x => Array.isArray(x) ? x.filter(m=>encaja(m, r)) : x;
+  const filtra = x => Array.isArray(x) ? x.filter(encaja) : x;
   const sp = filtra(D.sin_planograma), st = filtra(D.sin_tarifa), pd = filtra(D.precio_distinto);
   const cr = filtra(D.creados||[]);
   const dias = [...new Set(cr.map(c=>c.dia))].sort().reverse();
@@ -348,15 +346,13 @@ function pinta(){
     const sel = r.t==="tarifa" ? st : r.t==="precio" ? pd : sp;
     const tabla = r.t==="tarifa" ? tablaTarifa : r.t==="precio" ? tablaPrecio : tablaPlanograma;
     if(!Array.isArray(sel)) tabla(caja, sel);
-    else if(!r.a && !r.d) vistaAreas(caja, r, sel);
+    else if(!F.alguno()) vistaAreas(caja, r, sel);
     else {
-      if(r.a){
-        const mi = $("#miga");
-        mi.innerHTML = `<a href="#" id="volverArea">${esc(TITULO_T[r.t])}</a> › <b>${esc(r.a)}</b>`;
-        mi.hidden = false;
-        $("#volverArea").addEventListener("click", e=>{ e.preventDefault(); ir({a:""}); });
-      }
-      tabla(caja, r.a ? sel.filter(m=>zonaDe(m.delegacion)===r.a) : sel);
+      const mi = $("#miga");
+      mi.innerHTML = `<a href="#" id="volverArea">${esc(TITULO_T[r.t])}</a> › <b>${esc(F.texto())}</b>`;
+      mi.hidden = false;
+      $("#volverArea").addEventListener("click", e=>{ e.preventDefault(); F.limpia(); });
+      tabla(caja, sel);
     }
   }
   caja.querySelectorAll(".mat").forEach(b=>b.addEventListener("click", ()=>ir({m:b.dataset.m})));
@@ -389,7 +385,7 @@ function vistaAreas(caja, r, filas){
       return `<button class="kpi area" type="button" data-a="${esc(z)}"><div class="et">${esc(z)}</div>`
         + `<div class="vl">${num(a.maquinas)}</div><div class="nt">máquinas en ${num(a.delegs.size)} ${a.delegs.size===1?"delegación":"delegaciones"}${prod}</div></button>`;
     }).join("") + `</div>`);
-  caja.querySelectorAll(".area").forEach(b=>b.addEventListener("click", ()=>ir({a:b.dataset.a})));
+  caja.querySelectorAll(".area").forEach(b=>b.addEventListener("click", ()=>F.pon("areas", [b.dataset.a])));
 }
 /* Las filas de una tabla, con una cabecera por delegacion. */
 function porDeleg(filas, columnas, fila){
@@ -420,7 +416,7 @@ function kpis(r, cuenta, nota){
     + `</div>`;
 }
 function conectaKpis(v){
-  v.querySelectorAll(".kpi[data-t]").forEach(b=>b.addEventListener("click", ()=>ir({t:b.dataset.t, m:"", a:""})));
+  v.querySelectorAll(".kpi[data-t]").forEach(b=>b.addEventListener("click", ()=>ir({t:b.dataset.t, m:""})));
 }
 
 function cabecera(caja, titulo, explica, excel){
@@ -631,13 +627,8 @@ function filaDistinto(p){
 /* ------------------------------------------------------------- los Excel */
 const HOY = new Date();
 function titulo(que){
-  const r = ruta(), partes = [];
-  if(r.a && !r.d) partes.push(`Área ${r.a}`);
-  if(r.d) partes.push(r.d);
-  if(r.cl){ const m = todas().find(x=>x.cod_cliente===r.cl); partes.push(m ? m.cliente : r.cl); }
-  if(r.ce){ const m = todas().find(x=>x.num_centro===r.ce); partes.push(m ? `${m.centro} (${r.ce})` : r.ce); }
   return [`Revisión clientes · ${que}`,
-          `${partes.length ? partes.join(" · ") : "Todo el ámbito"} · generado el ${HOY.toLocaleDateString("es-ES")}`];
+          `${F.texto() || "Todo el ámbito"} · generado el ${HOY.toLocaleDateString("es-ES")}`];
 }
 const COL_SITIO = [{titulo:"Máquina",ancho:11},{titulo:"Delegación",ancho:18},{titulo:"Cód. cliente",ancho:10},
   {titulo:"Cliente",ancho:28},{titulo:"Nº centro",ancho:9},{titulo:"Centro",ancho:28},
@@ -650,7 +641,7 @@ function excelPlanograma(filas){
   XLSX.descarga(XLSX.libro([{nombre:"Sin planograma", titulo:titulo("máquinas sin planograma"),
     columnas:[...COL_SITIO,{titulo:"Qué le pasa",ancho:28}],
     filas:filas.map(m=>[...base(m), m.marcada ? "Marcada sin planograma" : "Ningún canal con artículo"])}]),
-    nombre("sin_planograma", ruta().ce || ruta().cl || ruta().d || ruta().a || "todas"));
+    nombre("sin_planograma", F.texto() || "todas"));
 }
 function excelTarifas(maquinas, sufijo){
   const resumen = maquinas.map(m=>[...base(m), textoNivel(m), textoEstandar(m), m.sin_tarifa, m.productos_total]);
@@ -672,7 +663,7 @@ function excelTarifas(maquinas, sufijo){
        {titulo:"Cobra hoy en efectivo",ancho:12,euros:true},{titulo:"Cobra hoy con tarjeta privada",ancho:12,euros:true},
        {titulo:"Cobra hoy con tarjeta de crédito",ancho:12,euros:true},{titulo:"Precio efectivo",ancho:12,euros:true},
        {titulo:"Precio tarjeta privada",ancho:12,euros:true},{titulo:"Precio tarjeta crédito",ancho:12,euros:true}],
-     rellenar:[14,15,16]}]), nombre("sin_tarifa", sufijo==="todas" ? (ruta().ce || ruta().cl || ruta().d || ruta().a || "todas") : sufijo));
+     rellenar:[14,15,16]}]), nombre("sin_tarifa", sufijo==="todas" ? (F.texto() || "todas") : sufijo));
 }
 function excelPrecios(maquinas, sufijo){
   const resumen = maquinas.map(m=>[...base(m), textoNivel(m), textoEstandar(m), m.distintos, m.comprobados, m.max_diferencia]);
@@ -696,7 +687,7 @@ function excelPrecios(maquinas, sufijo){
        {titulo:"Precio tarifa",ancho:11,euros:true},{titulo:"Precio cobrado",ancho:11,euros:true},
        {titulo:"Diferencia",ancho:10,euros:true},{titulo:"Fecha de la venta",ancho:12},{titulo:"Fuente",ancho:16},
        {titulo:"Nivel",ancho:14},{titulo:"Tarifa",ancho:30}],
-     marcar:(f,i)=>i===12}]), nombre("precio_distinto", sufijo==="todas" ? (ruta().ce || ruta().cl || ruta().d || ruta().a || "todas") : sufijo));
+     marcar:(f,i)=>i===12}]), nombre("precio_distinto", sufijo==="todas" ? (F.texto() || "todas") : sufijo));
 }
 function excelCreados(filas, dia){
   XLSX.descarga(XLSX.libro([{nombre:"Planogramas creados", titulo:titulo(`planogramas creados el ${fechaLarga(dia)}`),
@@ -727,6 +718,7 @@ function excelCreados(filas, dia){
   D = await rr.json();
   D.sin_planograma = D.sin_planograma || [];
   QUITADAS = new Set((YO.tablas_ocultas||{}).revision || []);
+  montaFiltros();
   window.addEventListener("hashchange", pinta);
   pinta();
   const gen = D.generado ? new Date(D.generado) : null;

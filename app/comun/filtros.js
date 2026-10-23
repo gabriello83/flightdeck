@@ -61,6 +61,11 @@
 .fm-l small{display:block;color:var(--tinta-2);font-size:12px}
 .fm-l mark{background:none;color:inherit;font-weight:700}
 .fm-l .fm-nada{color:var(--tinta-2);font-size:13px;padding:6px}
+.fm-cuatro{display:contents}
+/* Dentro de la barra de una seccion, sus reglas de label e input no entran aqui. */
+.fm .fm-p input[type=search]{min-width:0;max-width:none;width:100%;box-sizing:border-box}
+.fm .fm-l input[type=checkbox]{width:auto;min-width:0;padding:0;border:0;background:none;font-size:inherit}
+.fm .fm-l label{display:flex;font-size:13.5px;color:var(--tinta);min-width:0}
 @media (max-width:560px){ .fm-p{position:fixed;left:16px;right:16px;top:auto;width:auto;max-width:none} }`;
   (document.head || document.documentElement).appendChild(estilo);
 
@@ -161,5 +166,172 @@
     };
   }
 
-  window.Filtros = {multi, llano};
+  /* ===================================================================
+     Los cuatro de cada seccion: Area, Delegacion, Cliente y Centro, encadenados
+     como en el informe general (docs/72, docs/73). El area deja sus
+     delegaciones; las delegaciones, sus clientes; los clientes, sus centros.
+     Cada uno sale solo si hay mas de una cosa que elegir.
+
+       const F = Filtros.cuatro(contenedor, {
+         zonas:   {delegacion: area, ...},              // las que salen
+         centros: {numero: {n: nombre, c: cliente, d: delegacion}, ...},
+         campos:  ["area", "delegacion", "cliente", "centro"],  // los que se montan
+         alCambiar: () => {...}});
+       F.sel                 // {areas, delegs, clientes, centros}
+       F.pasaDeleg(dl)       // entra por area y delegacion
+       F.pasaCentro(n, dl)   // entra por los cuatro (n es el numero de centro)
+       F.porCentro()         // hay cliente o centro elegido
+       F.pon("delegs", [d])  // elige desde la pagina (pulsar una barra) y avisa
+       F.una("delegs")       // la unica elegida, o ""
+       F.limpia()
+
+     Lo elegido va en la direccion, repetido (?area=Sur&delegacion=…&cliente=…
+     &centro=500088); los demas parametros de la pagina se quedan como estan.
+     =================================================================== */
+  const CAMPOS = {area: ["areas", "Área", "Todas"], delegacion: ["delegs", "Delegación", "Todas"],
+                  cliente: ["clientes", "Cliente", "Todos"], centro: ["centros", "Centro", "Todos"]};
+  const ORDEN_CAMPOS = ["area", "delegacion", "cliente", "centro"];
+
+  function cuatro(cont, o){
+    const zonas = Object.assign({}, o.zonas || {});
+    const fichas = Object.assign({}, o.centros || {});
+    // Una delegacion de una ficha que la seccion no traia tambien tiene su area.
+    Object.values(fichas).forEach(f => { if(f.d && !(f.d in zonas) && o.zonaDe) zonas[f.d] = o.zonaDe(f.d); });
+    const campos = ORDEN_CAMPOS.filter(c => (o.campos || ORDEN_CAMPOS).includes(c));
+    const es = (a, b) => a.localeCompare(b, "es");
+    const unicos = l => [...new Set(l)];
+    const sel = {areas: [], delegs: [], clientes: [], centros: []};
+    if(o.url !== false){
+      const q = new URLSearchParams(location.search);
+      sel.areas = q.getAll("area"); sel.delegs = q.getAll("delegacion");
+      sel.clientes = q.getAll("cliente"); sel.centros = q.getAll("centro");
+    }
+    const delegs = Object.keys(zonas).sort(es);
+    const areas = unicos(delegs.map(d => zonas[d]).filter(Boolean)).sort(o.ordenAreas || es);
+    const centros = Object.keys(fichas);
+    // Las delegaciones que dejan area y delegacion (null: todas).
+    function delegsElegidas(){
+      if(!sel.areas.length && !sel.delegs.length) return null;
+      return delegs.filter(d => (!sel.areas.length || sel.areas.includes(zonas[d]))
+                             && (!sel.delegs.length || sel.delegs.includes(d)));
+    }
+    const dlSet = () => { const dl = delegsElegidas(); return dl && new Set(dl); };
+    const opc = {
+      area: () => areas,
+      delegacion: () => delegs.filter(d => !sel.areas.length || sel.areas.includes(zonas[d])),
+      cliente: () => { const dl = dlSet();
+        return unicos(centros.filter(c => !dl || dl.has(fichas[c].d)).map(c => fichas[c].c).filter(Boolean)).sort(es); },
+      centro: () => { const dl = dlSet();
+        return centros.filter(c => (!dl || dl.has(fichas[c].d)) && (!sel.clientes.length || sel.clientes.includes(fichas[c].c)))
+          .map(c => ({v: c, t: fichas[c].n || c,
+            sub: [fichas[c].n && fichas[c].n !== c ? `nº ${c}` : "", fichas[c].c, fichas[c].d].filter(Boolean).join(" · ")}))
+          .sort((a, b) => es(a.t, b.t)); },
+    };
+    const hay = {area: areas.length, delegacion: delegs.length,
+                 cliente: unicos(centros.map(c => fichas[c].c).filter(Boolean)).length, centro: centros.length};
+    cont.classList.add("fm-cuatro");
+    cont.innerHTML = campos.map(c => `<span data-f="${c}"></span>`).join("");
+    const F = {};
+    let enCascada = 0;
+    function guarda(){
+      if(o.url === false) return;
+      const q = new URLSearchParams(location.search);
+      ["area", "delegacion", "cliente", "centro"].forEach(k => q.delete(k));
+      sel.areas.forEach(x => q.append("area", x));
+      sel.delegs.forEach(x => q.append("delegacion", x));
+      sel.clientes.forEach(x => q.append("cliente", x));
+      sel.centros.forEach(x => q.append("centro", x));
+      const s = q.toString();
+      try{ history.replaceState(null, "", location.pathname + (s ? "?" + s : "") + location.hash); }catch(e){}
+    }
+    const cascada = i => {
+      enCascada++;
+      // Mientras se montan, los de debajo todavia no existen: ya nacen con lo de arriba.
+      for(let j = i + 1; j < campos.length; j++) if(F[campos[j]]) F[campos[j]].opciones(opc[campos[j]]());
+      enCascada--;
+      if(!enCascada){ guarda(); if(o.alCambiar) o.alCambiar(sel); }
+    };
+    // Lo que traiga la direccion y ya no exista se quita sin avisar todavia.
+    enCascada++;
+    campos.forEach((c, i) => {
+      const [k, et, todos] = CAMPOS[c];
+      const caja = cont.querySelector(`[data-f="${c}"]`);
+      F[c] = multi(caja, {etiqueta: et, todos, opciones: opc[c](), elegidos: sel[k],
+        alCambiar: v => { sel[k] = v; cascada(i); }});
+      sel[k] = F[c].valor();
+      caja.hidden = hay[c] < 2;
+    });
+    // Un filtro que no se monta no filtra.
+    ORDEN_CAMPOS.filter(c => !campos.includes(c)).forEach(c => { sel[CAMPOS[c][0]] = []; });
+    enCascada--;
+    guarda();
+
+    function pasaDeleg(dl){
+      if(sel.areas.length && !sel.areas.includes(zonas[dl] || (o.zonaDe ? o.zonaDe(dl) : ""))) return false;
+      return !sel.delegs.length || sel.delegs.includes(dl);
+    }
+    function pasaCentro(n, dl){
+      const f = fichas[n];
+      if(!pasaDeleg(dl != null && dl !== "" ? dl : f ? f.d : "")) return false;
+      if(sel.centros.length) return sel.centros.includes(String(n));
+      if(sel.clientes.length) return !!f && sel.clientes.includes(f.c);
+      return true;
+    }
+    // Elegir desde la pagina: lo de debajo se rehace como si se hubiera marcado a mano.
+    function pon(k, lista){
+      const c = ORDEN_CAMPOS.find(x => CAMPOS[x][0] === k);
+      if(!F[c]) return;
+      enCascada++;
+      F[c].pon(lista); sel[k] = F[c].valor();
+      enCascada--;
+      cascada(campos.indexOf(c));
+    }
+    function limpia(){
+      enCascada++;
+      campos.forEach(c => { F[c].pon([]); sel[CAMPOS[c][0]] = []; });
+      enCascada--;
+      cascada(-1);
+    }
+    return {
+      sel, pasaDeleg, pasaCentro, pon, limpia, delegsElegidas,
+      porCentro: () => sel.clientes.length > 0 || sel.centros.length > 0,
+      alguno: () => campos.some(c => sel[CAMPOS[c][0]].length > 0),
+      una: k => sel[k].length === 1 ? sel[k][0] : "",
+      ficha: n => fichas[n] || null,
+      // Lo elegido en palabras, para un titulo: «Sur · Madrid - Leganes · 2 centros».
+      texto(){
+        const t = [];
+        const de = (l, uno, varios) => l.length === 1 ? uno(l[0]) : l.length ? `${num(l.length)} ${varios}` : "";
+        t.push(de(sel.areas, x => x, "áreas"), de(sel.delegs, x => x, "delegaciones"),
+               de(sel.clientes, x => x, "clientes"), de(sel.centros, x => (fichas[x] && fichas[x].n) || x, "centros"));
+        return t.filter(Boolean).join(" · ");
+      },
+    };
+  }
+
+  /* Las fichas de los centros del perfil (nombre, cliente y delegacion), las
+     mismas del informe general: lo que llena las listas de Cliente y Centro.
+     Sin ellas (un perfil sin informe general) la seccion se arregla con lo
+     suyo. */
+  async function fichas(){
+    try{
+      const r = await fetch("/api/operativo?fichas=1", {credentials: "same-origin"});
+      if(!r.ok) return {};
+      const d = await r.json();
+      return {zonas: d.zonas || {}, centros: d.centros || {}};
+    }catch(e){ return {}; }
+  }
+
+  /* Un mes del reparto por centro (docs/72), el mismo del informe general:
+     {mes, dias: {fecha: {cuadrado: {centro: [...]}}}}, o null si no lo hay.
+     Se pide una vez por mes. */
+  const MESES = {};
+  function mesCentros(mes){
+    if(!(mes in MESES))
+      MESES[mes] = fetch(`/api/operativo?centros=${encodeURIComponent(mes)}`, {credentials: "same-origin"})
+        .then(r => r.ok ? r.json() : null).catch(() => null);
+    return MESES[mes];
+  }
+
+  window.Filtros = {multi, llano, cuatro, fichas, mesCentros};
 })();
