@@ -1163,8 +1163,11 @@ class Operativo:
                         valor = str(R.v(x, campo, "") or "").strip()
                         if valor:
                             g[k].add(valor)
-            if any(ambito.get(k) for k in ("clientes", "centros", "delegaciones")):
-                delegs = {str(d) for d in ambito.get("delegaciones") or []}
+            acota = ambito.get("acota") or {}
+            if any(ambito.get(k) for k in ("clientes", "centros", "delegaciones")) or acota:
+                # Con clientes o centros recortados al usuario (docs/74), solo las
+                # que visitaron lo suyo: las de la delegacion entera serian de mas.
+                delegs = set() if acota else {str(d) for d in ambito.get("delegaciones") or []}
                 flota = {m: g for m, g in flota.items() if g["d"] & delegs or m in visitas}
 
         km = {}
@@ -1336,7 +1339,10 @@ def almacenes(balance_por_periodo, rutas, ambito):
             deleg_de.setdefault(a, str(R.v(r, "delegacion")))
     delegaciones = [str(d) for d in (ambito or {}).get("delegaciones") or []]
     acotado = bool((ambito or {}).get("clientes") or (ambito or {}).get("centros"))
-    if acotado and not delegaciones:
+    # Un usuario con clientes o centros recortados (docs/74) tampoco, aunque
+    # tenga delegaciones: el recorte es un Y, y un almacen no es de un cliente.
+    acota = (ambito or {}).get("acota") or {}
+    if (acotado and not delegaciones) or acota.get("clientes") or acota.get("centros"):
         return {"sin_dato": "Los almacenes son de una delegación: este perfil está acotado "
                             "por clientes o centros y no tiene almacenes propios."}
 

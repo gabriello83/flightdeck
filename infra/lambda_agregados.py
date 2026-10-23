@@ -440,7 +440,8 @@ def perfiles_de_la_consola():
 
 
 def usuarios_de_la_consola():
-    """Los usuarios de la consola: de cada uno, su perfil y sus delegaciones.
+    """Los usuarios de la consola: de cada uno, su perfil, sus delegaciones y
+    los clientes y centros a los que se le recorta lo que ve (docs/74).
 
     Con las delegaciones que el administrador le marca a cada usuario del
     personal (docs/65) se le escribe su propio panel. Si la tabla no se puede
@@ -460,7 +461,10 @@ def usuarios_de_la_consola():
             for it in res.get("Items", []):
                 d = json.loads(it.get("dato", {}).get("S", "{}"))
                 out.append({"perfil_id": str(d.get("perfil_id", "")),
-                            "delegaciones": d.get("delegaciones") or []})
+                            "delegaciones": d.get("delegaciones") or [],
+                            # Los clientes y centros recortados (docs/74).
+                            "clientes": d.get("clientes") or [],
+                            "centros": d.get("centros") or []})
             arranque = res.get("LastEvaluatedKey")
             if not arranque:
                 return out, None
@@ -468,53 +472,82 @@ def usuarios_de_la_consola():
         return [], f"{type(e).__name__}: {e}"[:300]
 
 
-def cabina_de(perfil_id, delegaciones):
-    """La carpeta de cabina/ de un perfil con esas delegaciones.
+def acota_de(usuario):
+    """Los clientes y centros recortados a un usuario (docs/74). La MISMA
+    limpieza que comun.acota_de: la huella de la carpeta sale de aqui."""
+    out = {}
+    for k in ("clientes", "centros"):
+        xs = usuario.get(k)
+        if isinstance(xs, list):
+            xs = sorted({str(x).strip()[:80] for x in xs if str(x).strip()})[:200]
+            if xs:
+                out[k] = xs
+    return out
+
+
+def cabina_de(perfil_id, delegaciones, acota=None):
+    """La carpeta de cabina/ de un perfil con esas delegaciones, y con esos
+    clientes y centros si se le recortan al usuario (docs/74).
 
     La MISMA cuenta esta en infra/api/comun.py (cabina_de), que es donde la API
     decide de que carpeta lee cada sesion. Las dos pruebas fijan el mismo valor.
     """
     ds = sorted({str(d) for d in delegaciones or []})
+    acota = acota or {}
+    ds += [f"cliente:{c}" for c in sorted({str(x) for x in acota.get("clientes") or []})]
+    ds += [f"centro:{c}" for c in sorted({str(x) for x in acota.get("centros") or []})]
     if not perfil_id or not ds:
         return perfil_id
     return f"{perfil_id}~{hashlib.sha1(chr(10).join(ds).encode('utf-8')).hexdigest()[:12]}"
 
 
 def paneles_por_usuario(perfiles, de_la_consola, usuarios):
-    """Un perfil a calcular por cada usuario del personal con delegaciones.
+    """Un perfil a calcular por cada usuario con delegaciones o con clientes y
+    centros recortados.
 
-    Las delegaciones se eligen en el usuario, no en el perfil (docs/65). El
-    ambito se sigue aplicando aqui, al escribir: cada combinacion de perfil y
-    delegaciones tiene su carpeta, `<perfil>~<huella>`, con esas delegaciones y
-    ninguna otra. Dos usuarios con las mismas comparten panel.
+    Las delegaciones se eligen en el usuario, no en el perfil (docs/65), y los
+    clientes y centros que ve, tambien (docs/74). El ambito se sigue aplicando
+    aqui, al escribir: cada combinacion tiene su carpeta, `<perfil>~<huella>`,
+    con eso y nada mas. Dos usuarios con lo mismo comparten panel.
 
     - Las delegaciones del usuario sustituyen a las que tuviera el perfil de
       antes; los clientes y centros del perfil, si los tiene, se quedan.
-    - Un cliente no lleva: la delegacion es organizacion interna de Serunion.
+    - Un cliente no lleva delegaciones: es organizacion interna de Serunion.
+    - El recorte de clientes y centros va en `acota`, y es un Y: entra lo que
+      encaja en el ambito del perfil (con sus delegaciones) y ademas en uno de
+      esos clientes o centros. Nunca le da a nadie algo que su perfil no ve.
     - El perfil puede no estar en `perfiles` (uno del personal sin ambito no se
-      calcula: sus usuarios sin delegaciones leen el del interno). Su panel con
-      delegaciones si se calcula, porque las delegaciones ya lo acotan.
+      calcula: sus usuarios sin nada marcado leen el del interno). Su panel con
+      delegaciones o recorte si se calcula, porque eso ya lo acota. Uno de
+      cliente que no se calcula tampoco tiene panel por usuario: su ambito
+      vacio no es «todo el parque».
     """
     consola = {c["id"]: c for c in de_la_consola}
     calculados = {p.get("id"): p for p in perfiles}
     out = {}
     for u in usuarios:
         pid = u.get("perfil_id", "")
-        c = consola.get(pid)
-        if not c or c.get("tipo", "cliente") == "cliente":
+        c = consola.get(pid) or calculados.get(pid)
+        if not c:
             continue
-        ds = sorted({str(d).strip()[:80] for d in (u.get("delegaciones") or [])
-                     if str(d).strip()})[:200]
-        if not ds:
+        cliente = c.get("tipo", "cliente") == "cliente"
+        if cliente and pid not in calculados:
             continue
-        cid = cabina_de(pid, ds)
+        ds = [] if cliente else sorted({str(d).strip()[:80] for d in (u.get("delegaciones") or [])
+                                        if str(d).strip()})[:200]
+        acota = acota_de(u)
+        if not ds and not acota:
+            continue
+        cid = cabina_de(pid, ds, acota)
         if cid in out:
             continue
         base = (calculados.get(pid) or c).get("ambito") or {}
-        p = {"id": cid, "nombre": c.get("nombre", ""), "tipo": c["tipo"],
+        p = {"id": cid, "nombre": c.get("nombre", ""), "tipo": c.get("tipo", "cliente"),
              "ambito": {"clientes": [str(x) for x in base.get("clientes", [])],
                         "centros": [str(x) for x in base.get("centros", [])],
-                        "delegaciones": ds}}
+                        "delegaciones": ds or [str(x) for x in base.get("delegaciones", [])]}}
+        if acota:
+            p["ambito"]["acota"] = acota
         if "cuadro" in c:
             p["cuadro"] = c["cuadro"]
         out[cid] = p
@@ -565,8 +598,11 @@ def junta_perfiles(del_fichero, de_la_consola):
 
 
 def tiene_ambito(ambito):
-    """Un perfil con ambito es un perfil de cliente; sin ambito, el interno."""
-    return bool(ambito.get("clientes") or ambito.get("centros") or ambito.get("delegaciones"))
+    """Un perfil con ambito es un perfil de cliente; sin ambito, el interno.
+    Un recorte de usuario (`acota`, docs/74) tambien es ambito."""
+    acota = ambito.get("acota") or {}
+    return bool(ambito.get("clientes") or ambito.get("centros") or ambito.get("delegaciones")
+                or acota.get("clientes") or acota.get("centros"))
 
 
 def en_ambito(fila, ambito, mapa=None):
@@ -591,13 +627,27 @@ def en_ambito(fila, ambito, mapa=None):
     Lo escrito con numeros se prefiere siempre. Lo escrito con nombres se deja
     porque funciona y porque no todos los perfiles van a reescribirse a la vez,
     no porque sea igual de bueno.
+
+    Y encima, el recorte del usuario (`acota`, docs/74): con clientes o centros
+    recortados, la fila tiene que encajar ademas en uno de ellos. Es un Y, no
+    un O: el recorte nunca da nada que el perfil no vea.
     """
     if not tiene_ambito(ambito):
         return True
     q = mapa.de_quien_es(fila) if mapa is not None else _quien(fila)
     deleg = str(R.v(fila, "delegacion", ""))
+    base = {k: ambito.get(k) for k in ("clientes", "centros", "delegaciones")}
+    if any(base.values()) and not _encaja(q, deleg, base):
+        return False
+    acota = ambito.get("acota") or {}
+    if (acota.get("clientes") or acota.get("centros")) and not _encaja(q, deleg, acota):
+        return False
+    return True
 
-    for c in ambito.get("clientes", []):
+
+def _encaja(q, deleg, ambito):
+    """La regla de en_ambito para un ambito con algo: basta con uno de los tres."""
+    for c in ambito.get("clientes") or []:
         c = str(c)
         if q.cod_cliente and c == q.cod_cliente:
             return True
@@ -605,12 +655,12 @@ def en_ambito(fila, ambito, mapa=None):
         if aguja and (aguja in q.centro.upper() or aguja in q.cliente.upper()):
             return True
 
-    for c in ambito.get("centros", []):
+    for c in ambito.get("centros") or []:
         c = str(c)
         if (q.num_centro and c == q.num_centro) or (q.centro and c == q.centro):
             return True
 
-    return deleg in [str(d) for d in ambito.get("delegaciones", [])]
+    return deleg in [str(d) for d in ambito.get("delegaciones") or []]
 
 
 # ----------------------------------------------------------------------
@@ -1408,7 +1458,7 @@ def dias_actividad(hoy, desde=None):
 
 
 def _sin_ambito(acu):
-    return not any(acu.ambito.get(k) for k in ("clientes", "centros", "delegaciones"))
+    return not tiene_ambito(acu.ambito)
 
 
 def escribe_utilizo(acumuladores, operativos, actividad, hoy):
@@ -1933,7 +1983,8 @@ def lambda_handler(event, context):
         # consola que no se calculan porque no dicen de que cliente son.
         "consola": {"leidos": len(de_la_consola), "error": fallo_consola,
                     "sin_ambito": sin_ambito,
-                    # Los paneles por delegaciones de los usuarios (docs/65).
+                    # Los paneles por delegaciones de los usuarios (docs/65), y
+                    # por clientes y centros recortados (docs/74).
                     "por_usuario": [p["id"] for p in de_usuarios],
                     "error_usuarios": fallo_usuarios},
         "ficheros": escritos,

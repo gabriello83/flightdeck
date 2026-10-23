@@ -377,6 +377,54 @@ comprueba("y el perfil del personal sin ambito sigue sin panel propio: lee el de
 CONSOLA["fichas"].pop()
 CONSOLA["usuarios"] = [("ana@x.com", {})]
 
+print("\nClientes y centros por usuario (docs/74): un recorte, que es un Y")
+comprueba("la carpeta, fijada: la misma cuenta que comun.cabina_de (infra/api)",
+          L.cabina_de("ope-sur", ["SEVILLA"], {"clientes": ["CONSUM"], "centros": ["2002"]}),
+          "ope-sur~4c90a660cf4a")
+comprueba("sin recorte, la de las delegaciones de siempre",
+          L.cabina_de("ope-sur", ["SEVILLA", "CADIZ"], {}), "ope-sur~43165e23b879")
+_calc = [{"id": "cli-x", "nombre": "X", "tipo": "cliente", "ambito": {"clientes": ["AIRBUS"], "centros": []}}]
+_pu = L.paneles_por_usuario(_calc, _cons + [{"id": "ope-todo", "tipo": "operaciones", "ambito": {}},
+                                            {"id": "cli-nada", "tipo": "cliente", "ambito": {}}], [
+    {"perfil_id": "ope-sur", "delegaciones": ["SEVILLA"], "clientes": ["CONSUM"], "centros": ["2002"]},
+    {"perfil_id": "ope-todo", "clientes": ["CONSUM"]},
+    {"perfil_id": "cli-x", "delegaciones": ["SEVILLA"], "centros": ["500088"]},
+    {"perfil_id": "cli-nada", "centros": ["500088"]}])
+_pu = {p["id"]: p for p in _pu}
+comprueba("uno por usuario con recorte; un cliente que no se calcula, ninguno",
+          sorted(_pu), sorted(["ope-sur~4c90a660cf4a", L.cabina_de("ope-todo", [], {"clientes": ["CONSUM"]}),
+                               L.cabina_de("cli-x", [], {"centros": ["500088"]})]))
+_a = _pu["ope-sur~4c90a660cf4a"]["ambito"]
+comprueba("sus delegaciones Y sus clientes o centros",
+          [L.en_ambito(f, _a) for f in ({"delegacion": "SEVILLA", "centro": "CONSUM ALCALA", "cliente": "CONSUM"},
+                                        {"delegacion": "SEVILLA", "centro": "OTRO", "num_centro": "2002"},
+                                        {"delegacion": "SEVILLA", "centro": "OTRO", "cliente": "OTRO"},
+                                        {"delegacion": "MADRID", "centro": "CONSUM X", "cliente": "CONSUM"})],
+          [True, True, False, False])
+_a = _pu[L.cabina_de("ope-todo", [], {"clientes": ["CONSUM"]})]["ambito"]
+comprueba("del personal sin ambito: todo el parque, recortado a sus clientes",
+          [L.en_ambito({"delegacion": d, "centro": "C", "cliente": c}, _a)
+           for d, c in (("MADRID", "CONSUM"), ("SEVILLA", "CONSUM"), ("MADRID", "OTRO"))], [True, True, False])
+comprueba("y eso es ambito: no es el interno", L.tiene_ambito(_a), True)
+_a = _pu[L.cabina_de("cli-x", [], {"centros": ["500088"]})]["ambito"]
+comprueba("a un cliente, sin delegaciones y solo sus centros que esten en su perfil",
+          (_a["delegaciones"], [L.en_ambito({"centro": n, "num_centro": k, "cliente": "SERUNION, SA"}, _a)
+                                for n, k in (("AIRBUS GETAFE", "500088"), ("AIRBUS TOLOSA", "500089"),
+                                             ("OTRO", "500088"))]),
+          ([], [True, False, False]))
+CONSOLA["fichas"].append(("ope-sur", {"nombre": "Sur", "tipo": "operaciones", "ambito": {}}))
+CONSOLA["usuarios"] = [("olga@x.com", {"perfil_id": "ope-sur", "clientes": ["CONSUM"]})]
+res = L.lambda_handler({}, None)
+_cid = L.cabina_de("ope-sur", [], {"clientes": ["CONSUM"]})
+_rp = {p["id"]: p for p in res["perfiles"]}
+comprueba("la Lambda escribe su panel, con los centros de ese cliente y ninguno mas",
+          ([k for k in res["consola"]["por_usuario"]], [c["num"] for c in _rp[_cid]["coge_centros"]]),
+          ([_cid], ["2002"]))
+CONSOLA["fichas"].pop()
+CONSOLA["usuarios"] = [("ana@x.com", {})]
+comprueba("los almacenes no son de un cliente: con recorte no salen aunque tenga delegaciones",
+          "sin_dato" in L.OP.almacenes({}, [], {"delegaciones": ["SEVILLA"], "acota": {"clientes": ["CONSUM"]}}), True)
+
 print("\nSi la Lambda no puede leer la consola, sigue con el fichero")
 CONSOLA["fichas"] = None
 res = L.lambda_handler({}, None)
