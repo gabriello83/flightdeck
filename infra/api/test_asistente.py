@@ -282,6 +282,20 @@ comprueba("una posicion de la lista", L.consulta({"seccion": "rutas", "camino": 
 comprueba("un camino que no existe lo dice, con lo que hay",
           L.consulta({"seccion": "rutas", "camino": ["nada"]}, "t", cache)["hay"], ["centros", "otra"])
 
+print("\nSerie y tarifas sin parametros dicen como pedir el detalle")
+cache = {L.URL_API + "/api/tarifas": (200, {"total": {"pct": 61.6}, "delegaciones": []}),
+         L.URL_API + "/api/tarifas?centro=290010": (200, {"num_centro": "290010", "filas": []}),
+         L.URL_API + "/api/serie": (200, {"meses": ["2026-10"]})}
+comprueba("tarifas sin centro: el indice y la pista",
+          "centro" in L.consulta({"seccion": "tarifas"}, "t", cache).get("_parametros", ""), True)
+comprueba("con centro, sin pista",
+          "_parametros" in L.consulta({"seccion": "tarifas", "parametros": {"centro": "290010"}}, "t", cache), False)
+fallo = L.consulta({"seccion": "serie", "camino": ["filas"]}, "t", cache)
+comprueba("serie: si busca filas sin mes, el error dice que pida el mes",
+          ("hay" in fallo, "mes" in fallo.get("parametros", "")), (True, True))
+comprueba("rutas, que no admite parametros, no lleva pista",
+          "_parametros" in L.consulta({"seccion": "rutas"}, "t", {L.URL_API + "/api/rutas": (200, {"a": 1})}), False)
+
 # ----------------------------------------------------------------------
 print("\nPor pasos: cada peticion, una vuelta; el navegador sigue con el id")
 L.SEGUNDOS_VUELTA = -1

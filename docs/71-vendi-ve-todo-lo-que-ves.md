@@ -90,3 +90,15 @@ sugerencias de esa sección; si no, no pinta nada. `pagina` le dice al modelo po
 empezar a mirar, pero puede consultar cualquier otra que vea el usuario. Una página nueva lleva
 Vendi con esa misma línea. El panel y el informe general lo siguen montando ellos, con su botón
 «Preguntar». La consola y los avisos, que son de configuración, y el cuadro del cliente no lo llevan.
+
+## Serie y tarifas: el detalle va con parámetros
+
+23-oct: Gabriele preguntó por el precio del agua en Málaga y por la venta de Font Vella en el
+Hospital Clínico (290010), y Vendi contestó que no podía. Los registros muestran por qué: consultó
+`serie` y `tarifas` sin `parametros`, que solo dan el índice, y dio vueltas buscando dentro hasta
+quedarse sin ellas. El detalle estaba, pero detrás de `{"mes": …}`, `{"centros": …}` o
+`{"centro": …}`.
+
+Ahora, cuando una sección que admite parámetros se consulta sin ellos, la respuesta lleva
+`_parametros` con cómo pedir el detalle, y el error de un `camino` que no existe también lo dice.
+El recetario lo explica con los tres casos.
