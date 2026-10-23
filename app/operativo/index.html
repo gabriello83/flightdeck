@@ -17,12 +17,12 @@
   --s1:#2a78d6;
   --sombra:0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
   --rango:rgba(42,120,214,.15);
-  /* El semaforo. El amarillo lleva texto oscuro: con blanco no se lee. */
-  --verde:#15803d; --amarillo:#f2b705; --rojo:#c62828;
-  /* Los cuadrados sin semaforo, cada uno de su color. Ninguno es verde, ni
-     ambar ni rojo, para que no se confundan con un estado. */
-  --c-almacenes:#6d4fc2; --c-furgonetas:#1f6f8b; --c-pdvs:#2a62c9;
-  --c-ventas:#a63d84; --c-reposiciones:#4a5568; --c-devoluciones:#7a4e1d; --c-revision:#3d5a80; --c-utilizo:#5b4b8a; --c-preferidos:#334155;
+  /* El semaforo de David (22-oct-2026): bien es gris, regular amarillo y mal
+     rojo, para que lo que falla salte a la vista. El amarillo lleva texto
+     oscuro: con blanco no se lee. */
+  --verde:#5f5e5a; --amarillo:#f2b705; --rojo:#c62828;
+  /* Los cuadrados sin semaforo, en gris; Ventas, en su morado. */
+  --gris:#5f5e5a; --c-ventas:#a63d84;
 }
 @media (prefers-color-scheme: dark){
   :root:where(:not([data-theme="light"])){
@@ -30,9 +30,8 @@
     --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
     --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
     --s1:#3987e5; --sombra:none; --rango:rgba(57,135,229,.28);
-    --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
-    --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
-    --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d; --c-revision:#3a557a; --c-utilizo:#55477f; --c-preferidos:#334155;
+    --verde:#4f4f4c; --amarillo:#e3ac06; --rojo:#c0392b;
+    --gris:#4f4f4c; --c-ventas:#8b4a7a;
   }
 }
 :root[data-theme="dark"]{
@@ -40,9 +39,8 @@
   --fondo:#121211; --tarjeta:#1a1a19; --borde:#30302d; --borde-fuerte:#45453f;
   --tinta:#ffffff; --tinta-2:#c3c2b7; --tinta-3:#9a9890;
   --s1:#3987e5; --sombra:none; --rango:rgba(57,135,229,.28);
-  --verde:#17803f; --amarillo:#e3ac06; --rojo:#c0392b;
-  --c-almacenes:#6a4fbf; --c-furgonetas:#1d6a84; --c-pdvs:#2a5fbf;
-  --c-ventas:#9c3a7c; --c-reposiciones:#4b5563; --c-devoluciones:#7a4e1d; --c-revision:#3a557a; --c-utilizo:#55477f; --c-preferidos:#334155;
+  --verde:#4f4f4c; --amarillo:#e3ac06; --rojo:#c0392b;
+  --gris:#4f4f4c; --c-ventas:#8b4a7a;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -92,6 +90,9 @@ a.cuadro:focus-visible{outline:3px solid var(--s1);outline-offset:3px}
   margin-top:auto;font-variant-numeric:tabular-nums;overflow-wrap:anywhere
 }
 .cuadro .sub{font-size:13.5px;line-height:1.4;margin-top:6px;opacity:.95;overflow-wrap:anywhere}
+/* Las dos cifras de Ventas que pidio David: precio medio y venta por maquina. */
+.cuadro .extra{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;font-size:13.5px;line-height:1.3}
+.cuadro .extra b{font-size:17px;font-variant-numeric:tabular-nums;display:block}
 .cuadro .pie{font-size:12px;margin-top:12px;opacity:.85;display:flex;justify-content:space-between;gap:8px}
 .cuadro .estado{
   position:absolute;top:14px;right:14px;font-size:11.5px;font-weight:650;
@@ -99,7 +100,7 @@ a.cuadro:focus-visible{outline:3px solid var(--s1);outline-offset:3px}
 }
 .cuadro.amarillo{--tinta-c:#1d1a10}
 .cuadro.amarillo .estado{background:rgba(0,0,0,.12)}
-.cuadro .et svg{width:15px;height:15px;vertical-align:-2px;margin-right:5px;fill:#f5b800;stroke:#e3a008;stroke-width:1.7}
+a.btn svg{width:14px;height:14px;vertical-align:-2px;margin-right:5px;fill:#f5b800;stroke:#e3a008;stroke-width:1.7}
 .cuadro.sin{
   --tinta-c:var(--tinta);background:var(--tarjeta);border:1px dashed var(--borde-fuerte);box-shadow:none
 }
@@ -148,6 +149,8 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
   .cuadro{aspect-ratio:auto;min-height:168px;padding:13px 13px}
   .cuadro .vl{font-size:28px}
   .cuadro .sub{font-size:12.5px}
+  .cuadro .extra{font-size:12px}
+  .cuadro .extra b{font-size:15px}
   .cuadro .estado{position:static;align-self:flex-start;margin-top:6px}
   .cuadro .pie{justify-content:flex-end}
   .cuadro .pie .foto{display:none}
@@ -160,6 +163,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
      la pagina para tapar el «Cargando…» desde el primer instante. -->
 <script src="/comun/bienvenida.js"></script>
 <script src="/comun/asistente.js"></script>
+<script src="/comun/filtros.js"></script>
 <div class="env">
   <header class="top">
     <div class="marca">
@@ -168,6 +172,7 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
     </div>
     <div class="acciones">
       <a class="btn" href="/panel/" id="bPanel">Panel completo</a>
+      <a class="btn" href="/preferidos/" id="bPreferidos" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.83 5.74 6.33.92-4.58 4.46 1.08 6.3L12 17.25l-5.66 2.97 1.08-6.3L2.84 9.46l6.33-.92z"/></svg>Preferidos</a>
       <button class="btn" id="bPreguntar" type="button" hidden>Preguntar</button>
       <button class="btn" id="bTema" type="button">Modo oscuro</button>
       <button class="btn" id="bSalir" type="button">Salir</button>
@@ -186,8 +191,10 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
       </button>
       <div class="cal" id="cal" role="dialog" aria-label="Elegir día" hidden></div>
     </div>
-    <label id="lArea" hidden>Área <select id="area"></select></label>
-    <label id="lDeleg" hidden>Delegación <select id="deleg"></select></label>
+    <div id="fArea" hidden></div>
+    <div id="fDeleg" hidden></div>
+    <div id="fCliente" hidden></div>
+    <div id="fCentro" hidden></div>
     <div class="leyenda" aria-label="Colores">
       <span><i style="background:var(--verde)"></i><span id="lVerde"></span></span>
       <span><i style="background:var(--amarillo)"></i><span id="lAmarillo"></span></span>
@@ -211,14 +218,16 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
    fichero es el del perfil de la sesion, con los cuadrados que sus sesiones
    permiten. Esta pagina no decide quien ve que: solo dibuja.
 
-   Los colores de rutas, averias y telemetria son el semaforo; los demas
-   cuadrados llevan cada uno su color, que no es un estado. Un cuadrado sin
-   dato no sale en gris con un cero: sale con el motivo.
+   Los colores (David, 22-oct-2026, docs/72): el cuadrado con porcentaje va en
+   gris si esta bien, en amarillo si esta regular y en rojo si esta mal; los
+   demas, en gris, y Ventas en su morado. Un cuadrado sin dato no sale con un
+   cero: sale con el motivo, en blanco y con borde de rayas.
    =================================================================== */
 const CLAVE_TEMA = "digivend.tema";
 const eur  = n => new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n||0);
 const num  = n => new Intl.NumberFormat("es-ES").format(Math.round(n||0));
 const pct  = n => new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(n||0) + " %";
+const eur2 = n => new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);
 const esc  = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const $ = s => document.querySelector(s);
 
@@ -275,6 +284,12 @@ const TITULO = {
   pdvs:"Puntos de venta activos", ventas:"Ventas", reposiciones:"Reposiciones", telemetria:"Telemetría",
   tarifas:"Tarifas", revision:"Revisión clientes", utilizo:"Utilizo",
 };
+
+/* El orden de la portada, el de la captura de David: lo que tiene semaforo,
+   arriba; lo que es foto de la noche, debajo. */
+const ORDEN = ["ventas", "rutas", "averias", "telemetria", "tarifas", "devoluciones", "revision", "pdvs",
+               "reposiciones", "furgonetas", "almacenes", "utilizo"];
+const enOrden = lista => [...lista].sort((a, b) => (ORDEN.indexOf(a) + 1 || 99) - (ORDEN.indexOf(b) + 1 || 99));
 
 // Los cuadrados que no son de un dia sino la foto de la noche.
 const FOTO = new Set(["pdvs", "almacenes", "tarifas", "devoluciones", "revision", "utilizo"]);
@@ -359,10 +374,19 @@ function contenidoDe(id, x){
       const dia = new Date(String(x.dia)+"T00:00:00").toLocaleDateString("es-ES",{weekday:"long", day:"numeric", month:"long"});
       return {vl:num(x.usuarios), sub:`usuarios en VenCloud el ${dia} · ${num(x.acciones)} acciones`};
     }
-    case "ventas": return {vl:eur(x.importe),
-      sub:`${num(x.unidades)} unidades`
-        + (x.maquinas!=null ? ` · ${num(x.maquinas)} máquinas` : varios ? ` en ${num(x.dias)} días` : "")
-        + (x.fuente==="telemetria" ? " · por telemetría" : x.fuente==="visita_ventas" ? " · del parte, parcial" : "")};
+    case "ventas": {
+      /* David: el precio medio de la unidad vendida y la venta media de una
+         maquina. En varios dias, por maquina y dia: las maquinas de cada dia
+         no se suman entre si, pero si las maquinas-dia. */
+      const extra = [];
+      if(x.unidades) extra.push([eur2(x.importe/x.unidades), "por unidad vendida"]);
+      const mq = varios ? x.maquinas_dia : x.maquinas;
+      if(mq) extra.push([eur2(x.importe/mq), varios ? "por máquina y día" : "por máquina"]);
+      return {vl:eur(x.importe), extra,
+        sub:`${num(x.unidades)} unidades`
+          + (x.maquinas!=null ? ` · ${num(x.maquinas)} máquinas` : varios ? ` en ${num(x.dias)} días` : "")
+          + (x.fuente==="telemetria" ? " · por telemetría" : x.fuente==="visita_ventas" ? " · del parte, parcial" : "")};
+    }
     case "reposiciones": {
       const partes = (x.por_clase||[]).slice(0,3).map(c=>`${c.clase} ${num(c.unidades)}`).join(" · ");
       return {vl:num(x.unidades)+" ud",
@@ -388,22 +412,7 @@ function pinta(){
   const ses = new Set(YO.sesiones||[]);
   const cont = $("#cuadros");
   cont.innerHTML = "";
-  /* El cuadrado de Preferidos (docs/62): las tablas y gráficos que el usuario
-     marcó con la estrella, en su propia página. Va el primero. */
-  if(PREFERIDOS){
-    const n = PREFERIDOS.length;
-    const el = document.createElement("a");
-    el.className = "cuadro"; el.dataset.id = "preferidos"; el.href = "/preferidos/";
-    el.style.setProperty("--fondo-c", "var(--c-preferidos)");
-    el.innerHTML = `<div class="et"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.83 5.74 6.33.92-4.58 4.46 1.08 6.3L12 17.25l-5.66 2.97 1.08-6.3L2.84 9.46l6.33-.92z"/></svg>Preferidos</div>`
-      + `<div class="vl">${num(n)}</div>`
-      + `<div class="sub">${n ? (n===1 ? "tabla o gráfico con estrella" : "tablas y gráficos con estrella")
-          : "Pulsa la estrella junto al título de cualquier tabla y saldrá aquí"}</div>`
-      + `<div class="pie"><span class="foto">en el orden y tamaño que elijas</span><span>Ver preferidos →</span></div>`;
-    el.setAttribute("aria-label", `Preferidos: ${num(n)}. Abrir la página.`);
-    cont.appendChild(el);
-  }
-  (DATOS.cuadrados||[]).forEach(id=>{
+  enOrden(DATOS.cuadrados||[]).forEach(id=>{
     const c = contenido(id, d, f);
     if(!c) return;
     const dest = DESTINO[id];
@@ -420,10 +429,12 @@ function pinta(){
     const color = c.sin ? null : semaforo(c.pct);
     if(c.sin) el.classList.add("sin");
     else if(color){ el.classList.add(color); el.style.setProperty("--fondo-c", `var(--${color})`); }
-    else el.style.setProperty("--fondo-c", `var(--c-${id})`);
+    else el.style.setProperty("--fondo-c", id==="ventas" ? "var(--c-ventas)" : "var(--gris)");
     el.innerHTML = `<div class="et">${esc(TITULO[id])}</div>`
       + (color ? `<span class="estado">${ESTADO[color]}</span>` : "")
       + `<div class="vl">${c.sin ? "Sin dato" : c.vl}</div>`
+      + (!c.sin && c.extra && c.extra.length
+          ? `<div class="extra">${c.extra.map(([v, t])=>`<span><b>${esc(v)}</b>${esc(t)}</span>`).join("")}</div>` : "")
       + `<div class="sub">${esc(c.sin || c.sub)}</div>`
       + `<div class="pie"><span class="foto">${FOTO.has(id) ? "foto de la última carga" : ""}</span>`
       + `<span>${va ? (propia || dest.url ? "Ver detalle →" : "Ver sección →") : dest ? "" : "Sin sección todavía"}</span></div>`;
@@ -435,17 +446,33 @@ function pinta(){
 }
 
 /* ===================================================================
-   Lo elegido: un dia o varios, y area y delegacion (Gabriele, 19-oct).
+   Lo elegido: un dia o varios (Gabriele, 19-oct), y area, delegacion,
+   cliente y centro, con seleccion multiple y buscador (David, 22-oct, docs/72).
 
    La noche deja cada dia con su cifra y su reparto por delegacion, ya con el
-   ambito del usuario aplicado (docs/66). Aqui solo se elige y se suma: lo que
-   se suma se suma, los porcentajes salen del total y las furgonetas son las
-   distintas. Lo que un dia no tiene, se dice; no se rellena con los demas.
+   ambito del usuario aplicado (docs/66), y al lado un fichero por mes con el
+   reparto por centro, que solo se pide cuando se filtra por cliente o centro.
+   Aqui solo se elige y se suma: lo que se suma se suma, los porcentajes salen
+   del total y las furgonetas son las distintas. Lo que un dia no tiene, se
+   dice; no se rellena con los demas.
    =================================================================== */
-const SEL = {modo:"uno", desde:null, hasta:null, area:"", deleg:""};
+const SEL = {modo:"uno", desde:null, hasta:null, areas:[], delegs:[], clientes:[], centros:[]};
 let DIAS = [], HAY = new Set();
 const NO_SE_REPARTE = "Este cuadrado no se reparte por delegación: quita el filtro para verlo.";
+const NO_SE_REPARTE_C = "Este cuadrado no se reparte por cliente ni por centro: quita ese filtro para verlo.";
 const SIN_REPARTO = "Estos días son de antes de que el informe se repartiera por delegación.";
+const SIN_REPARTO_C = "Estos días no tienen el reparto por cliente y centro: empezó a calcularse la noche del 22 de octubre de 2026.";
+// El reparto por centro de cada mes, segun llega: mes -> {dias} o null si no hay.
+const MESES = {};
+/* Del reparto por centro, en listas, a la forma del de delegacion. */
+const DE_LISTA = {
+  rutas:        a => ({previstas:a[0], hechas:a[1], fuera:a[2], visitas:a[3]}),
+  averias:      a => ({cerradas:a[0], a_tiempo:a[1]}),
+  furgonetas:   a => ({visitas:a[0], visitas_sin_vehiculo:a[1], vehiculos:a[2]}),
+  ventas:       a => ({importe:a[0], unidades:a[1], maquinas:a[2]}),
+  reposiciones: a => ({unidades:a[0], consumibles:a[1], por_clase:a[2]}),
+  telemetria:   a => ({auditables:a[0], con_dex:a[1]}),
+};
 
 function masDias(iso, n){
   const d = new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); return isoLocal(d);
@@ -459,15 +486,42 @@ function fechasElegidas(){
   return SEL.modo==="uno" ? [SEL.hasta] : diasEntre(SEL.desde, SEL.hasta);
 }
 function delegsElegidas(){
-  if(SEL.deleg) return [SEL.deleg];
-  if(SEL.area) return Object.keys(DATOS.zonas||{}).filter(k=>DATOS.zonas[k]===SEL.area);
+  if(SEL.delegs.length) return SEL.delegs;
+  if(SEL.areas.length) return Object.keys(DATOS.zonas||{}).filter(k=>SEL.areas.includes(DATOS.zonas[k]));
   return null;
 }
+const porCentro = () => SEL.clientes.length > 0 || SEL.centros.length > 0;
+/* Los centros que caen en lo elegido: los marcados (o todos), de los clientes
+   marcados y de las delegaciones o areas marcadas. */
+function centrosElegidos(){
+  const fichas = DATOS.centros || {}, dl = delegsElegidas();
+  return Object.keys(fichas).filter(c => (!SEL.centros.length || SEL.centros.includes(c))
+    && (!SEL.clientes.length || SEL.clientes.includes(fichas[c].c))
+    && (!dl || dl.includes(fichas[c].d)));
+}
+/* La seleccion con que se suma: nada, unas delegaciones o unos centros. */
+function seleccion(){
+  if(porCentro()) return {centros: centrosElegidos()};
+  const dl = delegsElegidas();
+  return dl ? {delegs: dl} : null;
+}
+/* Las partes de un dia de lo elegido, o undefined si ese dia no esta repartido. */
+function partesDel(f, id, sel){
+  if(sel.centros){
+    const m = MESES[f.slice(0,7)];
+    const dia = m && m.dias && m.dias[f];
+    if(!dia || !(id in dia)) return undefined;
+    return sel.centros.map(c=>dia[id][c]).filter(Boolean).map(DE_LISTA[id]);
+  }
+  const por = ((DATOS.dias||{})[f]||{}).por_delegacion;
+  if(!por || !(id in por)) return undefined;
+  return sel.delegs.map(dl=>por[id][dl]).filter(Boolean);
+}
 
-/* Un cuadrado de dia sumado sobre `fechas` y, si hay filtro, sobre `delegs`.
-   Devuelve la misma forma que un dia, mas `dias` (los que aportan) y `de`
-   (los del rango). */
-function sumaCuadrado(id, fechas, delegs){
+/* Un cuadrado de dia sumado sobre `fechas` y, si hay filtro, sobre lo elegido
+   (`sel`, de seleccion()). Devuelve la misma forma que un dia, mas `dias` (los
+   que aportan) y `de` (los del rango). */
+function sumaCuadrado(id, fechas, sel){
   const de = fechas.length;
   let dias = 0, motivo = null, reparto = false;
   const acc = {};
@@ -482,12 +536,11 @@ function sumaCuadrado(id, fechas, delegs){
     // Un dia sin dato: rutas sin plan, ventas sin venta, telemetria sin censo.
     // Las averias sin cierres si son un dato: cero cerradas.
     if(x.sin_dato && id!=="averias"){ motivo = x.sin_dato; continue; }
-    let partes;
-    if(delegs){
-      const por = dia.por_delegacion;
-      if(!por || !(id in por)){ reparto = true; continue; }
-      partes = delegs.map(dl=>por[id][dl]).filter(Boolean);
-    } else partes = null;
+    let partes = null;
+    if(sel){
+      partes = partesDel(f, id, sel);
+      if(!partes){ reparto = true; continue; }
+    }
     dias++;
     switch(id){
       case "rutas":
@@ -525,7 +578,7 @@ function sumaCuadrado(id, fechas, delegs){
     }
   }
   if(!dias){
-    if(reparto) return {sin_dato: SIN_REPARTO};
+    if(reparto) return {sin_dato: sel.centros ? SIN_REPARTO_C : SIN_REPARTO};
     if(motivo) return {sin_dato: de===1 ? motivo : "Ninguno de esos días tiene este dato. " + motivo};
     return {sin_dato: de===1 ? "Ese día no tiene este dato." : "Ninguno de esos días tiene este dato."};
   }
@@ -533,7 +586,7 @@ function sumaCuadrado(id, fechas, delegs){
   const pctDe = (a,b) => b ? Math.round(1000*a/b)/10 : null;
   switch(id){
     case "rutas":
-      if(!acc.previstas) return {sin_dato: delegs ? "Esa selección no tenía visitas previstas en el plan."
+      if(!acc.previstas) return {sin_dato: sel ? "Esa selección no tenía visitas previstas en el plan."
                                                   : "El plan no tenía ninguna visita prevista."};
       return Object.assign(base, {previstas:acc.previstas, hechas:acc.hechas||0,
         fuera_de_plan:acc.fuera||0, pct:pctDe(acc.hechas||0, acc.previstas)});
@@ -544,14 +597,15 @@ function sumaCuadrado(id, fechas, delegs){
         pct:pctDe(acc.a_tiempo||0, acc.cerradas)});
     case "furgonetas":
       // Distintas en varios dias solo con la lista de matriculas de cada uno.
-      if(sinLista && (de>1 || delegs)) return {sin_dato: "Las furgonetas distintas de varios días solo "
+      if(sinLista && (de>1 || sel)) return {sin_dato: "Las furgonetas distintas de varios días solo "
         + "se pueden contar en los días que guardan su lista de matrículas."};
       return Object.assign(base, {activas: sinLista ? acc.activas : vehiculos.size,
         visitas:acc.visitas||0, visitas_sin_vehiculo:acc.sin||0});
     case "ventas":
       return Object.assign(base, {importe:acc.importe||0, unidades:acc.unidades||0,
         // Las maquinas de varios dias no se suman: serian la misma muchas veces.
-        maquinas: de===1 ? acc.maquinas||0 : null, fuente: de===1 && !delegs ? acc.fuente : null});
+        maquinas: de===1 ? acc.maquinas||0 : null, maquinas_dia: acc.maquinas||0,
+        fuente: de===1 && !sel ? acc.fuente : null});
     case "reposiciones":
       return Object.assign(base, {unidades:acc.unidades||0, consumibles:acc.consumibles||0,
         por_clase:Object.entries(clases).map(([clase,unidades])=>({clase,unidades})).sort((a,b)=>b.unidades-a.unidades)});
@@ -564,10 +618,26 @@ function sumaCuadrado(id, fechas, delegs){
 
 /* La foto de la noche, con el filtro: puntos de venta y almacenes se reparten
    por delegacion; los demas no, y lo dicen. */
-function fotoFiltrada(delegs){
+function fotoFiltrada(sel){
   const f = DATOS.foto || {};
-  if(!delegs) return f;
+  if(!sel) return f;
   const out = {};
+  if(sel.centros){
+    /* Por cliente o centro solo se reparten los puntos de venta: los almacenes
+       son de una delegacion, no de un cliente. */
+    for(const [id, x] of Object.entries(f)){
+      if(!x || x.sin_dato){ out[id] = x; continue; }
+      if(id==="pdvs"){
+        const por = x.por_centro;
+        if(!por){ out[id] = {sin_dato: "La foto de puntos de venta por centro llega con la carga de la noche."}; continue; }
+        const s = {activos:0, maquinas:0};
+        sel.centros.forEach(c=>{ if(por[c]){ s.activos += por[c][0]; s.maquinas += por[c][1]; } });
+        out[id] = s;
+      } else out[id] = {sin_dato: NO_SE_REPARTE_C};
+    }
+    return out;
+  }
+  const delegs = sel.delegs;
   for(const [id, x] of Object.entries(f)){
     if(!x || x.sin_dato){ out[id] = x; continue; }
     if(id==="pdvs"){
@@ -587,14 +657,48 @@ function fotoFiltrada(delegs){
 
 const DE_UN_DIA = ["rutas","averias","furgonetas","ventas","reposiciones","telemetria"];
 function vista(){
-  const fechas = fechasElegidas(), delegs = delegsElegidas();
-  const unoSolo = fechas.length===1 && !delegs;
+  const fechas = fechasElegidas(), sel = seleccion();
+  const unoSolo = fechas.length===1 && !sel;
   const d = {};
   for(const id of DE_UN_DIA){
     if(unoSolo){ const x = ((DATOS.dias||{})[fechas[0]]||{})[id]; if(x) d[id] = x; }
-    else d[id] = sumaCuadrado(id, fechas, delegs);
+    else d[id] = sumaCuadrado(id, fechas, sel);
   }
-  return {d, f: fotoFiltrada(delegs)};
+  return {d, f: fotoFiltrada(sel)};
+}
+
+/* Con cliente o centro, antes de pintar se piden los meses que faltan. Solo
+   los que la noche dice que tiene (meses_centros); si uno no llega, sus dias
+   dicen que no tienen el reparto, y arriba se avisa. */
+let turno = 0;
+async function cargaMeses(fechas){
+  const hay = new Set(DATOS.meses_centros || []);
+  const faltan = [...new Set(fechas.map(f=>f.slice(0,7)))].filter(m=>!(m in MESES));
+  let fallo = false;
+  await Promise.all(faltan.map(async m=>{
+    if(!hay.has(m)){ MESES[m] = null; return; }
+    try{
+      const r = await fetch(`/api/operativo?centros=${encodeURIComponent(m)}`, {credentials:"same-origin"});
+      if(r.status===401){ location.href = "/"; return; }
+      MESES[m] = r.ok ? await r.json() : null;
+    }catch(e){ fallo = true; }
+  }));
+  return fallo;
+}
+async function repinta(){
+  const t = ++turno;
+  if(porCentro()){
+    const fechas = fechasElegidas();
+    if(fechas.some(f=>!(f.slice(0,7) in MESES))){
+      const c = $("#cuadros");
+      c.setAttribute("aria-busy", "true"); c.style.opacity = ".55";
+      const fallo = await cargaMeses(fechas);
+      c.removeAttribute("aria-busy"); c.style.opacity = "";
+      if(fallo) avisa("No se ha podido leer el reparto por cliente y centro: comprueba la conexión y vuelve a elegir.", true);
+      if(t!==turno) return;
+    }
+  }
+  pinta();
 }
 
 /* ------------------------------------------------------------- el calendario */
@@ -713,12 +817,12 @@ function montaCal(){
     else if(b.dataset.ir) CAL.vista = b.dataset.ir;
     else if(b.dataset.anio){ CAL.y = +b.dataset.anio; CAL.vista = "meses"; }
     else if(b.dataset.mes){ CAL.m = +b.dataset.mes; CAL.vista = "dias"; }
-    else if(b.dataset.atajo){ atajo(b.dataset.atajo); cierraCal(true); pinta(); return; }
+    else if(b.dataset.atajo){ atajo(b.dataset.atajo); cierraCal(true); repinta(); return; }
     else if(b.dataset.dia){
       const iso = b.dataset.dia;
-      if(SEL.modo==="uno"){ SEL.hasta = iso; cierraCal(true); pinta(); return; }
+      if(SEL.modo==="uno"){ SEL.hasta = iso; cierraCal(true); repinta(); return; }
       if(!CAL.pendiente){ CAL.pendiente = iso; }
-      else { eligeRango(CAL.pendiente, iso); CAL.pendiente = null; cierraCal(true); pinta(); return; }
+      else { eligeRango(CAL.pendiente, iso); CAL.pendiente = null; cierraCal(true); repinta(); return; }
     }
     pintaCal();
     const foco = $("#cal .cal-rej button.sel:not(:disabled)") || $("#cal .cal-cab .tit");
@@ -732,37 +836,58 @@ function montaCal(){
     // De un dia a varios: la semana que acaba en ese dia. De varios a uno: el ultimo.
     if(m==="varios") eligeRango(masDias(SEL.hasta,-6) < DIAS[0] ? DIAS[0] : masDias(SEL.hasta,-6), SEL.hasta);
     else if(!HAY.has(SEL.hasta)) SEL.hasta = DIAS.filter(x=>x<=SEL.hasta).pop() || DIAS[DIAS.length-1];
-    cierraCal(false); pinta();
+    cierraCal(false); repinta();
   };
   $("#mUno").addEventListener("click", ()=>modo("uno"));
   $("#mVarios").addEventListener("click", ()=>modo("varios"));
 }
 
-/* ------------------------------------------------------------- area y delegacion */
+/* ------------------------------------------------------------- area, delegacion, cliente y centro */
+/* Los cuatro filtros, encadenados: el area deja sus delegaciones; las
+   delegaciones, sus clientes; los clientes, sus centros. Cada uno con
+   seleccion multiple y buscador (comun/filtros.js). Uno sale solo si hay
+   mas de una cosa que elegir. */
 function montaFiltros(){
-  const zonas = DATOS.zonas || {};
-  const delegs = Object.keys(zonas).sort((a,b)=>a.localeCompare(b,"es"));
-  // Con una sola delegacion no hay nada que filtrar.
-  if(delegs.length < 2) return;
-  const areas = [...new Set(delegs.map(d=>zonas[d]))].sort((a,b)=>a.localeCompare(b,"es"));
-  if(SEL.area && !areas.includes(SEL.area)) SEL.area = "";
-  if(SEL.deleg && !delegs.includes(SEL.deleg)) SEL.deleg = "";
-  const llenaDelegs = () => {
-    const lista = delegs.filter(d=>!SEL.area || zonas[d]===SEL.area);
-    if(SEL.deleg && !lista.includes(SEL.deleg)) SEL.deleg = "";
-    $("#deleg").innerHTML = `<option value="">${SEL.area ? "Todas las de " + esc(SEL.area) : "Todas"}</option>`
-      + lista.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join("");
-    $("#deleg").value = SEL.deleg;
+  const zonas = DATOS.zonas || {}, fichas = DATOS.centros || {};
+  const es = (a, b) => a.localeCompare(b, "es");
+  const unicos = l => [...new Set(l)];
+  const delegs = Object.keys(zonas).sort(es);
+  const areas = unicos(delegs.map(d=>zonas[d])).sort(es);
+  const centros = Object.keys(fichas);
+  const clientes = unicos(centros.map(c=>fichas[c].c).filter(Boolean)).sort(es);
+  const dlSet = () => { const dl = delegsElegidas(); return dl && new Set(dl); };
+  const opc = [
+    () => areas,
+    () => delegs.filter(d=>!SEL.areas.length || SEL.areas.includes(zonas[d])),
+    () => { const dl = dlSet(); return unicos(centros.filter(c=>!dl || dl.has(fichas[c].d)).map(c=>fichas[c].c).filter(Boolean)).sort(es); },
+    () => { const dl = dlSet();
+      return centros.filter(c=>(!dl || dl.has(fichas[c].d)) && (!SEL.clientes.length || SEL.clientes.includes(fichas[c].c)))
+        .map(c=>({v:c, t:fichas[c].n || c,
+          sub:[fichas[c].n && fichas[c].n!==c ? `nº ${c}` : "", fichas[c].c, fichas[c].d].filter(Boolean).join(" · ")}))
+        .sort((a, b)=>es(a.t, b.t)); },
+  ];
+  const campos = ["areas", "delegs", "clientes", "centros"];
+  const cajas = ["#fArea", "#fDeleg", "#fCliente", "#fCentro"];
+  const nombres = [["Área", "Todas"], ["Delegación", "Todas"], ["Cliente", "Todos"], ["Centro", "Todos"]];
+  const hay = [areas.length, delegs.length, clientes.length, centros.length];
+  const F = [];
+  let enCascada = 0;
+  // Lo que cambia en uno rehace las opciones de los de debajo; se pinta al final.
+  const cascada = i => {
+    enCascada++;
+    for(let j=i+1;j<F.length;j++) F[j].opciones(opc[j]());
+    enCascada--;
+    if(!enCascada) repinta();
   };
-  if(areas.length > 1){
-    $("#area").innerHTML = `<option value="">Todas</option>` + areas.map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join("");
-    $("#area").value = SEL.area;
-    $("#lArea").hidden = false;
-  }
-  llenaDelegs();
-  $("#lDeleg").hidden = false;
-  $("#area").addEventListener("change", ()=>{ SEL.area = $("#area").value; llenaDelegs(); pinta(); });
-  $("#deleg").addEventListener("change", ()=>{ SEL.deleg = $("#deleg").value; pinta(); });
+  // Lo que traiga la direccion y ya no exista se quita sin pintar todavia.
+  enCascada++;
+  campos.forEach((k, i)=>{
+    F[i] = Filtros.multi($(cajas[i]), {etiqueta:nombres[i][0], todos:nombres[i][1], opciones:opc[i](),
+      elegidos:SEL[k], alCambiar: v => { SEL[k] = v; cascada(i); }});
+    SEL[k] = F[i].valor();
+    $(cajas[i]).hidden = hay[i] < 2;
+  });
+  enCascada--;
 }
 
 /* Lo elegido va en la direccion: se puede guardar o mandar el enlace. */
@@ -771,14 +896,17 @@ function leeDeUrl(){
   const ok = s => /^\d{4}-\d{2}-\d{2}$/.test(s||"");
   if(ok(q.get("desde")) && ok(q.get("hasta"))){ SEL.modo = "varios"; eligeRango(q.get("desde"), q.get("hasta")); }
   else if(ok(q.get("dia"))) SEL.hasta = q.get("dia");
-  SEL.area = q.get("area") || ""; SEL.deleg = q.get("delegacion") || "";
+  SEL.areas = q.getAll("area"); SEL.delegs = q.getAll("delegacion");
+  SEL.clientes = q.getAll("cliente"); SEL.centros = q.getAll("centro");
 }
 function guardaEnUrl(){
   const q = new URLSearchParams();
   if(SEL.modo==="varios"){ q.set("desde", SEL.desde); q.set("hasta", SEL.hasta); }
   else q.set("dia", SEL.hasta);
-  if(SEL.area) q.set("area", SEL.area);
-  if(SEL.deleg) q.set("delegacion", SEL.deleg);
+  SEL.areas.forEach(x=>q.append("area", x));
+  SEL.delegs.forEach(x=>q.append("delegacion", x));
+  SEL.clientes.forEach(x=>q.append("cliente", x));
+  SEL.centros.forEach(x=>q.append("centro", x));
   try{ history.replaceState(null, "", "?" + q.toString()); }catch(e){}
 }
 
@@ -824,10 +952,18 @@ function avisa(texto, mal){
         ve.has("telemetria") && "¿Qué delegación tiene peor telemetría?",
       ].filter(Boolean)});
   }
+  /* Preferidos (docs/62), arriba junto a «Panel completo» (David, 22-oct). */
   try{
     const rp = await fetch("/api/preferidos", {credentials:"same-origin"});
     if(rp.ok) PREFERIDOS = (await rp.json()).preferidos || [];
   }catch(e){}
+  if(PREFERIDOS){
+    const b = $("#bPreferidos"), n = PREFERIDOS.length;
+    b.lastChild.textContent = n ? `Preferidos (${num(n)})` : "Preferidos";
+    b.title = n ? (n===1 ? "1 tabla o gráfico con estrella" : `${num(n)} tablas y gráficos con estrella`)
+      : "Pulsa la estrella junto al título de cualquier tabla y saldrá aquí";
+    b.hidden = false;
+  }
 
   const u = DATOS.umbrales || {verde:95, amarillo:75};
   const n1 = n => new Intl.NumberFormat("es-ES").format(n);
@@ -855,7 +991,7 @@ function avisa(texto, mal){
   montaFiltros();
   $("#barra").hidden = false;
   $("#cuadros").hidden = false;
-  pinta();
+  repinta();
 
   const gen = DATOS.generado ? new Date(DATOS.generado) : null;
   $("#pie").innerHTML = "Datos de VenCloud, filtrados por el ámbito de tu perfil y servidos desde este "

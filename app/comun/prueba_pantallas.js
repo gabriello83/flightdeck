@@ -190,7 +190,14 @@ const API = {
         telemetria: { auditables: 2253, con_dex: 900, pct: 39.9, color: 'rojo' }
       }
     },
-    foto: { pdvs: { activos: 3195, maquinas: 3165, por_delegacion: { 'Madrid - Leganes': { activos: 3000, maquinas: 2900 }, 'Levante - Murcia': { activos: 195, maquinas: 265 } } },
+    // El filtro de cliente y centro (docs/72): la ficha de cada centro y los
+    // meses con su reparto (OPERATIVO_CENTROS, mas abajo).
+    centros: { 100: { n: 'AIRBUS GETAFE', c: 'AIRBUS OPERATIONS SL', d: 'Madrid - Leganes' },
+               200: { n: 'HOSPITAL LA PAZ', c: 'SERMAS', d: 'Madrid - Leganes' },
+               300: { n: 'CONSUM MURCIA', c: 'CONSUM', d: 'Levante - Murcia' } },
+    meses_centros: [...new Set([mesDe(AYER), mesDe(new Date(AYER.getTime() - 86400000))])],
+    foto: { pdvs: { activos: 3195, maquinas: 3165, por_delegacion: { 'Madrid - Leganes': { activos: 3000, maquinas: 2900 }, 'Levante - Murcia': { activos: 195, maquinas: 265 } },
+                    por_centro: { 100: [1000, 900], 200: [2000, 2000], 300: [195, 265] } },
             devoluciones: { mes: iso(AYER).slice(0, 7), hasta: iso(AYER), total: 518, mes_anterior: 569, sin_cerrar: 76, especiales: 92,
                             importe: 1121.1, importe_anterior: 1179.33, sin_resolver: 87, rechazadas: 12,
                             por_canal: [['En el sitio', 244], ['Transferencia', 181]] },
@@ -536,6 +543,28 @@ const INDICE_CUADRO = {
   preventivos: { fuente: 'sat_averias' }, _preventivos: 'las tareas de SAT con operacion de preventivo'
 };
 
+// El informe general partido por centro (docs/72), como lo escribe
+// operativo.centros_por_mes: listas por cuadrado y centro, un fichero por mes.
+const OPERATIVO_CENTROS = {};
+for (const [f, dia] of Object.entries({
+  [iso(AYER)]: {
+    rutas: { 100: [200, 195, 1, 500], 200: [100, 95, 1, 300], 300: [100, 60, 10, 300] },
+    averias: { 100: [30, 25], 200: [10, 4], 300: [3, 1] },
+    furgonetas: { 100: [500, 50, ['1111AAA']], 200: [300, 50, ['2222BBB']], 300: [300, 10, ['2222BBB', '3333CCC']] },
+    ventas: { 100: [30000, 33000, 1000], 200: [10000, 11000, 500], 300: [9859.02, 10119, 393] },
+    reposiciones: { 100: [30000, 60000, { Snack: 20000, 'Bebida fría': 10000 }], 200: [10000, 20000, { Snack: 5000, 'Bebida fría': 5000 }],
+                    300: [12168, 8124, { Snack: 5340, 'Bebida fría': 4448 }] },
+    telemetria: { 100: [1500, 1495], 200: [500, 495], 300: [253, 210] }
+  },
+  [iso(new Date(AYER.getTime() - 86400000))]: {
+    rutas: { 300: [100, 50, 0, 300] }, averias: {},
+    furgonetas: { 300: [300, 0, ['3333CCC', '4444DDD']] }, ventas: { 300: [1000, 900, 100] },
+    reposiciones: { 300: [1000, 0, { Snack: 1000 }] }, telemetria: { 100: [1500, 0], 200: [500, 0], 300: [253, 53] }
+  }
+})) {
+  (OPERATIVO_CENTROS[f.slice(0, 7)] = OPERATIVO_CENTROS[f.slice(0, 7)] || { mes: f.slice(0, 7), dias: {} }).dias[f] = dia;
+}
+
 // Los preferidos del usuario de la prueba (docs/62), y los nombres que manda la API.
 let PREFS = [];
 const NOMBRES_TABLAS = {
@@ -594,6 +623,11 @@ const servidor = http.createServer((pet, res) => {
       if (!mes) return json(conVenta ? INDICE_CUADRO : { ...sinVenta(INDICE_CUADRO), meses: INDICE_CUADRO.meses.map(m => ({ mes: m.mes, visitas: m.visitas, incidencias: m.incidencias })) });
       if (!CUADRO[mes]) { res.writeHead(400); return res.end('{"error":"mes"}'); }
       return json(conVenta ? CUADRO[mes] : sinVenta(CUADRO[mes]));
+    }
+    if (u.pathname === '/api/operativo' && u.searchParams.has('centros')) {
+      const m = OPERATIVO_CENTROS[u.searchParams.get('centros')];
+      if (!m) { res.writeHead(404); return res.end('{"error":"Ese mes no tiene el reparto por centro."}'); }
+      return json(m);
     }
     if (u.pathname === '/api/almacenes/foto') {
       // Un PNG de un pixel: lo que importa es que la pagina la pide aqui.
@@ -991,9 +1025,22 @@ const servidor = http.createServer((pet, res) => {
     const { pagina, errores, fuera } = await abre('/operativo/');
     await pagina.waitForSelector('#cuadros .cuadro');
     comprueba_que('arranca en ayer', pagina.url().includes(`dia=${iso(AYER)}`), pagina.url());
-    comprueba('los cuadrados en su orden, con Preferidos el primero',
+    comprueba('los cuadrados en el orden de David (docs/72)',
       await pagina.$$eval('#cuadros .cuadro', x => x.map(c => c.dataset.id)),
-      ['preferidos', 'rutas', 'averias', 'devoluciones', 'almacenes', 'furgonetas', 'pdvs', 'ventas', 'reposiciones', 'telemetria', 'tarifas', 'revision', 'utilizo']);
+      ['ventas', 'rutas', 'averias', 'telemetria', 'tarifas', 'devoluciones', 'revision', 'pdvs', 'reposiciones', 'furgonetas', 'almacenes', 'utilizo']);
+    comprueba('Preferidos ya no es un cuadrado: es un boton arriba, con cuantos tiene',
+      [await pagina.isVisible('#bPreferidos'), await pagina.getAttribute('#bPreferidos', 'href'),
+       /^Preferidos/.test((await pagina.textContent('#bPreferidos')).trim())], [true, '/preferidos/', true]);
+    comprueba('los colores: lo que va bien en gris, Ventas en morado y los demas en gris',
+      await pagina.$$eval('#cuadros .cuadro', x => Object.fromEntries(x.filter(c => ['ventas', 'telemetria', 'pdvs'].includes(c.dataset.id))
+        .map(c => [c.dataset.id, c.style.getPropertyValue('--fondo-c')]))),
+      { ventas: 'var(--c-ventas)', telemetria: 'var(--verde)', pdvs: 'var(--gris)' });
+    comprueba('y el verde del semaforo es el gris',
+      await pagina.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--verde').trim()
+        === getComputedStyle(document.documentElement).getPropertyValue('--gris').trim()), true);
+    comprueba('Ventas: precio medio de la unidad y venta media por maquina',
+      await pagina.$$eval('.cuadro[data-id="ventas"] .extra span', x => x.map(e => e.textContent.replace(/\s/g, ' '))),
+      ['0,92 €por unidad vendida', '26,34 €por máquina']);
     comprueba('revision clientes: las maquinas sin planograma, sin semaforo, y lleva a su pagina',
       [(await pagina.textContent('.cuadro[data-id="revision"] .vl')).trim(),
        await pagina.$eval('.cuadro[data-id="revision"]', c => ['verde', 'amarillo', 'rojo'].some(k => c.classList.contains(k))),
@@ -1075,12 +1122,38 @@ const servidor = http.createServer((pet, res) => {
     comprueba('incidencias: el dia sin cierres no rebaja el porcentaje',
       (await pagina.textContent('.cuadro[data-id="averias"] .vl')).trim(), '69,8 %');
     comprueba_que('ventas sumadas', (await pagina.textContent('.cuadro[data-id="ventas"] .vl')).includes('50.859'));
+    comprueba('en varios dias, la venta por maquina es por maquina y dia: 50.859 € entre 1993 maquinas-dia',
+      await pagina.$$eval('.cuadro[data-id="ventas"] .extra span', x => x.map(e => e.textContent.replace(/\s/g, ' '))),
+      ['0,92 €por unidad vendida', '25,52 €por máquina y día']);
 
-    // Area y delegacion.
-    comprueba('las areas del usuario', await pagina.$$eval('#area option', x => x.map(o => o.value)), ['', 'Centro', 'Levante']);
-    await pagina.selectOption('#area', 'Levante');
-    comprueba('el area deja sus delegaciones', await pagina.$$eval('#deleg option', x => x.map(o => o.value)),
-      ['', 'Levante - Murcia', 'Levante - Valencia']);
+    // Area, delegacion, cliente y centro (docs/72): seleccion multiple con buscador.
+    const opciones = async caja => {
+      await pagina.click(`${caja} .fm-b`);
+      const v = await pagina.$$eval(`${caja} .fm-l input`, x => x.map(i => i.value));
+      await pagina.keyboard.press('Escape');
+      return v;
+    };
+    const marca = async (caja, texto) => {
+      await pagina.click(`${caja} .fm-b`);
+      await pagina.fill(`${caja} input[type=search]`, texto);
+      await pagina.keyboard.press('Enter');
+      await pagina.keyboard.press('Escape');
+      await pagina.waitForTimeout(150);
+    };
+    const quita = async caja => {
+      await pagina.click(`${caja} .fm-b`);
+      await pagina.click(`${caja} .fm-acc button[data-a="nada"]`);
+      await pagina.keyboard.press('Escape');
+      await pagina.waitForTimeout(150);
+    };
+    comprueba('las areas del usuario', await opciones('#fArea'), ['Centro', 'Levante']);
+    await pagina.click('#fArea .fm-b');
+    await pagina.fill('#fArea input[type=search]', 'LEV');
+    comprueba('el buscador encuentra lo que contiene lo escrito, sin mayusculas',
+      await pagina.$$eval('#fArea .fm-l input', x => x.map(i => i.value)), ['Levante']);
+    await pagina.keyboard.press('Enter');
+    await pagina.keyboard.press('Escape');
+    comprueba('el area deja sus delegaciones', await opciones('#fDeleg'), ['Levante - Murcia', 'Levante - Valencia']);
     comprueba('rutas de Levante en los dos dias: 110 de 200',
       (await pagina.textContent('.cuadro[data-id="rutas"] .vl')).trim(), '55 %');
     comprueba('furgonetas de Levante: tres distintas',
@@ -1088,11 +1161,35 @@ const servidor = http.createServer((pet, res) => {
     comprueba('puntos de venta de Levante, de la foto', (await pagina.textContent('.cuadro[data-id="pdvs"] .vl')).trim(), '195');
     comprueba_que('lo que no se reparte por delegacion lo dice',
       (await pagina.textContent('.cuadro[data-id="tarifas"]')).includes('no se reparte por delegación'));
-    await pagina.selectOption('#deleg', 'Levante - Murcia');
+    await marca('#fArea', 'centro');
+    comprueba('dos areas a la vez: Centro y Levante suman las dos',
+      [(await pagina.textContent('.cuadro[data-id="rutas"] .vl')).trim(), pagina.url().includes('area=Centro&area=Levante')], ['80 %', true]);
+    await marca('#fArea', 'centro');
+    await marca('#fDeleg', 'murcia');
     comprueba_que('y la delegacion va en la direccion', pagina.url().includes('delegacion=Levante'), pagina.url());
-    await pagina.selectOption('#area', '');
+    await quita('#fArea');
     await pagina.click('#mUno');
     comprueba_que('un dia vuelve al ultimo del rango', pagina.url().includes(`dia=${iso(AYER)}`), pagina.url());
+    await quita('#fDeleg');
+    comprueba('los clientes, de las fichas de los centros', await opciones('#fCliente'), ['AIRBUS OPERATIONS SL', 'CONSUM', 'SERMAS']);
+    await marca('#fCliente', 'airbus');
+    await pagina.waitForFunction(() => document.querySelector('.cuadro[data-id="rutas"] .vl').textContent.includes('97,5'));
+    comprueba('un cliente: sus rutas, su venta y sus puntos de venta, del reparto por centro',
+      [(await pagina.textContent('.cuadro[data-id="rutas"] .vl')).trim(),
+       (await pagina.textContent('.cuadro[data-id="ventas"] .vl')).replace(/\s/g, ' ').trim(),
+       (await pagina.textContent('.cuadro[data-id="pdvs"] .vl')).trim(),
+       (await pagina.textContent('.cuadro[data-id="furgonetas"] .vl')).trim()],
+      ['97,5 %', '30.000 €', '1000', '1']);
+    comprueba('y su venta por maquina', await pagina.$$eval('.cuadro[data-id="ventas"] .extra span', x => x.map(e => e.textContent.replace(/\s/g, ' '))),
+      ['0,91 €por unidad vendida', '30,00 €por máquina']);
+    comprueba_que('lo que no se reparte por cliente lo dice',
+      (await pagina.textContent('.cuadro[data-id="tarifas"]')).includes('no se reparte por cliente ni por centro'));
+    comprueba_que('el cliente va en la direccion', pagina.url().includes('cliente=AIRBUS'), pagina.url());
+    comprueba('el cliente deja sus centros', await opciones('#fCentro'), ['100']);
+    await quita('#fCliente');
+    await marca('#fCentro', 'consum');
+    comprueba('un centro por el buscador: Consum Murcia', (await pagina.textContent('.cuadro[data-id="rutas"] .vl')).trim(), '60 %');
+    await quita('#fCentro');
     comprueba('el cuadrado de averias se llama Incidencias',
       await pagina.textContent('.cuadro[data-id="averias"] .et'), 'Incidencias');
     await Promise.all([pagina.waitForURL('**/incidencias/**'), pagina.click('.cuadro[data-id="averias"]')]);

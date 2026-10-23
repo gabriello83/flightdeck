@@ -190,6 +190,9 @@ def encamina(evento, metodo, ruta):
     if ruta == "/api/operativo" and metodo == "GET":
         if A.nivel_de(perfil.get("tipo", "cliente")) < A.NIVEL["operaciones"]:
             raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
+        q = evento.get("queryStringParameters") or {}
+        if "centros" in q:
+            return operativo_centros(perfil, q["centros"])
         # Con toda la historia va comprimido (docs/66); el de antes, sin
         # comprimir, vale mientras la noche no haya escrito el nuevo.
         datos = None
@@ -657,6 +660,20 @@ def serie_centros(perfil, mes):
                 centros[clave] = x
         filas.append({"f": f.get("f"), "centros": centros})
     return _json_grande({"mes": mes, "filas": filas})
+
+
+def operativo_centros(perfil, mes):
+    """Un mes del informe general partido por centro, para el filtro de cliente
+    y centro (docs/72). Dentro de la carpeta de la sesion, como todo: no hay
+    con que pedir el de otro perfil. El mes es AAAA-MM y nada mas."""
+    mes = str(mes or "")
+    if not re.fullmatch(r"\d{4}-\d{2}", mes):
+        raise ValueError("El mes va como AAAA-MM.")
+    try:
+        datos = json.loads(_crudo(f"cabina/{_cabina(perfil)}/operativo/centros-{mes}.json.gz"))
+    except Exception:
+        return r(404, {"error": "Ese mes no tiene el reparto por centro."})
+    return _json_grande(A.recorta_operativo_centros(datos, perfil))
 
 
 def _json_grande(datos):

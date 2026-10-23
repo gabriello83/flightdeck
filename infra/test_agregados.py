@@ -330,6 +330,25 @@ comprueba("las furgonetas del dia llevan su lista, para contar distintas en vari
           len(op_int["dias"][_ayer]["furgonetas"]["vehiculos"]),
           op_int["dias"][_ayer]["furgonetas"]["activas"])
 
+print("\nEl informe general por centro (docs/72): el filtro de cliente y centro")
+_mes = _ayer[:7]
+_pc = json.loads(gzip.decompress(ALMACEN[f"cabina/interno/operativo/centros-{_mes}.json.gz"]))["dias"][_ayer]
+_pca = json.loads(gzip.decompress(ALMACEN[f"cabina/cli-airbus/operativo/centros-{_mes}.json.gz"]))["dias"][_ayer]
+comprueba("el informe dice que ese mes tiene reparto por centro", _mes in op_int["meses_centros"], True)
+comprueba("las previstas de cada centro suman las del dia",
+          sum(x[0] for x in _pc.get("rutas", {}).values()), op_int["dias"][_ayer]["rutas"]["previstas"])
+comprueba("la reposicion por centro suma la del dia",
+          round(sum(x[0] for x in _pc.get("reposiciones", {}).values()), 2),
+          op_int["dias"][_ayer]["reposiciones"]["unidades"])
+comprueba("la venta por centro suma la del dia",
+          round(sum(x[0] for x in _pc.get("ventas", {}).values()), 2),
+          op_int["dias"][_ayer]["ventas"].get("importe", 0))
+comprueba("cada centro del reparto tiene su ficha, con su cliente",
+          all(c in op_int["centros"] and op_int["centros"][c]["c"]
+              for k in ("rutas", "ventas") for c in _pc.get(k, {}) if c), True)
+comprueba("AIRBUS solo tiene centros de AIRBUS",
+          {op_air["centros"][c]["c"] for k in _pca for c in _pca[k] if c}, {"AIRBUS OPERATIONS SL"})
+
 print("\nLa pagina de rutas (docs/55): un fichero por perfil, con su ambito")
 _ri = json.loads(gzip.decompress(ALMACEN["cabina/interno/rutas.json.gz"]))
 _ra = json.loads(gzip.decompress(ALMACEN["cabina/cli-airbus/rutas.json.gz"]))
