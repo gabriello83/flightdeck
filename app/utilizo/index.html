@@ -140,6 +140,15 @@ footer{margin-top:26px;color:var(--tinta-3);font-size:12px;border-top:1px solid 
 a.dia,a.mes{color:var(--s1)}
 .barrita{display:inline-block;height:8px;border-radius:4px;background:var(--s1);vertical-align:middle;margin-right:6px}
 @media (max-width:760px){ .dos{grid-template-columns:1fr} }
+/* VenCloud, la dashboard o Vendi (docs/77) */
+.pestanas{display:flex;gap:4px;margin:16px 0 0;border-bottom:1px solid var(--borde);overflow-x:auto}
+.pestanas button{
+  font:inherit;font-size:14px;color:var(--tinta-2);background:none;border:0;border-bottom:2px solid transparent;
+  padding:7px 12px;cursor:pointer;white-space:nowrap;margin-bottom:-1px
+}
+.pestanas button:hover{color:var(--tinta)}
+.pestanas button[aria-selected="true"]{color:var(--tinta);border-bottom-color:var(--s1);font-weight:650}
+.pestanas button:focus-visible{outline:3px solid var(--s1);outline-offset:-3px}
 @media (max-width:560px){
   .barra input{width:100%}
   .horas-et span:nth-child(odd){visibility:hidden}
@@ -161,11 +170,16 @@ a.dia,a.mes{color:var(--s1)}
     </div>
   </header>
 
+  <div class="pestanas" id="pestanas" role="tablist" aria-label="Qué uso" hidden>
+    <button type="button" role="tab" data-que="vencloud">VenCloud</button>
+    <button type="button" role="tab" data-que="web">Dashboard</button>
+    <button type="button" role="tab" data-que="ia">Vendi (IA)</button>
+  </div>
   <div class="barra" id="barra" hidden>
     <label>Ver <select id="fPer"><option value="dia">Un día</option><option value="mes">Un mes</option></select></label>
     <label id="lDia">Día <select id="fDia"></select></label>
     <label id="lMes" hidden>Mes <select id="fMes"></select></label>
-    <label>Buscar <input id="fBusca" type="search" placeholder="Usuario" autocomplete="off"></label>
+    <label id="lBusca">Buscar <input id="fBusca" type="search" placeholder="Usuario" autocomplete="off"></label>
   </div>
   <nav class="miga" id="miga" aria-label="Dónde estás" hidden></nav>
   <div id="cargando">Cargando…</div>
@@ -186,6 +200,11 @@ a.dia,a.mes{color:var(--s1)}
    entero, y de cada usuario su historia mes a mes. El detalle (por hora y que
    toco) solo llega de los dos ultimos meses. Esta pagina solo suma los dias
    del mes; el resto lo escribio la noche (infra/utilizo.py).
+
+   Y en sus otras dos pestañas (docs/77), quien usa esta dashboard y cuanto
+   (entradas con clave y paginas abiertas) y quien pregunta a Vendi y cuanto
+   gasta. Eso no es de la noche: lo apunta la API al momento, y lo sirve
+   /api/utilizo/plataforma por persona y dia.
    =================================================================== */
 const CLAVE_TEMA = "digivend.tema";
 const num  = n => new Intl.NumberFormat("es-ES").format(Math.round(n||0));
@@ -213,7 +232,7 @@ $("#bSalir").addEventListener("click", async ()=>{
 });
 
 const ACCION = {I:"Alta", U:"Cambio", D:"Borrado"};
-let YO=null, D=null;
+let YO=null, D=null, P=null, ERR={};
 
 function fechaCorta(s){
   const d = new Date(String(s).slice(0,10)+"T00:00:00");
@@ -239,13 +258,15 @@ const sinTildes = s => String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toL
 function ruta(){
   const q = new URLSearchParams(location.hash.slice(1));
   return {dia: q.get("dia") || "", p: q.get("p") || "", q: q.get("q") || "",
-          per: q.get("per")==="mes" ? "mes" : "dia", mes: q.get("mes") || ""};
+          per: q.get("per")==="mes" ? "mes" : "dia", mes: q.get("mes") || "",
+          que: ["web","ia"].includes(q.get("que")) ? q.get("que") : "vencloud"};
 }
 function ir(cambios){
   const r = Object.assign(ruta(), cambios);
   const q = new URLSearchParams();
   if(r.per==="dia") r.per = "";
-  for(const k of ["per","mes","dia","p","q"]) if(r[k]) q.set(k, r[k]);
+  if(r.que==="vencloud") r.que = "";
+  for(const k of ["que","per","mes","dia","p","q"]) if(r[k]) q.set(k, r[k]);
   location.hash = q.toString();
 }
 $("#fDia").addEventListener("change", e=>ir({dia:e.target.value}));
@@ -274,19 +295,40 @@ function delMes(p, mes){
 const SIN_DETALLE = "El detalle por hora y qué tocó sólo se guarda de los dos últimos meses.";
 
 /* ------------------------------------------------------------ la vista */
-function pinta(){
+document.querySelectorAll("#pestanas button").forEach(b=>b.addEventListener("click", ()=>
+  ir({que:b.dataset.que, dia:"", mes:"", p:""})));
+
+/* Cada pestaña pide lo suyo la primera vez que se abre, no antes. */
+async function pinta(){
   avisa("");
-  const r = ruta(), dia = diaDe(r), mes = mesDe(r);
+  const r = ruta();
+  document.querySelectorAll("#pestanas button").forEach(b=>b.setAttribute("aria-selected", String(b.dataset.que===r.que)));
+  const listo = r.que==="vencloud" ? await cargaVenCloud() : await cargaPlataforma();
+  if(ruta().que !== r.que) return;   // cambio de pestaña mientras cargaba
+  if(!listo){
+    $("#barra").hidden = true; $("#miga").hidden = true; $("#pie").hidden = true;
+    $("#vista").innerHTML = "";
+    const e = ERR[r.que==="vencloud" ? "vencloud" : "plataforma"];
+    avisa(e.texto, e.mal);
+    return;
+  }
+  if(r.que==="vencloud") pintaVenCloud(r);
+  else pintaPlataforma(r);
+}
+
+function pintaVenCloud(r){
+  const dia = diaDe(r), mes = mesDe(r);
   $("#fPer").value = r.per;
   $("#lDia").hidden = r.per!=="dia"; $("#lMes").hidden = r.per!=="mes";
   $("#fDia").innerHTML = D.dias.map(d=>`<option value="${d}"${d===dia?" selected":""}>${esc(fechaLarga(d))} de ${d.slice(0,4)}</option>`).join("");
   $("#fMes").innerHTML = MESES.map(m=>`<option value="${m}"${m===mes?" selected":""}>${esc(mesLargo(m))}</option>`).join("");
   if(document.activeElement !== $("#fBusca")) $("#fBusca").value = r.q;
   $("#barra").hidden = false;
+  pieVenCloud();
   const p = r.p && D.personas.find(x=>x.nombre===r.p);
   if(p) return vistaPersona(p, r.per==="mes" ? null : dia, r.per==="mes" ? mes : dia.slice(0,7));
   $("#miga").hidden = true;
-  $("#fBusca").closest("label").hidden = false;
+  $("#lBusca").hidden = false;
   if(r.per==="mes") vistaMes(mes, r);
   else vistaDia(dia, r);
 }
@@ -488,6 +530,259 @@ function excelPersona(p, dia, mes){
   XLSX.descarga(XLSX.libro(hojas), `utilizo_${limpio(p.nombre)}_${dia || mes}.xlsx`);
 }
 
+/* ===================================================================
+   La dashboard y Vendi (docs/77)
+   =================================================================== */
+const PAGINA = {panel:"Panel", operativo:"Informe operativo", cuadro:"Cuadro de mando", rutas:"Rutas",
+  incidencias:"Incidencias", devoluciones:"Devoluciones", furgonetas:"Furgonetas", almacenes:"Almacenes",
+  telemetria:"Telemetría", tarifas:"Tarifas", revision:"Revisión clientes", utilizo:"Utilizo",
+  preferidos:"Preferidos", cifras:"Cifras", consola:"Consola", avisos:"Avisos", otra:"Otra"};
+const usd  = (n, dec=2) => new Intl.NumberFormat("es-ES",{style:"currency", currency:"USD",
+  minimumFractionDigits:dec, maximumFractionDigits:dec}).format(n||0);
+const nomP = u => u.nombre || u.correo;
+/* Si ese dia la persona tiene algo de esta pestaña. Un dia sin fila no es un
+   cero inventado: desde que se cuenta, no haber abierto nada es eso, cero. */
+const tiene = (que, x) => !!x && (que==="web" ? (x.vistas||x.entradas) > 0 : x.preguntas != null);
+const diasDe = que => [...new Set(P.usuarios.flatMap(u=>Object.keys(u.dias).filter(d=>tiene(que, u.dias[d]))))].sort().reverse();
+
+/* Lo de una persona en unos dias, sumado. */
+function sumaDe(u, que, dentro){
+  const lista = Object.keys(u.dias).filter(d=>dentro(d) && tiene(que, u.dias[d])).sort().map(d=>[d, u.dias[d]]);
+  if(!lista.length) return null;
+  const t = {dias:lista.length, lista, entradas:0, vistas:0, paginas:{}, preguntas:0, gasto:0, primera:"", ultima:""};
+  lista.forEach(([,x])=>{
+    t.entradas += x.entradas||0; t.vistas += x.vistas||0;
+    t.preguntas += x.preguntas||0; t.gasto += x.gasto_usd||0;
+    Object.entries(x.paginas||{}).forEach(([k,n])=>{ t.paginas[k] = (t.paginas[k]||0) + n; });
+  });
+  if(lista.length===1){ t.primera = lista[0][1].primera||""; t.ultima = lista[0][1].ultima||""; }
+  t.top = Object.entries(t.paginas).sort((a,b)=>b[1]-a[1]);
+  return t;
+}
+const topTxt = t => t.top.length ? `${esc(PAGINA[t.top[0][0]]||t.top[0][0])} <span class="peq">${num(t.top[0][1])}</span>` : "—";
+
+async function cargaPlataforma(){
+  if(P) return true;
+  if(ERR.plataforma) return false;
+  let rr;
+  try{ rr = await fetch("/api/utilizo/plataforma", {credentials:"same-origin"}); }
+  catch(e){ ERR.plataforma = {texto:"No hay conexión con el servidor.", mal:true}; return false; }
+  if(rr.status === 401){ location.href = "/"; return false; }
+  if(!rr.ok){
+    let e={}; try{ e = await rr.json(); }catch(x){}
+    ERR.plataforma = {texto: e.error || "El uso de la dashboard y de Vendi no está disponible ahora mismo.", mal:true};
+    return false;
+  }
+  P = await rr.json();
+  P.usuarios = P.usuarios || [];
+  return true;
+}
+
+function pintaPlataforma(r){
+  const que = r.que, dias = diasDe(que);
+  const meses = [...new Set(dias.map(d=>d.slice(0,7)))];
+  const desde = que==="web" ? P.desde_web : P.desde_ia;
+  pie(que==="web"
+    ? `Se cuenta desde el ${desde ? fechaCorta(desde) : "día en que se subió este cambio"}: antes no se apuntaba, así que de antes no hay datos. `
+      + "Una entrada es cada vez que alguien entra con su correo y su clave; una página vista, cada página de la dashboard que abre (la sesión dura 12 horas, así que se pueden ver páginas sin volver a entrar). "
+      + "Lo que no se puede medir es el tiempo que pasa mirando cada página. Las horas son las de España. El día de hoy va a medias, se ve al momento."
+    : `Se cuenta desde el ${desde ? fechaCorta(desde) : "día en que se activó Vendi"}. `
+      + "Una pregunta es cada mensaje que se le escribe a Vendi (o al muñeco que lleve cada uno); el gasto es lo que cobra Anthropic por esa pregunta en la API de Claude, en dólares, calculado con los tokens de cada respuesta. "
+      + "Cada día va en hora UTC, la del contador de preguntas del asistente. El día de hoy va a medias.");
+  if(!dias.length){
+    $("#barra").hidden = true; $("#miga").hidden = true; $("#vista").innerHTML = "";
+    avisa(que==="web" ? "Todavía no se ha apuntado ninguna visita a la dashboard: se empieza a contar desde que se subió este cambio."
+                      : "Todavía nadie le ha preguntado nada a Vendi.");
+    return;
+  }
+  const dia = r.dia && dias.includes(r.dia) ? r.dia : dias[0];
+  const mes = r.mes && meses.includes(r.mes) ? r.mes : meses[0];
+  $("#fPer").value = r.per;
+  $("#lDia").hidden = r.per!=="dia"; $("#lMes").hidden = r.per!=="mes";
+  $("#fDia").innerHTML = dias.map(d=>`<option value="${d}"${d===dia?" selected":""}>${esc(fechaLarga(d))} de ${d.slice(0,4)}</option>`).join("");
+  $("#fMes").innerHTML = meses.map(m=>`<option value="${m}"${m===mes?" selected":""}>${esc(mesLargo(m))}</option>`).join("");
+  if(document.activeElement !== $("#fBusca")) $("#fBusca").value = r.q;
+  $("#barra").hidden = false;
+  const u = r.p && P.usuarios.find(x=>x.correo===r.p);
+  if(u) return vistaUsuario(u, que, r.per==="mes" ? null : dia, r.per==="mes" ? mes : dia.slice(0,7), dias, meses);
+  $("#miga").hidden = true;
+  $("#lBusca").hidden = false;
+  vistaPlataforma(que, r.per, r.per==="mes" ? mes : dia, r, dias);
+}
+
+function vistaPlataforma(que, per, clave, r, dias){
+  const dentro = per==="mes" ? (d=>d.slice(0,7)===clave) : (d=>d===clave);
+  const cuando = per==="mes" ? `en ${mesLargo(clave)}` : `el ${fechaLarga(clave)}`;
+  const orden = que==="web" ? (t=>t.vistas*1000+t.entradas) : (t=>t.gasto);
+  const activos = P.usuarios.map(u=>({u, t:sumaDe(u, que, dentro)})).filter(o=>o.t)
+    .sort((a,b)=>orden(b.t)-orden(a.t) || nomP(a.u).localeCompare(nomP(b.u),"es"));
+  const busca = sinTildes(r.q);
+  const filas = busca ? activos.filter(o=>sinTildes(nomP(o.u)+" "+o.u.correo+" "+o.u.perfil).includes(busca)) : activos;
+  const sum = k => activos.reduce((s,o)=>s+o.t[k], 0);
+  const ultimos = dias.filter(d=>d<=(per==="mes" ? clave+"-31" : clave)).slice(0,30);
+  const v = $("#vista");
+  if(que==="web"){
+    v.innerHTML = `<div class="kpis fijos">`
+      + `<div class="kpi"><div class="et">Personas</div><div class="vl">${num(activos.length)}</div><div class="nt">que usaron la dashboard ${esc(cuando)}</div></div>`
+      + `<div class="kpi"><div class="et">Páginas vistas</div><div class="vl">${num(sum("vistas"))}</div><div class="nt">cada página que se abrió</div></div>`
+      + `<div class="kpi"><div class="et">Entradas</div><div class="vl">${num(sum("entradas"))}</div><div class="nt">veces que se entró con la clave</div></div>`
+      + `</div><section class="caja" id="tabla"></section>`;
+  } else {
+    const preg = sum("preguntas"), gasto = sum("gasto");
+    v.innerHTML = `<div class="kpis fijos">`
+      + `<div class="kpi"><div class="et">Personas</div><div class="vl">${num(activos.length)}</div><div class="nt">que preguntaron a Vendi ${esc(cuando)}</div></div>`
+      + `<div class="kpi"><div class="et">Preguntas</div><div class="vl">${num(preg)}</div><div class="nt">entre todas</div></div>`
+      + `<div class="kpi"><div class="et">Gasto</div><div class="vl">${usd(gasto)}</div><div class="nt">en la API de Claude</div></div>`
+      + `<div class="kpi"><div class="et">Por pregunta</div><div class="vl">${preg ? usd(gasto/preg, 3) : "—"}</div><div class="nt">de media</div></div>`
+      + `</div><section class="caja" id="tabla"></section>`;
+  }
+  const caja = $("#tabla");
+  caja.innerHTML = `<div class="cabsec"><h2>${que==="web" ? "Uso de la dashboard" : "Uso de Vendi"} ${esc(cuando)}</h2>`
+    + `<button class="btn primario" id="bExcel" type="button">Descargar Excel</button></div>`
+    + `<p class="explica">${que==="web"
+        ? "Cada persona que abrió la dashboard: cuántas páginas vio, cuántas veces entró con su clave, la página que más abrió y cuántos días la usó. Pulsa una persona para ver su historia."
+        : "Cada persona que preguntó a Vendi: cuántas preguntas le hizo, lo que costaron y lo que sale cada una. Pulsa una persona para ver su historia."}</p>`;
+  $("#bExcel").addEventListener("click", ()=>excelPlataforma(que, per, clave, activos));
+  if(!filas.length){
+    caja.insertAdjacentHTML("beforeend", `<p class="vacio">${busca ? "Nadie con ese nombre." : "Nadie."}</p>`);
+    return;
+  }
+  const max = Math.max(1, ...activos.map(o=>que==="web" ? o.t.vistas : o.t.gasto));
+  const barra = n => `<span class="barrita" style="width:${Math.max(2, Math.round(n/max*60))}px"></span>`;
+  const persona = u => `<td><button class="mat" type="button" data-p="${esc(u.correo)}">${esc(nomP(u))}</button>`
+    + (u.nombre ? `<div class="peq">${esc(u.correo)}</div>` : "") + `</td><td class="oculta-movil">${esc(u.perfil||"—")}</td>`;
+  let cab, fila;
+  if(que==="web" && per==="dia"){
+    cab = `<th>Persona</th><th class="oculta-movil">Perfil</th><th class="n">Páginas vistas</th><th class="n">Entradas</th><th class="oculta-movil">Primera · última</th><th class="oculta-movil">La que más abrió</th><th class="n oculta-movil">Días con uso</th>`;
+    fila = ({u,t}) => persona(u) + `<td class="n">${barra(t.vistas)}<b>${num(t.vistas)}</b></td><td class="n">${num(t.entradas)}</td>`
+      + `<td class="oculta-movil">${esc(deA(t))}</td><td class="oculta-movil">${topTxt(t)}</td>`
+      + `<td class="n oculta-movil">${num(ultimos.filter(d=>tiene("web", u.dias[d])).length)} <span class="peq">de ${num(ultimos.length)}</span></td>`;
+  } else if(que==="web"){
+    cab = `<th>Persona</th><th class="oculta-movil">Perfil</th><th class="n">Páginas vistas</th><th class="n">Entradas</th><th class="n">Días</th><th class="n oculta-movil">Páginas por día</th><th class="oculta-movil">La que más abrió</th>`;
+    fila = ({u,t}) => persona(u) + `<td class="n">${barra(t.vistas)}<b>${num(t.vistas)}</b></td><td class="n">${num(t.entradas)}</td>`
+      + `<td class="n">${num(t.dias)}</td><td class="n oculta-movil">${num(t.vistas/t.dias)}</td><td class="oculta-movil">${topTxt(t)}</td>`;
+  } else {
+    cab = `<th>Persona</th><th class="oculta-movil">Perfil</th><th class="n">Preguntas</th><th class="n">Gasto</th><th class="n oculta-movil">Por pregunta</th>` + (per==="mes" ? `<th class="n oculta-movil">Días</th>` : "");
+    fila = ({u,t}) => persona(u) + `<td class="n">${num(t.preguntas)}</td><td class="n">${barra(t.gasto)}<b>${usd(t.gasto)}</b></td>`
+      + `<td class="n oculta-movil">${t.preguntas ? usd(t.gasto/t.preguntas, 3) : "—"}</td>` + (per==="mes" ? `<td class="n oculta-movil">${num(t.dias)}</td>` : "");
+  }
+  caja.insertAdjacentHTML("beforeend", `<div class="tabla-env"><table><thead><tr>${cab}</tr></thead><tbody>`
+    + filas.map(o=>`<tr>${fila(o)}</tr>`).join("") + `</tbody></table></div>`);
+  caja.querySelectorAll(".mat").forEach(b=>b.addEventListener("click", ()=>ir({p:b.dataset.p})));
+}
+
+function vistaUsuario(u, que, dia, mes, dias, meses){
+  $("#lBusca").hidden = true;
+  const mi = $("#miga");
+  mi.innerHTML = `<a href="#" id="volver">Todas las personas</a> › <b>${esc(nomP(u))}</b>`;
+  mi.hidden = false;
+  $("#volver").addEventListener("click", e=>{ e.preventDefault(); ir({p:""}); });
+  const web = que==="web";
+  const t = sumaDe(u, que, dia ? (d=>d===dia) : (d=>d.slice(0,7)===mes));
+  let h = `<section class="caja"><div class="cabsec"><div><h2>${esc(nomP(u))} · ${esc(dia ? fechaLarga(dia) : mesLargo(mes))}</h2>`
+    + `<div class="peq">${esc(u.correo)}${u.perfil ? " · " + esc(u.perfil) : ""}</div></div>`
+    + `<button class="btn primario" id="bExcel" type="button">Descargar Excel</button></div>`;
+  if(!t) h += `<p class="vacio">${web ? "No abrió la dashboard" : "No preguntó nada a Vendi"} ${dia ? "ese día" : "ese mes"}.</p>`;
+  else if(web){
+    h += `<div class="persona-cab"><div><b>${num(t.vistas)}</b>páginas vistas</div><div><b>${num(t.entradas)}</b>entradas</div>`
+      + (dia ? `<div><b>${esc(deA(t))}</b>primera · última</div>` : `<div><b>${num(t.dias)}</b>días con uso</div>`) + `</div>`
+      + (t.top.length ? `<h2 style="margin-top:16px">Qué páginas abrió</h2><div class="tabla-env"><table><thead><tr><th>Página</th><th class="n">Veces</th></tr></thead><tbody>`
+          + t.top.map(([k,n])=>`<tr><td>${esc(PAGINA[k]||k)}</td><td class="n">${num(n)}</td></tr>`).join("") + `</tbody></table></div>` : "");
+  } else {
+    h += `<div class="persona-cab"><div><b>${num(t.preguntas)}</b>preguntas</div><div><b>${usd(t.gasto)}</b>gasto</div>`
+      + `<div><b>${t.preguntas ? usd(t.gasto/t.preguntas, 3) : "—"}</b>por pregunta</div>` + (dia ? "" : `<div><b>${num(t.dias)}</b>días</div>`) + `</div>`;
+  }
+  const celdas = x => web
+    ? (tiene("web", x) ? `<td class="n"><b>${num(x.vistas||0)}</b></td><td class="n">${num(x.entradas||0)}</td><td class="oculta-movil">${esc(deA(x))}</td>`
+                        : `<td class="n">0</td><td class="n">0</td><td class="oculta-movil peq">sin uso</td>`)
+    : (tiene("ia", x) ? `<td class="n"><b>${num(x.preguntas)}</b></td><td class="n">${usd(x.gasto_usd)}</td>`
+                       : `<td class="n">0</td><td class="n">${usd(0)}</td>`);
+  const cabDia = web ? `<th class="n">Páginas vistas</th><th class="n">Entradas</th><th class="oculta-movil">Primera · última</th>` : `<th class="n">Preguntas</th><th class="n">Gasto</th>`;
+  h += `<h2 style="margin-top:16px">Día a día, ${esc(mesLargo(mes))}</h2><div class="tabla-env"><table><thead><tr><th>Día</th>${cabDia}</tr></thead><tbody>`
+    + dias.filter(d=>d.slice(0,7)===mes).map(d=>`<tr><td><a href="#" class="dia" data-d="${d}">${esc(fechaCorta(d))}</a></td>${celdas(u.dias[d])}</tr>`).join("")
+    + `</tbody></table></div>`;
+  const cabMes = web ? `<th class="n">Páginas vistas</th><th class="n">Entradas</th><th class="n">Días</th>` : `<th class="n">Preguntas</th><th class="n">Gasto</th><th class="n">Días</th>`;
+  h += `<h2 style="margin-top:16px">Mes a mes</h2><div class="tabla-env" id="mesames"><table><thead><tr><th>Mes</th>${cabMes}</tr></thead><tbody>`
+    + meses.map(m=>{
+        const y = sumaDe(u, que, d=>d.slice(0,7)===m);
+        return `<tr><td><a href="#" class="mes" data-m="${m}">${esc(mesLargo(m))}</a></td>`
+          + (!y ? (web ? `<td class="n">0</td><td class="n">0</td><td class="n">0</td>` : `<td class="n">0</td><td class="n">${usd(0)}</td><td class="n">0</td>`)
+               : web ? `<td class="n"><b>${num(y.vistas)}</b></td><td class="n">${num(y.entradas)}</td><td class="n">${num(y.dias)}</td>`
+                     : `<td class="n"><b>${num(y.preguntas)}</b></td><td class="n">${usd(y.gasto)}</td><td class="n">${num(y.dias)}</td>`) + `</tr>`;
+      }).join("")
+    + `</tbody></table></div></section>`;
+  const v = $("#vista");
+  v.innerHTML = h;
+  v.querySelectorAll("a.dia").forEach(a=>a.addEventListener("click", e=>{ e.preventDefault(); ir({per:"dia", dia:a.dataset.d}); }));
+  v.querySelectorAll("a.mes").forEach(a=>a.addEventListener("click", e=>{ e.preventDefault(); ir({per:"mes", mes:a.dataset.m}); }));
+  $("#bExcel").addEventListener("click", ()=>excelUsuario(u, que));
+}
+
+/* Los Excel de la dashboard y de Vendi: lo que se ve y, detras, dia a dia. */
+const COL_WEB = [{titulo:"Día",ancho:12},{titulo:"Persona",ancho:22},{titulo:"Correo",ancho:28},{titulo:"Perfil",ancho:18},
+  {titulo:"Páginas vistas",ancho:10},{titulo:"Entradas",ancho:10},{titulo:"Primera",ancho:9},{titulo:"Última",ancho:9},{titulo:"Páginas",ancho:50}];
+const COL_IA = [{titulo:"Día",ancho:12},{titulo:"Persona",ancho:22},{titulo:"Correo",ancho:28},{titulo:"Perfil",ancho:18},
+  {titulo:"Preguntas",ancho:10},{titulo:"Gasto (USD)",ancho:12}];
+const filaUso = (que, u, d, x) => que==="web"
+  ? [d, nomP(u), u.correo, u.perfil||"", x.vistas||0, x.entradas||0, x.primera||"", x.ultima||"",
+     Object.entries(x.paginas||{}).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`${PAGINA[k]||k} ${n}`).join(", ")]
+  : [d, nomP(u), u.correo, u.perfil||"", x.preguntas||0, Math.round((x.gasto_usd||0)*10000)/10000];
+const diaADia = (que, us) => us.flatMap(u=>Object.keys(u.dias).filter(d=>tiene(que, u.dias[d])).map(d=>filaUso(que, u, d, u.dias[d])))
+  .sort((a,b)=>b[0].localeCompare(a[0]) || b[4]-a[4]);
+function excelPlataforma(que, per, clave, activos){
+  const nombre = que==="web" ? "dashboard" : "vendi";
+  const cuando = per==="mes" ? `en ${mesLargo(clave)}` : `el ${fechaLarga(clave)}`;
+  const resumen = que==="web"
+    ? {columnas:[{titulo:"Persona",ancho:22},{titulo:"Correo",ancho:28},{titulo:"Perfil",ancho:18},{titulo:"Páginas vistas",ancho:10},
+                 {titulo:"Entradas",ancho:10},{titulo:"Días con uso",ancho:10},{titulo:"La que más abrió",ancho:20}],
+       filas:activos.map(({u,t})=>[nomP(u), u.correo, u.perfil||"", t.vistas, t.entradas, t.dias, t.top.length ? PAGINA[t.top[0][0]]||t.top[0][0] : ""])}
+    : {columnas:[{titulo:"Persona",ancho:22},{titulo:"Correo",ancho:28},{titulo:"Perfil",ancho:18},{titulo:"Preguntas",ancho:10},
+                 {titulo:"Gasto (USD)",ancho:12},{titulo:"Por pregunta (USD)",ancho:12},{titulo:"Días",ancho:8}],
+       filas:activos.map(({u,t})=>[nomP(u), u.correo, u.perfil||"", t.preguntas, Math.round(t.gasto*10000)/10000,
+                                   t.preguntas ? Math.round(t.gasto/t.preguntas*10000)/10000 : "", t.dias])};
+  XLSX.descarga(XLSX.libro([
+    {nombre: per==="mes" ? "Mes" : "Día", titulo:tit(`uso de ${que==="web" ? "la dashboard" : "Vendi"} ${cuando}`), ...resumen},
+    {nombre:"Día a día", titulo:tit(`uso de ${que==="web" ? "la dashboard" : "Vendi"}, día a día`),
+     columnas: que==="web" ? COL_WEB : COL_IA, filas:diaADia(que, P.usuarios)}]),
+    `utilizo_${nombre}_${clave}.xlsx`);
+}
+function excelUsuario(u, que){
+  XLSX.descarga(XLSX.libro([
+    {nombre:"Día a día", titulo:tit(`${nomP(u)}, uso de ${que==="web" ? "la dashboard" : "Vendi"} día a día`),
+     columnas: que==="web" ? COL_WEB : COL_IA, filas:diaADia(que, [u])}]),
+    `utilizo_${que==="web" ? "dashboard" : "vendi"}_${limpio(nomP(u))}.xlsx`);
+}
+
+/* ===================================================================
+   arranque
+   =================================================================== */
+function pie(texto){ $("#pie").textContent = texto; $("#pie").hidden = !texto; }
+function pieVenCloud(){
+  pie("Sale del registro de actividad de VenCloud (control.activitylog): cada alta, cambio o borrado que hace un usuario, con su hora. Los procesos automáticos de VenCloud no cuentan. El día de hoy no sale hasta mañana, cuando está completo. Se guarda toda la historia; el detalle por hora y qué tocó, de los dos últimos meses."
+    + (D.generado ? ` Calculado con la carga del ${fechaCorta(D.generado)}.` : ""));
+}
+
+async function cargaVenCloud(){
+  if(D) return true;
+  if(ERR.vencloud) return false;
+  let rr;
+  try{ rr = await fetch("/api/utilizo", {credentials:"same-origin"}); }
+  catch(e){ ERR.vencloud = {texto:"No hay conexión con el servidor.", mal:true}; return false; }
+  if(rr.status === 401){ location.href = "/"; return false; }
+  if(!rr.ok){
+    let e={}; try{ e = await rr.json(); }catch(x){}
+    ERR.vencloud = {texto: e.error || "El uso de VenCloud no está disponible ahora mismo.", mal:true};
+    return false;
+  }
+  const d = await rr.json();
+  if(d.sin_dato){ ERR.vencloud = {texto:d.sin_dato}; return false; }
+  d.dias = d.dias || []; d.personas = d.personas || [];
+  if(!d.dias.length){ ERR.vencloud = {texto:"Todavía no ha llegado ningún día de actividad de VenCloud."}; return false; }
+  MESES = [...new Set(d.dias.map(x=>x.slice(0,7)))].sort().reverse();
+  D = d;
+  return true;
+}
+
 (async function arranca(){
   let r;
   try{ r = await fetch("/api/yo", {credentials:"same-origin"}); }
@@ -497,27 +792,10 @@ function excelPersona(p, dia, mes){
   YO = await r.json();
   if(YO.tipo === "cliente"){ location.replace("/cuadro/"); return; }
   $("#quien").textContent = (YO.perfil ? YO.perfil + " · " : "") + (YO.nombre || YO.correo);
-
-  let rr;
-  try{ rr = await fetch("/api/utilizo", {credentials:"same-origin"}); }
-  catch(e){ $("#cargando").textContent = "No hay conexión con el servidor."; return; }
-  if(rr.status === 401){ location.href = "/"; return; }
-  $("#cargando").hidden = true;
-  if(!rr.ok){
-    let e={}; try{ e = await rr.json(); }catch(x){}
-    avisa(e.error || "El uso de VenCloud no está disponible ahora mismo.", true);
-    return;
-  }
-  D = await rr.json();
-  if(D.sin_dato){ avisa(D.sin_dato); return; }
-  D.dias = D.dias || []; D.personas = D.personas || [];
-  MESES = [...new Set(D.dias.map(d=>d.slice(0,7)))].sort().reverse();
-  if(!D.dias.length){ avisa("Todavía no ha llegado ningún día de actividad de VenCloud."); return; }
+  $("#pestanas").hidden = false;
   window.addEventListener("hashchange", pinta);
-  pinta();
-  $("#pie").textContent = "Sale del registro de actividad de VenCloud (control.activitylog): cada alta, cambio o borrado que hace un usuario, con su hora. Los procesos automáticos de VenCloud no cuentan. El día de hoy no sale hasta mañana, cuando está completo. Se guarda toda la historia; el detalle por hora y qué tocó, de los dos últimos meses."
-    + (D.generado ? ` Calculado con la carga del ${fechaCorta(D.generado)}.` : "");
-  $("#pie").hidden = false;
+  await pinta();
+  $("#cargando").hidden = true;
   /* La estrella de preferidos de cada tabla, y la vista suelta de /preferidos/ (docs/62). */
   Preferidos.monta("utilizo", {});
 })();

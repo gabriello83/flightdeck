@@ -32,7 +32,8 @@ import autorizacion as A
 import catalogo as CAT
 import telemetria as TE
 from comun import (abre_sesion, acota_de, borra, cabina_y_ambito, cierra_sesion, config, cookie_sesion,
-                   cuerpo, delegaciones_de, escribe, lee, lista, panel_de, quien_es, r, s3, BUCKET)
+                   cuerpo, delegaciones_de, escribe, lee, lista, lista_dias, panel_de, quien_es, r, s3,
+                   BUCKET)
 
 cog = boto3.client("cognito-idp")
 
@@ -77,6 +78,98 @@ def _suma_fallo(correo):
 
 def _limpia_fallos(correo):
     borra(f"FALLOS#{correo}", "CUENTA")
+
+
+# ----------------------------------------------------------------------
+# uso de la dashboard (docs/77)
+# ----------------------------------------------------------------------
+# Las paginas que se cuentan. Lo que llegue de otra ruta cuenta como «otra»:
+# asi un Referer raro no llena la fila de claves inventadas.
+PAGINAS = ("panel", "operativo", "cuadro", "rutas", "incidencias", "devoluciones", "furgonetas",
+           "almacenes", "telemetria", "tarifas", "revision", "utilizo", "preferidos", "cifras",
+           "consola", "avisos")
+# Dos años largos, como el resto de historicos.
+DIAS_USO = 800
+
+
+def _ahora_espana():
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.datetime.now(ZoneInfo("Europe/Madrid"))
+    except Exception:  # noqa: BLE001  sin la base de zonas, la de UTC
+        return datetime.datetime.utcnow()
+
+
+def _apunta_uso(correo, entrada=False, pagina=None):
+    """Suma a la fila del dia de esta persona una entrada o una pagina vista.
+
+    Una fila por persona y dia (ACCESO#<correo>, sk = el dia en España). Si
+    falla, se calla: contar el uso nunca puede tumbar la peticion que lo cuenta.
+    """
+    try:
+        import time
+        ahora = _ahora_espana()
+        dia, hora = ahora.date().isoformat(), ahora.strftime("%H:%M")
+        fila = lee(f"ACCESO#{correo}", dia) or {}
+        if entrada:
+            fila["entradas"] = int(fila.get("entradas", 0)) + 1
+        if pagina:
+            fila["vistas"] = int(fila.get("vistas", 0)) + 1
+            paginas = fila.setdefault("paginas", {})
+            paginas[pagina] = int(paginas.get(pagina, 0)) + 1
+        fila.setdefault("primera", hora)
+        fila["ultima"] = hora
+        escribe(f"ACCESO#{correo}", fila, dia, expira=int(time.time()) + DIAS_USO * 86400)
+    except Exception as e:  # noqa: BLE001
+        print(f"USO no apuntado: {type(e).__name__}: {e}")
+
+
+def _pagina_de(evento):
+    """Que pagina de la dashboard ha pedido /api/yo, o None si no cuenta.
+
+    Cada pagina pide /api/yo una vez al abrirse, y el navegador dice desde donde
+    en el Referer. No cuentan: la portada de entrada («/»), las consultas que
+    hace Vendi por dentro (su user-agent) ni la que hace el boton del asistente
+    en cada pagina (lleva x-digivend-vista: no), que si no seria doble.
+    """
+    cab = {k.lower(): v for k, v in (evento.get("headers") or {}).items()}
+    if "digivend-asistente" in cab.get("user-agent", "") or cab.get("x-digivend-vista") == "no":
+        return None
+    m = re.match(r"https?://[^/]+/([a-z]*)", cab.get("referer", ""))
+    if not m or not m.group(1):
+        return None
+    return m.group(1) if m.group(1) in PAGINAS else "otra"
+
+
+def uso_plataforma(dias=400):
+    """Quien entra en la dashboard y cuanto, y quien pregunta a Vendi y cuanto gasta.
+
+    Junta por persona y dia las filas ACCESO# (las escribe esta Lambda) y USO#
+    (las escribe la del asistente). desde_web y desde_ia son el primer dia que
+    hay de cada una: antes de eso no se contaba, y la pagina lo dice.
+    """
+    desde = (datetime.date.today() - datetime.timedelta(days=dias)).isoformat()
+    nombres = {u["_id"]: u for u in lista("USUARIO#")}
+    perfiles = {p["_id"]: p.get("nombre") or p["_id"] for p in lista("PERFIL#")}
+    gente, desde_web, desde_ia = {}, None, None
+    for pk, dia, dato in lista_dias(["ACCESO#", "USO#"], desde):
+        tipo, correo = pk.split("#", 1)
+        u = nombres.get(correo, {})
+        quien = gente.setdefault(correo, {
+            "correo": correo, "nombre": u.get("nombre", ""),
+            "perfil": perfiles.get(u.get("perfil_id", ""), u.get("perfil_id", "")), "dias": {}})
+        d = quien["dias"].setdefault(dia, {})
+        if tipo == "ACCESO":
+            desde_web = min(desde_web or dia, dia)
+            for k in ("entradas", "vistas", "paginas", "primera", "ultima"):
+                if k in dato:
+                    d[k] = dato[k]
+        else:
+            desde_ia = min(desde_ia or dia, dia)
+            d["preguntas"] = int(dato.get("preguntas", 0))
+            d["gasto_usd"] = round(float(dato.get("gasto_usd", 0)), 4)
+    return {"desde_web": desde_web, "desde_ia": desde_ia, "hoy": _ahora_espana().date().isoformat(),
+            "usuarios": sorted(gente.values(), key=lambda x: x["correo"])}
 
 
 # ----------------------------------------------------------------------
@@ -131,6 +224,9 @@ def encamina(evento, metodo, ruta):
         return r(200, {"ok": True}, [cookie_sesion("")])
 
     if ruta == "/api/yo":
+        pagina = _pagina_de(evento)
+        if pagina:
+            _apunta_uso(usuario["correo"], pagina=pagina)
         ok_ia, motivo = A.asistente_habilitado(c, perfil, usuario)
         return r(200, {
             "correo": usuario["correo"],
@@ -290,6 +386,13 @@ def encamina(evento, metodo, ruta):
             return r(503, {"error": "La revisión de clientes todavía no se ha calculado.",
                            "_nota": "Lo escriben los agregados cada noche (4:45)."})
         return _con_tablas("revision", perfil, comprimido)
+
+    # Utilizo, la dashboard y Vendi (docs/77): quien entra, cuanto, y cuanto
+    # gasta en el asistente. Lo ve quien ve el cuadrado Utilizo, nadie mas.
+    if ruta == "/api/utilizo/plataforma" and metodo == "GET":
+        if "utilizo" not in A.cuadrados_de(perfil):
+            raise PermissionError("Este perfil no ve el uso de la plataforma.")
+        return r(200, uso_plataforma())
 
     # Utilizo (docs/60): cuanto usa VenCloud cada persona. Solo se escribe a
     # los perfiles sin ambito, y solo lo pide quien ve su cuadrado.
@@ -724,6 +827,7 @@ def acceso(evento):
         return r(403, {"error": "La cuenta no esta configurada. Avisa al administrador."})
 
     _limpia_fallos(correo)
+    _apunta_uso(correo, entrada=True)
     return r(200, {"ok": True}, [cookie_sesion(abre_sesion(correo))])
 
 
@@ -753,6 +857,7 @@ def nueva_clave(evento):
         return r(403, {"error": "La cuenta no esta configurada. Avisa al administrador."})
 
     _limpia_fallos(correo)
+    _apunta_uso(correo, entrada=True)
     return r(200, {"ok": True}, [cookie_sesion(abre_sesion(correo))])
 
 

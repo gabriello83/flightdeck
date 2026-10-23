@@ -719,7 +719,7 @@ ${tabla.outerHTML}</body></html>`);
   if(yo){
     const sola = async () => {
       let d = null;
-      try{ const r = await fetch("/api/yo", {credentials:"same-origin"}); if(r.ok) d = await r.json(); }catch(e){}
+      try{ const r = await fetch("/api/yo", {credentials:"same-origin", headers:{"x-digivend-vista":"no"}}); if(r.ok) d = await r.json(); }catch(e){}
       if(!d || !d.asistente || !d.asistente.habilitado) return;
       const [de, sug] = SECCION[yo] || ["esta página", []];
       monta({pagina: yo, hola: `¡Hola! Pregúntame por ${de} o por cualquier sección que veas.`, sugerencias: () => sug});

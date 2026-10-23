@@ -482,7 +482,8 @@ def suma_uso(correo, dia, usado, gasto, nueva=True):
     escribe(f"USO#{correo}",
             {"preguntas": int(usado.get("preguntas", 0)) + (1 if nueva else 0),
              "gasto_usd": round(float(usado.get("gasto_usd", 0)) + gasto, 5)},
-            dia, expira=int(time.time()) + 40 * 86400)
+            # 800 dias: Utilizo (docs/77) enseña quien gasta cuanto con historia.
+            dia, expira=int(time.time()) + 800 * 86400)
 
 
 def coste(u):
