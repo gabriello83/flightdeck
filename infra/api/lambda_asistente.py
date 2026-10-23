@@ -60,6 +60,9 @@ SEGUNDOS_VUELTA = 8        # si queda tiempo tras una consulta, otra vuelta en l
 MAX_RESULTADO = 12000      # caracteres de cada consulta que le llegan al modelo
 HORAS_CONVERSACION = 2     # lo que dura guardada una pregunta a medias
 MAX_MEMORIA = 4000         # caracteres de la memoria de cada usuario (docs/75)
+# Los munecos que puede elegir cada usuario (docs/76). El primero es el de siempre.
+MUNECOS = {"vendi": "Vendi", "tom": "Tom", "kiko": "Kiko", "furgo": "Furgo", "bufy": "Bufy"}
+MAX_AVISOS = 3             # veces que se le recuerda que puede cambiarlo; luego, nunca mas
 
 # Precios por millon de tokens, en dolares. Se guardan aqui para poder
 # ensenar el gasto en el panel de admin; hay que revisarlos si cambian.
@@ -84,7 +87,7 @@ def cliente():
 # Es FIJO a proposito. Una coma que cambie aqui invalida la cache y la pregunta
 # siguiente se paga entera, asi que no se le mete nada variable: ni la fecha, ni
 # el nombre del usuario, ni el ambito. Todo eso va en el mensaje.
-RECETARIO = """Eres Vendi, el asistente de digivend, la plataforma de operaciones de \
+RECETARIO = """Eres el asistente de digivend, la plataforma de operaciones de \
 vending de Serunion. Respondes preguntas sobre los datos de la plataforma, en espanol \
 de Espana, con el tono de un companero que conoce la operacion: directo, concreto, sin \
 adornos.
@@ -121,6 +124,14 @@ tabla en formato Markdown (con | y la fila de guiones): el usuario la puede baja
 Excel o PDF, asi que pon las cifras solas en su celda, con su unidad.
 - Si te piden una accion (enviar un WhatsApp, abrir una incidencia), explica que eso \
 se hace con el boton de la seccion correspondiente; tu no ejecutas acciones.
+
+TU MUNECO
+- En la web sales con un muneco que elige cada usuario: Vendi (la maquina de \
+snacks, el de siempre), Tom (el companero de polo blanco), Kiko (el grano de cafe), \
+Furgo (la furgoneta de Serunion Vending) o Bufy (el bisonte de Derichebourg). Te \
+llamas como el que tenga puesto, que va en el contexto como `muneco`.
+- Si te pide cambiarlo («ponme a Bufy», «quiero otro muneco»), cambialo con la \
+herramienta `muneco` y dilo en una frase. Si no dice cual, dile los cinco.
 
 TU MEMORIA DE ESTE USUARIO
 - Cada usuario tiene su propia memoria, un texto en Markdown que solo ve el y solo \
@@ -230,6 +241,16 @@ HERRAMIENTA_MEMORIA = {
     },
 }
 
+HERRAMIENTA_MUNECO = {
+    "name": "muneco",
+    "description": "Cambia el muneco con el que sale el asistente para este usuario.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"nombre": {"type": "string", "enum": list(MUNECOS)}},
+        "required": ["nombre"],
+    },
+}
+
 HERRAMIENTAS = [{
     "name": "consulta",
     "description": (
@@ -250,7 +271,7 @@ HERRAMIENTAS = [{
         },
         "required": ["seccion"],
     },
-}, HERRAMIENTA_MEMORIA]
+}, HERRAMIENTA_MEMORIA, HERRAMIENTA_MUNECO]
 
 
 def _baja(url, token):
@@ -396,6 +417,36 @@ def guarda_memoria(correo, texto):
 
 
 # ----------------------------------------------------------------------
+# el muneco de cada usuario (docs/76)
+# ----------------------------------------------------------------------
+# En MUNECO#<correo>: {"muneco", "elegido", "avisos", "ultimo_aviso"}. Vendi
+# sale si no hay nada. Al entrar se le recuerda que puede cambiarlo, un dia
+# distinto cada vez y MAX_AVISOS veces como mucho; si ya eligio, ninguna.
+def muneco_de(correo):
+    m = lee(f"MUNECO#{correo}") or {}
+    return m if m.get("muneco") in MUNECOS else {**m, "muneco": "vendi"}
+
+
+def elige_muneco(correo, nombre):
+    if nombre not in MUNECOS:
+        return None
+    m = muneco_de(correo)
+    m.update(muneco=nombre, elegido=True)
+    escribe(f"MUNECO#{correo}", m)
+    return nombre
+
+
+def ver_muneco(correo, hoy):
+    m = muneco_de(correo)
+    avisar = (not m.get("elegido") and int(m.get("avisos", 0)) < MAX_AVISOS
+              and m.get("ultimo_aviso") != hoy)
+    if avisar:
+        m.update(avisos=int(m.get("avisos", 0)) + 1, ultimo_aviso=hoy)
+        escribe(f"MUNECO#{correo}", m)
+    return {"muneco": m["muneco"], "avisar": avisar}
+
+
+# ----------------------------------------------------------------------
 # la conversacion guardada entre vueltas
 # ----------------------------------------------------------------------
 def guarda(id_, estado):
@@ -537,6 +588,14 @@ def avanza(estado, token, empezo):
                 resultados.append({"type": "tool_result", "tool_use_id": u.id,
                                    "content": f"Memoria guardada ({len(texto)} caracteres)."})
                 continue
+            if u.name == "muneco":
+                nombre = elige_muneco(estado["correo"], (u.input or {}).get("nombre", ""))
+                if nombre:
+                    estado["muneco"] = nombre
+                resultados.append({"type": "tool_result", "tool_use_id": u.id,
+                                   "content": f"Muneco cambiado a {MUNECOS[nombre]}." if nombre
+                                   else "Ese muneco no existe. Son: " + ", ".join(MUNECOS.values()) + "."})
+                continue
             try:
                 salida = consulta(dict(u.input or {}), token, cache)
             except Exception as e:  # noqa: BLE001
@@ -552,7 +611,7 @@ def avanza(estado, token, empezo):
             resultados.append({"type": "text", "text": "Ya no quedan consultas. Contesta ahora con lo "
                                "que has visto; si te falta algo, di exactamente qué falta."})
         estado["mensajes"].append({"role": "user", "content": resultados})
-        que = _que_hace([dict(u.input or {}) for u in usos if u.name != "memoria"])
+        que = _que_hace([dict(u.input or {}) for u in usos if u.name == "consulta"])
         # Otra vuelta en esta misma peticion solo si da tiempo de sobra: si no,
         # el navegador vuelve a llamar.
         if time.monotonic() - empezo > SEGUNDOS_VUELTA:
@@ -580,6 +639,12 @@ def lambda_handler(evento, contexto_lambda):
     if d.get("memoria") == "borrar":
         guarda_memoria(usuario["correo"], "")
         return r(200, {"memoria": ""})
+    # El muneco, igual: verlo al entrar o elegirlo en el chat.
+    if d.get("muneco") == "ver":
+        return r(200, ver_muneco(usuario["correo"], hoy_en_espana()))
+    if d.get("muneco"):
+        nombre = elige_muneco(usuario["correo"], str(d["muneco"]))
+        return r(200, {"muneco": nombre}) if nombre else r(400, {"error": "Ese muñeco no existe."})
 
     limite = usuario.get("limite_preguntas_dia") or c.get("limite_preguntas_dia", 0)
     dia, usado = uso_de_hoy(usuario["correo"])
@@ -612,7 +677,8 @@ def lambda_handler(evento, contexto_lambda):
             mensajes.pop()
         contexto = A.contexto_asistente(None, perfil)
         contexto.pop("datos", None)
-        contexto.update(hoy=hoy_en_espana(), pagina=str(d.get("pagina") or "panel")[:30])
+        contexto.update(hoy=hoy_en_espana(), pagina=str(d.get("pagina") or "panel")[:30],
+                        muneco=MUNECOS[muneco_de(usuario["correo"])["muneco"]])
         recuerdo = memoria_de(usuario["correo"])
         mensajes.append({"role": "user", "content":
                          "Contexto:\n" + json.dumps(contexto, ensure_ascii=False, separators=(",", ":"))
@@ -637,4 +703,5 @@ def lambda_handler(evento, contexto_lambda):
 
     quedan = max(0, limite - int(usado.get("preguntas", 0)) - (0 if d.get("sigue") else 1)) if limite else None
     return r(200, {"respuesta": respuesta, "quedan_hoy": quedan, "coste_usd": estado["gasto"],
-                   "memoria_cambiada": bool(estado.get("memoria_cambiada"))})
+                   "memoria_cambiada": bool(estado.get("memoria_cambiada")),
+                   "muneco": estado.get("muneco")})

@@ -202,7 +202,7 @@ comprueba("esfuerzo explicito", k["output_config"]["effort"], "medium")
 comprueba("sin budget_tokens (daria 400)", "budget_tokens" in json.dumps(k["thinking"]), False)
 comprueba("tope de salida", k["max_tokens"], 4000)
 comprueba("con reintento en otro modelo si declina", k.get("fallbacks"), "default")
-comprueba("con la herramienta de consulta y la de memoria", [t["name"] for t in k["tools"]], ["consulta", "memoria"])
+comprueba("con las herramientas de consulta, memoria y muneco", [t["name"] for t in k["tools"]], ["consulta", "memoria", "muneco"])
 comprueba("que puede usar o no", k["tool_choice"], {"type": "auto"})
 
 print("\nEl recetario va en el sistema, y en cache")
@@ -368,6 +368,46 @@ comprueba("borrarla la deja vacia", memoria(COOKIE, "borrar"), {"memoria": ""})
 comprueba("y ver o borrar no cuenta como pregunta",
           L.uso_de_hoy("ana@airbus.com")[1].get("preguntas", 0) - antes, 1)
 comprueba("sin sesion, nada", L.lambda_handler(falsos.peticion("POST", "/api/pregunta", {"memoria": "ver"}, None), None)["statusCode"], 401)
+
+print("\nCada usuario elige su muneco (docs/76)")
+def muneco(cookie, accion):
+    return L.lambda_handler(falsos.peticion("POST", "/api/pregunta", {"muneco": accion}, cookie), None)
+def elige(nombre):
+    return {"content": [_Bloque(type="tool_use", id=f"u{len(LLAMADAS)}", name="muneco", input={"nombre": nombre})],
+            "stop": "tool_use"}
+_hoy = L.hoy_en_espana
+DIA = ["2026-10-23"]
+L.hoy_en_espana = lambda: DIA[0]
+antes = L.uso_de_hoy("ana@airbus.com")[1].get("preguntas", 0)
+comprueba("sin elegir, Vendi, y se le avisa", cuerpo(muneco(COOKIE, "ver")), {"muneco": "vendi", "avisar": True})
+comprueba("el mismo dia, no se le avisa otra vez", cuerpo(muneco(COOKIE, "ver"))["avisar"], False)
+DIA[0] = "2026-10-24"
+comprueba("otro dia, si", cuerpo(muneco(COOKIE, "ver"))["avisar"], True)
+DIA[0] = "2026-10-25"
+comprueba("y otro, la tercera", cuerpo(muneco(COOKIE, "ver"))["avisar"], True)
+DIA[0] = "2026-10-26"
+comprueba("despues de tres, nunca mas", cuerpo(muneco(COOKIE, "ver"))["avisar"], False)
+comprueba("elegir uno que no existe, 400", muneco(COOKIE, "pikachu")["statusCode"], 400)
+comprueba("elegir en el chat", cuerpo(muneco(COOKIE, "bufy")), {"muneco": "bufy"})
+comprueba("se queda", cuerpo(muneco(COOKIE, "ver"))["muneco"], "bufy")
+comprueba("cada usuario el suyo", cuerpo(muneco(OTRA, "ver")), {"muneco": "vendi", "avisar": True})
+comprueba("ni ver ni elegir cuenta como pregunta", L.uso_de_hoy("ana@airbus.com")[1].get("preguntas", 0) - antes, 0)
+LLAMADAS.clear()
+pregunta("hola", COOKIE)
+comprueba("el modelo sabe como se llama", '"muneco":"Bufy"' in json.dumps(LLAMADAS[0]["messages"][-1]["content"], ensure_ascii=False).replace("\\", ""), True)
+comprueba("pero no en el recetario", "Bufy" in LLAMADAS[0]["system"][0]["text"] and "`muneco`" in LLAMADAS[0]["system"][0]["text"], True)
+LLAMADAS.clear()
+COLA[:] = [elige("tom"), texto()]
+r_ = cuerpo(pregunta("ponme a Tom", OTRA))
+comprueba("pedirlo por escrito lo cambia", r_.get("muneco"), "tom")
+comprueba("y se guarda", cuerpo(muneco(OTRA, "ver")), {"muneco": "tom", "avisar": False})
+comprueba("el modelo recibe que cambio", "Tom" in resultado(LLAMADAS[1]), True)
+COLA[:] = [elige("nadie"), texto()]
+r_ = cuerpo(pregunta("ponme a nadie", OTRA))
+comprueba("uno que no existe no cambia nada", (r_.get("muneco"), cuerpo(muneco(OTRA, "ver"))["muneco"]), (None, "tom"))
+comprueba("sin cambiarlo, la respuesta no trae muneco", cuerpo(pregunta("otra", COOKIE)).get("muneco"), None)
+comprueba("sin sesion, nada", muneco(None, "ver")["statusCode"], 401)
+L.hoy_en_espana = _hoy
 
 print("\nEl historial se pasa, recortado a tres idas y venidas")
 LLAMADAS.clear()
