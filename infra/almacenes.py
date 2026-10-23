@@ -259,7 +259,10 @@ def almacenes_del_perfil(nombres, rutas, ambito):
             deleg_de.setdefault(a, str(R.v(r, "delegacion")))
     delegaciones = [str(d) for d in (ambito or {}).get("delegaciones") or []]
     acotado = bool((ambito or {}).get("clientes") or (ambito or {}).get("centros"))
-    if acotado and not delegaciones:
+    # Un usuario con clientes o centros recortados (docs/74) tampoco, aunque
+    # tenga delegaciones: el recorte es un Y, y un almacen no es de un cliente.
+    acota = (ambito or {}).get("acota") or {}
+    if (acotado and not delegaciones) or acota.get("clientes") or acota.get("centros"):
         return None, ("Los almacenes son de una delegación: este perfil está acotado por "
                       "clientes o centros y no tiene almacenes propios.")
     out = {}

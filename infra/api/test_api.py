@@ -968,6 +968,45 @@ comprueba("con delegaciones, utilizo no le sale: no es de toda la empresa",
                             "ambito": _C.cabina_y_ambito("dir", {"tipo": "direccion", "ambito": {}},
                                                          {"delegaciones": ["SEVILLA"]})[1]}), [])
 
+print("\nClientes y centros por usuario (docs/74): un recorte encima de lo que ve")
+comprueba("la carpeta, fijada: la misma cuenta que lambda_agregados.cabina_de",
+          _C.cabina_de("ope-sur", ["SEVILLA"], {"clientes": ["CONSUM"], "centros": ["2002"]}),
+          "ope-sur~4c90a660cf4a")
+comprueba("sin recorte la de siempre: nadie pierde el panel de sus delegaciones",
+          _C.cabina_de("ope-sur", ["SEVILLA", "CADIZ"], {}), "ope-sur~43165e23b879")
+llama("POST", "/api/admin/usuarios", dict(_olga, delegaciones=["SEVILLA"], clientes=[" CONSUM ", "", "CONSUM"],
+                                          centros=["2002", 7]), cookie=COOKIE_JEFE)
+_fila = json.loads(falsos.TABLA[("USUARIO#olga@serunion.es", "FICHA")]["dato"]["S"])
+comprueba("se guardan limpios y en orden", (_fila["clientes"], _fila["centros"]), (["CONSUM"], ["2002", "7"]))
+llama("POST", "/api/admin/usuarios", dict(_olga, delegaciones=["SEVILLA"], clientes=["CONSUM"], centros=["2002"]),
+      cookie=COOKIE_JEFE)
+comprueba("sin su panel calculado, 503: NUNCA el de sus delegaciones en su lugar",
+          llama("GET", "/api/panel", cookie=COOKIE_OLGA)["statusCode"], 503)
+falsos.pon_panel("ope-sur~4c90a660cf4a", dict(PANEL_OPE, servicio={"visitas": 33, "coste_servicio": {"coste": 5.0}}))
+comprueba("calculado, lee el suyo",
+          cuerpo_de(llama("GET", "/api/panel", cookie=COOKIE_OLGA))["servicio"]["visitas"], 33)
+_lu = {u["_id"]: u for u in cuerpo_de(llama("GET", "/api/admin/usuarios", cookie=COOKIE_JEFE))["usuarios"]}
+comprueba("la lista de usuarios dice sus clientes y centros, y su panel",
+          (_lu["olga@serunion.es"]["clientes"], _lu["olga@serunion.es"]["centros"],
+           _lu["olga@serunion.es"]["panel"]["existe"]), (["CONSUM"], ["2002"], True))
+comprueba("a un cliente si se le recorta: sus centros, dentro de su perfil",
+          _C.cabina_y_ambito("cli-airbus", {"tipo": "cliente", "ambito": {"clientes": ["AIRBUS"]}},
+                             {"centros": ["500088"], "delegaciones": ["SEVILLA"]}),
+          ("cli-airbus~699b6f168b0d", {"clientes": ["AIRBUS"], "acota": {"centros": ["500088"]}}))
+comprueba("del personal sin ambito, con clientes: el suyo, no el del interno",
+          _C.cabina_y_ambito("ope-todo", {"tipo": "operaciones", "ambito": {}}, {"clientes": ["CONSUM"]})[0]
+          .startswith("ope-todo~"), True)
+comprueba("con clientes recortados, utilizo tampoco le sale",
+          L.A.cuadrados_de({"tipo": "direccion", "cuadrados": ["utilizo"],
+                            "ambito": _C.cabina_y_ambito("dir", {"tipo": "direccion", "ambito": {}},
+                                                         {"clientes": ["CONSUM"]})[1]}), [])
+comprueba("y el asistente sabe a que se le recorta",
+          L.A.contexto_asistente({}, {"tipo": "operaciones", "ambito": {"acota": {"clientes": ["CONSUM"]}}})
+          ["ambito"]["solo_clientes"], ["CONSUM"])
+llama("POST", "/api/admin/usuarios", dict(_olga, delegaciones=["SEVILLA", "CADIZ"]), cookie=COOKIE_JEFE)
+comprueba("quitado el recorte, vuelve al panel de sus delegaciones",
+          cuerpo_de(llama("GET", "/api/panel", cookie=COOKIE_OLGA))["servicio"]["visitas"], 77)
+
 print("\nAl guardar un perfil con delegaciones de antes, pasan a sus usuarios")
 pon_fila("USUARIO#luis@serunion.es", {"nombre": "Luis", "perfil_id": "ope-sur", "estado": "activo"})
 llama("POST", "/api/admin/perfiles", {"perfil_id": "ope-sur", "nombre": "Operaciones Sur", "tipo": "operaciones",

@@ -951,6 +951,31 @@ const toca = titulo => !process.env.SOLO || titulo.toLowerCase().includes(proces
     cuerpo = await envio;
     comprueba('se guarda el cliente entero, sin delegaciones', [cuerpo.ambito, cuerpo.sesiones],
       [{ clientes: ['CONSUM'], centros: [] }, ['resumen', 'cuadro']]);
+
+    // Los clientes y centros que ve cada usuario (docs/74): un recorte de lo
+    // que ve su perfil, elegido de la misma lista.
+    console.log('  · los clientes y centros de un usuario');
+    await pagina.waitForSelector('[data-ed="cli-airbus"]');
+    await pagina.click('#pestanas button[data-s="usuarios"]');
+    await pagina.click('[data-ed="eva@airbus.com"]');
+    comprueba_que('salen en su ficha, vacios: ve todo lo de su perfil',
+      await pagina.isVisible('#fClientesU') && (await pagina.textContent('#rClientesU')).includes('Vacío'),
+      await pagina.textContent('#rClientesU'));
+    await pagina.click('#fClientesU');
+    comprueba('solo los clientes que su perfil ve', (await listaDe('fClientesU')).map(x => x[0]), ['AIRBUS']);
+    await pagina.click('#fClientesULista li:has-text("AIRBUS")');
+    await pagina.click('#fCentrosU');
+    comprueba('y solo sus centros', (await listaDe('fCentrosU')).map(x => x[0]), ['AIRBUS SAN PABLO SUR']);
+    await pagina.click('#fCentrosULista li:has-text("AIRBUS SAN PABLO SUR")');
+    await pagina.keyboard.press('Escape');
+    const guardadoU = () => new Promise(r => pagina.on('request', q => {
+      if (q.method() === 'POST' && q.url().endsWith('/api/admin/usuarios')) r(JSON.parse(q.postData()));
+    }));
+    envio = guardadoU();
+    await pagina.click('#bGuardar');
+    cuerpo = await envio;
+    comprueba('se guarda: el cliente con centros marcados, solo sus centros',
+      [cuerpo.clientes, cuerpo.centros, cuerpo.delegaciones], [[], ['500092'], []]);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
@@ -2375,11 +2400,12 @@ const toca = titulo => !process.env.SOLO || titulo.toLowerCase().includes(proces
         furgonetas: { nombre: 'Furgonetas', tablas: { vehiculos: 'Furgonetas activas', dias: 'Furgonetas con visitas, día a día' } },
         ventas: { nombre: 'Ventas', tablas: {} } } };
     const { pagina, errores, fuera } = await abre('/consola/');
+    const listaU = id => pagina.$$eval(`#${id}Lista li[role=option] .txt`, x => x.map(l => l.textContent));
     await pagina.waitForSelector('[data-ed="olga@serunion.es"]');
     comprueba_que('la lista de usuarios dice lo que se le ha quitado',
       (await pagina.textContent('body')).includes('4 de 5 cuadrados · 1 tabla quitada'));
     comprueba_que('y las delegaciones que ve: sin marcar, las de su perfil de antes',
-      (await pagina.textContent('tr:has-text("olga@serunion.es") td[data-et="Delegaciones"]')).includes('SEVILLA (del perfil, de antes)'));
+      (await pagina.textContent('tr:has-text("olga@serunion.es") td[data-et="Qué ve"]')).includes('SEVILLA (del perfil, de antes)'));
     comprueba_que('y a quien no se le quita nada, que no tiene cuadrados (cliente)',
       (await pagina.textContent('tr:has-text("eva@airbus.com")')).includes('—'));
     await pagina.click('[data-ed="olga@serunion.es"]');
@@ -2410,7 +2436,16 @@ const toca = titulo => !process.env.SOLO || titulo.toLowerCase().includes(proces
       (await pagina.textContent('#rDelegacionesU')).includes('MADRID: 2 centros')
       && (await pagina.textContent('#rDelegacionesU')).includes('SEVILLA: 1 centro'),
       await pagina.textContent('#rDelegacionesU'));
+    // Y sus clientes (docs/74): de los de sus delegaciones, uno entero.
+    await pagina.click('#fClientesU');
+    comprueba('los clientes, solo los de sus delegaciones',
+      (await listaU('fClientesU')).sort(), ['AIRBUS', 'CONSUM']);
+    await pagina.click('#fClientesULista li:has-text("CONSUM")');
+    await pagina.keyboard.press('Escape');
+    comprueba_que('y dice con cuantos centros encaja',
+      (await pagina.textContent('#rClientesU')).includes('CONSUM: entero, 1 centro'), await pagina.textContent('#rClientesU'));
     if (FOTOS) {
+      await pagina.$eval('#campoDelegacionesU', x => x.scrollIntoView({ block: 'start' }));
       await pagina.screenshot({ path: path.join(FOTOS, 'consola-claro.png'), fullPage: false });
       await pagina.emulateMedia({ colorScheme: 'dark' });
       await pagina.screenshot({ path: path.join(FOTOS, 'consola-oscuro.png'), fullPage: false });
@@ -2420,7 +2455,10 @@ const toca = titulo => !process.env.SOLO || titulo.toLowerCase().includes(proces
     await pagina.waitForTimeout(200);
     comprueba('en movil el dialogo no se sale de la pantalla',
       await pagina.evaluate(() => document.querySelector('#dlg').scrollWidth <= window.innerWidth), true);
-    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'consola-movil.png'), fullPage: false });
+    if (FOTOS) {
+      await pagina.$eval('#campoClientesU', x => x.scrollIntoView({ block: 'start' }));
+      await pagina.screenshot({ path: path.join(FOTOS, 'consola-movil.png'), fullPage: false });
+    }
     await pagina.setViewportSize({ width: 1280, height: 800 });
     const envio = new Promise(r => pagina.on('request', q => {
       if (q.method() === 'POST' && q.url().endsWith('/api/admin/usuarios')) r(JSON.parse(q.postData()));
@@ -2430,6 +2468,7 @@ const toca = titulo => !process.env.SOLO || titulo.toLowerCase().includes(proces
     comprueba('se guarda lo que se le quita', [cuerpo.cuadrados_ocultos, cuerpo.tablas_ocultas],
       [['furgonetas'], { rutas: ['festivos'], averias: ['abiertas'] }]);
     comprueba('y sus delegaciones', cuerpo.delegaciones, ['SEVILLA', 'MADRID']);
+    comprueba('y sus clientes', [cuerpo.clientes, cuerpo.centros], [['CONSUM'], []]);
     await pagina.waitForSelector('[data-ed="olga@serunion.es"]');
     await pagina.click('[data-ed="olga@serunion.es"]');
     await pagina.selectOption('#fPerfil', 'cli-airbus');

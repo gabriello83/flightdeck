@@ -31,7 +31,7 @@ import boto3
 import autorizacion as A
 import catalogo as CAT
 import telemetria as TE
-from comun import (abre_sesion, borra, cabina_y_ambito, cierra_sesion, config, cookie_sesion,
+from comun import (abre_sesion, acota_de, borra, cabina_y_ambito, cierra_sesion, config, cookie_sesion,
                    cuerpo, delegaciones_de, escribe, lee, lista, panel_de, quien_es, r, s3, BUCKET)
 
 cog = boto3.client("cognito-idp")
@@ -846,15 +846,18 @@ def administra(evento, metodo, ruta, admin):
     d = cuerpo(evento)
 
     if resto == "usuarios" and metodo == "GET":
-        # Con su panel quien tiene delegaciones (docs/65): el suyo se escribe
-        # en la pasada de agregados siguiente a marcarlas, y hasta entonces
-        # entra a una pantalla que dice que todavia no hay datos.
+        # Con su panel quien tiene delegaciones (docs/65) o clientes y centros
+        # recortados (docs/74): el suyo se escribe en la pasada de agregados
+        # siguiente a marcarlas, y hasta entonces entra a una pantalla que dice
+        # que todavia no hay datos.
         perfiles = {p["_id"]: p for p in lista("PERFIL#")}
         usuarios = lista("USUARIO#")
         for u in usuarios:
             p = perfiles.get(u.get("perfil_id", ""), {"tipo": "cliente"})
             u["delegaciones"] = delegaciones_de(p, u)
-            if u["delegaciones"]:
+            acota = acota_de(u)
+            u["clientes"], u["centros"] = acota.get("clientes", []), acota.get("centros", [])
+            if u["delegaciones"] or acota:
                 u["panel"] = _hay_panel(cabina_y_ambito(u.get("perfil_id", ""), p, u)[0])
         return r(200, {"usuarios": usuarios})
 
@@ -894,6 +897,9 @@ def administra(evento, metodo, ruta, admin):
             # Las delegaciones que ve (docs/65), solo del personal: se eligen
             # aqui y no en el perfil. Vacio = todas las de su perfil.
             "delegaciones": delegaciones_de(perfil, d),
+            # Los clientes y centros a los que se le recorta lo que ve (docs/74),
+            # de cualquier perfil. Vacio = todo lo de su perfil.
+            **{k: acota_de(d).get(k, []) for k in ("clientes", "centros")},
             "alta_por": admin["correo"],
         })
         return r(200, {"ok": True, "nuevo": nuevo})

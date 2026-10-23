@@ -525,7 +525,8 @@ def cuadrados_de(perfil):
     if nivel_de(tipo) < NIVEL["direccion"]:
         out = [c for c in out if c not in SOLO_DIRECCION]
     ambito = perfil.get("ambito") or {}
-    if any(ambito.get(k) for k in ("clientes", "centros", "delegaciones")):
+    # Con clientes o centros recortados al usuario (acota, docs/74) tampoco.
+    if any(ambito.get(k) for k in ("clientes", "centros", "delegaciones", "acota")):
         out = [c for c in out if c not in SIN_AMBITO]
     quitados = set(perfil.get("cuadrados_ocultos") or [])
     return [c for c in out if c not in quitados]
@@ -668,6 +669,10 @@ def contexto_asistente(panel_recortado, perfil):
             # Las del usuario, si se las marcaron (docs/65); un cliente no lleva.
             "delegaciones": perfil.get("ambito", {}).get("delegaciones", [])
             if perfil.get("tipo", "cliente") != "cliente" else [],
+            # Y los clientes y centros a los que se le recorta (docs/74): ve
+            # solo lo que encaja en lo de arriba Y en esto.
+            "solo_clientes": (perfil.get("ambito", {}).get("acota") or {}).get("clientes", []),
+            "solo_centros": (perfil.get("ambito", {}).get("acota") or {}).get("centros", []),
         },
         "datos": panel_recortado,
     }
