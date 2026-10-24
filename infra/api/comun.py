@@ -53,7 +53,7 @@ def lista_dias(prefijos, desde):
     """Las filas por dia (sk = AAAA-MM-DD) de unos tipos, desde un dia.
 
     Para el uso de la dashboard y de Vendi (docs/77): son una fila por persona y
-    dia, miles como mucho. Devuelve (pk, sk, dato).
+    dia, miles como mucho. Devuelve (pk, sk, dato, expira o None).
     """
     out, arranque = [], None
     valores = {f":p{i}": {"S": p} for i, p in enumerate(prefijos)}
@@ -65,7 +65,8 @@ def lista_dias(prefijos, desde):
             kw["ExclusiveStartKey"] = arranque
         res = ddb.scan(**kw)
         for it in res.get("Items", []):
-            out.append((it["pk"]["S"], it["sk"]["S"], json.loads(it.get("dato", {}).get("S", "{}"))))
+            expira = int(it["expira"]["N"]) if "expira" in it else None
+            out.append((it["pk"]["S"], it["sk"]["S"], json.loads(it.get("dato", {}).get("S", "{}")), expira))
         arranque = res.get("LastEvaluatedKey")
         if not arranque:
             return out

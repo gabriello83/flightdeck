@@ -772,6 +772,7 @@ comprueba("la portada, sin Referer, el boton del asistente y Vendi por dentro no
           _fila["entradas"], 1)
 falsos.pon_fila("USO#olga@serunion.es", {"preguntas": 3, "gasto_usd": 0.41234}, _dia)
 falsos.pon_fila("USO#jefe@serunion.es", {"preguntas": 1, "gasto_usd": 0.1}, "2026-10-22")
+falsos.TABLA[("USO#jefe@serunion.es", "2026-10-22")]["expira"] = {"N": str(int(_t.time()) + 40 * 86400)}
 
 
 def _pla(cookie):
@@ -788,6 +789,8 @@ comprueba("el administrador ve a cada persona, con su nombre y su perfil",
 comprueba("y en su dia, la dashboard y Vendi juntos",
           {k: _olga_p["dias"][_dia][k] for k in ("entradas", "vistas", "preguntas", "gasto_usd")},
           {"entradas": 1, "vistas": 4, "preguntas": 3, "gasto_usd": 0.4123})
+comprueba("las filas de Vendi que caducaban a los 40 dias pasan a 800 desde su dia",
+          int(falsos.TABLA[("USO#jefe@serunion.es", "2026-10-22")]["expira"]["N"]), 1792627200 + 800 * 86400)
 comprueba("dice desde cuando se cuenta cada cosa", (_p["desde_web"], _p["desde_ia"]), (_dia, "2026-10-22"))
 comprueba("quien solo pregunto a Vendi sale sin vistas",
           next(u for u in _p["usuarios"] if u["correo"] == "jefe@serunion.es")["dias"]["2026-10-22"],

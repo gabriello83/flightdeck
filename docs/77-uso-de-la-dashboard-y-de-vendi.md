@@ -44,7 +44,8 @@ En DynamoDB, una fila por persona y día:
   asistente: es el mismo contador del límite de preguntas por día, por eso va en UTC.
 
 Las dos duran 800 días, como el resto de históricos. Las filas `USO#` duraban 40: las que ya
-había se alargan a 800 al subir este cambio. Si apuntar el uso falla, se calla: contarlo nunca
+había las alarga a 800 desde su día la API, la primera vez que alguien abre la pestaña Vendi
+(es la única Lambda que las lee todas, y Claude no tiene acceso directo a DynamoDB). Si apuntar el uso falla, se calla: contarlo nunca
 tumba la petición que lo cuenta.
 
 ## Quién lo ve

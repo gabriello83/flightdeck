@@ -152,8 +152,18 @@ def uso_plataforma(dias=400):
     nombres = {u["_id"]: u for u in lista("USUARIO#")}
     perfiles = {p["_id"]: p.get("nombre") or p["_id"] for p in lista("PERFIL#")}
     gente, desde_web, desde_ia = {}, None, None
-    for pk, dia, dato in lista_dias(["ACCESO#", "USO#"], desde):
+    import time
+    for pk, dia, dato, expira in lista_dias(["ACCESO#", "USO#"], desde):
         tipo, correo = pk.split("#", 1)
+        if tipo == "USO" and expira and expira < time.time() + 400 * 86400:
+            # Las filas de Vendi de antes de docs/77 caducaban a los 40 dias.
+            # Se alargan aqui, la primera vez que alguien las mira, a los 800
+            # desde su dia: es la unica Lambda que las lee todas.
+            try:
+                d0 = datetime.datetime.strptime(dia, "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc)
+                escribe(pk, dato, dia, expira=int(d0.timestamp()) + DIAS_USO * 86400)
+            except Exception as e:  # noqa: BLE001
+                print(f"USO no alargado: {type(e).__name__}: {e}")
         u = nombres.get(correo, {})
         quien = gente.setdefault(correo, {
             "correo": correo, "nombre": u.get("nombre", ""),
