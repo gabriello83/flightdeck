@@ -1398,11 +1398,13 @@ def con_los_meses_guardados(perfil_id, carpeta, anterior, historia, hoy):
     solo ve los meses que toca. Sin esto, la pagina no ofreceria los meses que
     ya estan en S3. Tampoco cuando el fichero ya existe pero lo escribio una
     noche sin este arreglo (24-oct-2026: solo apuntaba los meses recientes).
-    Solo se leen los meses que el fichero no dice; un panel cuyo fichero ya
+    Solo se leen los meses que el fichero no dice, y el mas antiguo que dice,
+    que puede ir a medias (el fichero guarda 62 dias); un panel cuyo fichero ya
     empieza en el primer mes de la historia no lee nada."""
     ya = set(((anterior or {}).get("meses_dias")) or {})
     if ya and min(ya) <= S.mes_de(S.PRIMER_DIA):
         return historia
+    ya.discard(min(ya, default=None))
     guardados = {}
     for mes in S.meses_entre(S.PRIMER_DIA, hoy):
         if mes not in historia and mes not in ya:

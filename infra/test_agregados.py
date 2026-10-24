@@ -970,7 +970,7 @@ _cg = L.con_los_meses_guardados("nuevo", "rutas", None, {_mes: {"dias": {AYER.is
 comprueba("un panel nuevo sin fichero de rutas ve los meses ya guardados",
           (sorted(_cg), sorted(L.OP.meses_dias(None, _cg, {})["2025-03"])), (["2025-03", _mes], [4, 5]))
 comprueba("ni cuando una noche anterior solo apunto los meses recientes",
-          sorted(L.con_los_meses_guardados("nuevo", "rutas", {"meses_dias": {_mes: [1]}}, {}, AYER)),
+          sorted(L.con_los_meses_guardados("nuevo", "rutas", {"meses_dias": {"2025-03": [30, 31]}}, {}, AYER)),
           ["2025-03"])
 comprueba("y si el fichero ya empieza en el primer mes, no se lee nada mas",
           sorted(L.con_los_meses_guardados("nuevo", "rutas", {"meses_dias": {"2025-01": [1]}}, {}, AYER)),
