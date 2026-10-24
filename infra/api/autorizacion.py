@@ -273,6 +273,34 @@ def asistente_habilitado(config, perfil, usuario):
     return True, ""
 
 
+# Los modelos que puede usar el asistente (docs/78), con lo que cobra Anthropic
+# por millon de tokens, en dolares: entrada, salida, y lectura y escritura de
+# cache (la de 5 minutos, 1,25 veces la entrada). Haiku cobra cinco veces mas
+# todo cuando la peticion pasa de 100.000 tokens. Hay que revisarlos si cambian.
+MODELOS_ASISTENTE = {
+    "claude-opus-5-5": {"nombre": "Opus 5.5", "entrada": 4.00, "salida": 20.00,
+                        "cache_lectura": 0.20, "cache_escritura": 5.00},
+    "claude-sonnet-5-5": {"nombre": "Sonnet 5.5", "entrada": 2.00, "salida": 10.00,
+                          "cache_lectura": 0.20, "cache_escritura": 2.50},
+    "claude-haiku-5-5": {"nombre": "Haiku 5.5", "entrada": 0.10, "salida": 0.50,
+                         "cache_lectura": 0.01, "cache_escritura": 0.125, "largo": 100000, "x_largo": 5},
+}
+
+
+def modelo_asistente(config, perfil, pedido=None, defecto="claude-opus-5-5"):
+    """El modelo con el que contesta el asistente.
+
+    Lo elige el administrador en la consola (config asistente_modelo); si no
+    hay, el de la variable MODELO de la Lambda. Un perfil admin puede pedir otro
+    en una pregunta suelta, para comparar sin cambiarselo a nadie; cualquier
+    otro perfil que lo pida se queda con el de siempre.
+    """
+    if pedido in MODELOS_ASISTENTE and perfil.get("tipo") == "admin":
+        return pedido
+    m = config.get("asistente_modelo")
+    return m if m in MODELOS_ASISTENTE else (defecto if defecto in MODELOS_ASISTENTE else "claude-opus-5-5")
+
+
 def dentro_del_limite(usadas, limite):
     """El limite diario por usuario. 0 o ausente significa sin limite."""
     if not limite:

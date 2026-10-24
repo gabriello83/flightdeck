@@ -290,6 +290,21 @@ const API = {
           { dia: viejo, acciones: 40, horas: 3, primera: '09:00:00', ultima: '12:00:00', cuentas: ['A.PEREZ <X>'] }] }]
     };
   })(),
+  // La dashboard y Vendi (docs/77), con la forma que devuelve uso_plataforma.
+  '/api/utilizo/plataforma': (() => {
+    const hoy = iso(new Date()), ayer = iso(AYER);
+    return {
+      desde_web: ayer, desde_ia: ayer, hoy,
+      usuarios: [
+        { correo: 'david@serunion.es', nombre: 'David <D>', perfil: 'Dirección', dias: {
+          [ayer]: { entradas: 1, vistas: 9, paginas: { operativo: 5, rutas: 4 }, primera: '08:02', ultima: '18:30', preguntas: 4, gasto_usd: 0.52 },
+          [hoy]: { entradas: 0, vistas: 2, paginas: { operativo: 2 }, primera: '09:00', ultima: '09:10' } } },
+        { correo: 'olga@serunion.es', nombre: 'Olga', perfil: 'Operaciones Sur', dias: {
+          [ayer]: { entradas: 2, vistas: 3, paginas: { incidencias: 3 }, primera: '10:00', ultima: '11:15' } } },
+        { correo: 'pepe@serunion.es', nombre: '', perfil: 'Operaciones Sur', dias: {
+          [hoy]: { preguntas: 1, gasto_usd: 0.1 } } }]
+    };
+  })(),
   // La revision de clientes (docs/59), con la forma que escribe infra/revision.py.
   '/api/revision': (() => {
     const sitio = (mat, d, cl, cli, ce, cen) => ({ matricula: mat, delegacion: d, cod_cliente: cl, cliente: cli,
@@ -2233,6 +2248,80 @@ const servidor = http.createServer((pet, res) => {
     await pagina.emulateMedia({ colorScheme: 'dark' });
     comprueba_que('en oscuro el fondo es oscuro',
       (await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(18, 18, 17)');
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nEl modelo del asistente, en la consola (docs/78)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre('/consola/');
+    await pagina.waitForSelector('#pestanas button');
+    await pagina.click('#pestanas button[data-s="plataforma"]');
+    await pagina.waitForSelector('#cModelo');
+    comprueba('sin elegir, el de la Lambda', await pagina.inputValue('#cModelo'), '');
+    await pagina.selectOption('#cModelo', 'claude-haiku-5-5');
+    const [pet] = await Promise.all([
+      pagina.waitForRequest(q => q.method() === 'PUT' && q.url().endsWith('/api/admin/config')),
+      pagina.click('#bGuardaConfig')]);
+    comprueba('al guardar manda el modelo', JSON.parse(pet.postData()).asistente_modelo, 'claude-haiku-5-5');
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  console.log('\nUtilizo: la dashboard y Vendi (docs/77)');
+  {
+    const FOTOS = process.env.FOTOS_UTILIZO;
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre('/utilizo/');
+    await pagina.waitForSelector('#tabla tbody tr');
+    const textos = async sel => pagina.$$eval(sel, x => x.map(e => e.textContent.replace(/\s+/g, ' ').trim()));
+    comprueba_que('VenCloud no pide lo de la dashboard hasta abrir su pestaña', !pedidos.includes('/api/utilizo/plataforma'));
+    await pagina.click('#pestanas [data-que="web"]');
+    await pagina.waitForFunction(() => location.hash.includes('que=web') && document.querySelector('#tabla h2').textContent.includes('dashboard'));
+    comprueba('la dashboard hoy: quien la abrio, paginas y entradas', await textos('.kpi .vl'), ['1', '2', '0']);
+    await pagina.selectOption('#fDia', iso(AYER));
+    await pagina.waitForFunction(() => document.querySelectorAll('#tabla tbody tr').length === 2);
+    comprueba('ayer: las dos personas, la que mas paginas vio primero', await textos('#tabla tbody tr td:first-child .mat'), ['David <D>', 'Olga']);
+    comprueba_que('el nombre va escapado', (await pagina.innerHTML('#tabla')).includes('David &lt;D&gt;'));
+    comprueba('con sus paginas, entradas y la que mas abrio',
+      (await textos('#tabla tbody tr:first-child td')).slice(2, 6), ['9', '1', '08:02 – 18:30', 'Informe operativo 5']);
+    const [d1] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('el Excel de la dashboard', d1.suggestedFilename() === `utilizo_dashboard_${iso(AYER)}.xlsx`, d1.suggestedFilename());
+    await pagina.click('#tabla .mat');
+    await pagina.waitForSelector('#miga:not([hidden])');
+    comprueba('pulsando, que paginas abrio', await pagina.$$eval('#vista .tabla-env', x => [...x[0].querySelectorAll('tbody tr td:first-child')].map(e => e.textContent.trim())), ['Informe operativo', 'Rutas']);
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'utilizo-persona.png'), fullPage: true });
+    await pagina.click('#volver');
+    await pagina.waitForSelector('#miga[hidden]', { state: 'attached' });
+    await pagina.click('#pestanas [data-que="ia"]');
+    await pagina.waitForFunction(() => location.hash.includes('que=ia') && document.querySelector('#tabla h2').textContent.includes('Vendi'));
+    await pagina.selectOption('#fPer', 'mes');
+    await pagina.waitForSelector('#lMes:not([hidden])');
+    await pagina.waitForFunction(() => document.querySelectorAll('#tabla tbody tr').length >= 1);
+    const mismoMes = iso(AYER).slice(0, 7) === iso(new Date()).slice(0, 7);
+    comprueba('Vendi en el mes: personas, preguntas, gasto y por pregunta', await textos('.kpi .vl'),
+      mismoMes ? ['2', '5', '0,62 US$', '0,124 US$'] : ['1', '1', '0,10 US$', '0,100 US$']);
+    comprueba_que('quien no tiene nombre sale con su correo', !mismoMes || (await textos('#tabla tbody tr td:first-child .mat')).includes('pepe@serunion.es'));
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'utilizo-vendi-claro.png'), fullPage: true });
+    const [d2] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('el Excel de Vendi', /^utilizo_vendi_\d{4}-\d\d\.xlsx$/.test(d2.suggestedFilename()), d2.suggestedFilename());
+    comprueba_que('el pie dice desde cuando se cuenta', (await pagina.textContent('#pie')).includes('Se cuenta desde'));
+    await pagina.emulateMedia({ colorScheme: 'dark' });
+    comprueba_que('en oscuro el fondo es oscuro',
+      (await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(18, 18, 17)');
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'utilizo-vendi-oscuro.png'), fullPage: true });
+    await pagina.setViewportSize({ width: 380, height: 800 });
+    comprueba('en movil no se sale de la pantalla',
+      await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'utilizo-movil.png'), fullPage: true });
+    await pagina.click('#pestanas [data-que="vencloud"]');
+    await pagina.waitForFunction(() => document.querySelector('#tabla h2').textContent.includes('VenCloud'));
+    comprueba_que('y se vuelve a VenCloud', true);
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();

@@ -39,8 +39,14 @@ class _DDB:
         return {}
 
     def scan(self, TableName, FilterExpression=None, ExpressionAttributeValues=None, **kw):
-        pref = ExpressionAttributeValues[":p"]["S"]
-        sk = ExpressionAttributeValues[":s"]["S"]
+        v_ = ExpressionAttributeValues
+        if ":d" in v_:
+            # lista_dias: varios tipos, dias desde uno
+            prefs = [x["S"] for k, x in v_.items() if k.startswith(":p")]
+            return {"Items": [v for (pk, s), v in TABLA.items()
+                              if any(pk.startswith(p) for p in prefs) and s >= v_[":d"]["S"]]}
+        pref = v_[":p"]["S"]
+        sk = v_[":s"]["S"]
         items = [v for (pk, s), v in TABLA.items() if pk.startswith(pref) and s == sk]
         return {"Items": items}
 

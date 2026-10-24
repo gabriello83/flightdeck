@@ -304,6 +304,15 @@ comprueba("apagado para todos", yo2["asistente"]["habilitado"], False)
 comprueba("y dice que es global", "plataforma" in yo2["asistente"]["motivo"], True)
 llama("PUT", "/api/admin/config", {"asistente_global": True}, cookie=COOKIE_JEFE)
 
+print("\nEl modelo del asistente se elige en la consola (docs/78)")
+comprueba("uno de la lista se guarda",
+          cuerpo_de(llama("PUT", "/api/admin/config", {"asistente_modelo": "claude-haiku-5-5"},
+                          cookie=COOKIE_JEFE))["asistente_modelo"], "claude-haiku-5-5")
+comprueba("uno que no esta, 400",
+          llama("PUT", "/api/admin/config", {"asistente_modelo": "gpt-loquesea"}, cookie=COOKIE_JEFE)["statusCode"], 400)
+comprueba("vacio, vuelve al de la Lambda",
+          cuerpo_de(llama("PUT", "/api/admin/config", {"asistente_modelo": ""}, cookie=COOKIE_JEFE))["asistente_modelo"], "")
+
 print("\nUn usuario bloqueado no pasa, aunque tenga cookie")
 pon_fila("USUARIO#ana@airbus.com", {"nombre": "Ana", "perfil_id": "cli-airbus",
                                     "estado": "bloqueado", "asistente": True})
@@ -723,6 +732,69 @@ comprueba("operaciones tampoco", _uti(cookie=COOKIE_OLGA), 403)
 comprueba("el administrador ve el de su perfil, comprimido", _uti(cookie=COOKIE_JEFE), ("gzip", "interno"))
 del falsos.OBJETOS["cabina/interno/utilizo.json.gz"]
 comprueba("sin calcular todavia, 503", _uti(cookie=COOKIE_JEFE), 503)
+
+print("\nUtilizo, la dashboard y Vendi (docs/77): quien entra, cuanto, y cuanto gasta")
+
+
+def _yo(cookie, referer=None, **cab):
+    ev = falsos.peticion("GET", "/api/yo", cookie=cookie)
+    if referer:
+        ev["headers"]["referer"] = referer
+    ev["headers"].update(cab)
+    return L.lambda_handler(ev, None)["statusCode"]
+
+
+def _acceso(correo):
+    return {(pk, sk): v for (pk, sk), v in falsos.TABLA.items() if pk == f"ACCESO#{correo}"}
+
+
+_dia = L._ahora_espana().date().isoformat()
+for k in [k for k in falsos.TABLA if k[0].startswith(("ACCESO#", "USO#"))]:
+    del falsos.TABLA[k]
+llama("POST", "/api/acceso", {"correo": "olga@serunion.es", "clave": "ClaveDeOlga12"})
+_fila = json.loads(_acceso("olga@serunion.es")[("ACCESO#olga@serunion.es", _dia)]["dato"]["S"])
+comprueba("entrar cuenta una entrada, en el dia de España", _fila["entradas"], 1)
+comprueba("y lleva su hora y su caducidad de 800 dias",
+          (len(_fila["primera"]), int(_acceso("olga@serunion.es")[("ACCESO#olga@serunion.es", _dia)]["expira"]["N"])
+           > _t.time() + 799 * 86400), (5, True))
+_yo(COOKIE_OLGA, "https://dashboard.digivend.es/rutas/#x")
+_yo(COOKIE_OLGA, "https://dashboard.digivend.es/rutas/")
+_yo(COOKIE_OLGA, "https://dashboard.digivend.es/operativo/")
+_yo(COOKIE_OLGA, "https://dashboard.digivend.es/inventada/")
+_yo(COOKIE_OLGA, "https://dashboard.digivend.es/")
+_yo(COOKIE_OLGA)
+_yo(COOKIE_OLGA, "https://dashboard.digivend.es/rutas/", **{"x-digivend-vista": "no"})
+_yo(COOKIE_OLGA, "https://dashboard.digivend.es/rutas/", **{"user-agent": "digivend-asistente"})
+_fila = json.loads(_acceso("olga@serunion.es")[("ACCESO#olga@serunion.es", _dia)]["dato"]["S"])
+comprueba("cada pagina abierta suma una vista, y una ruta rara cuenta como «otra»",
+          (_fila["vistas"], _fila["paginas"]), (4, {"rutas": 2, "operativo": 1, "otra": 1}))
+comprueba("la portada, sin Referer, el boton del asistente y Vendi por dentro no cuentan",
+          _fila["entradas"], 1)
+falsos.pon_fila("USO#olga@serunion.es", {"preguntas": 3, "gasto_usd": 0.41234}, _dia)
+falsos.pon_fila("USO#jefe@serunion.es", {"preguntas": 1, "gasto_usd": 0.1}, "2026-10-22")
+falsos.TABLA[("USO#jefe@serunion.es", "2026-10-22")]["expira"] = {"N": str(int(_t.time()) + 40 * 86400)}
+
+
+def _pla(cookie):
+    x = llama("GET", "/api/utilizo/plataforma", cookie=cookie)
+    return x["statusCode"] if x["statusCode"] != 200 else cuerpo_de(x)
+
+
+comprueba("un cliente no lo ve", _pla(COOKIE_ANA), 403)
+comprueba("operaciones tampoco", _pla(COOKIE_OLGA), 403)
+_p = _pla(COOKIE_JEFE)
+_olga_p = next(u for u in _p["usuarios"] if u["correo"] == "olga@serunion.es")
+comprueba("el administrador ve a cada persona, con su nombre y su perfil",
+          (_olga_p["nombre"], _olga_p["perfil"]), ("Olga", "Operaciones Sur"))
+comprueba("y en su dia, la dashboard y Vendi juntos",
+          {k: _olga_p["dias"][_dia][k] for k in ("entradas", "vistas", "preguntas", "gasto_usd")},
+          {"entradas": 1, "vistas": 4, "preguntas": 3, "gasto_usd": 0.4123})
+comprueba("las filas de Vendi que caducaban a los 40 dias pasan a 800 desde su dia",
+          int(falsos.TABLA[("USO#jefe@serunion.es", "2026-10-22")]["expira"]["N"]), 1792627200 + 800 * 86400)
+comprueba("dice desde cuando se cuenta cada cosa", (_p["desde_web"], _p["desde_ia"]), (_dia, "2026-10-22"))
+comprueba("quien solo pregunto a Vendi sale sin vistas",
+          next(u for u in _p["usuarios"] if u["correo"] == "jefe@serunion.es")["dias"]["2026-10-22"],
+          {"preguntas": 1, "gasto_usd": 0.1})
 
 print("\nLa pagina de devoluciones (docs/57): igual, con su propio fichero")
 falsos.OBJETOS["cabina/ope-sur/devoluciones.json.gz"] = gzip.compress(json.dumps({"perfil": "ope-sur"}).encode())
