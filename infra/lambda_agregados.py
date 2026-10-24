@@ -1370,7 +1370,7 @@ def escribe_operativo(perfil_id, op):
     meses = op.centros_por_mes(lambda mes: _json_de(f"cabina/{perfil_id}/operativo/centros-{mes}.json.gz"))
     for mes, datos in meses.items():
         escribe_comprimido(f"cabina/{perfil_id}/operativo/centros-{mes}.json.gz", datos)
-    # La historia, un fichero por mes (docs/75): solo los meses que reciben un
+    # La historia, un fichero por mes (docs/79): solo los meses que reciben un
     # dia; un mes cerrado no se vuelve a escribir.
     historia = op.dias_por_mes(anterior, lambda mes: _json_de(f"cabina/{perfil_id}/operativo/dias-{mes}.json.gz"))
     for mes, datos in historia.items():
@@ -1380,7 +1380,7 @@ def escribe_operativo(perfil_id, op):
     return fichero
 
 def escribe_rutas_por_mes(perfil_id, op, anterior, maquinas):
-    """La historia de la pagina de rutas, un fichero por mes (docs/75): solo
+    """La historia de la pagina de rutas, un fichero por mes (docs/79): solo
     los meses que reciben un dia. Devuelve los escritos."""
     historia = op.rutas_por_mes(anterior, lambda mes: _json_de(f"cabina/{perfil_id}/rutas/dias-{mes}.json.gz"),
                                 maquinas.quien_por_dia())
@@ -1391,7 +1391,7 @@ def escribe_rutas_por_mes(perfil_id, op, anterior, maquinas):
 
 def con_los_meses_guardados(perfil_id, carpeta, anterior, historia, hoy):
     """Los meses de la historia de una pagina, tambien los ya guardados, cuando
-    su fichero no dice que meses hay (docs/75).
+    su fichero no dice que meses hay (docs/79).
 
     Pasa con un panel nuevo: el relleno le escribe rutas/ y furgonetas/ mes a
     mes, pero no tiene fichero de pagina donde apuntar meses_dias, y la noche
@@ -1415,7 +1415,7 @@ def con_los_meses_guardados(perfil_id, carpeta, anterior, historia, hoy):
 
 
 def escribe_furgonetas_por_mes(perfil_id, op, anterior, vehiculos, ambito, historia_km):
-    """La historia de la pagina de furgonetas, un fichero por mes (docs/75):
+    """La historia de la pagina de furgonetas, un fichero por mes (docs/79):
     solo los meses que reciben un dia. Devuelve los escritos."""
     meses = op.furgonetas_por_mes(
         anterior, lambda mes: _json_de(f"cabina/{perfil_id}/furgonetas/dias-{mes}.json.gz"),
@@ -1831,7 +1831,7 @@ def lambda_handler(event, context):
                         maquinas[acu.perfil["id"]].come(nombre, propias, dia)
                 elif propias and nombre == "partes":
                     # En un relleno, solo quien hizo cada ruta, para la
-                    # historia de la pagina de rutas (docs/75).
+                    # historia de la pagina de rutas (docs/79).
                     maquinas[acu.perfil["id"]].come(nombre, propias, dia)
                 if propias and metodo and not historico:
                     getattr(acu, metodo)(propias)
@@ -1849,7 +1849,7 @@ def lambda_handler(event, context):
             existencias.come(lee_dia(*MOV_ALMACEN, dia))
         # Las visitas de la SAT, por la furgoneta del tecnico (docs/58).
         # Traen la matricula de la maquina: el ambito sale del mapa. Tambien en
-        # un relleno: son las visitas de la historia de furgonetas (docs/75).
+        # un relleno: son las visitas de la historia de furgonetas (docs/79).
         sat_v = lee_dia(*SAT_VISITAS, dia)
         if sat_v:
             leidas["sat_visitas"] += len(sat_v)
@@ -1992,7 +1992,7 @@ def lambda_handler(event, context):
                     for acu in acumuladores]
     if historico:
         # El maestro de vehiculos de hoy y la historia de jornadas, para la
-        # historia de la pagina de furgonetas (docs/75).
+        # historia de la pagina de furgonetas (docs/79).
         vehiculos_h = _json_de(CLAVE_VEHICULOS)
         vehiculos_h = _filas(vehiculos_h) if vehiculos_h is not None else None
         historia_km_h = _json_de(CLAVE_HISTORIA_KM) or {}
@@ -2000,7 +2000,7 @@ def lambda_handler(event, context):
         # habia: la foto y los dias de fuera del tramo se quedan como estaban.
         for acu in acumuladores:
             fichero = escribe_operativo(acu.perfil["id"], operativos[acu.perfil["id"]])
-            # Y la historia de la pagina de rutas (docs/75): sus meses, y el
+            # Y la historia de la pagina de rutas (docs/79): sus meses, y el
             # fichero de la pagina solo cambia en que dias hay.
             clave_r = f"cabina/{acu.perfil['id']}/rutas.json.gz"
             anterior_r = _json_de(clave_r)

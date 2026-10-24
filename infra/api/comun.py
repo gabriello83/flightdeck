@@ -49,6 +49,29 @@ def escribe(pk, dato, sk="FICHA", expira=None):
     ddb.put_item(TableName=TABLA, Item=item)
 
 
+def lista_dias(prefijos, desde):
+    """Las filas por dia (sk = AAAA-MM-DD) de unos tipos, desde un dia.
+
+    Para el uso de la dashboard y de Vendi (docs/77): son una fila por persona y
+    dia, miles como mucho. Devuelve (pk, sk, dato, expira o None).
+    """
+    out, arranque = [], None
+    valores = {f":p{i}": {"S": p} for i, p in enumerate(prefijos)}
+    valores[":d"] = {"S": desde}
+    filtro = "(" + " OR ".join(f"begins_with(pk, :p{i})" for i in range(len(prefijos))) + ") AND sk >= :d"
+    while True:
+        kw = {"TableName": TABLA, "FilterExpression": filtro, "ExpressionAttributeValues": valores}
+        if arranque:
+            kw["ExclusiveStartKey"] = arranque
+        res = ddb.scan(**kw)
+        for it in res.get("Items", []):
+            expira = int(it["expira"]["N"]) if "expira" in it else None
+            out.append((it["pk"]["S"], it["sk"]["S"], json.loads(it.get("dato", {}).get("S", "{}")), expira))
+        arranque = res.get("LastEvaluatedKey")
+        if not arranque:
+            return out
+
+
 def borra(pk, sk="FICHA"):
     ddb.delete_item(TableName=TABLA, Key={"pk": {"S": pk}, "sk": {"S": sk}})
 

@@ -951,7 +951,7 @@ comprueba("y las averias que ya tenia el dia (con M13), tambien",
           _desp["dias"][AYER.isoformat()]["averias"], _antes["dias"][AYER.isoformat()]["averias"])
 _mes = AYER.isoformat()[:7]
 _hist = json.loads(gzip.decompress(ALMACEN[f"cabina/interno/operativo/dias-{_mes}.json.gz"]))
-comprueba("la historia del informe va en un fichero por mes (docs/75)",
+comprueba("la historia del informe va en un fichero por mes (docs/79)",
           AYER.isoformat() in _hist["dias"], True)
 comprueba("y el fichero dice que dias tiene cada mes",
           AYER.day in _desp["meses_dias"][_mes], True)

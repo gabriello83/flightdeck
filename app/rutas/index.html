@@ -437,7 +437,7 @@ function diasPeriodo(){
   }
   return HAY.has(f) ? [f] : [];
 }
-/* Un día con dato: del fichero o de su mes de la historia (docs/75). Si su mes
+/* Un día con dato: del fichero o de su mes de la historia (docs/79). Si su mes
    no ha llegado, se dice, no se pinta como un día sin plan. */
 const NO_LLEGO = {sin_dato: "No se ha podido leer este día: comprueba la conexión y vuelve a elegirlo."};
 const diaDe = f => D.dias[f] || NO_LLEGO;
@@ -502,7 +502,7 @@ async function cargaMeses(){
   meses.forEach((m, i)=>{ MESES[m] = l[i]; });
 }
 /* Los meses de la historia que hacen falta para el periodo y la semana de
-   cada delegación (docs/75): se juntan con los días del fichero. */
+   cada delegación (docs/79): se juntan con los días del fichero. */
 async function cargaHistoria(){
   const f = diaSel(), semana = DIAS_TODOS.filter(x=>x<=f).slice(-7);
   const faltan = [...new Set(diasPeriodo().concat(semana).filter(x=>!D.dias[x]).map(x=>x.slice(0,7)))]

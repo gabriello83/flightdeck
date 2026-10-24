@@ -311,7 +311,7 @@ comprueba("el cuadrado no cambia: furgonetas distintas con visita, sin las de re
 fm = op.furgonetas_por_mes({"dias": ["2026-09-30"], "km": {"2026-09-30": {"1111AAA": [5, 1, ""]}},
                             "visitas": {"1111AAA": ["2026-09-30"]}}, lambda mes: None, MAESTRO, {},
                            {"2026-10-09": {"3": [[1, 2, True]]}})
-comprueba("la historia de furgonetas (docs/75): los km y las que visitaron, por dia",
+comprueba("la historia de furgonetas (docs/79): los km y las que visitaron, por dia",
           (fm["2026-10"]["dias"][DIA]["km"]["2222BBB"], fm["2026-10"]["dias"][DIA]["v"]),
           ([500, 1, ""], ["1111AAA", "2222BBB"]))
 comprueba("los dias del fichero de la pagina pasan a su mes",
@@ -498,7 +498,7 @@ comprueba("la foto de la noche se queda", f["foto"], {"pdvs": {"activos": 7}})
 comprueba("los dias viejos salen del fichero y quedan en su mes",
           (f["primer_dia"], "2025-01-02" in f["dias"], f["meses_dias"]["2025-01"]), ("2025-01-02", False, [2]))
 
-print("\nLa historia, un fichero por mes (docs/75): un mes cerrado no se reescribe")
+print("\nLa historia, un fichero por mes (docs/79): un mes cerrado no se reescribe")
 op = OP.Operativo(["2025-03-04"], historico=True)
 op.dia("2025-03-04").come_partes([visita("P1")])
 op.cierra("2025-03-04")

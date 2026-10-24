@@ -1210,6 +1210,15 @@ function vistaPlataforma(){
         <p class="pista">0 = sin límite. Es lo que corta el gasto si alguien se desboca.</p>
       </div>
       <div class="campo">
+        <label for="cModelo">Modelo</label>
+        <select id="cModelo">
+          <option value="">El de la Lambda (Opus 5.5)</option>
+          ${[["claude-opus-5-5","Opus 5.5 · el mejor, el más caro"],["claude-sonnet-5-5","Sonnet 5.5 · la mitad"],["claude-haiku-5-5","Haiku 5.5 · unas 40 veces más barato"]]
+            .map(([v,t])=>`<option value="${v}"${CONFIG.asistente_modelo===v?" selected":""}>${esc(t)}</option>`).join("")}
+        </select>
+        <p class="pista">Con qué modelo de Claude contesta el asistente. Vale desde la siguiente pregunta de cualquiera (docs/78).</p>
+      </div>
+      <div class="campo">
         <label for="cUmbral">Umbral de rentabilidad general</label>
         <input id="cUmbral" type="number" min="0" step="25" value="${esc(CONFIG.umbral_rentabilidad_mes||350)}">
         <p class="pista">€/mes por máquina. Un perfil puede tener el suyo.</p>
@@ -1627,6 +1636,7 @@ async function guardaConfig(){
       asistente_global: $("#cAsistente").checked,
       limite_preguntas_dia: Number($("#cLimite").value)||0,
       umbral_rentabilidad_mes: Number($("#cUmbral").value)||0,
+      asistente_modelo: $("#cModelo").value,
     });
     avisa("Guardado. El interruptor global tiene efecto en la siguiente pregunta de cualquiera.", true);
   }catch(e){ avisa(e.message); }

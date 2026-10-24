@@ -1096,7 +1096,7 @@ class Operativo:
             "umbrales": {"verde": VERDE, "amarillo": AMARILLO, "festivo_bajo": FESTIVO_BAJO},
             "festivos": resumen_festivos(festivos),
             "dias": dias,
-            # Los dias de antes, en rutas/dias-AAAA-MM (docs/75): cuales hay.
+            # Los dias de antes, en rutas/dias-AAAA-MM (docs/79): cuales hay.
             "meses_dias": meses_dias(anterior, historia, dias),
             "control_festivos": control_festivos(dias, festivos),
             "_nota": ("Cada día, lo previsto en el plan de visitas (D12, informe 184) contra las "
@@ -1112,7 +1112,7 @@ class Operativo:
 
     def rutas_por_mes(self, anterior, leer_mes, quien=None):
         """Los ficheros de la historia de la pagina de rutas que toca esta
-        ejecucion (historia_por_mes, docs/75): cada dia con sus cifras por
+        ejecucion (historia_por_mes, docs/79): cada dia con sus cifras por
         delegacion y por ruta y quien hizo cada ruta, sin la lista maquina a
         maquina. `quien` es {fecha: {"delegacion␁ruta": [reponedores]}}."""
         quien = quien or {}
@@ -1135,7 +1135,7 @@ class Operativo:
 
     def furgonetas_por_mes(self, anterior, leer_mes, maestro, ambito=None, historia=None):
         """Los ficheros de la historia de la pagina de furgonetas que toca esta
-        ejecucion (historia_por_mes, docs/75): cada dia, los km de cada
+        ejecucion (historia_por_mes, docs/79): cada dia, los km de cada
         furgoneta («km», como en el fichero de la pagina) y las que visitaron
         («v»). Son las furgonetas activas de hoy: una dada de baja no sale.
 
@@ -1283,7 +1283,7 @@ class Operativo:
             "visitas": {m: sorted(f for f in fs if limite <= f <= ultimo)
                         for m, fs in sorted(visitas.items())},
             "km": {f: km[f] for f in sorted(km) if f in dias},
-            # Los dias de antes, en furgonetas/dias-AAAA-MM (docs/75): cuales hay.
+            # Los dias de antes, en furgonetas/dias-AAAA-MM (docs/79): cuales hay.
             "meses_dias": meses_dias(ant, meses, dias),
             "_nota": ("flota: las furgonetas activas del maestro de vehículos (M12, informe 191), "
                       "{m: matrícula, n: nombre(s) en VenCloud, d: delegación(es), z: área, "

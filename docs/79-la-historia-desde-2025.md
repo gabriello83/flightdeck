@@ -1,4 +1,4 @@
-# 75 · La historia desde el 1 de enero de 2025, en todas las secciones
+# 79 · La historia desde el 1 de enero de 2025, en todas las secciones
 
 > `infra/operativo.py` (`historia_por_mes`, `meses_dias`, `dias_por_mes`, `rutas_por_mes`,
 > `furgonetas_por_mes`), `infra/lambda_agregados.py` (`escribe_operativo`,
