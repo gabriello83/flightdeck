@@ -964,6 +964,14 @@ comprueba("y el fichero de rutas dice que dias tiene cada mes",
 _fur = ALMACEN.get(f"cabina/interno/furgonetas/dias-{_mes}.json.gz")
 comprueba("la de furgonetas tambien, con los km de cada dia",
           _fur is not None and AYER.isoformat() in json.loads(gzip.decompress(_fur))["dias"], True)
+ALMACEN["cabina/nuevo/rutas/dias-2025-03.json.gz"] = gzip.compress(
+    json.dumps({"dias": {"2025-03-04": {}, "2025-03-05": {}}}).encode())
+_cg = L.con_los_meses_guardados("nuevo", "rutas", None, {_mes: {"dias": {AYER.isoformat(): {}}}}, AYER)
+comprueba("un panel nuevo sin fichero de rutas ve los meses ya guardados",
+          (sorted(_cg), sorted(L.OP.meses_dias(None, _cg, {})["2025-03"])), (["2025-03", _mes], [4, 5]))
+comprueba("y si el fichero ya dice sus meses, no se lee nada mas",
+          sorted(L.con_los_meses_guardados("nuevo", "rutas", {"meses_dias": {}}, {}, AYER)), [])
+del ALMACEN["cabina/nuevo/rutas/dias-2025-03.json.gz"]
 comprueba("la SAT de antes del tramo se lee, sin pasar del primer dia",
           (len(L.previos_averias(datetime.date(2026, 3, 1))),
            len(L.previos_averias(datetime.date(2025, 1, 10)))), (120, 9))

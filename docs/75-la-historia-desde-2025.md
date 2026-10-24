@@ -43,6 +43,12 @@ El fichero de cada página sigue llevando los últimos 62 días, que es lo que a
 todos en su calendario o su lista de días y pide un mes (`?mes=AAAA-MM`) solo cuando se elige un
 día suyo.
 
+Un panel nuevo (un usuario dado de alta después del relleno) no tiene aún fichero de rutas ni de
+furgonetas donde apuntar `meses_dias`. La primera noche que lo escribe, si el fichero no existe o
+no dice qué meses hay, mira qué meses tiene ya en su carpeta (`con_los_meses_guardados`), una sola
+vez. Un panel que no ha pasado por ningún relleno no tiene meses guardados: su historia empieza
+cuando se relanza el relleno, que no reescribe nada de los demás.
+
 **Un mes cerrado no se reescribe.** La noche escribe los meses de los días que calcula (los
 últimos siete) y nada más; el relleno, los de su tramo. Un día que ya estaba lo sustituye el
 recalculado, sin pisar lo que sabe mejor la noche (la telemetría con el censo de ese día y las

@@ -1389,6 +1389,25 @@ def escribe_rutas_por_mes(perfil_id, op, anterior, maquinas):
     return historia
 
 
+def con_los_meses_guardados(perfil_id, carpeta, anterior, historia, hoy):
+    """Los meses de la historia de una pagina, tambien los ya guardados, cuando
+    su fichero no dice que meses hay (docs/75).
+
+    Pasa con un panel nuevo: el relleno le escribe rutas/ y furgonetas/ mes a
+    mes, pero no tiene fichero de pagina donde apuntar meses_dias, y la noche
+    solo ve los meses que toca. Sin esto, la pagina no ofreceria los meses que
+    ya estan en S3. Se leen una vez: desde esa noche el fichero ya los dice."""
+    if anterior is not None and anterior.get("meses_dias") is not None:
+        return historia
+    guardados = {}
+    for mes in S.meses_entre(S.PRIMER_DIA, hoy):
+        if mes not in historia:
+            x = _json_de(f"cabina/{perfil_id}/{carpeta}/dias-{mes}.json.gz")
+            if x and x.get("dias"):
+                guardados[mes] = x
+    return {**guardados, **historia}
+
+
 def escribe_furgonetas_por_mes(perfil_id, op, anterior, vehiculos, ambito, historia_km):
     """La historia de la pagina de furgonetas, un fichero por mes (docs/75):
     solo los meses que reciben un dia. Devuelve los escritos."""
@@ -1938,6 +1957,7 @@ def lambda_handler(event, context):
             clave_r = f"cabina/{acu.perfil['id']}/rutas.json.gz"
             anterior_r = _json_de(clave_r)
             historia_r = escribe_rutas_por_mes(acu.perfil["id"], op, anterior_r, maquinas[acu.perfil["id"]])
+            historia_r = con_los_meses_guardados(acu.perfil["id"], "rutas", anterior_r, historia_r, hoy)
             fichero_r = op.detalle_rutas(acu.perfil["id"], anterior_r, festivos, ubicaciones, historia_r)
             fichero_r.update(maquinas[acu.perfil["id"]].bloque(
                 [f for f in censo if en_ambito(f, acu.ambito, mapa)],
@@ -1949,6 +1969,7 @@ def lambda_handler(event, context):
             anterior_f = _json_de(clave_f)
             meses_f = escribe_furgonetas_por_mes(acu.perfil["id"], op, anterior_f, vehiculos,
                                                  acu.ambito, historia_km)
+            meses_f = con_los_meses_guardados(acu.perfil["id"], "furgonetas", anterior_f, meses_f, hoy)
             escribe_comprimido(clave_f, op.detalle_furgonetas(acu.perfil["id"], anterior_f,
                                                               vehiculos, acu.ambito, historia_km,
                                                               rutas, empleados, meses_f))
