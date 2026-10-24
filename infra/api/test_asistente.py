@@ -55,6 +55,11 @@ def texto(t=TEXTO, stop="end_turn"):
                         _Bloque(type="text", text=t)], "stop": stop}
 
 
+def recuerda(t):
+    return {"content": [_Bloque(type="tool_use", id=f"m{len(LLAMADAS)}", name="memoria", input={"texto": t})],
+            "stop": "tool_use"}
+
+
 def consulta(**entrada):
     return {"content": [_Bloque(type="tool_use", id=f"t{len(LLAMADAS)}", name="consulta", input=entrada)],
             "stop": "tool_use"}
@@ -197,7 +202,7 @@ comprueba("esfuerzo explicito", k["output_config"]["effort"], "medium")
 comprueba("sin budget_tokens (daria 400)", "budget_tokens" in json.dumps(k["thinking"]), False)
 comprueba("tope de salida", k["max_tokens"], 4000)
 comprueba("con reintento en otro modelo si declina", k.get("fallbacks"), "default")
-comprueba("con la herramienta de consulta", [t["name"] for t in k["tools"]], ["consulta"])
+comprueba("con las herramientas de consulta, memoria y muneco", [t["name"] for t in k["tools"]], ["consulta", "memoria", "muneco"])
 comprueba("que puede usar o no", k["tool_choice"], {"type": "auto"})
 
 print("\nEl recetario va en el sistema, y en cache")
@@ -282,6 +287,20 @@ comprueba("una posicion de la lista", L.consulta({"seccion": "rutas", "camino": 
 comprueba("un camino que no existe lo dice, con lo que hay",
           L.consulta({"seccion": "rutas", "camino": ["nada"]}, "t", cache)["hay"], ["centros", "otra"])
 
+print("\nSerie y tarifas sin parametros dicen como pedir el detalle")
+cache = {L.URL_API + "/api/tarifas": (200, {"total": {"pct": 61.6}, "delegaciones": []}),
+         L.URL_API + "/api/tarifas?centro=290010": (200, {"num_centro": "290010", "filas": []}),
+         L.URL_API + "/api/serie": (200, {"meses": ["2026-10"]})}
+comprueba("tarifas sin centro: el indice y la pista",
+          "centro" in L.consulta({"seccion": "tarifas"}, "t", cache).get("_parametros", ""), True)
+comprueba("con centro, sin pista",
+          "_parametros" in L.consulta({"seccion": "tarifas", "parametros": {"centro": "290010"}}, "t", cache), False)
+fallo = L.consulta({"seccion": "serie", "camino": ["filas"]}, "t", cache)
+comprueba("serie: si busca filas sin mes, el error dice que pida el mes",
+          ("hay" in fallo, "mes" in fallo.get("parametros", "")), (True, True))
+comprueba("rutas, que no admite parametros, no lleva pista",
+          "_parametros" in L.consulta({"seccion": "rutas"}, "t", {L.URL_API + "/api/rutas": (200, {"a": 1})}), False)
+
 # ----------------------------------------------------------------------
 print("\nPor pasos: cada peticion, una vuelta; el navegador sigue con el id")
 L.SEGUNDOS_VUELTA = -1
@@ -319,6 +338,76 @@ comprueba("en las anteriores, no",
 print("\nUn objeto con muchas claves ensena las primeras y las ultimas")
 dias = {f"2026-10-{d:02d}": {"x": "y" * 400} for d in range(1, 22)}
 comprueba("las ultimas fechas se ven", "2026-10-01" in L._corto(dias) and "2026-10-21" in L._corto(dias), True)
+
+print("\nCada usuario tiene su memoria (docs/75)")
+def memoria(cookie, accion):
+    return cuerpo(L.lambda_handler(falsos.peticion("POST", "/api/pregunta", {"memoria": accion}, cookie), None))
+comprueba("al principio, vacia", memoria(COOKIE, "ver"), {"memoria": ""})
+LLAMADAS.clear()
+COLA[:] = [recuerda("- Le interesa el centro 500088\n- Lo quiere en tablas"), texto()]
+r_ = cuerpo(pregunta("recuerda que me interesa el 500088 y lo quiero en tablas", COOKIE))
+comprueba("el modelo la escribe y la respuesta lo dice", r_.get("memoria_cambiada"), True)
+comprueba("ver la memoria la devuelve", memoria(COOKIE, "ver")["memoria"], "- Le interesa el centro 500088\n- Lo quiere en tablas")
+comprueba("el modelo recibe que se guardo", "Memoria guardada" in resultado(LLAMADAS[1]), True)
+LLAMADAS.clear()
+pregunta("y hoy?", COOKIE)
+enviado = json.dumps(LLAMADAS[0]["messages"][-1]["content"], ensure_ascii=False)
+comprueba("la pregunta siguiente lleva su memoria", "500088" in enviado and "no reglas" in enviado, True)
+comprueba("pero en el mensaje, no en el recetario", "500088" in LLAMADAS[0]["system"][0]["text"], False)
+comprueba("sin cambiarla, la respuesta no dice que cambio",
+          cuerpo(pregunta("otra", COOKIE)).get("memoria_cambiada"), False)
+LLAMADAS.clear()
+pregunta("y yo?", OTRA)
+comprueba("otro usuario no ve la de Ana", "500088" in json.dumps(LLAMADAS[0]["messages"], ensure_ascii=False), False)
+comprueba("ni al pedirla", memoria(OTRA, "ver"), {"memoria": ""})
+antes = L.uso_de_hoy("ana@airbus.com")[1].get("preguntas", 0)
+COLA[:] = [recuerda("x" * 9000), texto()]
+pregunta("apunta mucho", COOKIE)
+comprueba("con tope de tamano", len(memoria(COOKIE, "ver")["memoria"]), L.MAX_MEMORIA)
+comprueba("borrarla la deja vacia", memoria(COOKIE, "borrar"), {"memoria": ""})
+comprueba("y ver o borrar no cuenta como pregunta",
+          L.uso_de_hoy("ana@airbus.com")[1].get("preguntas", 0) - antes, 1)
+comprueba("sin sesion, nada", L.lambda_handler(falsos.peticion("POST", "/api/pregunta", {"memoria": "ver"}, None), None)["statusCode"], 401)
+
+print("\nCada usuario elige su muneco (docs/76)")
+def muneco(cookie, accion):
+    return L.lambda_handler(falsos.peticion("POST", "/api/pregunta", {"muneco": accion}, cookie), None)
+def elige(nombre):
+    return {"content": [_Bloque(type="tool_use", id=f"u{len(LLAMADAS)}", name="muneco", input={"nombre": nombre})],
+            "stop": "tool_use"}
+_hoy = L.hoy_en_espana
+DIA = ["2026-10-23"]
+L.hoy_en_espana = lambda: DIA[0]
+antes = L.uso_de_hoy("ana@airbus.com")[1].get("preguntas", 0)
+comprueba("sin elegir, Vendi, y se le avisa", cuerpo(muneco(COOKIE, "ver")), {"muneco": "vendi", "avisar": True})
+comprueba("el mismo dia, no se le avisa otra vez", cuerpo(muneco(COOKIE, "ver"))["avisar"], False)
+DIA[0] = "2026-10-24"
+comprueba("otro dia, si", cuerpo(muneco(COOKIE, "ver"))["avisar"], True)
+DIA[0] = "2026-10-25"
+comprueba("y otro, la tercera", cuerpo(muneco(COOKIE, "ver"))["avisar"], True)
+DIA[0] = "2026-10-26"
+comprueba("despues de tres, nunca mas", cuerpo(muneco(COOKIE, "ver"))["avisar"], False)
+comprueba("elegir uno que no existe, 400", muneco(COOKIE, "pikachu")["statusCode"], 400)
+comprueba("elegir en el chat", cuerpo(muneco(COOKIE, "bufy")), {"muneco": "bufy"})
+comprueba("se queda", cuerpo(muneco(COOKIE, "ver"))["muneco"], "bufy")
+comprueba("cada usuario el suyo", cuerpo(muneco(OTRA, "ver")), {"muneco": "vendi", "avisar": True})
+comprueba("ni ver ni elegir cuenta como pregunta", L.uso_de_hoy("ana@airbus.com")[1].get("preguntas", 0) - antes, 0)
+LLAMADAS.clear()
+pregunta("hola", COOKIE)
+comprueba("el modelo sabe como se llama", '"muneco":"Bufy"' in json.dumps(LLAMADAS[0]["messages"][-1]["content"], ensure_ascii=False).replace("\\", ""), True)
+comprueba("pero no en el recetario", "Bufy" in LLAMADAS[0]["system"][0]["text"] and "`muneco`" in LLAMADAS[0]["system"][0]["text"], True)
+LLAMADAS.clear()
+COLA[:] = [elige("tom"), texto()]
+r_ = cuerpo(pregunta("ponme a Tom", OTRA))
+comprueba("pedirlo por escrito lo cambia", r_.get("muneco"), "tom")
+comprueba("y se guarda", cuerpo(muneco(OTRA, "ver")), {"muneco": "tom", "avisar": False})
+comprueba("el modelo recibe que cambio", "Tom" in resultado(LLAMADAS[1]), True)
+COLA[:] = [elige("nadie"), texto()]
+r_ = cuerpo(pregunta("ponme a nadie", OTRA))
+comprueba("uno que no existe no cambia nada", (r_.get("muneco"), cuerpo(muneco(OTRA, "ver"))["muneco"]), (None, "tom"))
+comprueba("sin cambiarlo, la respuesta no trae muneco", cuerpo(pregunta("otra", COOKIE)).get("muneco"), None)
+comprueba("sin sesion, nada", muneco(None, "ver")["statusCode"], 401)
+L.hoy_en_espana = _hoy
 
 print("\nEl historial se pasa, recortado a tres idas y venidas")
 LLAMADAS.clear()
@@ -381,6 +470,51 @@ class _U3(_U):
     input_tokens = 0
     cache_read_input_tokens = 1_000_000
 comprueba("y leido de cache, 0,20", round(L.coste(_U3()), 2), 0.20)
+
+print("\nEl modelo (docs/78): de la consola, o de la Lambda; un admin puede probar otro")
+comprueba("Sonnet cobra la mitad de entrada", round(L.coste(_U(), "claude-sonnet-5-5"), 2), 2.00)
+class _U4(_U):
+    input_tokens = 100_000
+comprueba("Haiku, 0,10 el millon de entrada: 100.000 tokens, 0,01", round(L.coste(_U4(), "claude-haiku-5-5"), 4), 0.01)
+
+
+class _U5(_U):
+    input_tokens = 150_000
+comprueba("y cinco veces mas pasados los 100.000 tokens", round(L.coste(_U5(), "claude-haiku-5-5"), 4), 0.075)
+comprueba("un modelo desconocido se cobra como Opus, que no se quede corto",
+          round(L.coste(_U(), "otro"), 2), 4.00)
+L._cliente = None   # el que reventaba, fuera
+falsos.pon_fila("PERFIL#admin-t", {"nombre": "Serunion", "tipo": "admin", "permisos": {}})
+falsos.pon_fila("USUARIO#jefa@serunion.es", {"nombre": "Jefa", "perfil_id": "admin-t", "estado": "activo"})
+_jefa, _ana = sesion_de("jefa@serunion.es"), sesion_de("ana@airbus.com")
+
+
+def _modelo(cookie, pedido=None):
+    LLAMADAS.clear()
+    d = {"pregunta": "¿Cuántas visitas?", "historial": []}
+    if pedido:
+        d["modelo"] = pedido
+    res = L.lambda_handler(falsos.peticion("POST", "/api/pregunta", d, cookie), None)
+    return LLAMADAS[-1]["model"], cuerpo(res).get("modelo"), "fallbacks" in LLAMADAS[-1]
+
+
+comprueba("sin nada, el de la Lambda, con respaldo", _modelo(_ana), ("claude-opus-5-5", "claude-opus-5-5", True))
+comprueba("un admin prueba Haiku en una pregunta suelta, sin respaldo, que Haiku no lo tiene",
+          _modelo(_jefa, "claude-haiku-5-5"), ("claude-haiku-5-5", "claude-haiku-5-5", False))
+comprueba("quien no es admin no elige modelo", _modelo(_ana, "claude-haiku-5-5")[0], "claude-opus-5-5")
+comprueba("ni un admin uno que no esta en la lista", _modelo(_jefa, "claude-loquesea")[0], "claude-opus-5-5")
+L.escribe("CONFIG", dict(L.config(), asistente_modelo="claude-sonnet-5-5"), "GLOBAL")
+comprueba("elegido en la consola, vale para todos", _modelo(_ana)[0], "claude-sonnet-5-5")
+COLA.append(consulta(seccion="panel"))
+LLAMADAS.clear()
+_r = pregunta("¿Y el panel?", _ana)
+L.escribe("CONFIG", dict(L.config(), asistente_modelo="claude-haiku-5-5"), "GLOBAL")
+while cuerpo(_r).get("sigue"):
+    _r = pregunta(None, _ana, sigue=cuerpo(_r)["sigue"])
+comprueba("una pregunta a medias sigue con el modelo con el que empezo",
+          sorted({x["model"] for x in LLAMADAS}), ["claude-sonnet-5-5"])
+L.escribe("CONFIG", dict(L.config(), asistente_modelo=""), "GLOBAL")
+comprueba("vacio, vuelve el de la Lambda", _modelo(_ana)[0], "claude-opus-5-5")
 
 print()
 if fallos:

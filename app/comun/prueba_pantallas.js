@@ -314,6 +314,21 @@ const API = {
           { dia: viejo, acciones: 40, horas: 3, primera: '09:00:00', ultima: '12:00:00', cuentas: ['A.PEREZ <X>'] }] }]
     };
   })(),
+  // La dashboard y Vendi (docs/77), con la forma que devuelve uso_plataforma.
+  '/api/utilizo/plataforma': (() => {
+    const hoy = iso(new Date()), ayer = iso(AYER);
+    return {
+      desde_web: ayer, desde_ia: ayer, hoy,
+      usuarios: [
+        { correo: 'david@serunion.es', nombre: 'David <D>', perfil: 'Dirección', dias: {
+          [ayer]: { entradas: 1, vistas: 9, paginas: { operativo: 5, rutas: 4 }, primera: '08:02', ultima: '18:30', preguntas: 4, gasto_usd: 0.52 },
+          [hoy]: { entradas: 0, vistas: 2, paginas: { operativo: 2 }, primera: '09:00', ultima: '09:10' } } },
+        { correo: 'olga@serunion.es', nombre: 'Olga', perfil: 'Operaciones Sur', dias: {
+          [ayer]: { entradas: 2, vistas: 3, paginas: { incidencias: 3 }, primera: '10:00', ultima: '11:15' } } },
+        { correo: 'pepe@serunion.es', nombre: '', perfil: 'Operaciones Sur', dias: {
+          [hoy]: { preguntas: 1, gasto_usd: 0.1 } } }]
+    };
+  })(),
   // La revision de clientes (docs/59), con la forma que escribe infra/revision.py.
   '/api/revision': (() => {
     const sitio = (mat, d, cl, cli, ce, cen) => ({ matricula: mat, delegacion: d, cod_cliente: cl, cliente: cli,
@@ -591,6 +606,8 @@ for (const [f, dia] of Object.entries({
 
 // Los preferidos del usuario de la prueba (docs/62), y los nombres que manda la API.
 let PREFS = [];
+// El muneco de este usuario (docs/76), como lo guarda el servidor.
+let MUNECO = { muneco: 'vendi', avisar: false };
 const NOMBRES_TABLAS = {
   rutas: { nombre: 'Rutas', tablas: { i_cumplimiento: 'Cumplimiento de ruta', i_en_ruta: 'Visitas en ruta',
     i_efectuadas: 'Visitas efectuadas', i_no_planificadas: 'Visitas no planificadas', i_pasaje_vacio: 'Pasaje vacío',
@@ -663,6 +680,17 @@ const servidor = http.createServer((pet, res) => {
       if (c === null) return json(RESUMEN_TARIFAS);
       if (c !== CENTRO_TARIFAS.num_centro) { res.writeHead(400); return res.end('{"error":"Ese centro no está en las tarifas de este perfil."}'); }
       return json(CENTRO_TARIFAS);
+    }
+    if (u.pathname === '/api/pregunta' && pet.method === 'POST') {
+      // Sin route en la prueba, solo contesta lo del muneco.
+      let b = '';
+      pet.on('data', c => { b += c; });
+      return pet.on('end', () => {
+        const d = JSON.parse(b || '{}');
+        if (d.muneco === 'ver') return json(MUNECO);
+        if (d.muneco) { MUNECO = { muneco: d.muneco, avisar: false }; return json({ muneco: d.muneco }); }
+        res.writeHead(404); res.end('{"error":"no existe"}');
+      });
     }
     if (u.pathname === '/api/preferidos') {
       // Como la API: los guarda y los devuelve, con los nombres de cada tabla.
@@ -1532,18 +1560,115 @@ const toca = titulo => !process.env.SOLO || titulo.toLowerCase().includes(proces
         await y.pagina.waitForSelector('#chat.vis');
         comprueba('con sugerencias de rutas', (await y.pagina.$$('#sugerencias button')).length, 2);
         const pide = [];
+        let md = '- Le interesan los centros **500088** y 500089\n- <b>tablas</b>';
         await y.pagina.route('**/api/pregunta', async ruta => {
-          pide.push(JSON.parse(ruta.request().postData() || '{}'));
-          await ruta.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ respuesta: 'Bien.', quedan_hoy: 38 }) });
+          const p = JSON.parse(ruta.request().postData() || '{}');
+          pide.push(p);
+          if (p.memoria === 'borrar') md = '';
+          const body = p.memoria ? { memoria: md } : { respuesta: 'Bien.', quedan_hoy: 38, memoria_cambiada: true };
+          await ruta.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
         });
         await y.pagina.click('#sugerencias button');
         await y.pagina.waitForSelector('.turno.el');
         comprueba('y pregunta diciendo desde que pagina', pide[0] && pide[0].pagina, 'rutas');
+        comprueba_que('si apunta algo, lo dice', (await y.pagina.textContent('.turno.el .apuntado')).includes('Apuntado en tu memoria'));
+        // La memoria de este usuario (docs/75): se ve, se baja y se olvida.
+        await y.pagina.click('#chatMemoria');
+        await y.pagina.waitForSelector('.turno.memoria .acciones');
+        comprueba('se ve en Markdown', await y.pagina.$eval('.turno.memoria li b', b => b.textContent), '500088');
+        comprueba('y lo que trae etiquetas, como texto', await y.pagina.$$eval('.turno.memoria li', l => l[1].textContent), '<b>tablas</b>');
+        const [dm] = await Promise.all([y.pagina.waitForEvent('download'), y.pagina.click('[data-m="bajar"]')]);
+        comprueba('se baja como vendi_memoria.md', dm.suggestedFilename(), 'vendi_memoria.md');
+        comprueba_que('con su texto', fs.readFileSync(await dm.path(), 'utf8').startsWith('- Le interesan los centros **500088**'));
+        if (process.env.FOTOS_VENDI) await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'memoria.png') });
+        await y.pagina.click('[data-m="borrar"]');
+        comprueba('olvidar pide confirmarlo', await y.pagina.textContent('[data-m="borrar"]'), '¿Seguro? Pulsa otra vez');
+        comprueba('y aun no ha borrado', pide.filter(p => p.memoria === 'borrar').length, 0);
+        await y.pagina.click('[data-m="borrar"]');
+        await y.pagina.waitForFunction(() => /Todavía no he apuntado/.test(document.querySelector('.turno.memoria').textContent));
+        comprueba('a la segunda, la vacia', pide.filter(p => p.memoria === 'borrar').length, 1);
+        comprueba('ver la memoria no se guarda en la conversacion',
+          await y.pagina.evaluate(() => JSON.parse(sessionStorage.getItem('digivend.asistente.hilo')).length), 2);
+        // El muneco (docs/76): se elige en el chat o se pide escribiendo.
+        await y.pagina.unroute('**/api/pregunta');
+        await y.pagina.click('#chatMuneco');
+        await y.pagina.waitForSelector('.turno.munecos');
+        comprueba('salen los cinco', await y.pagina.$$eval('.turno.munecos [data-muneco]', b => b.map(x => x.dataset.muneco)),
+          ['vendi', 'tom', 'kiko', 'furgo', 'bufy']);
+        comprueba('con el puesto marcado', await y.pagina.getAttribute('[data-muneco="vendi"]', 'aria-pressed'), 'true');
+        if (process.env.FOTOS_VENDI) {
+          await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'munecos.png') });
+          await y.pagina.emulateMedia({ colorScheme: 'dark' });
+          await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'munecos-oscuro.png') });
+          await y.pagina.setViewportSize({ width: 390, height: 844 });
+          await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'munecos-movil.png') });
+          await y.pagina.setViewportSize({ width: 1280, height: 720 });
+          await y.pagina.emulateMedia({ colorScheme: 'light' });
+        }
+        await y.pagina.click('[data-muneco="bufy"]');
+        await y.pagina.waitForSelector('#vendiChat .muneco.bufy');
+        comprueba('se guarda en el servidor', MUNECO.muneco, 'bufy');
+        comprueba('y en la pestana', await y.pagina.evaluate(() => sessionStorage.getItem('digivend.asistente.muneco')), 'bufy');
+        comprueba('el marcado cambia', await y.pagina.getAttribute('[data-muneco="bufy"]', 'aria-pressed'), 'true');
+        comprueba('elegir no se guarda en la conversacion',
+          await y.pagina.evaluate(() => JSON.parse(sessionStorage.getItem('digivend.asistente.hilo')).length), 2);
+        comprueba_que('y cada Bufy con sus recortes propios', await y.pagina.$$eval('clipPath', c => new Set(c.map(x => x.id)).size === c.length));
+        await y.pagina.click('#chatCerrar');
+        await y.pagina.waitForFunction(() => !document.querySelector('#bVendi').hidden);
+        await y.pagina.evaluate(() => document.querySelector('#bVendi .muneco').classList.remove('saluda'));
+        await y.pagina.hover('#bVendi');
+        comprueba_que('al pasar el raton, Bufy se encabrita',
+          await y.pagina.$eval('#bVendi .muneco', m => m.classList.contains('saluda') && getComputedStyle(m.querySelector('.cuerpo')).animationName === 'as-encabrita'));
+        if (process.env.FOTOS_VENDI) {
+          await y.pagina.waitForTimeout(800);
+          await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'bufy-encabritado.png') });
+          await y.pagina.emulateMedia({ colorScheme: 'dark' });
+          await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'bufy-oscuro.png') });
+          await y.pagina.emulateMedia({ colorScheme: 'light' });
+        }
+        await y.pagina.route('**/api/pregunta', ruta => ruta.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ respuesta: 'Hecho, ahora soy Kiko.', muneco: 'kiko' }) }));
+        await y.pagina.click('#bVendi');
+        await y.pagina.fill('#chatTexto', 'ponme a Kiko');
+        await y.pagina.press('#chatTexto', 'Enter');
+        await y.pagina.waitForFunction(() => document.querySelectorAll('.turno.el').length >= 3 && sessionStorage.getItem('digivend.asistente.muneco') === 'kiko');
+        comprueba_que('pedirlo escribiendo lo cambia', !(await y.pagina.$('#vendiChat .muneco.bufy')));
+        await y.pagina.unroute('**/api/pregunta');
+        MUNECO = { muneco: 'vendi', avisar: false };
       }
       comprueba(`en /${s}/, ni una peticion fuera del dominio`, y.fuera, []);
       comprueba(`en /${s}/, sin errores en la consola`, y.errores, []);
       await y.pagina.close();
     }
+    // El aviso de que se puede cambiar: lo decide el servidor (3 veces como mucho).
+    MUNECO = { muneco: 'vendi', avisar: true };
+    {
+      const y = await abre('/incidencias/');
+      await y.pagina.waitForSelector('#bocadillo.vis', { timeout: 5000 });
+      comprueba_que('si toca, Vendi recuerda que se puede cambiar', (await y.pagina.textContent('#bocadillo')).includes('Muñeco'));
+      if (process.env.FOTOS_VENDI) await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'aviso-muneco.png') });
+      await y.pagina.close();
+    }
+    MUNECO = { muneco: 'furgo', avisar: false };
+    {
+      const y = await abre('/incidencias/');
+      await y.pagina.waitForSelector('#bocadillo.vis', { timeout: 5000 });
+      comprueba_que('si no toca, el hola de siempre', !(await y.pagina.textContent('#bocadillo')).includes('Muñeco'));
+      comprueba_que('y sale con el suyo', !!(await y.pagina.$('#bVendi .muneco.furgo')));
+      await y.pagina.evaluate(() => document.querySelector('#bVendi .muneco').classList.remove('saluda'));
+      await y.pagina.hover('#bVendi');
+      comprueba_que('Furgo no saluda con la mano: le giran las ruedas',
+        await y.pagina.$eval('#bVendi .muneco', m => !m.querySelector('.mano') && getComputedStyle(m.querySelector('.rueda')).animationName === 'as-rueda'));
+      if (process.env.FOTOS_VENDI) {
+        await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'furgo.png') });
+        await y.pagina.click('#bVendi');
+        await y.pagina.click('#chatMuneco');
+        await y.pagina.waitForSelector('.turno.munecos');
+        await y.pagina.screenshot({ path: path.join(process.env.FOTOS_VENDI, 'munecos-furgo.png') });
+      }
+      await y.pagina.close();
+    }
+    MUNECO = { muneco: 'vendi', avisar: false };
     API['/api/yo'] = { ...API['/api/yo'], asistente: { habilitado: false, motivo: '' } };
     {
       const y = await abre('/rutas/');
@@ -2241,6 +2366,81 @@ const toca = titulo => !process.env.SOLO || titulo.toLowerCase().includes(proces
     await pagina.emulateMedia({ colorScheme: 'dark' });
     comprueba_que('en oscuro el fondo es oscuro',
       (await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(18, 18, 17)');
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  if (toca('El modelo del asistente, en la consola (docs/78)')) {
+    console.log('\nEl modelo del asistente, en la consola (docs/78)');
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre('/consola/');
+    await pagina.waitForSelector('#pestanas button');
+    await pagina.click('#pestanas button[data-s="plataforma"]');
+    await pagina.waitForSelector('#cModelo');
+    comprueba('sin elegir, el de la Lambda', await pagina.inputValue('#cModelo'), '');
+    await pagina.selectOption('#cModelo', 'claude-haiku-5-5');
+    const [pet] = await Promise.all([
+      pagina.waitForRequest(q => q.method() === 'PUT' && q.url().endsWith('/api/admin/config')),
+      pagina.click('#bGuardaConfig')]);
+    comprueba('al guardar manda el modelo', JSON.parse(pet.postData()).asistente_modelo, 'claude-haiku-5-5');
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
+  if (toca('Utilizo: la dashboard y Vendi (docs/77)')) {
+    console.log('\nUtilizo: la dashboard y Vendi (docs/77)');
+    const FOTOS = process.env.FOTOS_UTILIZO;
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre('/utilizo/');
+    await pagina.waitForSelector('#tabla tbody tr');
+    const textos = async sel => pagina.$$eval(sel, x => x.map(e => e.textContent.replace(/\s+/g, ' ').trim()));
+    comprueba_que('VenCloud no pide lo de la dashboard hasta abrir su pestaña', !pedidos.includes('/api/utilizo/plataforma'));
+    await pagina.click('#pestanas [data-que="web"]');
+    await pagina.waitForFunction(() => location.hash.includes('que=web') && document.querySelector('#tabla h2').textContent.includes('dashboard'));
+    comprueba_que('en la dashboard no sale el aviso de los filtros, que es de VenCloud', !(await pagina.isVisible('#sinLugar')));
+    comprueba('la dashboard hoy: quien la abrio, paginas y entradas', await textos('.kpi .vl'), ['1', '2', '0']);
+    await pagina.selectOption('#fDia', iso(AYER));
+    await pagina.waitForFunction(() => document.querySelectorAll('#tabla tbody tr').length === 2);
+    comprueba('ayer: las dos personas, la que mas paginas vio primero', await textos('#tabla tbody tr td:first-child .mat'), ['David <D>', 'Olga']);
+    comprueba_que('el nombre va escapado', (await pagina.innerHTML('#tabla')).includes('David &lt;D&gt;'));
+    comprueba('con sus paginas, entradas y la que mas abrio',
+      (await textos('#tabla tbody tr:first-child td')).slice(2, 6), ['9', '1', '08:02 – 18:30', 'Informe operativo 5']);
+    const [d1] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('el Excel de la dashboard', d1.suggestedFilename() === `utilizo_dashboard_${iso(AYER)}.xlsx`, d1.suggestedFilename());
+    await pagina.click('#tabla .mat');
+    await pagina.waitForSelector('#miga:not([hidden])');
+    comprueba('pulsando, que paginas abrio', await pagina.$$eval('#vista .tabla-env', x => [...x[0].querySelectorAll('tbody tr td:first-child')].map(e => e.textContent.trim())), ['Informe operativo', 'Rutas']);
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'utilizo-persona.png'), fullPage: true });
+    await pagina.click('#volver');
+    await pagina.waitForSelector('#miga[hidden]', { state: 'attached' });
+    await pagina.click('#pestanas [data-que="ia"]');
+    await pagina.waitForFunction(() => location.hash.includes('que=ia') && document.querySelector('#tabla h2').textContent.includes('Vendi'));
+    await pagina.selectOption('#fPer', 'mes');
+    await pagina.waitForSelector('#lMes:not([hidden])');
+    await pagina.waitForFunction(() => document.querySelectorAll('#tabla tbody tr').length >= 1);
+    const mismoMes = iso(AYER).slice(0, 7) === iso(new Date()).slice(0, 7);
+    comprueba('Vendi en el mes: personas, preguntas, gasto y por pregunta', await textos('.kpi .vl'),
+      mismoMes ? ['2', '5', '0,62 US$', '0,124 US$'] : ['1', '1', '0,10 US$', '0,100 US$']);
+    comprueba_que('quien no tiene nombre sale con su correo', !mismoMes || (await textos('#tabla tbody tr td:first-child .mat')).includes('pepe@serunion.es'));
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'utilizo-vendi-claro.png'), fullPage: true });
+    const [d2] = await Promise.all([pagina.waitForEvent('download'), pagina.click('#bExcel')]);
+    comprueba_que('el Excel de Vendi', /^utilizo_vendi_\d{4}-\d\d\.xlsx$/.test(d2.suggestedFilename()), d2.suggestedFilename());
+    comprueba_que('el pie dice desde cuando se cuenta', (await pagina.textContent('#pie')).includes('Se cuenta desde'));
+    await pagina.emulateMedia({ colorScheme: 'dark' });
+    comprueba_que('en oscuro el fondo es oscuro',
+      (await pagina.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(18, 18, 17)');
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'utilizo-vendi-oscuro.png'), fullPage: true });
+    await pagina.setViewportSize({ width: 380, height: 800 });
+    comprueba('en movil no se sale de la pantalla',
+      await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    if (FOTOS) await pagina.screenshot({ path: path.join(FOTOS, 'utilizo-movil.png'), fullPage: true });
+    await pagina.click('#pestanas [data-que="vencloud"]');
+    await pagina.waitForFunction(() => document.querySelector('#tabla h2').textContent.includes('VenCloud'));
+    comprueba_que('y se vuelve a VenCloud', true);
     comprueba('ni una peticion fuera del dominio', fuera, []);
     comprueba('sin un solo error en la consola del navegador', errores, []);
     await pagina.close();
