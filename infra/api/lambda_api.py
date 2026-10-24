@@ -193,6 +193,8 @@ def encamina(evento, metodo, ruta):
         q = evento.get("queryStringParameters") or {}
         if "centros" in q:
             return operativo_centros(perfil, q["centros"])
+        if "mes" in q:
+            return operativo_mes(perfil, q["mes"])
         # Con toda la historia va comprimido (docs/66); el de antes, sin
         # comprimir, vale mientras la noche no haya escrito el nuevo.
         datos = None
@@ -242,6 +244,9 @@ def encamina(evento, metodo, ruta):
             raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
         if "rutas" not in A.cuadrados_de(perfil):
             raise PermissionError("Este perfil no ve las rutas.")
+        q = evento.get("queryStringParameters") or {}
+        if "mes" in q:
+            return mes_de_seccion(perfil, "rutas", "rutas", q["mes"])
         try:
             return _con_tablas("rutas", perfil, _crudo(f"cabina/{_cabina(perfil)}/rutas.json.gz"))
         except Exception:
@@ -255,6 +260,9 @@ def encamina(evento, metodo, ruta):
             raise PermissionError("Un perfil de cliente solo tiene el cuadro de mando.")
         if "furgonetas" not in A.cuadrados_de(perfil):
             raise PermissionError("Este perfil no ve las furgonetas.")
+        q = evento.get("queryStringParameters") or {}
+        if "mes" in q:
+            return mes_de_seccion(perfil, "furgonetas", "furgonetas", q["mes"])
         try:
             return _con_tablas("furgonetas", perfil,
                                _crudo(f"cabina/{_cabina(perfil)}/furgonetas.json.gz"))
@@ -678,6 +686,35 @@ def operativo_centros(perfil, mes):
     except Exception:
         return r(404, {"error": "Ese mes no tiene el reparto por centro."})
     return _json_grande(A.recorta_operativo_centros(datos, perfil))
+
+
+def mes_de_seccion(perfil, cuadrado, carpeta, mes):
+    """Un mes de la historia de la pagina de una seccion (docs/75), de
+    <carpeta>/dias-AAAA-MM. Dentro de la carpeta de la sesion, el mes es
+    AAAA-MM y nada mas, y sin lo que solo usan las tablas que se le quitaron."""
+    mes = str(mes or "")
+    if not re.fullmatch(r"\d{4}-\d{2}", mes):
+        raise ValueError("El mes va como AAAA-MM.")
+    try:
+        cuerpo = s3.get_object(Bucket=BUCKET, Key=f"cabina/{_cabina(perfil)}/{carpeta}/"
+                                                  f"dias-{mes}.json.gz")["Body"].read()
+    except Exception:
+        return r(404, {"error": "Ese mes no tiene días calculados."})
+    return _con_tablas(cuadrado, perfil, cuerpo)
+
+
+def operativo_mes(perfil, mes):
+    """Un mes de la historia del informe general (docs/75): los dias de antes de
+    los que lleva el fichero del perfil. Dentro de la carpeta de la sesion, y el
+    mes es AAAA-MM y nada mas."""
+    mes = str(mes or "")
+    if not re.fullmatch(r"\d{4}-\d{2}", mes):
+        raise ValueError("El mes va como AAAA-MM.")
+    try:
+        datos = json.loads(_crudo(f"cabina/{_cabina(perfil)}/operativo/dias-{mes}.json.gz"))
+    except Exception:
+        return r(404, {"error": "Ese mes no tiene días calculados."})
+    return _json_grande(A.recorta_operativo_mes(datos, perfil))
 
 
 def _json_grande(datos):

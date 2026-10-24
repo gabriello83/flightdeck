@@ -308,6 +308,22 @@ comprueba("el cuadrado no cambia: furgonetas distintas con visita, sin las de re
            # Y la lista, para contar las distintas de varios dias (docs/66).
            "vehiculos": ["1111AAA", "2222BBB", "4444DDD"]})
 
+fm = op.furgonetas_por_mes({"dias": ["2026-09-30"], "km": {"2026-09-30": {"1111AAA": [5, 1, ""]}},
+                            "visitas": {"1111AAA": ["2026-09-30"]}}, lambda mes: None, MAESTRO, {},
+                           {"2026-10-09": {"3": [[1, 2, True]]}})
+comprueba("la historia de furgonetas (docs/75): los km y las que visitaron, por dia",
+          (fm["2026-10"]["dias"][DIA]["km"]["2222BBB"], fm["2026-10"]["dias"][DIA]["v"]),
+          ([500, 1, ""], ["1111AAA", "2222BBB"]))
+comprueba("los dias del fichero de la pagina pasan a su mes",
+          fm["2026-09"]["dias"]["2026-09-30"], {"km": {"1111AAA": [5, 1, ""]}, "v": ["1111AAA"]})
+comprueba("sin maestro de vehiculos no se escribe nada",
+          op.furgonetas_por_mes(None, lambda mes: None, None), {})
+op_h = OP.Operativo(["2025-01-02"], historico=True)
+fm = op_h.furgonetas_por_mes(None, lambda mes: None, MAESTRO, {},
+                             {"2025-01-02": {"1": [[1000, 1100, True, 7]]}})
+comprueba("en un relleno, los km salen de la historia de jornadas",
+          fm["2025-01"]["dias"]["2025-01-02"], {"km": {"1111AAA": [100, 1, ""]}, "v": []})
+
 op_sev = OP.Operativo([DIA])
 op_sev.dia(DIA)
 fa = op_sev.detalle_furgonetas("ope-sevilla", None, MAESTRO, {"delegaciones": ["Sevilla"]})
@@ -479,7 +495,36 @@ f = op.fichero("interno", {"generado": "antes", "foto": {"pdvs": {"activos": 7}}
                            "dias": {DIA: {"telemetria": {"pct": 50.0}}, "2025-01-02": {"x": 1}}})
 comprueba("la telemetria de la noche se queda", f["dias"][DIA]["telemetria"], {"pct": 50.0})
 comprueba("la foto de la noche se queda", f["foto"], {"pdvs": {"activos": 7}})
-comprueba("los dias de fuera del tramo, tambien", (f["primer_dia"], f["dias"]["2025-01-02"]), ("2025-01-02", {"x": 1}))
+comprueba("los dias viejos salen del fichero y quedan en su mes",
+          (f["primer_dia"], "2025-01-02" in f["dias"], f["meses_dias"]["2025-01"]), ("2025-01-02", False, [2]))
+
+print("\nLa historia, un fichero por mes (docs/75): un mes cerrado no se reescribe")
+op = OP.Operativo(["2025-03-04"], historico=True)
+op.dia("2025-03-04").come_partes([visita("P1")])
+op.cierra("2025-03-04")
+leidos = []
+def leer(mes):
+    leidos.append(mes)
+    return {"2025-03": {"mes": "2025-03", "dias": {"2025-03-03": {"x": 1},
+                                                   "2025-03-04": {"telemetria": {"pct": 9.0}}}},
+            "2026-10": {"mes": "2026-10", "dias": {"2026-10-01": {"y": 1}}}}.get(mes)
+anterior = {"dias": {"2026-10-01": {"y": 1}, "2026-10-02": {"y": 2}, "2026-09-30": {"z": 1}}}
+h = op.dias_por_mes(anterior, leer)
+comprueba("el mes del relleno, con el dia nuevo y el que ya tenia",
+          sorted(h["2025-03"]["dias"]), ["2025-03-03", "2025-03-04"])
+comprueba("sin pisar la telemetria que escribio la noche",
+          h["2025-03"]["dias"]["2025-03-04"]["telemetria"], {"pct": 9.0})
+comprueba("los dias del fichero que faltan en su mes pasan a el",
+          (sorted(h["2026-10"]["dias"]), sorted(h["2026-09"]["dias"])),
+          (["2026-10-01", "2026-10-02"], ["2026-09-30"]))
+leidos.clear()
+h = OP.Operativo([]).dias_por_mes({"dias": {"2026-10-01": {"y": 1}}}, leer)
+comprueba("un mes que ya lo tiene todo no se vuelve a escribir", (h, leidos), ({}, ["2026-10"]))
+f = op.fichero("interno", anterior, None, op.dias_por_mes(anterior, leer))
+comprueba("el fichero dice que dias tiene cada mes",
+          (f["meses_dias"]["2025-03"], f["meses_dias"]["2026-10"], f["primer_dia"], f["ultimo_dia"]),
+          ([3, 4], [1, 2], "2025-03-03", "2026-10-02"))
+comprueba("y solo lleva los ultimos dias", sorted(f["dias"]), ["2026-09-30", "2026-10-01", "2026-10-02"])
 comprueba("sin censo, la telemetria dice por que",
           OP.Operativo([DIA], historico=True).telemetria_vencloud(OP.DiaOperativo(DIA))["sin_dato"],
           OP.SIN_CENSO_HISTORICO)

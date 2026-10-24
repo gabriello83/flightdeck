@@ -583,6 +583,26 @@ comprueba("un cliente tampoco lo tiene",
 del falsos.OBJETOS["cabina/ope-sur/operativo/centros-2026-10.json.gz"]
 del falsos.OBJETOS["cabina/interno/operativo/centros-2026-10.json.gz"]
 
+print("\nLa historia del informe (docs/75): un mes, con la misma tijera, y solo el de su carpeta")
+falsos.OBJETOS["cabina/ope-sur/operativo/dias-2025-03.json.gz"] = gzip.compress(json.dumps({
+    "mes": "2025-03", "dias": {"2025-03-04": _dia_d}}).encode())
+falsos.OBJETOS["cabina/interno/operativo/dias-2025-03.json.gz"] = gzip.compress(json.dumps({
+    "mes": "2025-03", "dias": {"2025-03-05": {}}}).encode())
+o = cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA, query={"mes": "2025-03"}))
+comprueba("el mes, con los cuadrados que ve", (o["mes"], sorted(o["dias"]["2025-03-04"]["por_delegacion"])),
+          ("2025-03", ["rutas"]))
+comprueba("el de su perfil, aunque pida otro",
+          sorted(cuerpo_de(llama("GET", "/api/operativo", cookie=COOKIE_OLGA,
+                                 query={"mes": "2025-03", "perfil": "interno"}))["dias"]), ["2025-03-04"])
+comprueba("un mes que no es AAAA-MM no se busca",
+          llama("GET", "/api/operativo", cookie=COOKIE_OLGA, query={"mes": "../interno/x"})["statusCode"], 400)
+comprueba("un mes sin dias, 404",
+          llama("GET", "/api/operativo", cookie=COOKIE_OLGA, query={"mes": "2024-12"})["statusCode"], 404)
+comprueba("un cliente tampoco lo tiene",
+          llama("GET", "/api/operativo", cookie=COOKIE_ANA, query={"mes": "2025-03"})["statusCode"], 403)
+del falsos.OBJETOS["cabina/ope-sur/operativo/dias-2025-03.json.gz"]
+del falsos.OBJETOS["cabina/interno/operativo/dias-2025-03.json.gz"]
+
 print("\nTarifas (docs/52): el resumen del perfil, y un centro solo si es suyo")
 import gzip as _gz  # noqa: E402
 _res = {"total": {"pct": 80.0}, "delegaciones": [{"delegacion": "Sevilla", "centros": [
@@ -676,6 +696,34 @@ del falsos.OBJETOS["cabina/ope-sur/furgonetas.json.gz"]
 comprueba("sin calcular todavia, 503",
           llama("GET", "/api/furgonetas", cookie=COOKIE_OLGA)["statusCode"], 503)
 del falsos.OBJETOS["cabina/interno/furgonetas.json.gz"]
+
+print("\nLa historia de rutas y furgonetas (docs/75): un mes, solo de su carpeta")
+for _sec in ("rutas", "furgonetas"):
+    falsos.OBJETOS[f"cabina/ope-sur/{_sec}/dias-2025-03.json.gz"] = gzip.compress(json.dumps(
+        {"mes": "2025-03", "dias": {"2025-03-04": {"km": {"1111AAA": [5, 1, ""]}, "v": []}}}).encode())
+    falsos.OBJETOS[f"cabina/interno/{_sec}/dias-2025-03.json.gz"] = gzip.compress(json.dumps(
+        {"mes": "2025-03", "dias": {"2025-03-05": {}}}).encode())
+    _x = llama("GET", f"/api/{_sec}", cookie=COOKIE_OLGA, query={"mes": "2025-03", "perfil": "interno"})
+    comprueba(f"{_sec}: el mes de su perfil, comprimido, aunque pida otro",
+              (_x["headers"].get("content-encoding"),
+               sorted(json.loads(gzip.decompress(__import__("base64").b64decode(_x["body"])))["dias"])),
+              ("gzip", ["2025-03-04"]))
+    comprueba(f"{_sec}: un mes que no es AAAA-MM no se busca",
+              llama("GET", f"/api/{_sec}", cookie=COOKIE_OLGA, query={"mes": "../x"})["statusCode"], 400)
+    comprueba(f"{_sec}: un mes sin dias, 404",
+              llama("GET", f"/api/{_sec}", cookie=COOKIE_OLGA, query={"mes": "2024-01"})["statusCode"], 404)
+    comprueba(f"{_sec}: un cliente no lo tiene",
+              llama("GET", f"/api/{_sec}", cookie=COOKIE_ANA, query={"mes": "2025-03"})["statusCode"], 403)
+    del falsos.OBJETOS[f"cabina/ope-sur/{_sec}/dias-2025-03.json.gz"]
+    del falsos.OBJETOS[f"cabina/interno/{_sec}/dias-2025-03.json.gz"]
+comprueba("sin la tabla de vehiculos, los km de cada dia de un mes tampoco salen",
+          L.A.recorta_tablas("furgonetas", {"dias": {"2025-03-04": {"km": {}, "v": []}}},
+                           {"tablas_ocultas": {"furgonetas": ["vehiculos"]}, "tipo": "operaciones"})["dias"],
+          {"2025-03-04": {"v": []}})
+comprueba("y el fichero de la pagina, con su lista de dias, sigue igual",
+          L.A.recorta_tablas("furgonetas", {"dias": ["2025-03-04"], "km": {}},
+                           {"tablas_ocultas": {"furgonetas": ["vehiculos"]}, "tipo": "operaciones"})["dias"],
+          ["2025-03-04"])
 
 print("\nLa pagina de incidencias (docs/56): el fichero del perfil de la sesion, comprimido")
 import base64 as _b64i  # noqa: E402

@@ -99,6 +99,10 @@ tamano; con `camino` bajas a una clave o a una posicion de una lista. En las lis
 usa `filtro` (campo y texto que contiene), `orden` y `max` para traer solo lo que \
 necesitas. Lo que llega recortado lo dice: si te falta algo, vuelve a pedirlo mas \
 concreto.
+- `serie` y `tarifas` sin `parametros` solo dan el indice. La venta de un mes va en \
+`serie` con {"mes": "AAAA-MM"}, y por centro con {"centros": "AAAA-MM"}; los \
+productos de un centro, con su precio de tarifa y el cobrado, en `tarifas` con \
+{"centro": "<num_centro>"}. Pidelo asi desde el principio.
 - Ve directo: cuando ya sepas la forma, baja de una vez con un `camino` largo (por \
 ejemplo ["dias", "2026-10-21", "delegaciones"]). Si necesitas dos secciones, pidelas \
 las dos en la misma vuelta, no una detras de otra. Cada vuelta hace esperar al usuario.
@@ -185,7 +189,10 @@ dilo. En este modelo, lo que parece un hallazgo espectacular suele ser una de es
 # nombre -> (ruta de la API, parametros que admite, para que sirve)
 SECCIONES = {
     "panel": ("/api/panel", (), "el panel: servicio, dinero por mes, SAT, inventario, rentabilidad"),
-    "informe_general": ("/api/operativo", (), "los cuadrados del informe general, dia a dia y por delegacion"),
+    "informe_general": ("/api/operativo", ("mes",),
+                        "los cuadrados del informe general, dia a dia y por delegacion: sin parametros, "
+                        "los ultimos 62 dias y en meses_dias los dias que hay desde 2025; con "
+                        "mes=AAAA-MM, los dias de ese mes"),
     "serie": ("/api/serie", ("mes", "centros"),
               "la serie diaria: sin parametros, los meses que hay; con mes=AAAA-MM, ese mes dia a "
               "dia; con centros=AAAA-MM, ese mes dia a dia y centro a centro (venta por punto de venta)"),
@@ -286,12 +293,17 @@ def _num(x):
         return None
 
 
+def _pista(admite, para_que):
+    return (f"Esto es solo el indice. El detalle se pide con parametros ({', '.join(admite)}): "
+            f"{para_que}.")
+
+
 def consulta(entrada, token, cache):
     """Ejecuta la herramienta: baja la seccion (una vez por pregunta) y recorta."""
     nombre = entrada.get("seccion")
     if nombre not in SECCIONES:
         return {"error": f"No hay seccion {nombre!r}."}
-    ruta, admite, _ = SECCIONES[nombre]
+    ruta, admite, para_que = SECCIONES[nombre]
     params = {k: str(v) for k, v in (entrada.get("parametros") or {}).items() if k in admite}
     url = URL_API + ruta + ("?" + urllib.parse.urlencode(params) if params else "")
     if url not in cache:
@@ -308,8 +320,11 @@ def consulta(entrada, token, cache):
         elif isinstance(v, list) and _num(paso) is not None and -len(v) <= int(_num(paso)) < len(v):
             v = v[int(_num(paso))]
         else:
-            return {"error": f"No existe {paso!r} en ese camino.",
-                    "hay": list(v)[:60] if isinstance(v, dict) else (f"lista de {len(v)}" if isinstance(v, list) else None)}
+            fallo = {"error": f"No existe {paso!r} en ese camino.",
+                     "hay": list(v)[:60] if isinstance(v, dict) else (f"lista de {len(v)}" if isinstance(v, list) else None)}
+            if admite and not params:
+                fallo["parametros"] = _pista(admite, para_que)
+            return fallo
 
     maximo = max(1, min(int(entrada.get("max") or 40), 200))
     if isinstance(v, list):
@@ -329,6 +344,11 @@ def consulta(entrada, token, cache):
     else:
         vista = _vista(v, maximo)
 
+    # Sin parametros, serie y tarifas solo dan el indice: el detalle (un mes, un
+    # centro con sus productos) esta detras. En la prueba real el modelo daba
+    # vueltas por el indice sin pedirlo (23-oct).
+    if admite and not params and isinstance(vista, dict):
+        vista = {**vista, "_parametros": _pista(admite, para_que)}
     texto = json.dumps(vista, ensure_ascii=False, separators=(",", ":"))
     if len(texto) > MAX_RESULTADO:
         texto = texto[:MAX_RESULTADO] + "…(recortado: pide algo mas concreto con camino, filtro o max)"

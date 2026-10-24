@@ -352,6 +352,10 @@ let D=null, AREA="", VER="", QUITADAS=new Set(), VARIAS_AREAS=false;
 let F = null;
 /* El reparto por centro de cada mes (docs/72), segun llega: mes -> {dias} o null. */
 const MESES = {};
+/* Los días con dato (los del fichero y los de cada mes de la historia, que se
+   piden al elegirlos) y los meses de la historia ya pedidos. */
+let DIAS_TODOS = [], HAY = new Set();
+const HISTORIA = {};
 const SIN_REPARTO_C = "Estos días no tienen el reparto por cliente y centro: empezó a calcularse la noche del 22 de octubre de 2026.";
 const NO_SE_REPARTE_C = "no se reparte por cliente ni por centro: quita ese filtro para verla.";
 
@@ -424,15 +428,19 @@ const nombreRuta = r => r || "Sin ruta";
 /* Los días del periodo: el elegido, los siete hasta él o el mes hasta él. */
 function diasPeriodo(){
   const f = diaSel(), p = $("#periodo").value;
-  const todos = Object.keys(D.dias).filter(x=>x<=f).sort();
+  const todos = DIAS_TODOS.filter(x=>x<=f);
   if(p === "mes") return todos.filter(x=>x.slice(0,7)===f.slice(0,7));
   if(p === "semana"){
     const d = new Date(f+"T00:00:00"); d.setDate(d.getDate()-6);
     const desde = isoLocal(d);
     return todos.filter(x=>x>=desde);
   }
-  return D.dias[f] ? [f] : [];
+  return HAY.has(f) ? [f] : [];
 }
+/* Un día con dato: del fichero o de su mes de la historia (docs/75). Si su mes
+   no ha llegado, se dice, no se pinta como un día sin plan. */
+const NO_LLEGO = {sin_dato: "No se ha podido leer este día: comprueba la conexión y vuelve a elegirlo."};
+const diaDe = f => D.dias[f] || NO_LLEGO;
 const unDia = () => $("#periodo").value === "dia";
 function textoPeriodo(){
   const ds = diasPeriodo();
@@ -460,7 +468,7 @@ function cifras(area){
   const rs = rutaSel(), filas = []; let sin = 0, sinDato = null;
   const dentro = dl => area!==undefined ? (area==="" || area==="*" || zona(dl)===area) : deLaDeleg(dl);
   diasPeriodo().forEach(f=>{
-    const d = D.dias[f];
+    const d = diaDe(f);
     if(d.sin_dato){ sin++; sinDato = d.sin_dato; return; }
     if(rs && area===undefined) filas.push(...(d.rutas||[]).filter(x=>x.delegacion===rs[0] && x.ruta===rs[1]));
     else filas.push(...(d.delegaciones||[]).filter(x=>dentro(x.delegacion)));
@@ -493,7 +501,34 @@ async function cargaMeses(){
   const l = await Promise.all(meses.map(m=>Filtros.mesCentros(m)));
   meses.forEach((m, i)=>{ MESES[m] = l[i]; });
 }
-async function repinta(){ await cargaMeses(); pintaOpcionesRuta(); pintaTodo(); }
+/* Los meses de la historia que hacen falta para el periodo y la semana de
+   cada delegación (docs/75): se juntan con los días del fichero. */
+async function cargaHistoria(){
+  const f = diaSel(), semana = DIAS_TODOS.filter(x=>x<=f).slice(-7);
+  const faltan = [...new Set(diasPeriodo().concat(semana).filter(x=>!D.dias[x]).map(x=>x.slice(0,7)))]
+    .filter(m=>!HISTORIA[m] && (D.meses_dias||{})[m]);
+  if(!faltan.length) return;
+  $("#todo").style.opacity = ".55";
+  let fallo = false;
+  await Promise.all(faltan.map(async m=>{
+    try{
+      const r = await fetch(`/api/rutas?mes=${encodeURIComponent(m)}`, {credentials:"same-origin"});
+      if(r.status===401){ location.href = "/"; return; }
+      if(!r.ok){ fallo = true; return; }
+      const x = await r.json();
+      D.quien = D.quien || {};
+      for(const [dia, d] of Object.entries(x.dias||{})){
+        if(D.dias[dia]) continue;
+        if(d.quien){ D.quien[dia] = d.quien; delete d.quien; }
+        D.dias[dia] = d;
+      }
+      HISTORIA[m] = true;
+    }catch(e){ fallo = true; }
+  }));
+  $("#todo").style.opacity = "";
+  if(fallo) avisa("No se han podido leer todos los días de lo elegido: comprueba la conexión y vuelve a elegirlo.", true);
+}
+async function repinta(){ await cargaHistoria(); await cargaMeses(); pintaOpcionesRuta(); pintaTodo(); }
 
 function kpi(clase, et, vl, nt, id){
   return `<div class="kpi ${clase}"${id?` data-tabla="${id}" data-estrella="${id}"`:""}><div class="et">${esc(et)}</div><div class="vl">${vl}</div><div class="nt">${nt}</div></div>`;
@@ -748,7 +783,7 @@ function pintaDona(){
 function rutasPeriodo(){
   const por = {}; let sin = 0;
   diasPeriodo().forEach(f=>{
-    const d = D.dias[f];
+    const d = diaDe(f);
     if(d.sin_dato){ sin++; return; }
     (d.rutas||[]).filter(x=>deLaDeleg(x.delegacion)).forEach(x=>{
       const k = x.delegacion + SEP + x.ruta;
@@ -830,7 +865,7 @@ function visitasDia(d, f){
 /* Las del periodo: los días que la guardan (la última semana). */
 function visitasPeriodo(){
   const ds = diasPeriodo(), out = []; let con = 0;
-  ds.forEach(f=>{ const v = visitasDia(D.dias[f], f); if(v){ con++; out.push(...v); } });
+  ds.forEach(f=>{ const v = visitasDia(diaDe(f), f); if(v){ con++; out.push(...v); } });
   return {v: con ? out : null, con, de: ds.length};
 }
 function enFiltro(x){
@@ -912,9 +947,9 @@ function pintaPdv(){
 
 /* ------------------------------------------------- delegaciones y festivos */
 function semana(dl){
-  const fechas = Object.keys(D.dias).filter(f=>f<=diaSel()).sort().slice(-7);
+  const fechas = DIAS_TODOS.filter(f=>f<=diaSel()).slice(-7);
   return `<span class="semana">${fechas.map(f=>{
-    const v = D.dias[f], x = (v.delegaciones||[]).find(y=>y.delegacion===dl);
+    const v = diaDe(f), x = (v.delegaciones||[]).find(y=>y.delegacion===dl);
     const fe = festivo(f, dl);
     const t = `${fechaCorta(f)}: ${x && x.pct!=null ? fpct(x.pct) : "sin dato"}${fe ? " · festivo "+fe : ""}`;
     return `<i class="${esc((x&&x.color)||"")}${fe?" fest":""}" title="${esc(t)}"></i>`;
@@ -925,7 +960,7 @@ function pintaDeleg(){
   if(F.porCentro()){ $("#tDeleg").innerHTML = `<p class="vacio">La tabla por delegación ${NO_SE_REPARTE_C}</p>`; return; }
   const por = {}; let sin = 0;
   diasPeriodo().forEach(f=>{
-    const d = D.dias[f];
+    const d = diaDe(f);
     if(d.sin_dato){ sin++; return; }
     (d.delegaciones||[]).filter(x=>enArea(x.delegacion)).forEach(x=>{ (por[x.delegacion] = por[x.delegacion] || []).push(x); });
   });
@@ -1037,7 +1072,7 @@ function csv(){
 /* Las rutas del periodo de la delegación elegida, para el desplegable. */
 function pintaOpcionesRuta(){
   const antes = $("#ruta").value, vistas = new Set(), rutas = [];
-  diasPeriodo().forEach(f=>(D.dias[f].rutas||[]).filter(x=>deLaDeleg(x.delegacion)).forEach(x=>{
+  diasPeriodo().forEach(f=>(diaDe(f).rutas||[]).filter(x=>deLaDeleg(x.delegacion)).forEach(x=>{
     const k = x.delegacion + SEP + x.ruta;
     if(!vistas.has(k)){ vistas.add(k); rutas.push(x); }
   }));
@@ -1074,7 +1109,11 @@ function pintaOpcionesRuta(){
   }
   D = await rt.json();
   D.dias = D.dias || {};
-  const dias = Object.keys(D.dias).sort().reverse();
+  HAY = new Set(Object.keys(D.dias));
+  for(const [m, ds] of Object.entries(D.meses_dias||{}))
+    for(const d of ds) HAY.add(`${m}-${String(d).padStart(2,"0")}`);
+  DIAS_TODOS = [...HAY].sort();
+  const dias = DIAS_TODOS.slice().reverse();
   if(!dias.length){ avisa("Todavía no hay ningún día calculado.", true); return; }
   $("#dia").innerHTML = dias.map(f=>`<option value="${esc(f)}">${esc(fechaLarga(f))}</option>`).join("");
   /* El día que llega en la dirección (desde el cuadrado), o ayer, o el último. */
@@ -1108,6 +1147,7 @@ function pintaOpcionesRuta(){
     alCambiar: ()=>{ VER = VER && F.alguno() ? VER : ""; repinta(); }});
   if(["llamadas", "recaudar", "reponer", "sanitarias"].includes(solo)) VER = solo;
   else if(["llamadas", "recaudar", "reponer", "sanitarias"].includes(q.get("ver")) && (F.alguno() || !VARIAS_AREAS)) VER = q.get("ver");
+  await cargaHistoria();
   await cargaMeses();
   pintaOpcionesRuta();
   ["#dia","#periodo"].forEach(s=>$(s).addEventListener("change", repinta));

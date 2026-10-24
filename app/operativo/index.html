@@ -475,6 +475,9 @@ const SIN_REPARTO = "Estos días son de antes de que el informe se repartiera po
 const SIN_REPARTO_C = "Estos días no tienen el reparto por cliente y centro: empezó a calcularse la noche del 22 de octubre de 2026.";
 // El reparto por centro de cada mes, segun llega: mes -> {dias} o null si no hay.
 const MESES = {};
+// La historia (docs/75): el fichero trae los ultimos dias y cada mes de antes
+// se pide al elegirlo. Mes -> true cuando ya esta en DATOS.dias, o null si no llego.
+const HISTORIA = {};
 /* Del reparto por centro, en listas, a la forma del de delegacion. */
 const DE_LISTA = {
   rutas:        a => ({previstas:a[0], hechas:a[1], fuera:a[2], visitas:a[3]}),
@@ -696,8 +699,38 @@ async function cargaMeses(fechas){
   }));
   return fallo;
 }
+/* Los dias de antes de los que trae el fichero, un mes cada vez: se juntan con
+   los demas en DATOS.dias y a partir de ahi todo suma igual. */
+async function cargaHistoria(fechas){
+  const meses = DATOS.meses_dias || {};
+  const faltan = [...new Set(fechas.filter(f=>HAY.has(f) && !(f in (DATOS.dias||{}))).map(f=>f.slice(0,7)))]
+    .filter(m=>!(m in HISTORIA) && m in meses);
+  let fallo = false;
+  await Promise.all(faltan.map(async m=>{
+    try{
+      const r = await fetch(`/api/operativo?mes=${encodeURIComponent(m)}`, {credentials:"same-origin"});
+      if(r.status===401){ location.href = "/"; return; }
+      if(!r.ok){ HISTORIA[m] = null; fallo = true; return; }
+      const x = await r.json();
+      for(const [f, d] of Object.entries(x.dias||{})) if(!(f in DATOS.dias)) DATOS.dias[f] = d;
+      HISTORIA[m] = true;
+    }catch(e){ fallo = true; }
+  }));
+  return fallo;
+}
 async function repinta(){
   const t = ++turno;
+  {
+    const fechas = fechasElegidas();
+    if(fechas.some(f=>HAY.has(f) && !(f in (DATOS.dias||{})) && !(f.slice(0,7) in HISTORIA))){
+      const c = $("#cuadros");
+      c.setAttribute("aria-busy", "true"); c.style.opacity = ".55";
+      const fallo = await cargaHistoria(fechas);
+      c.removeAttribute("aria-busy"); c.style.opacity = "";
+      if(fallo) avisa("No se han podido leer todos los días de esos meses: comprueba la conexión y vuelve a elegir.", true);
+      if(t!==turno) return;
+    }
+  }
   if(porCentro()){
     const fechas = fechasElegidas();
     if(fechas.some(f=>!(f.slice(0,7) in MESES))){
@@ -982,7 +1015,13 @@ function avisa(texto, mal){
   $("#lAmarillo").textContent = `del ${n1(u.amarillo)} al ${n1(u.verde)} %`;
   $("#lRojo").textContent = `menos del ${n1(u.amarillo)} %`;
 
-  DIAS = Object.keys(DATOS.dias||{}).sort();
+  /* Los dias con dato: los del fichero y los de cada mes de la historia, que
+     llegan al elegirlos. */
+  DATOS.dias = DATOS.dias || {};
+  const conDato = new Set(Object.keys(DATOS.dias));
+  for(const [m, ds] of Object.entries(DATOS.meses_dias||{}))
+    for(const d of ds) conDato.add(`${m}-${String(d).padStart(2,"0")}`);
+  DIAS = [...conDato].sort();
   HAY = new Set(DIAS);
   if(!DIAS.length){ avisa("Todavía no hay ningún día calculado.", true); return; }
   const ultimo = DIAS[DIAS.length-1];
