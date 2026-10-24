@@ -471,6 +471,51 @@ class _U3(_U):
     cache_read_input_tokens = 1_000_000
 comprueba("y leido de cache, 0,20", round(L.coste(_U3()), 2), 0.20)
 
+print("\nEl modelo (docs/78): de la consola, o de la Lambda; un admin puede probar otro")
+comprueba("Sonnet cobra la mitad de entrada", round(L.coste(_U(), "claude-sonnet-5-5"), 2), 2.00)
+class _U4(_U):
+    input_tokens = 100_000
+comprueba("Haiku, 0,10 el millon de entrada: 100.000 tokens, 0,01", round(L.coste(_U4(), "claude-haiku-5-5"), 4), 0.01)
+
+
+class _U5(_U):
+    input_tokens = 150_000
+comprueba("y cinco veces mas pasados los 100.000 tokens", round(L.coste(_U5(), "claude-haiku-5-5"), 4), 0.075)
+comprueba("un modelo desconocido se cobra como Opus, que no se quede corto",
+          round(L.coste(_U(), "otro"), 2), 4.00)
+L._cliente = None   # el que reventaba, fuera
+falsos.pon_fila("PERFIL#admin-t", {"nombre": "Serunion", "tipo": "admin", "permisos": {}})
+falsos.pon_fila("USUARIO#jefa@serunion.es", {"nombre": "Jefa", "perfil_id": "admin-t", "estado": "activo"})
+_jefa, _ana = sesion_de("jefa@serunion.es"), sesion_de("ana@airbus.com")
+
+
+def _modelo(cookie, pedido=None):
+    LLAMADAS.clear()
+    d = {"pregunta": "¿Cuántas visitas?", "historial": []}
+    if pedido:
+        d["modelo"] = pedido
+    res = L.lambda_handler(falsos.peticion("POST", "/api/pregunta", d, cookie), None)
+    return LLAMADAS[-1]["model"], cuerpo(res).get("modelo"), "fallbacks" in LLAMADAS[-1]
+
+
+comprueba("sin nada, el de la Lambda, con respaldo", _modelo(_ana), ("claude-opus-5-5", "claude-opus-5-5", True))
+comprueba("un admin prueba Haiku en una pregunta suelta, sin respaldo, que Haiku no lo tiene",
+          _modelo(_jefa, "claude-haiku-5-5"), ("claude-haiku-5-5", "claude-haiku-5-5", False))
+comprueba("quien no es admin no elige modelo", _modelo(_ana, "claude-haiku-5-5")[0], "claude-opus-5-5")
+comprueba("ni un admin uno que no esta en la lista", _modelo(_jefa, "claude-loquesea")[0], "claude-opus-5-5")
+L.escribe("CONFIG", dict(L.config(), asistente_modelo="claude-sonnet-5-5"), "GLOBAL")
+comprueba("elegido en la consola, vale para todos", _modelo(_ana)[0], "claude-sonnet-5-5")
+COLA.append(consulta(seccion="panel"))
+LLAMADAS.clear()
+_r = pregunta("¿Y el panel?", _ana)
+L.escribe("CONFIG", dict(L.config(), asistente_modelo="claude-haiku-5-5"), "GLOBAL")
+while cuerpo(_r).get("sigue"):
+    _r = pregunta(None, _ana, sigue=cuerpo(_r)["sigue"])
+comprueba("una pregunta a medias sigue con el modelo con el que empezo",
+          sorted({x["model"] for x in LLAMADAS}), ["claude-sonnet-5-5"])
+L.escribe("CONFIG", dict(L.config(), asistente_modelo=""), "GLOBAL")
+comprueba("vacio, vuelve el de la Lambda", _modelo(_ana)[0], "claude-opus-5-5")
+
 print()
 if fallos:
     print(f"{len(fallos)} PRUEBAS FALLIDAS: {', '.join(fallos)}")

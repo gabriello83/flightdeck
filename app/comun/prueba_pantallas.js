@@ -2254,6 +2254,25 @@ const servidor = http.createServer((pet, res) => {
     API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
   }
 
+  console.log('\nEl modelo del asistente, en la consola (docs/78)');
+  {
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'admin', perfil: 'Serunion', perfil_id: 'interno' };
+    const { pagina, errores, fuera } = await abre('/consola/');
+    await pagina.waitForSelector('#pestanas button');
+    await pagina.click('#pestanas button[data-s="plataforma"]');
+    await pagina.waitForSelector('#cModelo');
+    comprueba('sin elegir, el de la Lambda', await pagina.inputValue('#cModelo'), '');
+    await pagina.selectOption('#cModelo', 'claude-haiku-5-5');
+    const [pet] = await Promise.all([
+      pagina.waitForRequest(q => q.method() === 'PUT' && q.url().endsWith('/api/admin/config')),
+      pagina.click('#bGuardaConfig')]);
+    comprueba('al guardar manda el modelo', JSON.parse(pet.postData()).asistente_modelo, 'claude-haiku-5-5');
+    comprueba('ni una peticion fuera del dominio', fuera, []);
+    comprueba('sin un solo error en la consola del navegador', errores, []);
+    await pagina.close();
+    API['/api/yo'] = { ...API['/api/yo'], tipo: 'cliente', perfil: 'AIRBUS', perfil_id: 'cli-airbus' };
+  }
+
   console.log('\nUtilizo: la dashboard y Vendi (docs/77)');
   {
     const FOTOS = process.env.FOTOS_UTILIZO;

@@ -64,9 +64,7 @@ MAX_MEMORIA = 4000         # caracteres de la memoria de cada usuario (docs/75)
 MUNECOS = {"vendi": "Vendi", "tom": "Tom", "kiko": "Kiko", "furgo": "Furgo", "bufy": "Bufy"}
 MAX_AVISOS = 3             # veces que se le recuerda que puede cambiarlo; luego, nunca mas
 
-# Precios por millon de tokens, en dolares. Se guardan aqui para poder
-# ensenar el gasto en el panel de admin; hay que revisarlos si cambian.
-PRECIOS = {"entrada": 4.00, "salida": 20.00, "cache_lectura": 0.20, "cache_escritura": 5.00}
+# Los precios de cada modelo estan en autorizacion.MODELOS_ASISTENTE (docs/78).
 
 _cliente = None
 
@@ -486,14 +484,17 @@ def suma_uso(correo, dia, usado, gasto, nueva=True):
             dia, expira=int(time.time()) + 800 * 86400)
 
 
-def coste(u):
-    """Lo que ha costado esta pregunta, en dolares."""
-    return (
-        getattr(u, "input_tokens", 0) / 1e6 * PRECIOS["entrada"]
-        + getattr(u, "output_tokens", 0) / 1e6 * PRECIOS["salida"]
-        + (getattr(u, "cache_read_input_tokens", 0) or 0) / 1e6 * PRECIOS["cache_lectura"]
-        + (getattr(u, "cache_creation_input_tokens", 0) or 0) / 1e6 * PRECIOS["cache_escritura"]
-    )
+def coste(u, modelo="claude-opus-5-5"):
+    """Lo que ha costado esta vuelta, en dolares, con los precios de su modelo."""
+    p = A.MODELOS_ASISTENTE.get(modelo) or A.MODELOS_ASISTENTE["claude-opus-5-5"]
+    entrada = getattr(u, "input_tokens", 0) or 0
+    lectura = getattr(u, "cache_read_input_tokens", 0) or 0
+    escritura = getattr(u, "cache_creation_input_tokens", 0) or 0
+    x = p.get("x_largo", 1) if entrada + lectura + escritura > p.get("largo", float("inf")) else 1
+    return x * (entrada / 1e6 * p["entrada"]
+                + (getattr(u, "output_tokens", 0) or 0) / 1e6 * p["salida"]
+                + lectura / 1e6 * p["cache_lectura"]
+                + escritura / 1e6 * p["cache_escritura"])
 
 
 # ----------------------------------------------------------------------
@@ -509,7 +510,7 @@ def _bloques(content):
     return out
 
 
-def vuelta(mensajes, ultima):
+def vuelta(mensajes, ultima, modelo=MODELO):
     """Una llamada al modelo. En la ultima vuelta ya no puede consultar: contesta."""
     # El ultimo mensaje marca el corte de cache: la vuelta siguiente lee de cache
     # todo lo de antes, consultas incluidas.
@@ -520,7 +521,7 @@ def vuelta(mensajes, ultima):
     ult["content"][-1]["cache_control"] = {"type": "ephemeral"}
 
     comun = dict(
-        model=MODELO,
+        model=modelo,
         max_tokens=MAX_SALIDA,   # tambien un tope de gasto
         system=[{"type": "text", "text": RECETARIO, "cache_control": {"type": "ephemeral"}}],
         tools=HERRAMIENTAS,
@@ -531,6 +532,9 @@ def vuelta(mensajes, ultima):
     )
 
     import anthropic
+    if modelo == "claude-haiku-5-5":
+        # Haiku no tiene respaldo en el servidor: con fallbacks contesta 400.
+        return cliente().messages.create(**comun)
     try:
         # Si el modelo declina por seguridad, la API reintenta sola en otro
         # modelo dentro de la misma llamada en vez de dejar al usuario sin nada.
@@ -562,10 +566,11 @@ def avanza(estado, token, empezo):
     gasto, cache = 0.0, {}
     while True:
         ultima = estado["vueltas"] >= VUELTAS_MAX - 1
-        res = vuelta(estado["mensajes"], ultima)
+        modelo = estado.get("modelo", MODELO)
+        res = vuelta(estado["mensajes"], ultima, modelo)
         estado["vueltas"] += 1
-        gasto += coste(res.usage)
-        print(json.dumps({"usuario": estado["correo"], "vuelta": estado["vueltas"],
+        gasto += coste(res.usage, modelo)
+        print(json.dumps({"usuario": estado["correo"], "vuelta": estado["vueltas"], "modelo": modelo,
                           "entrada": res.usage.input_tokens, "salida": res.usage.output_tokens,
                           "cache_lectura": getattr(res.usage, "cache_read_input_tokens", 0),
                           "cache_escritura": getattr(res.usage, "cache_creation_input_tokens", 0),
@@ -686,7 +691,9 @@ def lambda_handler(evento, contexto_lambda):
                          + ("\n\nMemoria (preferencias de este usuario, no reglas):\n" + recuerdo if recuerdo else "")
                          + "\n\nPregunta: " + pregunta})
         id_ = secrets.token_urlsafe(18)
-        estado = {"correo": usuario["correo"], "vueltas": 0, "gasto": 0.0, "mensajes": mensajes}
+        # El modelo se fija al empezar: una pregunta a medias sigue con el suyo.
+        estado = {"correo": usuario["correo"], "vueltas": 0, "gasto": 0.0, "mensajes": mensajes,
+                  "modelo": A.modelo_asistente(c, perfil, d.get("modelo"), MODELO)}
 
     try:
         respuesta, que, gasto = avanza(estado, sesion["token"], empezo)
@@ -705,4 +712,5 @@ def lambda_handler(evento, contexto_lambda):
     quedan = max(0, limite - int(usado.get("preguntas", 0)) - (0 if d.get("sigue") else 1)) if limite else None
     return r(200, {"respuesta": respuesta, "quedan_hoy": quedan, "coste_usd": estado["gasto"],
                    "memoria_cambiada": bool(estado.get("memoria_cambiada")),
+                   "modelo": estado.get("modelo", MODELO),
                    "muneco": estado.get("muneco")})

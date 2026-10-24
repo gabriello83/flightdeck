@@ -304,6 +304,15 @@ comprueba("apagado para todos", yo2["asistente"]["habilitado"], False)
 comprueba("y dice que es global", "plataforma" in yo2["asistente"]["motivo"], True)
 llama("PUT", "/api/admin/config", {"asistente_global": True}, cookie=COOKIE_JEFE)
 
+print("\nEl modelo del asistente se elige en la consola (docs/78)")
+comprueba("uno de la lista se guarda",
+          cuerpo_de(llama("PUT", "/api/admin/config", {"asistente_modelo": "claude-haiku-5-5"},
+                          cookie=COOKIE_JEFE))["asistente_modelo"], "claude-haiku-5-5")
+comprueba("uno que no esta, 400",
+          llama("PUT", "/api/admin/config", {"asistente_modelo": "gpt-loquesea"}, cookie=COOKIE_JEFE)["statusCode"], 400)
+comprueba("vacio, vuelve al de la Lambda",
+          cuerpo_de(llama("PUT", "/api/admin/config", {"asistente_modelo": ""}, cookie=COOKIE_JEFE))["asistente_modelo"], "")
+
 print("\nUn usuario bloqueado no pasa, aunque tenga cookie")
 pon_fila("USUARIO#ana@airbus.com", {"nombre": "Ana", "perfil_id": "cli-airbus",
                                     "estado": "bloqueado", "asistente": True})

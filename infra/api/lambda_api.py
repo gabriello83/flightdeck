@@ -1148,6 +1148,12 @@ def administra(evento, metodo, ruta, admin):
             c["limite_preguntas_dia"] = max(0, int(d["limite_preguntas_dia"]))
         if "umbral_rentabilidad_mes" in d:
             c["umbral_rentabilidad_mes"] = float(d["umbral_rentabilidad_mes"])
+        # El modelo del asistente (docs/78). Vacio = el de la variable MODELO.
+        if "asistente_modelo" in d:
+            m = str(d["asistente_modelo"] or "")
+            if m and m not in A.MODELOS_ASISTENTE:
+                raise ValueError("Ese modelo no esta entre los del asistente.")
+            c["asistente_modelo"] = m
         escribe("CONFIG", c, "GLOBAL")
         return r(200, c)
 
