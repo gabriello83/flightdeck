@@ -1396,12 +1396,16 @@ def con_los_meses_guardados(perfil_id, carpeta, anterior, historia, hoy):
     Pasa con un panel nuevo: el relleno le escribe rutas/ y furgonetas/ mes a
     mes, pero no tiene fichero de pagina donde apuntar meses_dias, y la noche
     solo ve los meses que toca. Sin esto, la pagina no ofreceria los meses que
-    ya estan en S3. Se leen una vez: desde esa noche el fichero ya los dice."""
-    if anterior is not None and anterior.get("meses_dias") is not None:
+    ya estan en S3. Tampoco cuando el fichero ya existe pero lo escribio una
+    noche sin este arreglo (24-oct-2026: solo apuntaba los meses recientes).
+    Solo se leen los meses que el fichero no dice; un panel cuyo fichero ya
+    empieza en el primer mes de la historia no lee nada."""
+    ya = set(((anterior or {}).get("meses_dias")) or {})
+    if ya and min(ya) <= S.mes_de(S.PRIMER_DIA):
         return historia
     guardados = {}
     for mes in S.meses_entre(S.PRIMER_DIA, hoy):
-        if mes not in historia:
+        if mes not in historia and mes not in ya:
             x = _json_de(f"cabina/{perfil_id}/{carpeta}/dias-{mes}.json.gz")
             if x and x.get("dias"):
                 guardados[mes] = x
